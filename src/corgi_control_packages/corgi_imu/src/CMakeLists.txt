@@ -1,3 +1,2 @@
-# Define the executable and link required libraries
-add_executable(corgi_csv_control ./corgi_csv_control.cpp)
-target_link_libraries(corgi_csv_control ${catkin_LIBRARIES} ${CMAKE_DL_LIBS})
+add_executable(imu_cx5 imu.cpp)
+target_link_libraries(imu_cx5 Eigen3::Eigen geometry_msgs sensor_msgs mip)

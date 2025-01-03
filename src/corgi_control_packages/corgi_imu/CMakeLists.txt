@@ -12,8 +12,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 
 set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
-find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs)
-catkin_package(CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs)
+
+
+find_package(mip REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(catkin REQUIRED COMPONENTS roscpp std_msgs sensor_msgs rosgraph_msgs geometry_msgs corgi_msgs)
+catkin_package(CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs sensor_msgs)
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
