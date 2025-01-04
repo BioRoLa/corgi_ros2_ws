@@ -31,7 +31,7 @@ void setting_calculation(double walking_distance, double step_length, double til
 
     // Output simulation details
     cout << "==================================="<< endl;
-    cout << "Robot Walking Setting" << endl;
+    cout << "Robot Setting" << endl;
     cout << "Walking Distance: " << walking_distance << " m" << endl;
     cout << "Terrain Tilt Angle: " << rad2deg(tilt_angle_rad) << " degrees" << endl;
     cout << "Step Length: " << step_length << " mm" << endl;
@@ -87,9 +87,8 @@ void findMinMaxHeight(const vector<pair<double, double>> &terrain_positions) {
         }
     }
 }
-
 // 250104 assume calculate single leg and for only one cycle
-int main(int argc, char **argv) {
+int main(int argc, char **argv) {    
     // Initial settings and check
     setting(walking_distance, step_length, velocity, tilt_angle_deg, tilt_angle_rad);
     genTerrainPosition(walking_distance * 1000, tilt_angle_rad, terrain_positions);
