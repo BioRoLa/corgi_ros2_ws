@@ -23,12 +23,13 @@ int main(int argc, char **argv) {
         &imp_cmd.module_d
     };
     
+    int loop_count = 0;
     while (ros::ok()) {
         ros::spinOnce();
         
         for (auto& cmd : imp_cmd_modules){
-            cmd->Px = 0;
-            cmd->Py = -0.15;
+            cmd->theta = (47-30*cos(loop_count/2500.0*M_PI))/180.0*M_PI;
+            cmd->beta = 0;
             cmd->Fx = 0;
             cmd->Fy = 0;
             cmd->Mx = 0.652;
@@ -48,6 +49,8 @@ int main(int argc, char **argv) {
         imp_cmd.header.seq = -1;
 
         imp_cmd_pub.publish(imp_cmd);
+
+        loop_count++;
 
         rate.sleep();
     }

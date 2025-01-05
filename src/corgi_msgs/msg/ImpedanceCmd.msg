@@ -1,5 +1,5 @@
-float64 Px
-float64 Py
+float64 theta
+float64 beta
 float64 Fx
 float64 Fy
 float64 Mx
