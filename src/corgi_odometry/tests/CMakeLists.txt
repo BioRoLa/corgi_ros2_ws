@@ -1,7 +1,7 @@
-add_executable(quick_test quicktest.cpp)
-target_link_libraries(quick_test Eigen3::Eigen Kinematic)
-target_include_directories(quick_test PUBLIC "${PROJECT_SOURCE_DIR}/include")
+add_executable(corgi_kinematic_quick_test kinematic_quicktest.cpp)
+target_link_libraries(corgi_kinematic_quick_test Eigen3::Eigen Kinematic)
+target_include_directories(corgi_kinematic_quick_test PUBLIC "${PROJECT_SOURCE_DIR}/include")
 
-add_executable(if_estimate IF_main.cpp)
-target_link_libraries(if_estimate Eigen3::Eigen ${_CORE_LIBRARIES} Kinematic IF pthread)
-target_include_directories(if_estimate PUBLIC "${PROJECT_SOURCE_DIR}/include")
+add_executable(corgi_information_filter_offline_estimate InformationFilter_offline.cpp)
+target_link_libraries(corgi_information_filter_offline_estimate Eigen3::Eigen ${_CORE_LIBRARIES} Kinematic IF pthread)
+target_include_directories(corgi_information_filter_offline_estimate PUBLIC "${PROJECT_SOURCE_DIR}/include")
