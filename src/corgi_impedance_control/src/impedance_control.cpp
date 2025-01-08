@@ -8,21 +8,15 @@ AdmittanceController::AdmittanceController() : dt(0.001), legmodel(true) {
     D = Eigen::MatrixXd::Zero(2, 2);
 
     pos_fb = Eigen::MatrixXd::Zero(2, 1);
-    vel_fb = Eigen::MatrixXd::Zero(2, 1);
     pos_ref = Eigen::MatrixXd::Zero(2, 1);
-    vel_ref = Eigen::MatrixXd::Zero(2, 1);
 
     pos_cmd = Eigen::MatrixXd::Zero(2, 1);
     eta_cmd = Eigen::MatrixXd::Zero(2, 1);
 }
 
 
-void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::MatrixXd& eta_ref,
-                                  const Eigen::MatrixXd& force_fb, const Eigen::MatrixXd& force_ref,
-                                  const Eigen::MatrixXd& pos_fb_prev, const Eigen::MatrixXd& pos_ref_prev) {
-    
-    if (eta_ref == Eigen::MatrixXd::Zero(2, 1) || eta_fb == Eigen::MatrixXd::Zero(2, 1)) return;
-
+void AdmittanceController::update(const Eigen::MatrixXd& eta_ref, const Eigen::MatrixXd& pos_err_prev, const Eigen::MatrixXd& force_err_prev) {
+    if (eta_ref == Eigen::MatrixXd::Zero(2, 1)) return;
     Eigen::MatrixXd H_l(2, 1);
     Eigen::MatrixXd U_l(2, 1);
     Eigen::MatrixXd F_l(2, 1);
@@ -32,9 +26,9 @@ void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::Ma
     Eigen::MatrixXd F_r(2, 1);
     Eigen::MatrixXd L_r(2, 1);
     Eigen::MatrixXd G(2, 1);
-    
-    legmodel.contact_map(eta_fb(0, 0), eta_fb(1, 0));
-    legmodel.forward(eta_fb(0, 0), eta_fb(1, 0));
+
+    legmodel.contact_map(eta_ref(0, 0), eta_ref(1, 0));
+    legmodel.forward(eta_ref(0, 0), eta_ref(1, 0));
 
     Eigen::Rotation2D<double> rotation(legmodel.alpha);
     Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
@@ -49,67 +43,51 @@ void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::Ma
     L_r << legmodel.L_r[0], legmodel.L_r[1];
     G << legmodel.G[0], legmodel.G[1];
 
-    if (legmodel.rim == 1) { pos_fb = rot_alpha * (H_l-U_l) + U_l; }
-    else if (legmodel.rim == 2) { pos_fb = rot_alpha * (F_l-L_l) + L_l; }
-    else if (legmodel.rim == 3) { pos_fb = G; }
-    else if (legmodel.rim == 4) { pos_fb = rot_alpha * (G-L_r) + L_r; }
-    else if (legmodel.rim == 5) { pos_fb = rot_alpha * (F_r-U_r) + U_r; }
-
-
-    legmodel.contact_map(eta_ref(0, 0), eta_ref(1, 0));
-    legmodel.forward(eta_ref(0, 0), eta_ref(1, 0));
-
-    Eigen::Rotation2D<double> rotation_(legmodel.alpha);
-    Eigen::Matrix2d rot_alpha_ = rotation_.toRotationMatrix();
-
-    H_l << legmodel.H_l[0], legmodel.H_l[1];
-    U_l << legmodel.U_l[0], legmodel.U_l[1];
-    F_l << legmodel.F_l[0], legmodel.F_l[1];
-    L_l << legmodel.L_l[0], legmodel.L_l[1];
-    H_r << legmodel.H_r[0], legmodel.H_r[1];
-    U_r << legmodel.U_r[0], legmodel.U_r[1];
-    F_r << legmodel.F_r[0], legmodel.F_r[1];
-    L_r << legmodel.L_r[0], legmodel.L_r[1];
-    G << legmodel.G[0], legmodel.G[1];
-
-    if (legmodel.rim == 1) { pos_ref = rot_alpha_ * (H_l-U_l) + U_l; }
-    else if (legmodel.rim == 2) { pos_ref = rot_alpha_ * (F_l-L_l) + L_l; }
+    if (legmodel.rim == 1) { pos_ref = rot_alpha * (H_l-U_l) + U_l; }
+    else if (legmodel.rim == 2) { pos_ref = rot_alpha * (F_l-L_l) + L_l; }
     else if (legmodel.rim == 3) { pos_ref = G; }
-    else if (legmodel.rim == 4) { pos_ref = rot_alpha_ * (G-L_r) + L_r; }
-    else if (legmodel.rim == 5) { pos_ref = rot_alpha_ * (F_r-U_r) + U_r; }
+    else if (legmodel.rim == 4) { pos_ref = rot_alpha * (G-L_r) + L_r; }
+    else if (legmodel.rim == 5) { pos_ref = rot_alpha * (F_r-U_r) + U_r; }
 
-    vel_fb = (pos_fb-pos_fb_prev)/dt;
-    vel_ref = (pos_ref-pos_ref_prev)/dt;
+    /***/
+    Eigen::MatrixXd d_F_k = force_err_prev.block(0, 0, 2, 1);
+    Eigen::MatrixXd d_F_k_1 = force_err_prev.block(0, 1, 2, 1);
+    Eigen::MatrixXd d_F_k_2 = force_err_prev.block(0, 2, 2, 1);
 
-    // pos_cmd = pos_fb + dt * (vel_fb + dt*M.inverse()*((force_fb-force_ref)-K*(pos_fb-pos_ref)-D*(vel_fb-vel_ref)));
+    Eigen::MatrixXd E_k_1 = pos_err_prev.block(0, 0, 2, 1);
+    Eigen::MatrixXd E_k_2 = pos_err_prev.block(0, 1, 2, 1);
 
-    pos_cmd << pos_ref(0, 0), pos_ref(1, 0);
+    Eigen::MatrixXd w1 = K * pow(dt, 2) + 2 * D * dt + 4 * M;
+    Eigen::MatrixXd w2 = 2 * K * pow(dt, 2) - 8 * M;
+    Eigen::MatrixXd w3 = K * pow(dt, 2) - 2 * D * dt + 4 * M;
+
+    Eigen::MatrixXd E_k = w1.inverse() * (pow(dt, 2) * (d_F_k + 2 * d_F_k_1 + d_F_k_2) - w2 * E_k_1 - w3 * E_k_2);
+
+    pos_cmd = pos_ref - E_k;
+    /***/
 
     std::cout << pos_ref(0, 0) << ", " << pos_ref(1, 0) << std::endl;
     std::cout << pos_cmd(0, 0) << ", " << pos_cmd(1, 0) << std::endl;
 
+    double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)};
+
     if (legmodel.rim == 1){
-        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
         legmodel.inverse(pos_cmd_center, "Ul");
         eta_cmd << legmodel.theta, legmodel.beta;
     }
     else if (legmodel.rim == 2){
-        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
         legmodel.inverse(pos_cmd_center, "Ll");
         eta_cmd << legmodel.theta, legmodel.beta;
     }
     else if (legmodel.rim == 3){
-        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.0125};
         legmodel.inverse(pos_cmd_center, "G");
         eta_cmd << legmodel.theta, legmodel.beta;
     }
     else if (legmodel.rim == 4){
-        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
         legmodel.inverse(pos_cmd_center, "Lr");
         eta_cmd << legmodel.theta, legmodel.beta;
     }
     else if (legmodel.rim == 5){
-        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
         legmodel.inverse(pos_cmd_center, "Ur");
         eta_cmd << legmodel.theta, legmodel.beta;
     }
@@ -178,8 +156,8 @@ int main(int argc, char **argv) {
 
     AdmittanceController admittance_controller;
     
-    pos_fb_prev_modules = {Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1)};
-    pos_ref_prev_modules = {Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1), Eigen::MatrixXd::Zero(2, 1)};
+    pos_err_prev_modules = {Eigen::MatrixXd::Zero(2, 2), Eigen::MatrixXd::Zero(2, 2), Eigen::MatrixXd::Zero(2, 2), Eigen::MatrixXd::Zero(2, 2)};
+    force_err_prev_modules = {Eigen::MatrixXd::Zero(2, 3), Eigen::MatrixXd::Zero(2, 3), Eigen::MatrixXd::Zero(2, 3), Eigen::MatrixXd::Zero(2, 3)};
 
     while (ros::ok()) {
         ros::spinOnce();
@@ -199,10 +177,48 @@ int main(int argc, char **argv) {
             admittance_controller.K << imp_cmd_modules[i]->Kx, 0, 0, imp_cmd_modules[i]->Ky;
             admittance_controller.D << imp_cmd_modules[i]->Dx, 0, 0, imp_cmd_modules[i]->Dy;
 
-            admittance_controller.update(eta_fb, eta_ref, force_fb, force_ref, pos_fb_prev_modules[i], pos_ref_prev_modules[i]);
+            // if (eta_fb != Eigen::MatrixXd::Zero(2, 1)){
+            //     Eigen::MatrixXd H_l(2, 1);
+            //     Eigen::MatrixXd U_l(2, 1);
+            //     Eigen::MatrixXd F_l(2, 1);
+            //     Eigen::MatrixXd L_l(2, 1);
+            //     Eigen::MatrixXd H_r(2, 1);
+            //     Eigen::MatrixXd U_r(2, 1);
+            //     Eigen::MatrixXd F_r(2, 1);
+            //     Eigen::MatrixXd L_r(2, 1);
+            //     Eigen::MatrixXd G(2, 1);
+                
+            //     admittance_controller.legmodel.contact_map(eta_fb(0, 0), eta_fb(1, 0));
+            //     admittance_controller.legmodel.forward(eta_fb(0, 0), eta_fb(1, 0));
 
-            pos_fb_prev_modules[i] = admittance_controller.pos_fb;
-            pos_ref_prev_modules[i] = admittance_controller.pos_ref;
+            //     Eigen::Rotation2D<double> rotation(admittance_controller.legmodel.alpha);
+            //     Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+
+            //     H_l << admittance_controller.legmodel.H_l[0], admittance_controller.legmodel.H_l[1];
+            //     U_l << admittance_controller.legmodel.U_l[0], admittance_controller.legmodel.U_l[1];
+            //     F_l << admittance_controller.legmodel.F_l[0], admittance_controller.legmodel.F_l[1];
+            //     L_l << admittance_controller.legmodel.L_l[0], admittance_controller.legmodel.L_l[1];
+            //     H_r << admittance_controller.legmodel.H_r[0], admittance_controller.legmodel.H_r[1];
+            //     U_r << admittance_controller.legmodel.U_r[0], admittance_controller.legmodel.U_r[1];
+            //     F_r << admittance_controller.legmodel.F_r[0], admittance_controller.legmodel.F_r[1];
+            //     L_r << admittance_controller.legmodel.L_r[0], admittance_controller.legmodel.L_r[1];
+            //     G << admittance_controller.legmodel.G[0], admittance_controller.legmodel.G[1];
+
+            //     if (admittance_controller.legmodel.rim == 1) { pos_fb = rot_alpha * (H_l-U_l) + U_l; }
+            //     else if (admittance_controller.legmodel.rim == 2) { pos_fb = rot_alpha * (F_l-L_l) + L_l; }
+            //     else if (admittance_controller.legmodel.rim == 3) { pos_fb = G; }
+            //     else if (admittance_controller.legmodel.rim == 4) { pos_fb = rot_alpha * (G-L_r) + L_r; }
+            //     else if (admittance_controller.legmodel.rim == 5) { pos_fb = rot_alpha * (F_r-U_r) + U_r; }
+            // }
+
+            force_err_prev_modules[i].block(0, 2, 2, 1) = force_err_prev_modules[i].block(0, 1, 2, 1);
+            force_err_prev_modules[i].block(0, 1, 2, 1) = force_err_prev_modules[i].block(0, 0, 2, 1);
+            force_err_prev_modules[i].block(0, 0, 2, 1) = force_ref-force_fb;
+
+            admittance_controller.update(eta_ref, pos_err_prev_modules[i], force_err_prev_modules[i]);
+
+            pos_err_prev_modules[i].block(0, 1, 2, 1) = pos_err_prev_modules[i].block(0, 0, 2, 1);
+            pos_err_prev_modules[i].block(0, 0, 2, 1) = admittance_controller.pos_ref-admittance_controller.pos_cmd;
 
             motor_cmd_modules[i]->theta = admittance_controller.eta_cmd(0, 0);
             motor_cmd_modules[i]->beta = admittance_controller.eta_cmd(1, 0);

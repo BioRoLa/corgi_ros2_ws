@@ -23,8 +23,8 @@ Eigen::MatrixXd eta_ref(2, 1);
 Eigen::MatrixXd force_fb(2, 1);
 Eigen::MatrixXd force_ref(2, 1);
 
-std::vector<Eigen::MatrixXd> pos_fb_prev_modules;
-std::vector<Eigen::MatrixXd> pos_ref_prev_modules;
+std::vector<Eigen::MatrixXd> pos_err_prev_modules;
+std::vector<Eigen::MatrixXd> force_err_prev_modules;
 
 
 class AdmittanceController {
@@ -36,9 +36,7 @@ public:
     Eigen::MatrixXd D;
 
     Eigen::MatrixXd pos_fb;
-    Eigen::MatrixXd vel_fb;
     Eigen::MatrixXd pos_ref;
-    Eigen::MatrixXd vel_ref;
 
     Eigen::MatrixXd pos_cmd;
     Eigen::MatrixXd eta_cmd;
@@ -47,9 +45,7 @@ public:
 
 
     AdmittanceController();
-    void update(const Eigen::MatrixXd& eta_fb, const Eigen::MatrixXd& eta_ref,
-                const Eigen::MatrixXd& force_fb, const Eigen::MatrixXd& force_ref,
-                const Eigen::MatrixXd& pos_fb_prev, const Eigen::MatrixXd& pos_ref_prev);
+    void update(const Eigen::MatrixXd& eta_ref, const Eigen::MatrixXd& pos_err_prev, const Eigen::MatrixXd& force_err_prev);
 };
 
 #endif
