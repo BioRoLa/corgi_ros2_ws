@@ -192,7 +192,8 @@ DEF CORGI Robot {
       device [
         DEF lf_right_motor RotationalMotor {
           name "lf_right_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -201,7 +202,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LF_rmotorbar Solid {
         translation 0.222 0 -0.2
-        rotation 0.9697964005582006 0.2439158449685787 4.514003016704795e-05 6.283172776516791
+        rotation 0.9697964005582008 0.24391584496857877 4.5140030167047955e-05 6.283172776516791
         children [
           DEF group_rmotorbar Group {
             children [
@@ -1147,7 +1148,8 @@ DEF CORGI Robot {
       device [
         DEF lf_left_motor RotationalMotor {
           name "lf_left_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2021,7 +2023,8 @@ DEF CORGI Robot {
       device [
         DEF lh_right_motor RotationalMotor {
           name "lh_right_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2030,7 +2033,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_rmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation -0.1118107580217798 0.993729517721115 5.960385482923935e-07 6.283175930808174
+        rotation -0.11181075802177978 0.9937295177211148 5.960385482923934e-07 6.283175930808174
         children [
           USE group_rmotorbar
           DEF LH_Rl5l6 HingeJoint {
@@ -2156,7 +2159,8 @@ DEF CORGI Robot {
       device [
         DEF lh_left_motor RotationalMotor {
           name "lh_left_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2165,7 +2169,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_lmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation 0.9995835214168743 -0.028857734097284222 -0.00012204348322334183 6.283183818256037
+        rotation 0.9995835214168741 -0.028857734097284215 -0.0001220434832233418 6.283183818256037
         children [
           USE group_lmotorbar
           DEF LH_Ll5l6 HingeJoint {
@@ -2284,7 +2288,8 @@ DEF CORGI Robot {
       device [
         DEF rf_right_motor RotationalMotor {
           name "rf_right_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2419,7 +2424,8 @@ DEF CORGI Robot {
       device [
         DEF rf_left_motor RotationalMotor {
           name "rf_left_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2428,7 +2434,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RF_lmotorbar Solid {
         translation 0.222 0 0.2
-        rotation 3.589317177683407e-10 0.9999999999387919 -1.1064205190456558e-05 3.141636699015246
+        rotation 3.5893171776834067e-10 0.9999999999387917 -1.1064205190456561e-05 3.141636699015246
         children [
           USE group_lmotorbar
           DEF RF_Ll5l6 HingeJoint {
@@ -2547,7 +2553,8 @@ DEF CORGI Robot {
       device [
         DEF rh_right_motor RotationalMotor {
           name "rh_right_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2682,7 +2689,8 @@ DEF CORGI Robot {
       device [
         DEF rh_left_motor RotationalMotor {
           name "rh_left_motor"
-          maxVelocity 100
+          controlPID 90 0 1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -2691,7 +2699,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RH_lmotorbar Solid {
         translation -0.222 0 0.2
-        rotation 4.444736245550751e-12 -0.999999999999694 -7.824504824462818e-07 3.14160104444671
+        rotation 4.44473624555075e-12 -0.9999999999996939 -7.824504824462815e-07 3.14160104444671
         children [
           USE group_lmotorbar
           DEF RH_Ll5l6 HingeJoint {

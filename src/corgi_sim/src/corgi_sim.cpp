@@ -168,15 +168,15 @@ int main(int argc, char **argv) {
 
     std::cout << "\nInput the output filename and press Enter to start the simulation: ";
     trigger.output_filename = get_lastest_input();
+
+    update_motor_pid(AR_motor_pid_srv, AL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 90, 0, 0.5);
     
     int loop_counter = 0;
     while (ros::ok() && time_step_client.call(time_step_srv)){
         ros::spinOnce();
-
-        update_motor_pid(AR_motor_pid_srv, AL_motor_pid_srv, motor_cmd.module_a.kp, motor_cmd.module_a.ki, motor_cmd.module_a.kd);
-        update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, motor_cmd.module_b.kp, motor_cmd.module_b.ki, motor_cmd.module_b.kd);
-        update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, motor_cmd.module_c.kp, motor_cmd.module_c.ki, motor_cmd.module_c.kd);
-        update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, motor_cmd.module_d.kp, motor_cmd.module_d.ki, motor_cmd.module_d.kd);
 
         AR_motor_pid_client.call(AR_motor_pid_srv);
         AL_motor_pid_client.call(AL_motor_pid_srv);
