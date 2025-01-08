@@ -21,6 +21,8 @@ add_message_files(
   PowerStateStamped.msg
   TriggerStamped.msg
   SensorEnableStamped.msg
+  SteeringCmd.msg
+  SteeringStateStamped.msg
 )
 
 generate_messages(
