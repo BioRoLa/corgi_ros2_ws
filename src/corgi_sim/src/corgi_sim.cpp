@@ -4,10 +4,12 @@
 #include "rosgraph_msgs/Clock.h"
 #include "corgi_sim/set_int.h"
 #include "corgi_sim/set_float.h"
+#include "corgi_sim/motor_set_control_pid.h"
 #include "corgi_sim/Float64Stamped.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+
 
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
@@ -22,14 +24,23 @@ double CL_phi = 0.0;
 double DR_phi = 0.0;
 double DL_phi = 0.0;
 
-corgi_sim::set_float AR_motor_srv;
-corgi_sim::set_float AL_motor_srv;
-corgi_sim::set_float BR_motor_srv;
-corgi_sim::set_float BL_motor_srv;
-corgi_sim::set_float CR_motor_srv;
-corgi_sim::set_float CL_motor_srv;
-corgi_sim::set_float DR_motor_srv;
-corgi_sim::set_float DL_motor_srv;
+corgi_sim::set_float AR_motor_pos_srv;
+corgi_sim::set_float AL_motor_pos_srv;
+corgi_sim::set_float BR_motor_pos_srv;
+corgi_sim::set_float BL_motor_pos_srv;
+corgi_sim::set_float CR_motor_pos_srv;
+corgi_sim::set_float CL_motor_pos_srv;
+corgi_sim::set_float DR_motor_pos_srv;
+corgi_sim::set_float DL_motor_pos_srv;
+
+corgi_sim::motor_set_control_pid AR_motor_pid_srv;
+corgi_sim::motor_set_control_pid AL_motor_pid_srv;
+corgi_sim::motor_set_control_pid BR_motor_pid_srv;
+corgi_sim::motor_set_control_pid BL_motor_pid_srv;
+corgi_sim::motor_set_control_pid CR_motor_pid_srv;
+corgi_sim::motor_set_control_pid CL_motor_pid_srv;
+corgi_sim::motor_set_control_pid DR_motor_pid_srv;
+corgi_sim::motor_set_control_pid DL_motor_pid_srv;
 
 corgi_sim::set_int time_step_srv;
 
@@ -54,6 +65,16 @@ void CR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_r
 void CL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_l = trq.data; }
 void DR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_r = trq.data; }
 void DL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_l = trq.data; }
+
+void update_motor_pid(corgi_sim::motor_set_control_pid &R_motor_pid_srv, corgi_sim::motor_set_control_pid &L_motor_pid_srv, double kp, double ki, double kd){
+    R_motor_pid_srv.request.controlp = kp;
+    R_motor_pid_srv.request.controli = ki;
+    R_motor_pid_srv.request.controld = kd;
+
+    L_motor_pid_srv.request.controlp = kp;
+    L_motor_pid_srv.request.controli = ki;
+    L_motor_pid_srv.request.controld = kd;
+}
 
 void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
     theta = (phi_l - phi_r) / 2.0 + 17 / 180.0 * M_PI;
@@ -98,14 +119,23 @@ int main(int argc, char **argv) {
 
     ros::ServiceClient time_step_client = nh.serviceClient<corgi_sim::set_int>("robot/time_step");
 
-    ros::ServiceClient AR_motor_client = nh.serviceClient<corgi_sim::set_float>("lf_left_motor/set_position");
-    ros::ServiceClient AL_motor_client = nh.serviceClient<corgi_sim::set_float>("lf_right_motor/set_position");
-    ros::ServiceClient BR_motor_client = nh.serviceClient<corgi_sim::set_float>("rf_left_motor/set_position");
-    ros::ServiceClient BL_motor_client = nh.serviceClient<corgi_sim::set_float>("rf_right_motor/set_position");
-    ros::ServiceClient CR_motor_client = nh.serviceClient<corgi_sim::set_float>("rh_left_motor/set_position");
-    ros::ServiceClient CL_motor_client = nh.serviceClient<corgi_sim::set_float>("rh_right_motor/set_position");
-    ros::ServiceClient DR_motor_client = nh.serviceClient<corgi_sim::set_float>("lh_left_motor/set_position");
-    ros::ServiceClient DL_motor_client = nh.serviceClient<corgi_sim::set_float>("lh_right_motor/set_position");
+    ros::ServiceClient AR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lf_left_motor/set_position");
+    ros::ServiceClient AL_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lf_right_motor/set_position");
+    ros::ServiceClient BR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("rf_left_motor/set_position");
+    ros::ServiceClient BL_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("rf_right_motor/set_position");
+    ros::ServiceClient CR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("rh_left_motor/set_position");
+    ros::ServiceClient CL_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("rh_right_motor/set_position");
+    ros::ServiceClient DR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lh_left_motor/set_position");
+    ros::ServiceClient DL_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lh_right_motor/set_position");
+
+    ros::ServiceClient AR_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("lf_left_motor/set_control_pid");
+    ros::ServiceClient AL_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("lf_right_motor/set_control_pid");
+    ros::ServiceClient BR_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("rf_left_motor/set_control_pid");
+    ros::ServiceClient BL_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("rf_right_motor/set_control_pid");
+    ros::ServiceClient CR_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("rh_left_motor/set_control_pid");
+    ros::ServiceClient CL_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("rh_right_motor/set_control_pid");
+    ros::ServiceClient DR_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("lh_left_motor/set_control_pid");
+    ros::ServiceClient DL_motor_pid_client = nh.serviceClient<corgi_sim::motor_set_control_pid>("lh_right_motor/set_control_pid");
     
     ros::Subscriber AR_encoder_sub = nh.subscribe<corgi_sim::Float64Stamped>("lf_left_motor_sensor/value", 1, AR_encoder_cb);
     ros::Subscriber AL_encoder_sub = nh.subscribe<corgi_sim::Float64Stamped>("lf_right_motor_sensor/value" , 1, AL_encoder_cb);
@@ -138,24 +168,38 @@ int main(int argc, char **argv) {
 
     std::cout << "\nInput the output filename and press Enter to start the simulation: ";
     trigger.output_filename = get_lastest_input();
+
+    update_motor_pid(AR_motor_pid_srv, AL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 90, 0, 0.5);
     
     int loop_counter = 0;
     while (ros::ok() && time_step_client.call(time_step_srv)){
         ros::spinOnce();
 
-        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_srv.request.value, AL_motor_srv.request.value);
-        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_srv.request.value, BL_motor_srv.request.value);
-        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_srv.request.value, CL_motor_srv.request.value);
-        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_srv.request.value, DL_motor_srv.request.value);
+        AR_motor_pid_client.call(AR_motor_pid_srv);
+        AL_motor_pid_client.call(AL_motor_pid_srv);
+        BR_motor_pid_client.call(BR_motor_pid_srv);
+        BL_motor_pid_client.call(BL_motor_pid_srv);
+        CR_motor_pid_client.call(CR_motor_pid_srv);
+        CL_motor_pid_client.call(CL_motor_pid_srv);
+        DR_motor_pid_client.call(DR_motor_pid_srv);
+        DL_motor_pid_client.call(DL_motor_pid_srv);
 
-        AR_motor_client.call(AR_motor_srv);
-        AL_motor_client.call(AL_motor_srv);
-        BR_motor_client.call(BR_motor_srv);
-        BL_motor_client.call(BL_motor_srv);
-        CR_motor_client.call(CR_motor_srv);
-        CL_motor_client.call(CL_motor_srv);
-        DR_motor_client.call(DR_motor_srv);
-        DL_motor_client.call(DL_motor_srv);
+        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value);
+        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value);
+        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value);
+        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value);
+
+        AR_motor_pos_client.call(AR_motor_pos_srv);
+        AL_motor_pos_client.call(AL_motor_pos_srv);
+        BR_motor_pos_client.call(BR_motor_pos_srv);
+        BL_motor_pos_client.call(BL_motor_pos_srv);
+        CR_motor_pos_client.call(CR_motor_pos_srv);
+        CL_motor_pos_client.call(CL_motor_pos_srv);
+        DR_motor_pos_client.call(DR_motor_pos_srv);
+        DL_motor_pos_client.call(DL_motor_pos_srv);
 
         phi2tb(AR_phi, AL_phi, motor_state.module_a.theta, motor_state.module_a.beta);
         phi2tb(BR_phi, BL_phi, motor_state.module_b.theta, motor_state.module_b.beta);

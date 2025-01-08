@@ -22,6 +22,7 @@ add_message_files(
 
 add_service_files(
   FILES
+  motor_set_control_pid.srv
   set_float.srv
   set_int.srv
 )
