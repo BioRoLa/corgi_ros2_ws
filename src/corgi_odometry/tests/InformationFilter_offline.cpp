@@ -39,14 +39,16 @@ int main (int argc, char* argv[]) {
     if (argc == 3) {
         thres = std::atof(argv[2]);
     }
-    std::cout << thres << "\n";
+    std::cout << "thres : " << thres << "\n";  //add threshold of KLD
     int start_index = 0;
     while (1) {
         start_index ++;
-        if (df.iloc("trigger", start_index)) 
+        if (df.iloc("trigger", start_index))  // FIXME: if cannot find "trigger", function return first colume 
             break;
     }
-    Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero(n - start_index, 46);
+    Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero(n - start_index, 46);  //TODO: refactor to make it more readable, "magic number" 46
+
+    // read data from csv
     Eigen::Vector3f a(df.iloc("a.x", start_index), df.iloc("a.y", start_index), df.iloc("a.z", start_index));
     Eigen::Quaternionf q(df.iloc("q.w", start_index), df.iloc("q.x", start_index), df.iloc("q.y", start_index), df.iloc("q.z", start_index));
     Eigen::Vector<float, 5> encoder_lf(df.iloc("lf.theta", start_index), df.iloc("lf.beta", start_index), df.iloc("lf.beta_d", start_index), df.iloc("w.y", start_index), df.iloc("lf.theta_d", start_index));
@@ -58,7 +60,7 @@ int main (int argc, char* argv[]) {
     const int j = 10; // sample time (matrix size)
     const int SAMPLE_RATE = 200; // 200 500 1000 400 Hz 
     float dt = 1 / (float)SAMPLE_RATE;
-    U u(j, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt) ;
+    U u(j, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt); //IMU data
     Leg lf_leg(Eigen::Vector3f(0.222, 0.193, 0), 0.1, 0.012);
     Leg rf_leg(Eigen::Vector3f(0.222, -0.193, 0), 0.1, 0.012);
     Leg rh_leg(Eigen::Vector3f(-0.222, -0.193, 0), 0.1, 0.012);
@@ -119,6 +121,7 @@ int main (int argc, char* argv[]) {
         Eigen::Matrix3f R = q.toRotationMatrix();
         u.push_data(a, w, dt);
 
+        // lidar
         float alpha_lf,  alpha_rf, alpha_rh, alpha_lh;
         if (counter % 50) {
             alpha_lf = -100;
@@ -137,7 +140,7 @@ int main (int argc, char* argv[]) {
         rh.push_data(encoder_rh, w, dt, alpha_rh);
         lh.push_data(encoder_lh, w, dt, alpha_lh);
         if ((t265_pose - Eigen::Vector3f(df.iloc("t265.x", i), df.iloc("t265.y", i), df.iloc("t265.z", i))).norm() > 0)
-            usec += 1;
+            usec += 1; // FIXME: logic error, this parameter is used to check if the t265 data is updated
         t265_pose = Eigen::Vector3f(df.iloc("t265.x", i), df.iloc("t265.y", i), df.iloc("t265.z", i));
         t265.push_data(t265_pose,
         qt265.toRotationMatrix(), Eigen::Matrix3f::Identity() * 9e-6, sec, usec);
