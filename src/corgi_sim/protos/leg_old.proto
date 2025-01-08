@@ -1,10 +1,11 @@
 #VRML_SIM R2022b utf8
 PROTO leg_old[
-  field SFVec3f    translation  1 0 0.15
-  field SFRotation rotation     1 0 0 1.5708
+  field SFVec3f    translation  0 0 0.4
+  field SFRotation rotation     0 0.70710528118436 0.707108281185553 3.14159
   field SFFloat    bodyMass     5
-  field SFString   controller   ""
-  field MFString controllerArgs ""
+  field SFString   controller   "ros"
+  field MFString   controllerArgs ["--synchronize"
+                                   "--auto-publish"]
   field MFVec3f centerOfMass 0 0 0
 ]
 {
@@ -22,114 +23,96 @@ DEF LEG Robot {
         size 0.1 0.1 0.1
       }
     }
-    DEF LF_DISTANCE HingeJoint {
-      jointParameters HingeJointParameters {
-      }
-      endPoint DistanceSensor {
-        translation 0 -0.055 0
-        rotation 0 0 1 -1.5707963
-        children [
-          Shape {
-            appearance PBRAppearance {
-              baseColor 0.301961 0.301961 0.301961
-              roughness 1
-              metalness 0
-            }
-            geometry Cylinder {
-              height 0.01
-              radius 0.005
-            }
+    DistanceSensor {
+      translation 0 -0.055 -0.04
+      rotation 0 0 1 -1.5708
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.301961 0.301961 0.301961
+            roughness 1
+            metalness 0
           }
-        ]
-        name "dst_lf"
-        lookupTable [
-          0 0 0
-          0.62 1000 0
-        ]
-        type "sonar"
+          geometry Cylinder {
+            height 0.01
+            radius 0.005
+          }
+        }
+      ]
+      name "dst_lf"
+      lookupTable [
+        0 0 0
+        0.62 1000 0
+      ]
+      type "sonar"
+    }
+    Accelerometer {
+      rotation 1 0 0 1.5708
+      children [
+        DEF BOX Shape {
+          appearance PBRAppearance {
+            baseColor 0.8 0.8 0.8
+            roughness 1
+            metalness 0
+          }
+          geometry DEF BOX Box {
+            size 0.05 0.05 0.05
+          }
+        }
+      ]
+      name "imu"
+      boundingObject USE BOX
+      physics Physics {
       }
     }
-    DEF HINGE_IMU HingeJoint {
-      jointParameters HingeJointParameters {
-      }
-      endPoint Accelerometer {
-        translation -4.228787320315065e-09 -2.0381433211485417e-08 5.59510338864903e-10
-        rotation -0.9999999999996657 2.9901092489102905e-07 7.609758895250213e-07 1.5707961801967754
-        children [
-          DEF BOX Shape {
-            appearance PBRAppearance {
-              baseColor 0.8 0.8 0.8
-              roughness 1
-              metalness 0
-            }
-            geometry DEF BOX Box {
-              size 0.05 0.05 0.05
-            }
+    InertialUnit {
+      rotation 1 0 0 1.5708
+      children [
+        DEF BOX Shape {
+          appearance PBRAppearance {
+            baseColor 0.8 0.8 0.8
+            roughness 1
+            metalness 0
           }
-        ]
-        name "imu"
-        boundingObject USE BOX
-        physics Physics {
+          geometry DEF BOX Box {
+            size 0.05 0.05 0.05
+          }
         }
+      ]
+      name "gyro"
+      boundingObject USE BOX
+      physics Physics {
       }
     }
-    DEF HINGE_GYRO HingeJoint {
-      jointParameters HingeJointParameters {
-      }
-      endPoint InertialUnit {
-        translation -4.228787320315065e-09 -2.0381433211485417e-08 5.595103388649022e-10
-        rotation -0.9999999999996657 2.99010924892006e-07 7.609758895348623e-07 1.5707961801967754
-        children [
-          DEF BOX Shape {
-            appearance PBRAppearance {
-              baseColor 0.8 0.8 0.8
-              roughness 1
-              metalness 0
-            }
-            geometry DEF BOX Box {
-              size 0.05 0.05 0.05
-            }
+    Gyro {
+      rotation 1 0 0 1.5708
+      children [
+        DEF BOX Shape {
+          appearance PBRAppearance {
+            baseColor 0.8 0.8 0.8
+            roughness 1
+            metalness 0
           }
-        ]
-        name "gyro"
-        boundingObject USE BOX
-        physics Physics {
-        }
-      }
-    }
-    DEF HINGE_ANGVEL HingeJoint {
-      jointParameters HingeJointParameters {
-      }
-      endPoint Gyro {
-        translation -4.228787320315065e-09 -2.0381433211485417e-08 5.595103388649007e-10
-        rotation -0.9999999999996657 2.990109248916631e-07 7.60975889548351e-07 1.5707961801967754
-        children [
-          DEF BOX Shape {
-            appearance PBRAppearance {
-              baseColor 0.8 0.8 0.8
-              roughness 1
-              metalness 0
-            }
-            geometry DEF BOX Box {
-              size 0.05 0.05 0.05
-            }
+          geometry DEF BOX Box {
+            size 0.05 0.05 0.05
           }
-        ]
-        name "ang_vel"
-        boundingObject USE BOX
-        physics Physics {
         }
+      ]
+      name "ang_vel"
+      boundingObject USE BOX
+      physics Physics {
       }
     }
     DEF LF_Rmotorbar HingeJoint {
       jointParameters HingeJointParameters {
         axis 0 0 -1
-        anchor 0 0 -0.2
+        anchor 0 0 -0.12
       }
       device [
         DEF lf_right_motor RotationalMotor {
           name "lf_right_motor"
-          maxVelocity 100
+          controlPID 30 0 0.1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -137,12 +120,12 @@ DEF LEG Robot {
         }
       ]
       endPoint DEF LF_rmotorbar Solid {
-        translation 0 0 -0.2
-        rotation 0.9697964008685963 0.24391584504664912 3.738309534109889e-05 6.28317277222926
+        translation 0 0 -0.12
+        rotation 0.9697964005582006 0.2439158449685787 4.514003016704795e-05 6.283172776516791
         children [
           DEF group_rmotorbar Group {
             children [
-              DEF pin645_rmotorbar_3 Transform {
+              DEF pin645_rmotorbar_3 Pose {
                 children [
                   Shape {
                     appearance Appearance {
@@ -174,7 +157,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF right_motorbar Transform {
+              DEF right_motorbar Pose {
                 children [
                   Shape {
                     appearance PBRAppearance {
@@ -203,7 +186,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF flange_rmotorbar_3f Transform {
+              DEF flange_rmotorbar_3f Pose {
                 children [
                   Shape {
                     appearance Appearance {
@@ -235,7 +218,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF flange_rmotorbar_3b Transform {
+              DEF flange_rmotorbar_3b Pose {
                 children [
                   Shape {
                     appearance Appearance {
@@ -275,11 +258,11 @@ DEF LEG Robot {
               anchor 0.0233897 0.0765044 0
             }
             endPoint DEF LF_rl5l6 Solid {
-              translation 1.3877787807814457e-17 2.7755575615628914e-17 0
+              translation 5.551115123125783e-17 -2.7755575615628914e-16 -1.3877787807814457e-16
               children [
                 DEF group_rl5l6 Group {
                   children [
-                    DEF pin645_2l5l6 Transform {
+                    DEF pin645_2l5l6 Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -311,7 +294,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF right_l5l6 Transform {
+                    DEF right_l5l6 Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -340,7 +323,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rl5l6_df Transform {
+                    DEF flange_rl5l6_df Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -372,7 +355,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rl5l6_db Transform {
+                    DEF flange_rl5l6_db Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -412,11 +395,11 @@ DEF LEG Robot {
                     anchor 0.00719684 -0.0120269 0
                   }
                   endPoint DEF LF_rl4 Solid {
-                    translation 8.673617379884035e-19 1.734723475976807e-18 0
+                    translation 0 0 8.326672684688674e-17
                     children [
                       DEF group_rl4 Group {
                         children [
-                          DEF pin422_rl4 Transform {
+                          DEF pin422_rl4 Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -448,7 +431,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF right_l4 Transform {
+                          DEF right_l4 Pose {
                             children [
                               Shape {
                                 appearance PBRAppearance {
@@ -477,7 +460,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rl4_f Transform {
+                          DEF flange_rl4_f Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -509,7 +492,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rl4_b Transform {
+                          DEF flange_rl4_b Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -567,11 +550,11 @@ DEF LEG Robot {
               anchor 0.0292372 0.0956305 0
             }
             endPoint DEF LF_rupframe Solid {
-              translation -2.0816681711721685e-17 -1.3877787807814457e-17 0
+              translation 1.3877787807814457e-16 3.3306690738754696e-16 -1.3877787807814457e-16
               children [
                 DEF group_rupframe Group {
                   children [
-                    DEF pin645_rupframe_u Transform {
+                    DEF pin645_rupframe_u Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -603,7 +586,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF pin645_rupframe_d2 Transform {
+                    DEF pin645_rupframe_d2 Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -635,7 +618,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF pin645_rupframe_d1 Transform {
+                    DEF pin645_rupframe_d1 Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -667,7 +650,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rupframe_uf Transform {
+                    DEF flange_rupframe_uf Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -696,7 +679,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rupframe_ub Transform {
+                    DEF flange_rupframe_ub Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -725,7 +708,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rupframe_d2f Transform {
+                    DEF flange_rupframe_d2f Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -754,7 +737,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_rupframe_d2b Transform {
+                    DEF flange_rupframe_d2b Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -783,7 +766,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF rupframe Transform {
+                    DEF rupframe Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -829,7 +812,7 @@ DEF LEG Robot {
                     anchor 0.0766044 -0.0642788 0
                   }
                   endPoint DEF LF_rdownframe Solid {
-                    translation -4.163336342344337e-17 2.7755575615628914e-17 0
+                    translation 2.220446049250313e-16 -3.3306690738754696e-16 -8.326672684688674e-17
                     children [
                       DEF LF_force_sensor TouchSensor {
                         translation 0 -0.1 0
@@ -858,7 +841,7 @@ DEF LEG Robot {
                       }
                       DEF group_rdownframe Group {
                         children [
-                          DEF pin630_G Transform {
+                          DEF pin630_G Pose {
                             children [
                               DEF pin630_G_shape Shape {
                                 appearance Appearance {
@@ -890,7 +873,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF right_downframe Transform {
+                          DEF right_downframe Pose {
                             children [
                               Shape {
                                 appearance PBRAppearance {
@@ -919,7 +902,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rdownframe_uf Transform {
+                          DEF flange_rdownframe_uf Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -951,7 +934,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rdownframe_ub Transform {
+                          DEF flange_rdownframe_ub Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -983,7 +966,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rdownframe_df Transform {
+                          DEF flange_rdownframe_df Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1015,7 +998,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_rdownframe_db Transform {
+                          DEF flange_rdownframe_db Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1079,12 +1062,13 @@ DEF LEG Robot {
     DEF LF_Lmotorbar HingeJoint {
       jointParameters HingeJointParameters {
         axis 0 0 -1
-        anchor 0 0 -0.2
+        anchor 0 0 -0.12
       }
       device [
         DEF lf_left_motor RotationalMotor {
           name "lf_left_motor"
-          maxVelocity 100
+          controlPID 30 0 0.1
+          maxVelocity 31.4
           maxTorque 35
         }
         PositionSensor {
@@ -1092,12 +1076,12 @@ DEF LEG Robot {
         }
       ]
       endPoint DEF LF_lmotorbar Solid {
-        translation 0 0 -0.2
-        rotation 0.25550985217549205 -0.9668064518959203 3.6985707641022456e-06 6.283168162786524
+        translation 0 0 -0.12
+        rotation 0.2555098521772103 -0.9668064519024216 4.800809896809153e-07 6.283168166154229
         children [
           DEF group_lmotorbar Group {
             children [
-              DEF pin645_lmotorbar_3 Transform {
+              DEF pin645_lmotorbar_3 Pose {
                 children [
                   Shape {
                     appearance Appearance {
@@ -1129,7 +1113,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF left_motorbar Transform {
+              DEF left_motorbar Pose {
                 children [
                   Shape {
                     appearance PBRAppearance {
@@ -1158,7 +1142,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF flange_lmotorbar_3f Transform {
+              DEF flange_lmotorbar_3f Pose {
                 children [
                   Shape {
                     appearance PBRAppearance {
@@ -1185,7 +1169,7 @@ DEF LEG Robot {
                   }
                 ]
               }
-              DEF flange_lmotorbar_3b Transform {
+              DEF flange_lmotorbar_3b Pose {
                 children [
                   Shape {
                     appearance Appearance {
@@ -1225,11 +1209,11 @@ DEF LEG Robot {
               anchor -0.0233897 0.0765044 0
             }
             endPoint DEF LF_ll5l6 Solid {
-              translation -1.0408340855860843e-17 2.7755575615628914e-17 0
+              translation -2.7755575615628914e-17 1.1102230246251565e-16 -1.6653345369377348e-16
               children [
                 DEF group_ll5l6 Group {
                   children [
-                    DEF left_l5l6 Transform {
+                    DEF left_l5l6 Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1258,7 +1242,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_ll5l6_df Transform {
+                    DEF flange_ll5l6_df Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1287,7 +1271,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_ll5l6_db Transform {
+                    DEF flange_ll5l6_db Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -1336,11 +1320,11 @@ DEF LEG Robot {
                     anchor -0.00719684 -0.0120269 0
                   }
                   endPoint DEF LF_ll4 Solid {
-                    translation 2.6020852139652106e-18 1.734723475976807e-18 0
+                    translation 5.551115123125783e-17 0 0
                     children [
                       DEF group_ll4 Group {
                         children [
-                          DEF pin422_ll4 Transform {
+                          DEF pin422_ll4 Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1372,7 +1356,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF left_l4 Transform {
+                          DEF left_l4 Pose {
                             children [
                               Shape {
                                 appearance PBRAppearance {
@@ -1401,7 +1385,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ll4_f Transform {
+                          DEF flange_ll4_f Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1433,7 +1417,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ll4_b Transform {
+                          DEF flange_ll4_b Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1491,11 +1475,11 @@ DEF LEG Robot {
               anchor -0.0292372 0.0956305 0
             }
             endPoint DEF LF_lupframe Solid {
-              translation 3.469446951953614e-18 2.7755575615628914e-17 0
+              translation 2.7755575615628914e-17 3.3306690738754696e-16 -1.6653345369377348e-16
               children [
                 DEF group_lupframe Group {
                   children [
-                    DEF pin645_lupframe_u Transform {
+                    DEF pin645_lupframe_u Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -1527,7 +1511,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF pin645_lupframe_d2 Transform {
+                    DEF pin645_lupframe_d2 Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -1559,7 +1543,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF pin645_lupframe_d1 Transform {
+                    DEF pin645_lupframe_d1 Pose {
                       children [
                         Shape {
                           appearance Appearance {
@@ -1591,7 +1575,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF lupframe Transform {
+                    DEF lupframe Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1620,7 +1604,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_lupframe_uf Transform {
+                    DEF flange_lupframe_uf Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1649,7 +1633,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_lupframe_ub Transform {
+                    DEF flange_lupframe_ub Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1678,7 +1662,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_lupframe_d2f Transform {
+                    DEF flange_lupframe_d2f Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1707,7 +1691,7 @@ DEF LEG Robot {
                         }
                       ]
                     }
-                    DEF flange_lupframe_d2b Transform {
+                    DEF flange_lupframe_d2b Pose {
                       children [
                         Shape {
                           appearance PBRAppearance {
@@ -1753,11 +1737,11 @@ DEF LEG Robot {
                     anchor -0.0766044 -0.0642788 0
                   }
                   endPoint DEF LF_ldownframe Solid {
-                    translation 1.3877787807814457e-17 2.7755575615628914e-17 0
+                    translation -4.440892098500626e-16 -4.996003610813204e-16 -5.551115123125783e-17
                     children [
                       DEF group_ldowframe Group {
                         children [
-                          DEF left_downframe Transform {
+                          DEF left_downframe Pose {
                             children [
                               Shape {
                                 appearance PBRAppearance {
@@ -1784,7 +1768,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ldownframe_uf Transform {
+                          DEF flange_ldownframe_uf Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1816,7 +1800,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ldownframe_ub Transform {
+                          DEF flange_ldownframe_ub Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1848,7 +1832,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ldownframe_df Transform {
+                          DEF flange_ldownframe_df Pose {
                             children [
                               Shape {
                                 appearance Appearance {
@@ -1880,7 +1864,7 @@ DEF LEG Robot {
                               }
                             ]
                           }
-                          DEF flange_ldownframe_db Transform {
+                          DEF flange_ldownframe_db Pose {
                             children [
                               Shape {
                                 appearance Appearance {
