@@ -1,7 +1,7 @@
 #include "impedance_control.hpp"
 
 
-AdmittanceController::AdmittanceController() : dt(0.0001), legmodel(true) {
+AdmittanceController::AdmittanceController() : dt(0.001), legmodel(true) {
 
     M = Eigen::MatrixXd::Zero(2, 2);
     K = Eigen::MatrixXd::Zero(2, 2);
@@ -12,6 +12,7 @@ AdmittanceController::AdmittanceController() : dt(0.0001), legmodel(true) {
     pos_ref = Eigen::MatrixXd::Zero(2, 1);
     vel_ref = Eigen::MatrixXd::Zero(2, 1);
 
+    pos_cmd = Eigen::MatrixXd::Zero(2, 1);
     eta_cmd = Eigen::MatrixXd::Zero(2, 1);
 }
 
@@ -20,6 +21,8 @@ void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::Ma
                                   const Eigen::MatrixXd& force_fb, const Eigen::MatrixXd& force_ref,
                                   const Eigen::MatrixXd& pos_fb_prev, const Eigen::MatrixXd& pos_ref_prev) {
     
+    if (eta_ref == Eigen::MatrixXd::Zero(2, 1) || eta_fb == Eigen::MatrixXd::Zero(2, 1)) return;
+
     Eigen::MatrixXd H_l(2, 1);
     Eigen::MatrixXd U_l(2, 1);
     Eigen::MatrixXd F_l(2, 1);
@@ -46,12 +49,11 @@ void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::Ma
     L_r << legmodel.L_r[0], legmodel.L_r[1];
     G << legmodel.G[0], legmodel.G[1];
 
-    if (legmodel.rim == 1) pos_fb = rot_alpha * (H_l-U_l) + U_l;
-    else if (legmodel.rim == 2) pos_fb = rot_alpha * (F_l-L_l) + L_l;
-    else if (legmodel.rim == 3) pos_fb = G;
-    else if (legmodel.rim == 4) pos_fb = rot_alpha * (G-L_r) + L_r;
-    else if (legmodel.rim == 5) pos_fb = rot_alpha * (F_r-U_r) + U_r;
-    else eta_cmd << eta_ref(0, 0), eta_ref(1, 0);
+    if (legmodel.rim == 1) { pos_fb = rot_alpha * (H_l-U_l) + U_l; }
+    else if (legmodel.rim == 2) { pos_fb = rot_alpha * (F_l-L_l) + L_l; }
+    else if (legmodel.rim == 3) { pos_fb = G; }
+    else if (legmodel.rim == 4) { pos_fb = rot_alpha * (G-L_r) + L_r; }
+    else if (legmodel.rim == 5) { pos_fb = rot_alpha * (F_r-U_r) + U_r; }
 
 
     legmodel.contact_map(eta_ref(0, 0), eta_ref(1, 0));
@@ -70,22 +72,50 @@ void AdmittanceController::update(const Eigen::MatrixXd& eta_fb, const Eigen::Ma
     L_r << legmodel.L_r[0], legmodel.L_r[1];
     G << legmodel.G[0], legmodel.G[1];
 
-    if (legmodel.rim == 1) pos_ref = rot_alpha_ * (H_l-U_l) + U_l;
-    else if (legmodel.rim == 2) pos_ref = rot_alpha_ * (F_l-L_l) + L_l;
-    else if (legmodel.rim == 3) pos_ref = G;
-    else if (legmodel.rim == 4) pos_ref = rot_alpha_ * (G-L_r) + L_r;
-    else if (legmodel.rim == 5) pos_ref = rot_alpha_ * (F_r-U_r) + U_r;
-    else eta_cmd << eta_ref(0, 0), eta_ref(1, 0);
+    if (legmodel.rim == 1) { pos_ref = rot_alpha_ * (H_l-U_l) + U_l; }
+    else if (legmodel.rim == 2) { pos_ref = rot_alpha_ * (F_l-L_l) + L_l; }
+    else if (legmodel.rim == 3) { pos_ref = G; }
+    else if (legmodel.rim == 4) { pos_ref = rot_alpha_ * (G-L_r) + L_r; }
+    else if (legmodel.rim == 5) { pos_ref = rot_alpha_ * (F_r-U_r) + U_r; }
 
-    vel_fb = (pos_fb_prev - pos_fb) / dt;
-    vel_ref = (pos_ref_prev - pos_ref) / dt;
+    vel_fb = (pos_fb-pos_fb_prev)/dt;
+    vel_ref = (pos_ref-pos_ref_prev)/dt;
 
-    pos_cmd = pos_fb + dt * (vel_fb + dt*M.inverse()*((force_ref-force_fb) - D*(vel_ref-vel_fb) - K*(pos_ref-pos_fb)));
+    // pos_cmd = pos_fb + dt * (vel_fb + dt*M.inverse()*((force_fb-force_ref)-K*(pos_fb-pos_ref)-D*(vel_fb-vel_ref)));
+
+    pos_cmd << pos_ref(0, 0), pos_ref(1, 0);
 
     std::cout << pos_ref(0, 0) << ", " << pos_ref(1, 0) << std::endl;
     std::cout << pos_cmd(0, 0) << ", " << pos_cmd(1, 0) << std::endl;
 
-    eta_cmd << eta_ref(0, 0), eta_ref(1, 0);
+    if (legmodel.rim == 1){
+        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
+        legmodel.inverse(pos_cmd_center, "Ul");
+        eta_cmd << legmodel.theta, legmodel.beta;
+    }
+    else if (legmodel.rim == 2){
+        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
+        legmodel.inverse(pos_cmd_center, "Ll");
+        eta_cmd << legmodel.theta, legmodel.beta;
+    }
+    else if (legmodel.rim == 3){
+        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.0125};
+        legmodel.inverse(pos_cmd_center, "G");
+        eta_cmd << legmodel.theta, legmodel.beta;
+    }
+    else if (legmodel.rim == 4){
+        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
+        legmodel.inverse(pos_cmd_center, "Lr");
+        eta_cmd << legmodel.theta, legmodel.beta;
+    }
+    else if (legmodel.rim == 5){
+        double pos_cmd_center[2] = {pos_cmd(0, 0), pos_cmd(1, 0)+0.1125};
+        legmodel.inverse(pos_cmd_center, "Ur");
+        eta_cmd << legmodel.theta, legmodel.beta;
+    }
+    else{
+        eta_cmd << eta_ref(0, 0), eta_ref(1, 0);
+    }
 }
 
 

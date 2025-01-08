@@ -28,7 +28,10 @@ int main(int argc, char **argv) {
         ros::spinOnce();
         
         for (auto& cmd : imp_cmd_modules){
-            cmd->theta = (47-30*cos(loop_count/2500.0*M_PI))/180.0*M_PI;
+            // cmd->theta = (47-30*cos(loop_count/2500.0*M_PI))/180.0*M_PI;
+            if (loop_count < 3000) cmd->theta = (loop_count/6000.0+17/180.0)*M_PI;
+            else cmd->theta = (0.5+17/180.0)*M_PI;
+            // cmd->theta = 60/180.0*M_PI;
             cmd->beta = 0;
             cmd->Fx = 0;
             cmd->Fy = 0;
