@@ -169,10 +169,10 @@ int main(int argc, char **argv) {
     std::cout << "\nInput the output filename and press Enter to start the simulation: ";
     trigger.output_filename = get_lastest_input();
 
-    update_motor_pid(AR_motor_pid_srv, AL_motor_pid_srv, 90, 0, 0.5);
-    update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, 90, 0, 0.5);
-    update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 90, 0, 0.5);
-    update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 90, 0, 0.5);
+    update_motor_pid(AR_motor_pid_srv, AL_motor_pid_srv, 30, 0, 0.1);
+    update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, 30, 0, 0.1);
+    update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 30, 0, 0.1);
+    update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 30, 0, 0.1);
     
     int loop_counter = 0;
     while (ros::ok() && time_step_client.call(time_step_srv)){
