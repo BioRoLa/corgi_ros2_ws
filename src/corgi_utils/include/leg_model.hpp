@@ -25,9 +25,9 @@ class LegModel {
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
 
         // Constants
-        double R; // Wheel radius
-        double r; // Tire radius
-        double radius;  // Wheel radius + Tire radius
+        const double R; // Wheel radius
+        const double r; // Tire radius
+        const double radius;  // Wheel radius + Tire radius
 
         // Current theta and beta
         double theta;
@@ -43,14 +43,14 @@ class LegModel {
         std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
 
         // Constants
-        double max_theta;
-        double min_theta;
-        double theta0;
-        double beta0;
-        double arc_HF;
-        double arc_BC;
-        double l1, l2, l3, l4, l5, l6, l7, l8;
-        double l_AE, l_BF, l_BH, ang_UBC, ang_LFG;
+        const double max_theta;
+        const double min_theta;
+        const double theta0;
+        const double beta0;
+        const double arc_HF;
+        const double arc_BC;
+        const double l1, l2, l3, l4, l5, l6, l7, l8;
+        const double l_AE, l_BF, l_BH, ang_UBC, ang_LFG;
 
         // Intermediate variables
         double l_BD;
