@@ -207,7 +207,11 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
         bool in_range = ((p2 - O).real() >= -cal_err) && ((p1 - O).real() <= cal_err);
 
         if (in_range) {
-            lowest_point = O.imag() - radius;
+            if (rim == "G") {
+                lowest_point = O.imag() - r;
+            } else {
+                lowest_point = O.imag() - radius;
+            }//end if else
             alpha = std::arg(-1i / (p1 - O));
             contact_x = O.real();
         } else {
