@@ -142,16 +142,21 @@ int main (int argc, char* argv[]) {
         rf.push_data(encoder_rf, w, dt, alpha_rf);
         rh.push_data(encoder_rh, w, dt, alpha_rh);
         lh.push_data(encoder_lh, w, dt, alpha_lh);
+
+        // t265
         if ((t265_pose - Eigen::Vector3f(df.iloc("t265.x", i), df.iloc("t265.y", i), df.iloc("t265.z", i))).norm() > 0)
             usec += 1; // FIXME: logic error, this parameter is used to check if the t265 data is updated
         t265_pose = Eigen::Vector3f(df.iloc("t265.x", i), df.iloc("t265.y", i), df.iloc("t265.z", i));
         t265.push_data(t265_pose,
         qt265.toRotationMatrix(), Eigen::Matrix3f::Identity() * 9e-6, sec, usec);
 
+
         filter.predict();
+
         if (t265.is_update()) {
             filter.certain_valid(&t265_pkld);
         }
+        
         filter.valid();
         x = filter.state();
         Eigen::Matrix3f P_cov = filter.Y_inv.block<3, 3>(3*j-3, 3*j-3);
