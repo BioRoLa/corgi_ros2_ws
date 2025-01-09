@@ -234,7 +234,9 @@ int main(int argc, char **argv) {
             
             P_cov = filter.Y_inv.block<3, 3>(3*J-3, 3*J-3);
             p += rot * R * R_init.transpose() * x.segment(3 * J - 3, 3) * dt;
-            //TODO: info counter number 
+            
+            // Print the counter number using ROS_INFO
+            ROS_INFO("Counter: %d", counter);
             counter ++;
         }
     }
