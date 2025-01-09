@@ -1,5 +1,5 @@
 /**
- * @file IF_main.cpp
+ * @file InformationFilter_offline.cpp
  * 
  * @author peichunhuang
  * @modified by Kenny-Huang
@@ -69,12 +69,15 @@ int main (int argc, char* argv[]) {
     DP rf(j + 1, rf_leg, encoder_rf, 0, &u);
     DP rh(j + 1, rh_leg, encoder_rh, 0, &u);
     DP lh(j + 1, lh_leg, encoder_lh, 0, &u);
+
+    // T265 data
     Eigen::Quaternionf qt265(df.iloc("t265.qw", start_index), df.iloc("t265.qx", start_index), df.iloc("t265.qy", start_index), df.iloc("t265.qz", start_index));
     Eigen::Matrix3f t265_to_imu;
     t265_to_imu << 0, 0, -1, 1, 0, 0, 0, -1, 0;
     T265 t265(&lf, t265_to_imu, Eigen::Vector3f(0, 0, 0.285), j + 1, 
     Eigen::Vector3f(df.iloc("t265.x", 0), df.iloc("t265.y", 0), df.iloc("t265.z", 0)), 
     qt265.toRotationMatrix());
+    // initial state
     Eigen::VectorXf x = Eigen::VectorXf::Zero(6 * j);
     for (int i = 0; i < j; i++) {
         x(i * 3) = v_init(0);
