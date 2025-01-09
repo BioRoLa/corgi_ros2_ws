@@ -180,7 +180,7 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
 
         rim = min_index==5? 0 : min_index+1;
         alpha = arc_list[min_index][1];
-        contact_p = {arc_list[min_index][0], arc_list[min_index][2]};
+        contact_p = {arc_list[min_index][2], arc_list[min_index][0]};
 }//end contact_map
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
@@ -412,7 +412,7 @@ int main() {
     legmodel.contact_map(theta, beta);
     std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
     std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
-    std::cout << "Output contact_p with single value input: " << legmodel.contact_p[0] << ", " << legmodel.contact_p[1] << std::endl;
+    std::cout << "Output contact_p with single value input: (" << legmodel.contact_p[0] << ", " << legmodel.contact_p[1] << ")\n";
     
     /* Inverse kinematics */
     std::cout << "\n";
