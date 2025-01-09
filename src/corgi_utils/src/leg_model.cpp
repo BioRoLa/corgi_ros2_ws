@@ -8,44 +8,37 @@
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
 
-LegModel::LegModel(bool sim) {
-    // Constants initialization
-    max_theta = M_PI * 160.0 / 180.0;
-    min_theta = M_PI * 17.0 / 180.0;
-    theta0 = M_PI * 17.0 / 180.0;
-    beta0 = M_PI * 90.0 / 180.0;
-
+LegModel::LegModel(bool sim) : 
+    /* Initializer List */
+    max_theta(M_PI * 160.0 / 180.0),
+    min_theta(M_PI * 17.0 / 180.0),
+    theta0(M_PI * 17.0 / 180.0),
+    beta0(M_PI * 90.0 / 180.0),
     // Wheel radius
-    R = 0.1; // 10 cm
-    if (sim) {
-        r = 0.0125; // No tire
-    } else {
-        r = 0.019;  // With tire
-    }
-    radius = R + r;
-
+    R(0.1), // 10 cm
+    r(sim? 0.0125 : 0.019), // No tire : With tire
+    radius(R + r),
     // Linkage parameters
-    arc_HF = M_PI * 130.0 / 180.0;
-    arc_BC = M_PI * 101.0 / 180.0;
-    l1 = 0.8 * R;
-    l2 = R - l1;
-    l3 = 2.0 * R * sin(arc_BC / 2.0);
-    l4 = 0.882966335 * R;
-    l5 = 0.9 * R;
-    l6 = 0.4 * R;
-    l7 = 2.0 * R * sin((arc_HF - arc_BC - theta0) / 2.0);
-    l8 = 2.0 * R * sin((M_PI - arc_HF) / 2.0);
-
+    arc_HF(M_PI * 130.0 / 180.0),
+    arc_BC(M_PI * 101.0 / 180.0),
+    l1(0.8 * R),
+    l2(R - l1),
+    l3(2.0 * R * sin(arc_BC / 2.0)),
+    l4(0.882966335 * R),
+    l5(0.9 * R),
+    l6(0.4 * R),
+    l7(2.0 * R * sin((arc_HF - arc_BC - theta0) / 2.0)),
+    l8(2.0 * R * sin((M_PI - arc_HF) / 2.0)),
     // Useful parameters
-    l_AE = l5 + l6;
-    l_BF = 2.0 * R * sin((arc_HF - theta0) / 2.0);
-    l_BH = 2.0 * R * sin(theta0 / 2.0);
-    ang_UBC = (M_PI - arc_BC) / 2.0;
-    ang_LFG = (M_PI - (M_PI - arc_HF)) / 2.0;
-
+    l_AE(l5 + l6),
+    l_BF(2.0 * R * sin((arc_HF - theta0) / 2.0)),
+    l_BH(2.0 * R * sin(theta0 / 2.0)),
+    ang_UBC((M_PI - arc_BC) / 2.0),
+    ang_LFG((M_PI - (M_PI - arc_HF)) / 2.0) 
+{
     // Initialize positions
     this->forward(theta0, 0.0);
-}
+}//end LegModel
 
 void LegModel::forward(double theta_in, double beta_in, bool vector) {
     theta = theta_in;
