@@ -24,6 +24,11 @@ class LegModel {
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
 
+        // Constants
+        double R; // Wheel radius
+        double r; // Tire radius
+        double radius;  // Wheel radius + Tire radius
+
         // Current theta and beta
         double theta;
         double beta;
@@ -42,9 +47,6 @@ class LegModel {
         double min_theta;
         double theta0;
         double beta0;
-        double R; // Wheel radius
-        double r; // Tire radius
-        double radius;
         double arc_HF;
         double arc_BC;
         double l1, l2, l3, l4, l5, l6, l7, l8;
