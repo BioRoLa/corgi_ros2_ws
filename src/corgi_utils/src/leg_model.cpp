@@ -147,44 +147,6 @@ void LegModel::to_vector() {
     L_r = {L_r_c.real(), L_r_c.imag()};
 }
 
-// Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
-// For a complete implementation, you would need to use numerical libraries like Eigen, Ceres Solver, or write custom solvers.
-void LegModel::inverse(const double pos[2], const std::string &joint, bool forward) {
-        using namespace std::complex_literals;
-        double abs_pos = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
-        if (joint == "G"){
-            theta = inv_G_dist_poly(abs_pos);
-            beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);    // atan2(y, x)
-        } else if (joint == "Ul" || joint == "Ur"){
-            theta = inv_U_dist_poly(abs_pos);
-            double U_x_beta0, U_y_beta0;
-            if (joint == "Ul"){
-                U_x_beta0 = U_l_poly[0](theta);
-                U_y_beta0 = U_l_poly[1](theta);
-            } else {    // Ur
-                U_x_beta0 = U_r_poly[0](theta);
-                U_y_beta0 = U_r_poly[1](theta);    
-            }//end if else
-            beta = std::atan2(pos[1], pos[0]) - std::atan2(U_y_beta0, U_x_beta0);    // atan2(y, x)
-        } else if (joint == "Ll" || joint == "Lr"){
-            theta = inv_L_dist_poly(abs_pos);
-            double L_x_beta0, L_y_beta0;
-            if (joint == "Ll"){
-                L_x_beta0 = L_l_poly[0](theta);
-                L_y_beta0 = L_l_poly[1](theta);
-            } else {    // Lr
-                L_x_beta0 = L_r_poly[0](theta);
-                L_y_beta0 = L_r_poly[1](theta);  
-            }//end if else            
-            beta = std::atan2(pos[1], pos[0]) - std::atan2(L_y_beta0, L_x_beta0);    // atan2(y, x)
-        } else {
-            throw std::runtime_error("joint needs to be 'G', 'Ul', 'Ur', 'Ll', or 'Lr'.");
-        }//end if else
-        if (forward) {
-            this->forward(theta, beta);
-        }
-}//end inverse
-
 void LegModel::contact_map(double theta_in, double beta_in, double slope) {
         using namespace std::complex_literals;
         double beta_adjusted = beta_in - slope;
@@ -198,13 +160,13 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
         std::complex<double> F_l_tmp = (F_l_c - U_l_c) / R * radius + U_l_c;
         std::complex<double> F_r_tmp = (F_r_c - U_r_c) / R * radius + U_r_c;
 
-        std::array<std::array<double, 2>, 6> arc_list = {
+        std::array<std::array<double, 3>, 6> arc_list = {
             this->arc_min(H_l_tmp, F_l_tmp, U_l_c, "left upper"),
             this->arc_min(F_l_tmp, G_l_tmp, L_l_c, "left lower"),
             this->arc_min(G_l_tmp, G_r_tmp, G_c, "G"),
             this->arc_min(G_r_tmp, F_r_tmp, L_r_c, "right lower"),
             this->arc_min(F_r_tmp, H_r_tmp, U_r_c, "right upper"),
-            {0.0, 0.0}
+            {0.0, 0.0, 0.0}
         };
 
         double min_value = arc_list[0][0];
@@ -218,13 +180,14 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
 
         rim = min_index==5? 0 : min_index+1;
         alpha = arc_list[min_index][1];
-        height = -arc_list[min_index][0];
+        contact_p = {arc_list[min_index][0], arc_list[min_index][2]};
 }//end contact_map
 
-std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
+std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
         using namespace std::complex_literals;
         double lowest_point = 0.0;
         double alpha = 0.0;
+        double contact_x = 0.0;
         double bias_alpha = 0.0;
 
         if (rim == "left upper") {
@@ -246,14 +209,53 @@ std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const st
         if (in_range) {
             lowest_point = O.imag() - radius;
             alpha = std::arg(-1i / (p1 - O));
+            contact_x = O.real();
         } else {
             std::complex<double> smaller = (p1.imag() < p2.imag()) ? p1 : p2;
             lowest_point = 1.0; // Set to a large value if not normal contact
             alpha = std::arg((smaller - O) / (p1 - O));
+            contact_x = 0.0;  // set to 0 if not normal contact
         }//end if else
 
-        return {lowest_point, alpha + bias_alpha};
+        return {lowest_point, alpha + bias_alpha, contact_x};
 }//end arc_min
+
+// Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
+// For a complete implementation, you would need to use numerical libraries like Eigen, Ceres Solver, or write custom solvers.
+std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &joint) {
+    using namespace std::complex_literals;
+    double abs_pos = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+    if (joint == "G"){
+        theta = inv_G_dist_poly(abs_pos);
+        beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);    // atan2(y, x)
+    } else if (joint == "U_l" || joint == "U_r"){
+        theta = inv_U_dist_poly(abs_pos);
+        double U_x_beta0, U_y_beta0;
+        if (joint == "U_l"){
+            U_x_beta0 = U_l_poly[0](theta);
+            U_y_beta0 = U_l_poly[1](theta);
+        } else {    // Ur
+            U_x_beta0 = U_r_poly[0](theta);
+            U_y_beta0 = U_r_poly[1](theta);    
+        }//end if else
+        beta = std::atan2(pos[1], pos[0]) - std::atan2(U_y_beta0, U_x_beta0);    // atan2(y, x)
+    } else if (joint == "L_l" || joint == "L_r"){
+        theta = inv_L_dist_poly(abs_pos);
+        double L_x_beta0, L_y_beta0;
+        if (joint == "L_l"){
+            L_x_beta0 = L_l_poly[0](theta);
+            L_y_beta0 = L_l_poly[1](theta);
+        } else {    // Lr
+            L_x_beta0 = L_r_poly[0](theta);
+            L_y_beta0 = L_r_poly[1](theta);  
+        }//end if else            
+        beta = std::atan2(pos[1], pos[0]) - std::atan2(L_y_beta0, L_x_beta0);    // atan2(y, x)
+    } else {
+        throw std::runtime_error("joint needs to be 'G', 'U_l', 'U_r', 'L_l', or 'L_r'.");
+    }//end if else
+
+    return {theta, beta};
+}//end inverse
 
 std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper, double tol, size_t max_iter) {
     this->contact_map(theta_in, beta_in);
@@ -314,7 +316,6 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
     // update theta, beta
     theta += guess_dq[0];
     beta  += guess_dq[1];
-    this->forward(theta, beta);
     return {theta, beta};
 }//end move
 
@@ -384,6 +385,7 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
 
 int main() {
     LegModel legmodel(true);
+    std::array<double, 2> new_theta_beta;
     double theta = M_PI * 130.0 / 180.0;
     double beta =  M_PI * 50.0 / 180.0;
 
@@ -406,7 +408,8 @@ int main() {
     legmodel.contact_map(theta, beta);
     std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
     std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
-
+    std::cout << "Output contact_p with single value input: " << legmodel.contact_p[0] << ", " << legmodel.contact_p[1] << std::endl;
+    
     /* Inverse kinematics */
     std::cout << "\n";
     std::cout << "****************************************" << std::endl;
@@ -416,22 +419,25 @@ int main() {
     std::cout << "==========Inverse for G==========" << std::endl;
     double G_p[2] = {0.05, -0.25};
     std::cout << "Input G: " << G_p[0] << ", " << G_p[1] << std::endl;
-    legmodel.inverse(G_p, "G");
-    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    new_theta_beta = legmodel.inverse(G_p, "G");
+    legmodel.forward(new_theta_beta[0], new_theta_beta[1]);
+    std::cout << "Output theta, beta (degree): " << new_theta_beta[0]*180.0/M_PI << ", "<< new_theta_beta[1]*180.0/M_PI << std::endl;
     std::cout << "Output G: " << legmodel.G[0] << ", " << legmodel.G[1] << std::endl;
     // inverse for left upper rim
     std::cout << "==========Inverse for U_l==========" << std::endl;
     double Ul_p[2] = {-0.01, -0.015};
     std::cout << "Input U_l: " << Ul_p[0] << ", " << Ul_p[1] << std::endl;
-    legmodel.inverse(Ul_p, "Ul");
-    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    new_theta_beta = legmodel.inverse(Ul_p, "U_l");
+    legmodel.forward(new_theta_beta[0], new_theta_beta[1]);
+    std::cout << "Output theta, beta (degree): " << new_theta_beta[0]*180.0/M_PI << ", "<< new_theta_beta[1]*180.0/M_PI << std::endl;
     std::cout << "Output U_l: " << legmodel.U_l[0] << ", " << legmodel.U_l[1] << std::endl;
     // inverse for right lower rim
     std::cout << "==========Inverse for L_r==========" << std::endl;
     double Lr_p[2] = {-0.01, -0.015};
     std::cout << "Input L_r: " << Lr_p[0] << ", " << Lr_p[1] << std::endl;
-    legmodel.inverse(Lr_p, "Lr");
-    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    new_theta_beta = legmodel.inverse(Lr_p, "L_r");
+    legmodel.forward(new_theta_beta[0], new_theta_beta[1]);
+    std::cout << "Output theta, beta (degree): " << new_theta_beta[0]*180.0/M_PI << ", "<< new_theta_beta[1]*180.0/M_PI << std::endl;
     std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
 
     /* Move */
@@ -441,7 +447,6 @@ int main() {
     std::cout << "**************************" << std::endl;
     std::array<double, 2> hip = {0.1, 0};
     std::array<double, 2> desired_hip = {0.2, 0};
-    std::array<double, 2> new_theta_beta;
     auto start2 = std::chrono::high_resolution_clock::now();
     for (int i=0; i<10000; i++){
         new_theta_beta = legmodel.move(theta, beta, {desired_hip[0]-hip[0], desired_hip[1]-hip[1]});
