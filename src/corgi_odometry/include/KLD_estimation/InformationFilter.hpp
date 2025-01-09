@@ -34,7 +34,9 @@ namespace estimation_model {
     class DP: public Z {
         public:
             DP(int size, Leg &leg_, Eigen::Vector<float, 5> encoder_init, float alpha_init, U *input) ;
-            Eigen::MatrixXf Q(float dt) ;
+            DP(int size, Leg &leg_, U *input) ;
+            void init(Eigen::Vector<float, 5> encoder_init, float alpha_init) ;
+            Eigen::MatrixXf Q(float dt);
             Eigen::VectorXf z(float dt);
             Eigen::MatrixXf C(float dt);
             void push_data(Eigen::Vector<float, 5> encoders, Eigen::Vector3f wk, float dt, float alpha = -100) ; // encoders: theta, beta, beta_d, omega

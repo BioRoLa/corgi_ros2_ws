@@ -96,6 +96,15 @@ namespace estimation_model {
         }
     }
 
+    DP::DP(int size, Leg &leg_,U *input) : n(size), leg(leg_), u(input){}
+
+    void DP::init(Eigen::Vector<float, 5> encoder_init, float alpha_init){
+        for (int i = 0; i < n; i ++) {
+            trajectories.push_back(trajectory{encoder_init(0), encoder_init(1), encoder_init(1) + alpha_init, Eigen::Matrix3f::Identity()});
+            theta_d.push_back(encoder_init(4));
+        }
+    }
+
     void DP::push_data(Eigen::Vector<float, 5> encoders, Eigen::Vector3f wk, float dt, float alpha) {
         trajectory last = trajectories.back();
         float contact_beta = (encoders(2) + encoders(3)) * dt + std::get<2>(last);
