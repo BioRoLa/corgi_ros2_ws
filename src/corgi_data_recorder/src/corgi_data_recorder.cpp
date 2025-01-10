@@ -12,12 +12,14 @@
 #include "corgi_msgs/PowerCmdStamped.h"
 #include "corgi_msgs/PowerStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "sensor_msgs/Imu.h"
 
 bool trigger = false;
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::PowerCmdStamped power_cmd;
 corgi_msgs::PowerStateStamped power_state;
+sensor_msgs::Imu imu;
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -89,6 +91,11 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
                         << "state_vel_r_d" << "," << "state_vel_l_d" << ","
                         << "state_trq_r_d" << "," << "state_trq_l_d" << ","
 
+                        << "imu_seq" << "," << "imu_sec" << "," << "imu_usec" << ","
+                        << "imu_orien_x" << "," << "imu_orien_y" << "," << "imu_orien_z" << "," << "imu_orien_w" << ","
+                        << "imu_ang_vel_x" << "," << "imu_ang_vel_y" << "," << "imu_ang_vel_z" << ","
+                        << "imu_lin_acc_x" << "," << "imu_lin_acc_y" << "," << "imu_lin_acc_z" << ","
+
                         << "power_seq" << "," << "power_sec" << "," << "power_usec" << ","
                         << "v_0" << "," << "i_0" << ","
                         << "v_1" << "," << "i_1" << ","
@@ -135,6 +142,10 @@ void power_state_cb(const corgi_msgs::PowerStateStamped state){
     power_state = state;
 }
 
+void imu_cb(const sensor_msgs::Imu values){
+    imu = values;
+}
+
 
 void write_data() {
     if (!output_file.is_open()){
@@ -167,6 +178,11 @@ void write_data() {
                 << motor_state.module_d.velocity_r << "," << motor_state.module_d.velocity_l << ","
                 << motor_state.module_d.torque_r   << "," << motor_state.module_d.torque_l << ","
 
+                << imu.header.seq << "," << imu.header.stamp.sec << "," << imu.header.stamp.nsec << ","
+                << imu.orientation.x << "," << imu.orientation.y << "," << imu.orientation.z << "," << imu.orientation.w << ","
+                << imu.angular_velocity.x << "," << imu.angular_velocity.y << "," << imu.angular_velocity.z << ","
+                << imu.linear_acceleration.x << "," << imu.linear_acceleration.y << "," << imu.linear_acceleration.z << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nsec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -197,6 +213,7 @@ int main(int argc, char **argv) {
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber power_cmd_sub = nh.subscribe<corgi_msgs::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
     ros::Subscriber power_state_sub = nh.subscribe<corgi_msgs::PowerStateStamped>("power/state", 1000, power_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
     ros::Rate rate(1000);
 
     signal(SIGINT, signal_handler);
