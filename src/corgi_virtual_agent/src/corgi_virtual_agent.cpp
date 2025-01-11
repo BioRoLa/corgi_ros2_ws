@@ -5,15 +5,19 @@
 #include "NodeHandler.h"
 #include "Motor.pb.h"
 #include "Power.pb.h"
+#include "Steering.pb.h"
 
 
 std::mutex mutex_motor_state;
 std::mutex mutex_power_state;
+std::mutex mutex_steer_state;
 
-motor_msg::MotorCmdStamped      motor_cmd;
-power_msg::PowerCmdStamped      power_cmd;
-motor_msg::MotorStateStamped    motor_state;
-power_msg::PowerStateStamped    power_state;
+motor_msg::MotorCmdStamped          motor_cmd;
+power_msg::PowerCmdStamped          power_cmd;
+steering_msg::SteeringCmdStamped    steer_cmd;
+motor_msg::MotorStateStamped        motor_state;
+power_msg::PowerStateStamped        power_state;
+steering_msg::SteeringStateStamped  steer_state;
 
 
 void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd) {
@@ -70,14 +74,31 @@ void power_cmd_cb(const power_msg::PowerCmdStamped cmd) {
     power_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
+void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
+    std::lock_guard<std::mutex> lock(mutex_steer_state);
+
+    steer_state.set_current_angle(cmd.angle());
+    steer_state.set_current_state(cmd.voltage());
+    steer_state.set_cmd_finish(cmd.calibration());
+
+
+    timeval currentTime;
+    gettimeofday(&currentTime, nullptr);
+    steer_state.mutable_header()->set_seq(cmd.header().seq());
+    steer_state.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
+    steer_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
+}
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "corgi_virtual_agent");
 
     core::NodeHandler nh_;
     core::Publisher<motor_msg::MotorStateStamped> &motor_state_pub = nh_.advertise<motor_msg::MotorStateStamped>("motor/state");
     core::Publisher<power_msg::PowerStateStamped> &power_state_pub = nh_.advertise<power_msg::PowerStateStamped>("power/state");
+    core::Publisher<steering_msg::SteeringStateStamped> &steer_state_pub = nh_.advertise<steering_msg::SteeringStateStamped>("steer/state");
     core::Subscriber<motor_msg::MotorCmdStamped> &motor_cmd_sub = nh_.subscribe<motor_msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
     core::Subscriber<power_msg::PowerCmdStamped> &power_cmd_sub = nh_.subscribe<power_msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
+    core::Subscriber<steering_msg::SteeringCmdStamped> &steer_cmd_sub = nh_.subscribe<steering_msg::SteeringCmdStamped>("steer/command", 1000, steer_cmd_cb);
 
     core::Rate rate(1000);
 
@@ -92,6 +113,11 @@ int main(int argc, char **argv) {
         {
             std::lock_guard<std::mutex> lock(mutex_power_state);
             power_state_pub.publish(power_state);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_steer_state);
+            steer_state_pub.publish(steer_state);
         }
 
         rate.sleep();

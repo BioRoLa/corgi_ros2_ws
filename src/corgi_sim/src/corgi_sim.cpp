@@ -2,6 +2,7 @@
 #include <signal.h>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
+#include "sensor_msgs/Imu.h"
 #include "corgi_sim/set_int.h"
 #include "corgi_sim/set_float.h"
 #include "corgi_sim/motor_set_control_pid.h"
@@ -14,6 +15,7 @@
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::TriggerStamped trigger;
+sensor_msgs::Imu imu;
 
 double AR_phi = 0.0;
 double AL_phi = 0.0;
@@ -65,6 +67,10 @@ void CR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_r
 void CL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_l = trq.data; }
 void DR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_r = trq.data; }
 void DL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_l = trq.data; }
+
+void gyro_cb(sensor_msgs::Imu values) { imu.orientation = values.orientation; }
+void ang_vel_cb(sensor_msgs::Imu values) { imu.angular_velocity = values.angular_velocity; }
+void imu_cb(sensor_msgs::Imu values) { imu.linear_acceleration = values.linear_acceleration; }
 
 void update_motor_pid(corgi_sim::motor_set_control_pid &R_motor_pid_srv, corgi_sim::motor_set_control_pid &L_motor_pid_srv, double kp, double ki, double kd){
     R_motor_pid_srv.request.controlp = kp;
@@ -155,8 +161,13 @@ int main(int argc, char **argv) {
     ros::Subscriber DR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_left_motor/torque_feedback", 1, DR_torque_cb);
     ros::Subscriber DL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_right_motor/torque_feedback" , 1, DL_torque_cb);
     
+    ros::Subscriber gyro_sub = nh.subscribe<sensor_msgs::Imu>("gyro/quaternion" , 1, gyro_cb);
+    ros::Subscriber ang_vel_sub = nh.subscribe<sensor_msgs::Imu>("ang_vel/values" , 1, ang_vel_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/values" , 1, imu_cb);
+
     ros::Subscriber motor_cmd_sub = nh.subscribe<corgi_msgs::MotorCmdStamped>("motor/command", 1, motor_cmd_cb);
     ros::Publisher motor_state_pub = nh.advertise<corgi_msgs::MotorStateStamped>("motor/state", 1000);
+    ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
     ros::Publisher trigger_pub = nh.advertise<corgi_msgs::TriggerStamped>("trigger", 1000);
     
     ros::WallRate rate(1000);
@@ -210,6 +221,7 @@ int main(int argc, char **argv) {
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
+        imu_pub.publish(imu);
 
         double clock = loop_counter*0.001;
         simulationClock.clock.sec = (int)clock;
