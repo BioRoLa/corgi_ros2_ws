@@ -101,6 +101,7 @@ void ros_power_cmd_cb(const corgi_msgs::PowerCmdStamped cmd) {
     grpc_power_cmd.set_clean(false);
     grpc_power_cmd.set_trigger(ros_trigger);
     grpc_power_cmd.set_robot_mode((power_msg::ROBOTMODE)ros_power_cmd.robot_mode);
+    grpc_power_cmd.set_steering_cali(ros_power_cmd.steering_cali);
 
     grpc_power_cmd.mutable_header()->set_seq(ros_power_cmd.header.seq);
     grpc_power_cmd.mutable_header()->mutable_stamp()->set_sec(ros_power_cmd.header.stamp.sec);
@@ -114,7 +115,6 @@ void ros_steer_cmd_cb(const corgi_msgs::SteeringCmdStamped cmd) {
 
     ros_steer_cmd = cmd;
 
-    grpc_steer_cmd.set_calibration(ros_steer_cmd.calibration);
     grpc_steer_cmd.set_voltage(ros_steer_cmd.voltage);
     grpc_steer_cmd.set_angle(ros_steer_cmd.angle);
 

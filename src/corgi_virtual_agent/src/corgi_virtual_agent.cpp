@@ -79,7 +79,6 @@ void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
 
     steer_state.set_current_angle(cmd.angle());
     steer_state.set_current_state(cmd.voltage());
-    steer_state.set_cmd_finish(cmd.calibration());
 
 
     timeval currentTime;
