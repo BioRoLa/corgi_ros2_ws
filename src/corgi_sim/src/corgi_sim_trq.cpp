@@ -59,15 +59,6 @@ void CL_encoder_cb(corgi_sim::Float64Stamped phi) { CL_phi_dot = (phi.data - CL_
 void DR_encoder_cb(corgi_sim::Float64Stamped phi) { DR_phi_dot = (phi.data - DR_phi)*1000; DR_phi = phi.data; }
 void DL_encoder_cb(corgi_sim::Float64Stamped phi) { DL_phi_dot = (phi.data - DL_phi)*1000; DL_phi = phi.data; }
 
-void AR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_a.torque_r = trq.data; }
-void AL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_a.torque_l = trq.data; }
-void BR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_b.torque_r = trq.data; }
-void BL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_b.torque_l = trq.data; }
-void CR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_r = trq.data; }
-void CL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_l = trq.data; }
-void DR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_r = trq.data; }
-void DL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_l = trq.data; }
-
 void gyro_cb(sensor_msgs::Imu values) { imu.orientation = values.orientation; }
 void ang_vel_cb(sensor_msgs::Imu values) { imu.angular_velocity = values.angular_velocity; }
 void imu_cb(sensor_msgs::Imu values) { imu.linear_acceleration = values.linear_acceleration; }
@@ -90,11 +81,8 @@ void tb2phi(corgi_msgs::MotorCmd motor_cmd, double &trq_r, double &trq_l, double
     double phi_r = find_closest_phi(motor_cmd.beta - motor_cmd.theta + theta_0, phi_r_fb);
     double phi_l = find_closest_phi(motor_cmd.beta + motor_cmd.theta - theta_0, phi_l_fb);
     
-    double kp = 90.0;
-    double kd = 1.75;
-
-    trq_r = kp*(phi_r-phi_r_fb) + kd*(-phi_r_dot_fb) + motor_cmd.torque_r;
-    trq_l = kp*(phi_l-phi_l_fb) + kd*(-phi_l_dot_fb) + motor_cmd.torque_l;
+    trq_r = motor_cmd.kp*(phi_r-phi_r_fb) + motor_cmd.kd*(-phi_r_dot_fb) + motor_cmd.torque_r;
+    trq_l = motor_cmd.kp*(phi_l-phi_l_fb) + motor_cmd.kd*(-phi_l_dot_fb) + motor_cmd.torque_l;
 }
 
 std::string get_lastest_input() {
@@ -146,15 +134,6 @@ int main(int argc, char **argv) {
     ros::Subscriber DR_encoder_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_left_motor_sensor/value" , 1, DR_encoder_cb);
     ros::Subscriber DL_encoder_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_right_motor_sensor/value", 1, DL_encoder_cb);
     
-    ros::Subscriber AR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lf_left_motor/torque_feedback" , 1, AR_torque_cb);
-    ros::Subscriber AL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lf_right_motor/torque_feedback", 1, AL_torque_cb);
-    ros::Subscriber BR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("rf_left_motor/torque_feedback" , 1, BR_torque_cb);
-    ros::Subscriber BL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("rf_right_motor/torque_feedback", 1, BL_torque_cb);
-    ros::Subscriber CR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("rh_left_motor/torque_feedback" , 1, CR_torque_cb);
-    ros::Subscriber CL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("rh_right_motor/torque_feedback", 1, CL_torque_cb);
-    ros::Subscriber DR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_left_motor/torque_feedback" , 1, DR_torque_cb);
-    ros::Subscriber DL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_right_motor/torque_feedback", 1, DL_torque_cb);
-    
     ros::Subscriber gyro_sub = nh.subscribe<sensor_msgs::Imu>("gyro/quaternion", 1, gyro_cb);
     ros::Subscriber ang_vel_sub = nh.subscribe<sensor_msgs::Imu>("ang_vel/values", 1, ang_vel_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/values", 1, imu_cb);
@@ -199,6 +178,8 @@ int main(int argc, char **argv) {
         phi2tb(DR_phi, DL_phi, motor_state.module_d.theta, motor_state.module_d.beta);
 
         motor_state.header.seq = loop_counter;
+        motor_state.module_a.torque_r = AR_motor_trq_srv.request.value;
+        motor_state.module_a.torque_l = AL_motor_trq_srv.request.value;
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
