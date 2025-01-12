@@ -23,6 +23,7 @@ add_message_files(
   SensorEnableStamped.msg
   SteeringCmdStamped.msg
   SteeringStateStamped.msg
+  WheelCmd.msg
 )
 
 generate_messages(
