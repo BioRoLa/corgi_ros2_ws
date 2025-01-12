@@ -78,9 +78,14 @@ void tb2phi(corgi_msgs::MotorCmd motor_cmd, double &trq_r, double &trq_l, double
     double theta_0 = 17 / 180.0 * M_PI;
     if (motor_cmd.theta < theta_0) {motor_cmd.theta = theta_0;}
 
+    if (motor_cmd.kp == 0) {
+        motor_cmd.kp = 90;
+        motor_cmd.kd = 1.75;
+    }
+    
     double phi_r = find_closest_phi(motor_cmd.beta - motor_cmd.theta + theta_0, phi_r_fb);
     double phi_l = find_closest_phi(motor_cmd.beta + motor_cmd.theta - theta_0, phi_l_fb);
-    
+
     trq_r = motor_cmd.kp*(phi_r-phi_r_fb) + motor_cmd.kd*(-phi_r_dot_fb) + motor_cmd.torque_r;
     trq_l = motor_cmd.kp*(phi_l-phi_l_fb) + motor_cmd.kd*(-phi_l_dot_fb) + motor_cmd.torque_l;
 }
@@ -178,8 +183,24 @@ int main(int argc, char **argv) {
         phi2tb(DR_phi, DL_phi, motor_state.module_d.theta, motor_state.module_d.beta);
 
         motor_state.header.seq = loop_counter;
+        
         motor_state.module_a.torque_r = AR_motor_trq_srv.request.value;
         motor_state.module_a.torque_l = AL_motor_trq_srv.request.value;
+        motor_state.module_b.torque_r = BR_motor_trq_srv.request.value;
+        motor_state.module_b.torque_l = BL_motor_trq_srv.request.value;
+        motor_state.module_c.torque_r = CR_motor_trq_srv.request.value;
+        motor_state.module_c.torque_l = CL_motor_trq_srv.request.value;
+        motor_state.module_d.torque_r = DR_motor_trq_srv.request.value;
+        motor_state.module_d.torque_l = DL_motor_trq_srv.request.value;
+
+        motor_state.module_a.velocity_r = AR_phi_dot;
+        motor_state.module_a.velocity_l = AL_phi_dot;
+        motor_state.module_b.velocity_r = BR_phi_dot;
+        motor_state.module_b.velocity_l = BL_phi_dot;
+        motor_state.module_c.velocity_r = CR_phi_dot;
+        motor_state.module_c.velocity_l = CL_phi_dot;
+        motor_state.module_d.velocity_r = DR_phi_dot;
+        motor_state.module_d.velocity_l = DL_phi_dot;
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
