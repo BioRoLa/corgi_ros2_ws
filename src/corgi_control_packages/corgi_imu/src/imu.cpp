@@ -1,5 +1,8 @@
 #include "ros/ros.h"
 #include "sensor_msgs/Imu.h"
+#include "corgi_msgs/IMUStamped.h" // This is the message file: imu mode
+#include "corgi_msgs/imu.h" // This is the service file
+#include "corgi_msgs/Headers.h"
 #include "cx5.hpp"
 #include <sys/time.h>
 #include <mutex>
@@ -7,36 +10,52 @@
 
 std::shared_ptr<CX5_AHRS> imu;
 std::mutex cb_lock;
-sensor_msg::SensorMode mode;
 
-void cb(sensor_msg::SensorRequest request, sensor_msg::SensorReply &reply) {
+enum SensorMode {
+    REST = 0,
+    CALIBRATION = 1,
+    SENSOR = 2,
+    RESET = 3
+};            
+
+int mode = REST; // Initial state: REST (0: REST, 1: CALIBRATION, 2: SENSOR, 3: RESET)
+bool cb(corgi_msgs::imu::Request &req, corgi_msgs::imu::Response &res){
     cb_lock.lock();
-    switch (request.mode()) {
-        case sensor_msg::REST:
-            mode = sensor_msg::REST;
-            reply.set_mode(sensor_msg::REST);
+    switch (req.mode) {
+        case REST:
+            mode = REST;
+            res.mode = REST;
+            ROS_INFO("Mode set to REST");
             break;
-        case sensor_msg::CALIBRATION:
+        case CALIBRATION:
+            ROS_INFO("Calibrating...");
+            mode = SENSOR;
+            res.mode = SENSOR;
             imu->calibrate(1000);  // 1 second averaging
-            mode = sensor_msg::SENSOR;
             break;
-        case sensor_msg::RESET:
-            mode = sensor_msg::RESET;
-            reply.set_mode(sensor_msg::RESET);
+        case RESET:
+            mode = RESET;
+            res.mode = RESET;
+            ROS_INFO("Mode set to RESET");
             break;
-        case sensor_msg::SENSOR:
-            mode = sensor_msg::SENSOR;
-            reply.set_mode(sensor_msg::SENSOR);
+        case SENSOR:
+            mode = SENSOR;
+            res.mode = SENSOR;
+            ROS_INFO("Mode set to SENSOR");
             break;
+        default:
+            ROS_INFO("Invalid mode");
+            return false;
     }
+    return true;
     cb_lock.unlock();
 }
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "imu_node");
     ros::NodeHandle nh;
-
-    imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS0", 921600, 1000, 500);
+    printf("Starting IMU node\n");
+    imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 115200, 1000, 500); //ttyTHS0
     ros::Rate rate(1000);
 
     ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
@@ -47,7 +66,9 @@ int main(int argc, char **argv) {
     });
 
     sensor_msgs::Imu imu_msg;
-    imu_msg.header.frame_id = "imu_base";
+    corgi_msgs::Headers headers_msg;
+    headers_msg.frame_id = "imu_base";
+    // imu_msg.header.frame_id = "imu_base";
 
     Eigen::Vector3f acceleration, twist;
     Eigen::Quaternionf orientation;
@@ -59,10 +80,14 @@ int main(int argc, char **argv) {
         timeval currentTime;
         gettimeofday(&currentTime, nullptr);
 
-        imu_msg.header.seq = seq++;
-        imu_msg.header.stamp.sec = currentTime.tv_sec;
-        imu_msg.header.stamp.nsec = currentTime.tv_usec * 1000;
-
+        headers_msg.seq = seq++;
+        headers_msg.stamp.sec = currentTime.tv_sec;
+        headers_msg.stamp.nsec = currentTime.tv_usec * 1000;
+        // imu_msg.header.seq = seq++;
+        // imu_msg.header.stamp.sec = currentTime.tv_sec;
+        // imu_msg.header.stamp.nsec = currentTime.tv_usec * 1000;
+        imu_msg.header.seq = headers_msg.seq;
+        imu_msg.header.stamp = headers_msg.stamp;
         imu_msg.linear_acceleration.x = acceleration.x();
         imu_msg.linear_acceleration.y = acceleration.y();
         imu_msg.linear_acceleration.z = acceleration.z();
@@ -78,6 +103,6 @@ int main(int argc, char **argv) {
 
         rate.sleep();
     }
-
+    // ros::spin();
     return 0;
 }
