@@ -130,9 +130,8 @@ int main(int argc, char **argv) {
         filepath = std::getenv("HOME");
         filename = argv[1];
         filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/";
-        filepath += filename;
-        ROS_INFO("Saving data to %s.csv", filepath.c_str());
-        std::cout << "saving data to " << filepath + ".csv\n";
+        filepath += filename+ ".csv";
+        ROS_INFO("Saving data to %s", filepath.c_str());
         // Initialize the CSV file.
         if (!logger.initCSV(filepath, headers)) {
             return -1;  // Exit if the CSV file could not be created.
@@ -298,7 +297,7 @@ int main(int argc, char **argv) {
     }
 
     logger.finalizeCSV();
-    ROS_INFO("Saved data to %s.csv\n", filepath.c_str());
+    ROS_INFO("Saved data to %s", filepath.c_str());
 
     ros::shutdown();
     
