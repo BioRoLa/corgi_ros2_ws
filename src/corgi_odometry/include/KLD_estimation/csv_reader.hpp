@@ -108,6 +108,81 @@ namespace DataProcessor
             cerr << "Cannot Open File" << endl;
         }
     }
+    class CsvLogger {
+    public:
+        CsvLogger() = default;
+        
+        // Destructor makes sure the file is closed.
+        ~CsvLogger() {
+            if (outFile.is_open()) {
+                outFile.close();
+            }
+        }
+        
+        /**
+         * @brief Initialize the CSV file by opening it and writing the header.
+         * 
+         * @param filename The name (and path) of the file to create.
+         * @param headers A vector of strings representing header names (each column name).
+         * @return true if the file was successfully opened and the header was written.
+         * @return false otherwise.
+         */
+        bool initCSV(const std::string &filename, const std::vector<std::string>& headers) {
+            this->filename = filename;
+            // Open file in output mode (this overwrites any existing file with the same name)
+            outFile.open(filename, std::ios::out);
+            if (!outFile.is_open()) {
+                std::cerr << "Error opening file: " << filename << std::endl;
+                return false;
+            }
+            // Write headers: comma-separated, no trailing comma.
+            for (size_t i = 0; i < headers.size(); ++i) {
+                outFile << headers[i];
+                if (i != headers.size() - 1) {
+                    outFile << ",";
+                }
+            }
+            outFile << "\n";
+            outFile.flush();  // make sure header is written immediately
+            return true;
+        }
+        
+        /**
+         * @brief Log a new state (an Eigen::VectorXf) by appending it to the CSV file.
+         * 
+         * @param state The state vector to log.
+         * @return true if the state was successfully logged.
+         * @return false if the file is not open.
+         */
+        bool logState(const Eigen::VectorXf &state) {
+            if (!outFile.is_open()) {
+                std::cerr << "File not open. Please call initCSV() first." << std::endl;
+                return false;
+            }
+            // Write each element separated by commas.
+            for (int i = 0; i < state.size(); ++i) {
+                outFile << state(i);
+                if (i < state.size() - 1)
+                    outFile << ",";
+            }
+            outFile << "\n";
+            return true;
+        }
+        
+        /**
+         * @brief Finalize the CSV file by flushing and closing the stream.
+         */
+        void finalizeCSV() {
+            if (outFile.is_open()) {
+                outFile.flush();
+                outFile.close();
+            }
+        }
+        
+    private:
+        std::string filename;
+        std::ofstream outFile;
+    };
 } // namespace DataProcessor
 
 #endif
