@@ -2,12 +2,14 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include "leg_model.hpp"
-
 #include "ros/ros.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
+#include "corgi_msgs/ImpedanceCmdStamped.h"
+
+#include "leg_model.hpp"
+
 
 Eigen::MatrixXd H_l_poly(2, 8);
 Eigen::MatrixXd U_l_poly(2, 8);
@@ -21,6 +23,7 @@ Eigen::MatrixXd P_poly(2, 8);
 
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::ForceStateStamped force_state;
+corgi_msgs::ImpedanceCmdStamped imp_cmd;
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
@@ -28,6 +31,10 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
 
 void force_state_cb(const corgi_msgs::ForceStateStamped state){
     force_state = state;
+}
+
+void imp_cmd_cb(const corgi_msgs::ImpedanceCmdStamped cmd){
+    imp_cmd = cmd;
 }
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
@@ -84,7 +91,7 @@ Eigen::MatrixXd calculate_jacobian(Eigen::MatrixXd P_theta, Eigen::MatrixXd P_th
     return jacobian;
 }
 
-Eigen::MatrixXd calculate_torque_cmd(double theta, double beta, double force_err_x, double force_err_y){
+Eigen::MatrixXd calculate_torque_cmd(double theta, double beta, double force_x, double force_y){
     LegModel legmodel(true);
     legmodel.contact_map(theta, beta);
 
@@ -102,10 +109,10 @@ Eigen::MatrixXd calculate_torque_cmd(double theta, double beta, double force_err
     Eigen::MatrixXd jacobian(2, 2);
     jacobian = calculate_jacobian(P_theta, P_theta_deriv, beta);
     
-    Eigen::MatrixXd force_err(2, 1);
-    force_err << force_err_x, force_err_y;
+    Eigen::MatrixXd force(2, 1);
+    force << force_x, force_y;
 
-    Eigen::MatrixXd torque_cmd = jacobian.transpose() * force_err;
+    Eigen::MatrixXd torque_cmd = jacobian.transpose() * force;
 
     return torque_cmd;
 }
@@ -113,14 +120,15 @@ Eigen::MatrixXd calculate_torque_cmd(double theta, double beta, double force_err
 
 int main(int argc, char **argv) {
 
-    ROS_INFO("Force and Position Publisher Starts\n");
+    ROS_INFO("Hybrid Control Starts\n");
 
-    ros::init(argc, argv, "force_position_pub");
+    ros::init(argc, argv, "hybrid_control");
 
     ros::NodeHandle nh;
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
+    ros::Subscriber imp_cmd_sub = nh.subscribe<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
     ros::Rate rate(1000);
 
     corgi_msgs::MotorCmdStamped motor_cmd;
@@ -146,28 +154,35 @@ int main(int argc, char **argv) {
         &force_state.module_d
     };
 
+    std::vector<corgi_msgs::ImpedanceCmd*> imp_cmd_modules = {
+        &imp_cmd.module_a,
+        &imp_cmd.module_b,
+        &imp_cmd.module_c,
+        &imp_cmd.module_d
+    };
+
     int loop_count = 0;
     while (ros::ok()) {
         ros::spinOnce();
 
         for (int i=0; i<4; i++){
-            double force_cmd_x = 0;
-            double force_cmd_y = -60.0;
-
-            Eigen::MatrixXd torque_cmd = calculate_torque_cmd(motor_state_modules[i]->theta, motor_state_modules[i]->beta, force_cmd_x - force_state_modules[i]->Fx, force_cmd_y - force_state_modules[i]->Fy);
-            std::cout << motor_state_modules[i]->theta << ", " << motor_state_modules[i]->beta << std::endl;
-            std::cout << force_state_modules[i]->Fx << ", " << force_state_modules[i]->Fy << std::endl;
-            std::cout << torque_cmd(0, 0) << ", " << torque_cmd(1, 0) << std::endl;
+            Eigen::MatrixXd torque_cmd = calculate_torque_cmd(motor_state_modules[i]->theta, motor_state_modules[i]->beta, imp_cmd_modules[i]->Fx, imp_cmd_modules[i]->Fy);
             
-            motor_cmd_modules[i]->theta = 1;
-            motor_cmd_modules[i]->beta = 0;
-            motor_cmd_modules[i]->kp = 0;
+            motor_cmd_modules[i]->theta = imp_cmd_modules[i]->theta;
+            motor_cmd_modules[i]->beta = imp_cmd_modules[i]->beta;
+            motor_cmd_modules[i]->kp = 90;
             motor_cmd_modules[i]->ki = 0;
-            motor_cmd_modules[i]->kd = 0;
+            motor_cmd_modules[i]->kd = 1.75;
+
+            if (imp_cmd_modules[i]->Fx != 0 || imp_cmd_modules[i]->Fy != 0) {
+                motor_cmd_modules[i]->kp = 0;
+                motor_cmd_modules[i]->ki = 0;
+                motor_cmd_modules[i]->kd = 0;
+            }
+            
             motor_cmd_modules[i]->torque_r = torque_cmd(0, 0);
             motor_cmd_modules[i]->torque_l = torque_cmd(1, 0);
         }
-        std::cout << "-" << std::endl;
 
         motor_cmd.header.seq = loop_count;
 
