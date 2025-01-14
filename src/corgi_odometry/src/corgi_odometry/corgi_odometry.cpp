@@ -13,7 +13,7 @@
 using namespace estimation_model;
 
 // Constants
-#define SAMPLE_RATE 200 //Hz
+#define SAMPLE_RATE 200.0 //Hz
 #define THRESHOLD 0.08 //threshold of KLD
 #define J 10 //sample time (matrix size)
 #define MOTOR_OFFSET_X 0.222
@@ -21,6 +21,26 @@ using namespace estimation_model;
 #define MOTOR_OFFSET_Z 0.0
 #define WHEEL_RADIUS 0.1
 #define WHEEL_WIDTH 0.012
+
+// CSV file parameters
+std::vector<std::string> headers = {
+    "v_.x", "v_.y", "v_.z", 
+    "p.x", "p.y", "p.z", 
+    "zLF.x", "zLF.y", "zLF.z", 
+    "zRF.x", "zRF.y", "zRF.z", 
+    "zRH.x", "zRH.y", "zRH.z", 
+    "zLH.x", "zLH.y", "zLH.z", 
+    "zP.x", "zP.y", "zP.z", //t265 
+    "ba.x", "ba.y", "ba.z", 
+    "lf.contact","rf.contact","rh.contact","lh.contact",
+    "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
+    "lf.c","rf.c","rh.c","lh.c", //contact
+    "threshold",
+    "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
+};
+DataProcessor::CsvLogger logger;
+std::string filepath;
+std::string filename;
 
 //Classes
 class Encoder{
@@ -106,6 +126,18 @@ int main(int argc, char **argv) {
 
     ros::NodeHandle nh;
 
+    if (argc == 2){
+        filepath = std::getenv("HOME");
+        filename = argv[1];
+        filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/";
+        filepath += filename;
+        ROS_INFO("Saving data to %s.csv", filepath.c_str());
+        std::cout << "saving data to " << filepath + ".csv\n";
+        // Initialize the CSV file.
+        if (!logger.initCSV(filepath, headers)) {
+            return -1;  // Exit if the CSV file could not be created.
+        }
+    }
     // ROS Publishers
     /* TODO: add state publisher
     std::vector<std::string> cols = {
@@ -181,6 +213,8 @@ int main(int argc, char **argv) {
     filter.threshold = THRESHOLD;
     filter.init(x);
 
+    //Initialize csv file if needed
+
     while (ros::ok()){
         ros::spinOnce();
         if(trigger){
@@ -239,54 +273,33 @@ int main(int argc, char **argv) {
             ROS_INFO("Counter: %d", counter);
             ROS_INFO("Estimated Position: %f, %f, %f", p(0), p(1), p(2));
             ROS_INFO("Estimated Velocity: %f, %f, %f", x(3 * J - 3), x(3 * J - 2), x(3 * J - 1));
+
+            // Store the estimated state to a csv file
+            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(46);
+            estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);
+            estimate_state.segment(3, 3) = p;
+            estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);
+            estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);
+            estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);
+            estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);
+            // estimate_state.segment(18, 3) = 1. / dt / (float) J * t265.z(dt);
+            estimate_state.segment(21, 3) = x.segment(6 * J - 3, 3);
+            estimate_state.segment(24, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);
+            estimate_state.segment(28, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);
+            // estimate_state.segment(32, 4) = Eigen::Vector4f(df.iloc("lf.contact", i), df.iloc("rf.contact", i), df.iloc("rh.contact", i), df.iloc("lh.contact", i));
+            estimate_state(36) = filter.threshold;
+            estimate_state.segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
+            
+            logger.logState(estimate_state);
+
             counter ++;
-        }//FIXME: store filter state to csv file every iteration 
+        }
         rate.sleep();
     }
 
-    // Save the estimated state to a csv file
+    logger.finalizeCSV();
+    ROS_INFO("Saved data to %s.csv\n", filepath.c_str());
 
-    Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero(counter, 46);
-    for (int i = 0; i < counter; i++) {
-        estimate_state.row(i).segment(0, 3) = x.segment(3 * J - 3, 3);
-        estimate_state.row(i).segment(3, 3) = p;
-        estimate_state.row(i).segment(6, 3) = 1. / dt / (float) J * lf.z(dt);
-        estimate_state.row(i).segment(9, 3) = 1. / dt / (float) J * rf.z(dt);
-        estimate_state.row(i).segment(12, 3) = 1. / dt / (float) J * rh.z(dt);
-        estimate_state.row(i).segment(15, 3) = 1. / dt / (float) J * lh.z(dt);
-        // estimate_state.row(i).segment(18, 3) = 1. / dt / (float) J * t265.z(dt);
-        estimate_state.row(i).segment(21, 3) = x.segment(6 * J - 3, 3);
-        estimate_state.row(i).segment(24, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);
-        estimate_state.row(i).segment(28, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);
-        // estimate_state.row(i).segment(32, 4) = Eigen::Vector4f(df.iloc("lf.contact", i), df.iloc("rf.contact", i), df.iloc("rh.contact", i), df.iloc("lh.contact", i));
-        estimate_state.row(i)(36) = filter.threshold;
-        estimate_state.row(i).segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
-    }
-        
-    std::vector<std::string> cols = {
-        "v_.x", "v_.y", "v_.z", 
-        "p.x", "p.y", "p.z", 
-        "zLF.x", "zLF.y", "zLF.z", 
-        "zRF.x", "zRF.y", "zRF.z", 
-        "zRH.x", "zRH.y", "zRH.z", 
-        "zLH.x", "zLH.y", "zLH.z", 
-        "zP.x", "zP.y", "zP.z", //t265 
-        "ba.x", "ba.y", "ba.z", 
-        "lf.contact","rf.contact","rh.contact","lh.contact",
-        "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
-        "lf.c","rf.c","rh.c","lh.c", //contact
-        "threshold",
-        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
-    };
-
-    std::string filepath = std::getenv("HOME");
-    std::string filename;
-    filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/";
-    std::cout << "estimation data saved successfully, input csv file name:\n";
-    std::cin >> filename;
-    filepath += filename;
-    std::cout << "saving data to " << filepath + ".csv\n";
-    DataProcessor::write_csv(estimate_state, filepath + ".csv", cols);
     ros::shutdown();
     
     return 0;
