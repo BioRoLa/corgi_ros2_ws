@@ -45,23 +45,33 @@ std::string filename;
 //Classes
 class Encoder{
     public:
-        Encoder(corgi_msgs::MotorState* m, sensor_msgs::Imu* i): module(m), imu(i)
-        {}
-
+        Encoder(corgi_msgs::MotorState* m, sensor_msgs::Imu* i, bool opposite): module(m), imu(i), opposite(opposite) {}
         void UpdateState(float dt){
             beta_d = (beta - beta_prev) / dt;
             theta_d = (theta - theta_prev) / dt;
             theta_prev = theta;
             beta_prev  = beta;
-            theta = module->theta;
-            beta  = module->beta;
+            if(opposite){
+                theta = -module->theta;
+                beta  = -module->beta;
+            }
+            else{
+                theta = module->theta;
+                beta  = module->beta;
+            }
             w_y = imu->angular_velocity.y;
             state << theta, beta, beta_d, w_y, theta_d;
         }
 
         void init(float dt){
-            theta = module->theta;
-            beta  = module->beta;
+            if(opposite){
+                theta = -module->theta;
+                beta  = -module->beta;
+            }
+            else{
+                theta = module->theta;
+                beta  = module->beta;
+            }
             theta_prev = theta;
             beta_prev  = beta;
             UpdateState(dt);
@@ -73,6 +83,7 @@ class Encoder{
     private:
         corgi_msgs::MotorState* module;
         sensor_msgs::Imu* imu;
+        bool opposite = false;
         float theta;
         float beta;
         float theta_prev;
@@ -174,10 +185,11 @@ int main(int argc, char **argv) {
     Leg lh_leg(Eigen::Vector3f(-MOTOR_OFFSET_X,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
     
     //Legs encoder
-    Encoder encoder_lf(&motor_state.module_a, &imu);
-    Encoder encoder_rf(&motor_state.module_b, &imu);
-    Encoder encoder_rh(&motor_state.module_c, &imu);
-    Encoder encoder_lh(&motor_state.module_d, &imu);
+    // motor a,d for left side, which rotation is opposite to right side
+    Encoder encoder_lf(&motor_state.module_a, &imu, true);
+    Encoder encoder_rf(&motor_state.module_b, &imu, false);
+    Encoder encoder_rh(&motor_state.module_c, &imu, true);
+    Encoder encoder_lh(&motor_state.module_d, &imu, false);
 
     //Dynamic predictor
     DP lf(J + 1, lf_leg, &u);
