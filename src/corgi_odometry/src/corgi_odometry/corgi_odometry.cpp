@@ -239,6 +239,7 @@ int main(int argc, char **argv) {
             ROS_INFO("Counter: %d", counter);
             counter ++;
         }
+        rate.sleep();
     }
 
     // Save the estimated state to a csv file
