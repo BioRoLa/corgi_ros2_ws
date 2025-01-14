@@ -75,13 +75,13 @@ void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
 }
 
 void tb2phi(corgi_msgs::MotorCmd motor_cmd, double &trq_r, double &trq_l, double phi_r_fb, double phi_l_fb, double phi_r_dot_fb, double phi_l_dot_fb){
-    double theta_0 = 17 / 180.0 * M_PI;
-    if (motor_cmd.theta < theta_0) {motor_cmd.theta = theta_0;}
-
-    if (motor_cmd.kp == 0) {
+    if (motor_cmd.theta == 0) {
         motor_cmd.kp = 90;
         motor_cmd.kd = 1.75;
     }
+    
+    double theta_0 = 17 / 180.0 * M_PI;
+    if (motor_cmd.theta < theta_0) {motor_cmd.theta = theta_0;}
     
     double phi_r = find_closest_phi(motor_cmd.beta - motor_cmd.theta + theta_0, phi_r_fb);
     double phi_l = find_closest_phi(motor_cmd.beta + motor_cmd.theta - theta_0, phi_l_fb);
