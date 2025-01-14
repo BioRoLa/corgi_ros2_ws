@@ -293,6 +293,10 @@ int main(int argc, char **argv) {
 
             counter ++;
         }
+        
+        if(counter > 0 && !trigger){
+            break;
+        }
         rate.sleep();
     }
 
