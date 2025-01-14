@@ -237,8 +237,10 @@ int main(int argc, char **argv) {
             
             // Print the counter number using ROS_INFO
             ROS_INFO("Counter: %d", counter);
+            ROS_INFO("Estimated Position: %f, %f, %f", p(0), p(1), p(2));
+            ROS_INFO("Estimated Velocity: %f, %f, %f", x(3 * J - 3), x(3 * J - 2), x(3 * J - 1));
             counter ++;
-        }
+        }//FIXME: store filter state to csv file every iteration 
         rate.sleep();
     }
 
