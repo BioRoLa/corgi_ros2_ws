@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     double CoM_bias = 0.0;
     double velocity = 0.1;
     int sampling = 1000;
-    double stand_height = 0.2 + leg_model.r;
+    double stand_height = 0.2;
     double step_length = 0.4;
     double step_height = 0.06;
     double forward_distance = 2.0;
@@ -100,13 +100,17 @@ int main(int argc, char **argv) {
                         {-BL/2, stand_height}};
     std::array<std::array<double, 2>, 4> foothold;
     // initial leg configuration
-    for (int i=0; i<4; i++){
-        if (use_init_conf) { 
-            foothold[i] = {hip[i][0] + relative_foothold[i][0], hip[i][1] + relative_foothold[i][1]};
-        } else {
-            foothold[i] = {hip[i][0] - step_length/2*(1-swing_time), hip[i][1] - stand_height};
-        }//end if else
-    }//end for 
+    if (use_init_conf) { 
+        foothold = {{hip[0][0] + relative_foothold[0][0], hip[0][1] + relative_foothold[0][1]},   
+                    {hip[1][0] + relative_foothold[1][0], hip[1][1] + relative_foothold[1][1]},
+                    {hip[2][0] + relative_foothold[2][0], hip[2][1] + relative_foothold[2][1]},
+                    {hip[3][0] + relative_foothold[3][0], hip[3][1] + relative_foothold[3][1]}};
+    } else {
+        foothold = {{hip[0][0] - step_length/2*(1-swing_time), hip[0][1] - stand_height},   
+                    {hip[1][0] + step_length/8*(1-swing_time), hip[1][1] - stand_height},
+                    {hip[2][0] - step_length/8*(1-swing_time), hip[2][1] - stand_height},
+                    {hip[3][0] + step_length/2*(1-swing_time), hip[3][1] - stand_height}};
+    }//end if else
 
     // Initial stored data
     std::array<double, 4> current_theta;
