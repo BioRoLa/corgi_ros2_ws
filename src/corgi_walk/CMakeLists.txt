@@ -30,4 +30,6 @@ include_directories(
   include
 )
 
+find_library(CORGI_UTILS corgi_utils)
+
 add_subdirectory(src)

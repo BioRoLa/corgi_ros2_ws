@@ -1,2 +1,2 @@
 add_executable(walk_trajectory walk_trajectory.cpp)
-target_link_libraries(walk_trajectory corgi_utils)
+target_link_libraries(walk_trajectory CORGI_UTILS)
