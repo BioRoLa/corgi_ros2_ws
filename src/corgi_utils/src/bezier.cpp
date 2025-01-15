@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include "bezier.hpp"
 
 int main() {
     return 0;

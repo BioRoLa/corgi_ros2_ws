@@ -151,7 +151,7 @@ int main() {
                 double p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
                 for (int j=0; j<5; j++) {   // G, L_l, L_r, U_l, U_r
-                    result_eta = leg_model.inverse({step_length/2*(1-swing_time), -stand_height+contact_hieght[j]}, rim_list[j]);
+                    result_eta = leg_model.inverse({step_length/2*(1-swing_time), -stand_height+contact_hieght_list[j]}, rim_list[j]);
                     leg_model.contact_map(result_eta[0], result_eta[1]);
                     if (leg_model.rim == rim_idx[j]) {
                         current_rim = leg_model.rim;
@@ -166,7 +166,7 @@ int main() {
                 } else if (current_rim == 2) {  // L_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.L_l[0], foothold[i][1] + leg_model.G[1]-leg_model.L_l[1] + leg_model.radius};
                 } else if (current_rim == 1) {  // U_l
-                    p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G.[1]-leg_model.U_l[1] + leg_model.radius};
+                    p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
                 sp[i] = SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
             } else if (duty[i] >= 1.0) {
@@ -186,8 +186,8 @@ int main() {
             if (next_theta[i] < M_PI*17.0/180.0) {
                 std::cout << "Exceed lower bound." << std::endl;
             }//end if 
-            motor_cmd_modules[i].theta = next_theta[i];
-            motor_cmd_modules[i].beta  = next_beta[i];
+            motor_cmd_modules[i]->theta = next_theta[i];
+            motor_cmd_modules[i]->beta  = next_beta[i];
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
         }//end for
