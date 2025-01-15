@@ -17,7 +17,7 @@
 
 // Main function
 int main(int argc, char **argv) {
-    ROS_INFO("Impedance Command Publisher Starts\n");
+    ROS_INFO("Check point1\n");
     ros::init(argc, argv, "imp_cmd_pub");
     ros::NodeHandle nh;
     ros::Publisher motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1);
@@ -131,6 +131,7 @@ int main(int argc, char **argv) {
         current_theta[i] = result_eta[0];
         current_beta[i]  = result_eta[1];
     }//end for
+    ROS_INFO("Check point2\n");
 
     // Start walking
     while (traveled_distance <= forward_distance) {
@@ -198,7 +199,10 @@ int main(int argc, char **argv) {
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
         }//end for
+        ROS_INFO("Check point3\n");
+
         motor_pub.publish(motor_cmd);
+        rate.sleep();
     }//end while
 
     ros::shutdown();
