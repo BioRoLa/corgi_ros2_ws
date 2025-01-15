@@ -114,15 +114,16 @@ int main() {
     double dS = velocity / sampling;
     double incre_duty = dS / step_length;
     double traveled_distance = 0.0;
-    SwingProfile sp[4];
+    std::vector<SwingProfile> sp;
 
     // Initial teata, beta
+    std::array<double, 2> result_eta;
     std::string rim_list[5] = {"G", "L_l", "L_r", "U_l", "U_r"};
     int rim_idx[5] = {3, 2, 4, 1, 5};
     double contact_hieght_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
     for (int i=0; i<4; i++) {
         double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[current_rim-1]};
-        double result_eta[2] = leg_model.inverse(contact_point, rim_list[current_rim-1]);
+        result_eta = leg_model.inverse(contact_point, rim_list[current_rim-1]);
         current_theta[i] = result_eta[0];
         current_beta[i]  = result_eta[1];
     }//end for
@@ -130,13 +131,12 @@ int main() {
     // Start walking
     while (traveled_distance <= forward_distance) {
         for (int i=0; i<4; i++) {
-            std::array<double, 2> result_eta;
             if (swing_phase[i] == 0) { // Stance phase
                 result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
             } else { // Swing phase
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
-                double curve_point[2] = sp[i].getFootendPoint(swing_phase_ratio);
+                double curve_point[2] = sp.begin()->getFootendPoint(swing_phase_ratio);
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
             next_theta[i] = result_eta[0];
@@ -151,7 +151,8 @@ int main() {
                 double p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
                 for (int j=0; j<5; j++) {   // G, L_l, L_r, U_l, U_r
-                    result_eta = leg_model.inverse({step_length/2*(1-swing_time), -stand_height+contact_hieght_list[j]}, rim_list[j]);
+                    double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_hieght_list[j]};
+                    result_eta = leg_model.inverse(contact_point, rim_list[j]);
                     leg_model.contact_map(result_eta[0], result_eta[1]);
                     if (leg_model.rim == rim_idx[j]) {
                         current_rim = leg_model.rim;
@@ -168,7 +169,8 @@ int main() {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                sp[i] = SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
+                sp.erase(sp.begin());
+                sp.push_back(SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]));
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;
