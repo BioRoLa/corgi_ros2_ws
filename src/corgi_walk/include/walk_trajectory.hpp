@@ -1,0 +1,5 @@
+#ifndef WALKTRAJECT_HPP
+#define WALKTRAJECT_HPP
+
+
+#endif // WALKTRAJECT_HPP
