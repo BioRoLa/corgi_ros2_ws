@@ -133,7 +133,7 @@ int main() {
     // Start walking
     while (traveled_distance <= forward_distance) {
         for (int i=0; i<4; i++) {
-            std::array<double, 2> result_eta[2];
+            std::array<double, 2> result_eta;
             if (swing_phase[i] == 0) { // Stance phase
                 result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
             } else { // Swing phase
