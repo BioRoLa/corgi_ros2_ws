@@ -17,8 +17,8 @@
 
 // Main function
 int main() {
-    bool sim = true;
-    LegModel leg_model(sim);
+    ROS_INFO("Impedance Command Publisher Starts\n");
+    ros::init(argc, argv, "imp_cmd_pub");
     ros::NodeHandle nh;
     ros::Publisher motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1);
     corgi_msgs::MotorCmdStamped motor_cmd;
@@ -28,6 +28,10 @@ int main() {
         &motor_cmd.module_c,
         &motor_cmd.module_d
     };
+    ros::Rate rate(1000);
+    
+    bool sim = true;
+    LegModel leg_model(sim);
 
     // User-defined parameters
     double BL = 0.444;
@@ -197,5 +201,6 @@ int main() {
         motor_pub.publish(motor_cmd);
     }//end while
 
+    ros::shutdown();
     return 0;
 }//end main
