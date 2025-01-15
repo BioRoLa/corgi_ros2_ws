@@ -9,6 +9,10 @@
 
 class Bezier {
     public:
+        Bezier() {
+            // 默认构造函数的实现
+        }
+
         Bezier(const std::vector<std::array<double, 2>>& control_pts) : control_pts(control_pts) {
             bz_cff = bz_coeff(control_pts);
         }
@@ -64,6 +68,10 @@ class Bezier {
 
 class SwingProfile {
     public:
+        SwingProfile() {
+            // 默认构造函数的实现
+        }
+
         SwingProfile(double L, double h, double dh, double dL1, double dL2, double dL3, double dL4, double offset_x = 0, double offset_y = 0, double diff_h = 0)
             : L(L), h(h), dh(dh), dL1(dL1), dL2(dL2), dL3(dL3), dL4(dL4), offset_x(offset_x), offset_y(offset_y), diff_h(diff_h), bezier(control_points) {
             getControlPoint();
