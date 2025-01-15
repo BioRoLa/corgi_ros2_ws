@@ -2,6 +2,7 @@
 #include <signal.h>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
+#include "sensor_msgs/Imu.h"
 #include "corgi_sim/set_int.h"
 #include "corgi_sim/set_float.h"
 #include "corgi_sim/motor_set_control_pid.h"
@@ -14,6 +15,7 @@
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::TriggerStamped trigger;
+sensor_msgs::Imu imu;
 
 double AR_phi = 0.0;
 double AL_phi = 0.0;
@@ -66,6 +68,10 @@ void CL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_c.torque_l
 void DR_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_r = trq.data; }
 void DL_torque_cb(corgi_sim::Float64Stamped trq) { motor_state.module_d.torque_l = trq.data; }
 
+void gyro_cb(sensor_msgs::Imu values) { imu.orientation = values.orientation; }
+void ang_vel_cb(sensor_msgs::Imu values) { imu.angular_velocity = values.angular_velocity; }
+void imu_cb(sensor_msgs::Imu values) { imu.linear_acceleration = values.linear_acceleration; }
+
 void update_motor_pid(corgi_sim::motor_set_control_pid &R_motor_pid_srv, corgi_sim::motor_set_control_pid &L_motor_pid_srv, double kp, double ki, double kd){
     R_motor_pid_srv.request.controlp = kp;
     R_motor_pid_srv.request.controli = ki;
@@ -76,16 +82,22 @@ void update_motor_pid(corgi_sim::motor_set_control_pid &R_motor_pid_srv, corgi_s
     L_motor_pid_srv.request.controld = kd;
 }
 
+double find_closest_phi(double phi_ref, double phi_fb) {
+    double diff = fmod(phi_ref - phi_fb + M_PI, 2 * M_PI);
+    if (diff < 0) diff += 2 * M_PI;
+    return phi_fb + diff - M_PI;
+}
+
 void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
     theta = (phi_l - phi_r) / 2.0 + 17 / 180.0 * M_PI;
     beta  = (phi_l + phi_r) / 2.0;
 }
 
-void tb2phi(double theta, double beta, double &phi_r, double &phi_l){
+void tb2phi(double theta, double beta, double &phi_r, double &phi_l, double phi_r_fb, double phi_l_fb){
     double theta_0 = 17 / 180.0 * M_PI;
     if (theta < theta_0) {theta = theta_0;}
-    phi_r = beta - theta + theta_0;
-    phi_l = beta + theta - theta_0;
+    phi_r = find_closest_phi(beta - theta + theta_0, phi_r_fb);
+    phi_l = find_closest_phi(beta + theta - theta_0, phi_l_fb);
 }
 
 std::string get_lastest_input() {
@@ -155,8 +167,13 @@ int main(int argc, char **argv) {
     ros::Subscriber DR_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_left_motor/torque_feedback", 1, DR_torque_cb);
     ros::Subscriber DL_torque_sub = nh.subscribe<corgi_sim::Float64Stamped>("lh_right_motor/torque_feedback" , 1, DL_torque_cb);
     
+    ros::Subscriber gyro_sub = nh.subscribe<sensor_msgs::Imu>("gyro/quaternion" , 1, gyro_cb);
+    ros::Subscriber ang_vel_sub = nh.subscribe<sensor_msgs::Imu>("ang_vel/values" , 1, ang_vel_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/values" , 1, imu_cb);
+
     ros::Subscriber motor_cmd_sub = nh.subscribe<corgi_msgs::MotorCmdStamped>("motor/command", 1, motor_cmd_cb);
     ros::Publisher motor_state_pub = nh.advertise<corgi_msgs::MotorStateStamped>("motor/state", 1000);
+    ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
     ros::Publisher trigger_pub = nh.advertise<corgi_msgs::TriggerStamped>("trigger", 1000);
     
     ros::WallRate rate(1000);
@@ -174,23 +191,23 @@ int main(int argc, char **argv) {
     update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 30, 0, 0.1);
     update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 30, 0, 0.1);
     
+    AR_motor_pid_client.call(AR_motor_pid_srv);
+    AL_motor_pid_client.call(AL_motor_pid_srv);
+    BR_motor_pid_client.call(BR_motor_pid_srv);
+    BL_motor_pid_client.call(BL_motor_pid_srv);
+    CR_motor_pid_client.call(CR_motor_pid_srv);
+    CL_motor_pid_client.call(CL_motor_pid_srv);
+    DR_motor_pid_client.call(DR_motor_pid_srv);
+    DL_motor_pid_client.call(DL_motor_pid_srv);
+
     int loop_counter = 0;
     while (ros::ok() && time_step_client.call(time_step_srv)){
         ros::spinOnce();
 
-        AR_motor_pid_client.call(AR_motor_pid_srv);
-        AL_motor_pid_client.call(AL_motor_pid_srv);
-        BR_motor_pid_client.call(BR_motor_pid_srv);
-        BL_motor_pid_client.call(BL_motor_pid_srv);
-        CR_motor_pid_client.call(CR_motor_pid_srv);
-        CL_motor_pid_client.call(CL_motor_pid_srv);
-        DR_motor_pid_client.call(DR_motor_pid_srv);
-        DL_motor_pid_client.call(DL_motor_pid_srv);
-
-        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value);
+        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value, AR_phi, AL_phi);
+        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value, BR_phi, BL_phi);
+        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value, CR_phi, CL_phi);
+        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value, DR_phi, DL_phi);
 
         AR_motor_pos_client.call(AR_motor_pos_srv);
         AL_motor_pos_client.call(AL_motor_pos_srv);
@@ -210,6 +227,7 @@ int main(int argc, char **argv) {
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
+        imu_pub.publish(imu);
 
         double clock = loop_counter*0.001;
         simulationClock.clock.sec = (int)clock;
