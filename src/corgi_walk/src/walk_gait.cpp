@@ -136,7 +136,8 @@ int main() {
             } else { // Swing phase
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
-                double curve_point[2] = sp.begin()->getFootendPoint(swing_phase_ratio);
+                double* temp = sp.begin()->getFootendPoint(swing_phase_ratio);
+                double curve_point[2] = {temp[0], temp[1]};
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
             next_theta[i] = result_eta[0];
