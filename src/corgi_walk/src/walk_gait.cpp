@@ -197,11 +197,12 @@ int main(int argc, char **argv) {
             if (next_theta[i] < M_PI*17.0/180.0) {
                 std::cout << "Exceed lower bound." << std::endl;
             }//end if 
-            if (i==0 || i==3) {
-                next_beta[i] = -next_beta[i];
-            }//end if
             motor_cmd_modules[i]->theta = next_theta[i];
-            motor_cmd_modules[i]->beta  = next_beta[i];
+            if (i==1 || i==2) {
+                motor_cmd_modules[i]->beta  = next_beta[i];
+            } else {
+                motor_cmd_modules[i]->beta  = -next_beta[i];
+            }
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
         }//end for
