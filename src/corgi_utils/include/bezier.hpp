@@ -23,13 +23,15 @@ class Bezier {
             }
             x += offset_x;
             y += offset_y;
-            double xy[2] = {x, y};
+            xy[0] = x;
+            xy[1] = y;
             return xy;
         }
 
     private:
         std::vector<std::array<double, 2>> control_pts;
         std::vector<int> bz_cff;
+        double xy[2];
 
         int fact(int n) {
             return (n == 0 || n == 1) ? 1 : n * fact(n - 1);

@@ -17,8 +17,7 @@
 
 // Main function
 int main(int argc, char **argv) {
-    ROS_INFO("Check point1\n");
-    ros::init(argc, argv, "imp_cmd_pub");
+    ros::init(argc, argv, "walk_pub");
     ros::NodeHandle nh;
     ros::Publisher motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1);
     corgi_msgs::MotorCmdStamped motor_cmd;
@@ -119,6 +118,7 @@ int main(int argc, char **argv) {
     double incre_duty = dS / step_length;
     double traveled_distance = 0.0;
     std::vector<SwingProfile> sp;
+    sp.push_back(SwingProfile(0.0, step_height, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
     // Initial teata, beta
     std::array<double, 2> result_eta;
@@ -131,7 +131,6 @@ int main(int argc, char **argv) {
         current_theta[i] = result_eta[0];
         current_beta[i]  = result_eta[1];
     }//end for
-    ROS_INFO("Check point2\n");
 
     // Start walking
     while (traveled_distance <= forward_distance) {
@@ -199,8 +198,6 @@ int main(int argc, char **argv) {
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
         }//end for
-        ROS_INFO("Check point3\n");
-
         motor_pub.publish(motor_cmd);
         rate.sleep();
     }//end while
