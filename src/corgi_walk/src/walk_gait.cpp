@@ -155,20 +155,21 @@ int main() {
                 // calculate contact rim when touch ground
                 for (int j=0; j<5; j++) {   // G, L_l, L_r, U_l, U_r
                     result_eta = leg_model.inverse({step_length/2*(1-swing_time), -stand_height+contact_hieght[j]}, rim_list[j]);
-                    leg_model.contact_map(result_eta[0], result_eta[1]);    // also get joint positions when touch ground, in polar coordinate (x+jy).
+                    leg_model.contact_map(result_eta[0], result_eta[1]);
                     if (leg_model.rim == rim_idx[j]) {
                         current_rim = leg_model.rim;
                         break;
                     }//end if
                 }//end for
                 // G position when touch ground
+                leg_model.forward(result_eta[0], result_eta[1]);
                 double p_td[2];
                 if (current_rim == 3) {   // G
                     p_td = {foothold[i][0], foothold[i][1] + leg_model.r};
                 } else if (current_rim == 2) {  // L_l
-                    p_td = {foothold[i][0] + leg_model.G.real()-leg_model.L_l.real(), foothold[i][1] + leg_model.G.imag()-leg_model.L_l.imag() + leg_model.radius};
+                    p_td = {foothold[i][0] + leg_model.G[0]-leg_model.L_l[0], foothold[i][1] + leg_model.G[1]-leg_model.L_l[1] + leg_model.radius};
                 } else if (current_rim == 1) {  // U_l
-                    p_td = {foothold[i][0] + leg_model.G.real()-leg_model.U_l.real(), foothold[i][1] + leg_model.G.imag()-leg_model.U_l.imag() + leg_model.radius};
+                    p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G.[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
                 sp[i](p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
             } else if (duty[i] >= 1.0) {
