@@ -80,7 +80,7 @@ int main() {
             first_swing_leg = i;
         }//end if
     }//end for 
-    double duty[4];
+    std::array<double, 4> duty;
     if (!use_init_conf || first_swing_leg == 0) {
         duty = {1 - swing_time, 0.5 - swing_time, 0.5, 0.0};
     } else if (first_swing_leg == 1) {
@@ -95,19 +95,15 @@ int main() {
                         {BL/2, stand_height} ,
                         {-BL/2, stand_height},
                         {-BL/2, stand_height}};
-    double foothold[4][2];
+    std::array<std::array<double, 2>, 4> foothold;
     // initial leg configuration
-    if (use_init_conf) { 
-        foothold = {{hip[0][0] + relative_foothold[0][0], hip[0][1] + relative_foothold[0][1]},   
-                    {hip[1][0] + relative_foothold[1][0], hip[1][1] + relative_foothold[1][1]},
-                    {hip[2][0] + relative_foothold[2][0], hip[2][1] + relative_foothold[2][1]},
-                    {hip[3][0] + relative_foothold[3][0], hip[3][1] + relative_foothold[3][1]}};
-    } else {
-        foothold = {{hip[0][0] - step_length/2*(1-swing_time), hip[0][1] - stand_height},   
-                    {hip[1][0] + step_length/8*(1-swing_time), hip[1][1] - stand_height},
-                    {hip[2][0] - step_length/8*(1-swing_time), hip[2][1] - stand_height},
-                    {hip[3][0] + step_length/2*(1-swing_time), hip[3][1] - stand_height}};
-    }//end if else
+    for (int i=0; i<4; i++){
+        if (use_init_conf) { 
+            foothold[i] = {hip[i][0] + relative_foothold[i][0], hip[i][1] + relative_foothold[i][1]};
+        } else {
+            foothold[i] = {hip[i][0] - step_length/2*(1-swing_time), hip[i][1] - stand_height};
+        }//end if else
+    }//end for 
 
     // Initial stored data
     std::array<double, 4> current_theta;
@@ -164,7 +160,7 @@ int main() {
                 }//end for
                 // G position when touch ground
                 leg_model.forward(result_eta[0], result_eta[1]);
-                double p_td[2];
+                std::array<double, 2> p_td;
                 if (current_rim == 3) {   // G
                     p_td = {foothold[i][0], foothold[i][1] + leg_model.r};
                 } else if (current_rim == 2) {  // L_l
