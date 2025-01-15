@@ -47,33 +47,29 @@ class Encoder{
     public:
         Encoder(corgi_msgs::MotorState* m, sensor_msgs::Imu* i, bool opposite): module(m), imu(i), opposite(opposite) {}
         void UpdateState(float dt){
-            beta_d = (beta - beta_prev) / dt;
-            theta_d = (theta - theta_prev) / dt;
             theta_prev = theta;
             beta_prev  = beta;
+            theta = module->theta;
             if(opposite){
-                theta = -module->theta;
                 beta  = -module->beta;
             }
             else{
-                theta = module->theta;
                 beta  = module->beta;
             }
+            beta_d = (beta - beta_prev) / dt;
+            theta_d = (theta - theta_prev) / dt;
             w_y = imu->angular_velocity.y;
             state << theta, beta, beta_d, w_y, theta_d;
         }
 
         void init(float dt){
+            theta = module->theta;
             if(opposite){
-                theta = -module->theta;
                 beta  = -module->beta;
             }
             else{
-                theta = module->theta;
                 beta  = module->beta;
             }
-            theta_prev = theta;
-            beta_prev  = beta;
             UpdateState(dt);
         }
         //const reference, prevent modified
@@ -83,7 +79,7 @@ class Encoder{
     private:
         corgi_msgs::MotorState* module;
         sensor_msgs::Imu* imu;
-        bool opposite = false;
+        bool opposite;
         float theta;
         float beta;
         float theta_prev;
@@ -110,12 +106,13 @@ Eigen::Vector3f w;
 Eigen::Quaternionf q;
 int counter = 0;
 //calculate the angle by lidar, need to implement lidar sensor to get the value
-float alpha_lf = 0;
-float alpha_rf = 0;
-float alpha_rh = 0;
-float alpha_lh = 0;
-Eigen::Matrix3f P_cov;
+//set to -100 to disable lidar
+float alpha_lf = -100;
+float alpha_rf = -100;
+float alpha_rh = -100;
+float alpha_lh = -100;
 
+Eigen::Matrix3f P_cov;
 corgi_msgs::MotorStateStamped motor_state;
 sensor_msgs::Imu imu;
 
@@ -188,8 +185,8 @@ int main(int argc, char **argv) {
     // motor a,d for left side, which rotation is opposite to right side
     Encoder encoder_lf(&motor_state.module_a, &imu, true);
     Encoder encoder_rf(&motor_state.module_b, &imu, false);
-    Encoder encoder_rh(&motor_state.module_c, &imu, true);
-    Encoder encoder_lh(&motor_state.module_d, &imu, false);
+    Encoder encoder_rh(&motor_state.module_c, &imu, false);
+    Encoder encoder_lh(&motor_state.module_d, &imu, true);
 
     //Dynamic predictor
     DP lf(J + 1, lf_leg, &u);
@@ -198,8 +195,8 @@ int main(int argc, char **argv) {
     DP lh(J + 1, lh_leg, &u);
 
     rot <<  1,  0,  0, 
-            0, -1,  0,
-            0,  0, -1;
+            0,  1,  0,
+            0,  0,  1;
 
     v_init << 0, 0, 0;
 
