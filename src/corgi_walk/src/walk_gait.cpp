@@ -121,8 +121,7 @@ int main(int argc, char **argv) {
     double dS = velocity / sampling;
     double incre_duty = dS / step_length;
     double traveled_distance = 0.0;
-    std::vector<SwingProfile> sp;
-    sp.push_back(SwingProfile(0.0, step_height, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    std::vector<SwingProfile> sp(4);
     std::string touch_rim_list[3] = {"G", "L_l", "U_l"};
     int touch_rim_idx[3] = {3, 2, 1};
 
@@ -173,7 +172,7 @@ int main(int argc, char **argv) {
             } else { // Swing phase
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
-                double* temp = sp.begin()->getFootendPoint(swing_phase_ratio);
+                double* temp = sp[i].getFootendPoint(swing_phase_ratio);
                 double curve_point[2] = {temp[0]-hip[i][0], temp[1]-hip[i][1]};
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
@@ -207,8 +206,7 @@ int main(int argc, char **argv) {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                sp.erase(sp.begin());
-                sp.push_back(SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]));
+                sp[i] = SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;
