@@ -35,4 +35,5 @@ add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
   src/leg_model.cpp
+  src/bezier.cpp
 )
