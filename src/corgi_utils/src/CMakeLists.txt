@@ -1,4 +1,4 @@
-add_executable(leg_model leg_model.cpp)
+add_executable(leg_model leg_model_main.cpp)
 target_link_libraries(leg_model Eigen3::Eigen)
 
 add_executable(bezier bezier.cpp)
