@@ -56,20 +56,20 @@ int main(int argc, char **argv) {
     int swing_phase[4] = {0, 0, 0, 0};
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
-    int current_rim = 0;
+    int init_rim[4] = {};
     for (int i=0; i<4; i++) {
         leg_model.contact_map(init_theta[i], init_beta[i]);
-        current_rim = leg_model.rim;
+        init_rim[i] = leg_model.rim;
         leg_model.forward(init_theta[i], init_beta[i]);
-        if (current_rim == 1) {
+        if (init_rim[i] == 1) {
             relative_foothold[i][0] = leg_model.U_l[0];
-        } else if (current_rim == 2) {
+        } else if (init_rim[i] == 2) {
             relative_foothold[i][0] = leg_model.L_l[0];
-        } else if (current_rim == 3) {
+        } else if (init_rim[i] == 3) {
             relative_foothold[i][0] = leg_model.G[0];
-        } else if (current_rim == 4) {
+        } else if (init_rim[i] == 4) {
             relative_foothold[i][0] = leg_model.L_r[0];
-        } else if (current_rim == 5) {
+        } else if (init_rim[i] == 5) {
             relative_foothold[i][0] = leg_model.U_r[0];
         } else {
             std::cout << "Leg cannot contact ground if use the given initial theta/beta." << std::endl;
@@ -123,6 +123,7 @@ int main(int argc, char **argv) {
     double traveled_distance = 0.0;
     std::vector<SwingProfile> sp;
     sp.push_back(SwingProfile(0.0, step_height, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    int current_rim = 0;
 
     // Initial teata, beta
     std::array<double, 2> result_eta;
@@ -130,12 +131,33 @@ int main(int argc, char **argv) {
     int rim_idx[5] = {3, 2, 4, 1, 5};
     double contact_hieght_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
     for (int i=0; i<4; i++) {
-        double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[current_rim-1]};
-        result_eta = leg_model.inverse(contact_point, rim_list[current_rim-1]);
+        double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[init_rim[i]-1]};
+        result_eta = leg_model.inverse(contact_point, rim_list[init_rim[i]-1]);
         current_theta[i] = result_eta[0];
         current_beta[i]  = result_eta[1];
     }//end for
-
+    // Check and update theta, beta
+    for (int i=0; i<4; i++) {
+        if (next_theta[i] > M_PI*160.0/180.0) {
+            std::cout << "Exceed upper bound." << std::endl;
+        }//end if 
+        if (next_theta[i] < M_PI*17.0/180.0) {
+            std::cout << "Exceed lower bound." << std::endl;
+        }//end if 
+        motor_cmd_modules[i]->theta = current_theta[i];
+        if (i==1 || i==2) {
+            motor_cmd_modules[i]->beta  = current_beta[i];
+        } else {
+            motor_cmd_modules[i]->beta  = -current_beta[i];
+        }
+        std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
+        std::cout << "current_beta " << i << ": "<< current_beta[i]*180.0/M_PI << std::endl;
+    }//end for
+    for (int i=0; i<1000; i++) {
+        motor_pub.publish(motor_cmd);
+        rate.sleep();
+    }
+    
     // Start walking
     while (traveled_distance <= forward_distance) {
         for (int i=0; i<4; i++) {
