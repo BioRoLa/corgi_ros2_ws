@@ -16,7 +16,7 @@
 #include <fstream>
 
 // Main function
-int main() {
+int main(int argc, char **argv) {
     ROS_INFO("Impedance Command Publisher Starts\n");
     ros::init(argc, argv, "imp_cmd_pub");
     ros::NodeHandle nh;
@@ -29,7 +29,7 @@ int main() {
         &motor_cmd.module_d
     };
     ros::Rate rate(1000);
-    
+
     bool sim = true;
     LegModel leg_model(sim);
 
