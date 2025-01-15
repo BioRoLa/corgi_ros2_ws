@@ -101,15 +101,15 @@ int main(int argc, char **argv) {
     std::array<std::array<double, 2>, 4> foothold;
     // initial leg configuration
     if (use_init_conf) { 
-        foothold = {{hip[0][0] + relative_foothold[0][0], hip[0][1] + relative_foothold[0][1]},   
-                    {hip[1][0] + relative_foothold[1][0], hip[1][1] + relative_foothold[1][1]},
-                    {hip[2][0] + relative_foothold[2][0], hip[2][1] + relative_foothold[2][1]},
-                    {hip[3][0] + relative_foothold[3][0], hip[3][1] + relative_foothold[3][1]}};
+        foothold = {{{hip[0][0] + relative_foothold[0][0], hip[0][1] + relative_foothold[0][1]},   
+                     {hip[1][0] + relative_foothold[1][0], hip[1][1] + relative_foothold[1][1]},
+                     {hip[2][0] + relative_foothold[2][0], hip[2][1] + relative_foothold[2][1]},
+                     {hip[3][0] + relative_foothold[3][0], hip[3][1] + relative_foothold[3][1]}}};
     } else {
-        foothold = {{hip[0][0] - step_length/2*(1-swing_time), hip[0][1] - stand_height},   
-                    {hip[1][0] + step_length/8*(1-swing_time), hip[1][1] - stand_height},
-                    {hip[2][0] - step_length/8*(1-swing_time), hip[2][1] - stand_height},
-                    {hip[3][0] + step_length/2*(1-swing_time), hip[3][1] - stand_height}};
+        foothold = {{{hip[0][0] - step_length/2*(1-swing_time), hip[0][1] - stand_height},   
+                     {hip[1][0] + step_length/8*(1-swing_time), hip[1][1] - stand_height},
+                     {hip[2][0] - step_length/8*(1-swing_time), hip[2][1] - stand_height},
+                     {hip[3][0] + step_length/2*(1-swing_time), hip[3][1] - stand_height}}};
     }//end if else
 
     // Initial stored data
@@ -197,6 +197,9 @@ int main(int argc, char **argv) {
             if (next_theta[i] < M_PI*17.0/180.0) {
                 std::cout << "Exceed lower bound." << std::endl;
             }//end if 
+            if (i==0 || i==3) {
+                next_beta[i] = -next_beta[i];
+            }//end if
             motor_cmd_modules[i]->theta = next_theta[i];
             motor_cmd_modules[i]->beta  = next_beta[i];
             current_theta[i] = next_theta[i];
