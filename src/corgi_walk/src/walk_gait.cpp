@@ -135,8 +135,8 @@ int main(int argc, char **argv) {
         // calculate contact rim of initial pose
         for (int j=0; j<5; j++) {
             double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[j]};
-            result_eta = leg_model.inverse(contact_point, contact_rim[j]);
-            leg_model.contact_map(theta, beta);
+            result_eta = leg_model.inverse(contact_point, rim_list[j]);
+            leg_model.contact_map(result_eta[0], result_eta[1]);
             if (leg_model.rim == rim_idx[j])
                 break;
         }
@@ -145,10 +145,10 @@ int main(int argc, char **argv) {
     }//end for
     // Check and update theta, beta
     for (int i=0; i<4; i++) {
-        if (next_theta[i] > M_PI*160.0/180.0) {
+        if (current_theta[i] > M_PI*160.0/180.0) {
             std::cout << "Exceed upper bound." << std::endl;
         }//end if 
-        if (next_theta[i] < M_PI*17.0/180.0) {
+        if (current_theta[i] < M_PI*17.0/180.0) {
             std::cout << "Exceed lower bound." << std::endl;
         }//end if 
         motor_cmd_modules[i]->theta = current_theta[i];
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
                 double* temp = sp.begin()->getFootendPoint(swing_phase_ratio);
-                double curve_point[2] = {temp[0], temp[1]};
+                double curve_point[2] = {temp[0]-hip[i][0], temp[1]-hip[i][1]};
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
             next_theta[i] = result_eta[0];
@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
                 swing_phase[i] = 1;
                 foothold[i] = {hip[i][0] + ((1-swing_time)/2+swing_time)*step_length, 0};
                 // Bezier curve for swing phase
-                leg_model.forward(current_theta[i], current_beta[i]);
+                leg_model.forward(next_theta[i], next_beta[i]);
                 double p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
                 for (int j=0; j<3; j++) {   // G, L_l, U_l
@@ -234,6 +234,8 @@ int main(int argc, char **argv) {
             }
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
+            std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
+            std::cout << "current_beta " << i << ": "<< current_beta[i]*180.0/M_PI << std::endl;
         }//end for
         motor_pub.publish(motor_cmd);
         rate.sleep();
