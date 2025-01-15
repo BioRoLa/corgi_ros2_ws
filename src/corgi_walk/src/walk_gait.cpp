@@ -3,8 +3,9 @@
 #include <stdexcept>
 #include <vector>
 #include <chrono>
-#include "ros/ros.h"
 
+#include "ros/ros.h"
+#include "corgi_msgs/MotorCmdStamped.h"
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
 #include "walk_gait.hpp"
@@ -125,7 +126,7 @@ int main() {
     double contact_hieght_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
     for (int i=0; i<4; i++) {
         double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[current_rim-1]};
-        double result_eta[2] = leg_model.inverse(, rim_list[current_rim-1]);
+        double result_eta[2] = leg_model.inverse(contact_point, rim_list[current_rim-1]);
         current_theta[i] = result_eta[0];
         current_beta[i]  = result_eta[1];
     }//end for
@@ -171,7 +172,7 @@ int main() {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G.[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                sp[i](p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
+                sp[i] = SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;
@@ -194,7 +195,7 @@ int main() {
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
         }//end for
-        motor_pub.pub(motor_cmd);
+        motor_pub.publish(motor_cmd);
     }//end while
 
     return 0;
