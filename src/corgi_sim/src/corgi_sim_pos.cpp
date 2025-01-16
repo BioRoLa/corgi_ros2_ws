@@ -1,5 +1,7 @@
 #include <iostream>
 #include <signal.h>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
 #include "sensor_msgs/Imu.h"
@@ -224,6 +226,16 @@ int main(int argc, char **argv) {
         phi2tb(DR_phi, DL_phi, motor_state.module_d.theta, motor_state.module_d.beta);
 
         motor_state.header.seq = loop_counter;
+
+        Eigen::Quaterniond orientation(imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z);
+        Eigen::Vector3d linear_acceleration(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+        Eigen::Vector3d gravity_global(0, 0, 9.81);
+        Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
+
+        linear_acceleration -= gravity_body;
+        imu.linear_acceleration.x = linear_acceleration(0);
+        imu.linear_acceleration.y = linear_acceleration(1);
+        imu.linear_acceleration.z = linear_acceleration(2);
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
