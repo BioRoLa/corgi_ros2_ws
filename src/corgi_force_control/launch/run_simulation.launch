@@ -7,6 +7,5 @@
     <node name="webots_launcher" pkg="corgi_sim" type="webots_launcher.py" args="--world=$(arg world) --mode=$(arg mode)" required="true"/>
     <node name="corgi_data_recorder" pkg="corgi_data_recorder" type="corgi_data_recorder"/>
     <node name="corgi_sim_trq" pkg="corgi_sim" type="corgi_sim_trq" respawn="true" output="screen"/>
-    <node name="force_estimation" pkg="corgi_impedance_control" type="force_estimation"/>
-    <node name="hybrid_control" pkg="corgi_impedance_control" type="hybrid_control"/>
+    <node name="force_estimation" pkg="corgi_force_control" type="force_estimation"/>
 </launch>

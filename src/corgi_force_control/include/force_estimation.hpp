@@ -11,18 +11,19 @@
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
 
+LegModel legmodel(true);
 
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::ForceStateStamped force_state;
 
 Eigen::MatrixXd H_l_poly(2, 8);
-Eigen::MatrixXd U_l_poly(2, 8);
 Eigen::MatrixXd F_l_poly(2, 8);
-Eigen::MatrixXd L_l_poly(2, 8);
-Eigen::MatrixXd G_poly(2, 8);
-Eigen::MatrixXd L_r_poly(2, 8);
 Eigen::MatrixXd F_r_poly(2, 8);
+Eigen::MatrixXd U_l_poly(2, 8);
 Eigen::MatrixXd U_r_poly(2, 8);
+Eigen::MatrixXd L_l_poly(2, 8);
+Eigen::MatrixXd L_r_poly(2, 8);
+Eigen::MatrixXd G_poly(2, 8);
 Eigen::MatrixXd P_poly(2, 8);
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state);

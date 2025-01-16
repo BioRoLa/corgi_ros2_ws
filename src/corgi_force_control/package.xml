@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>corgi_impedance_control</name>
+  <name>corgi_force_control</name>
   <version>0.0.0</version>
-  <description>The corgi_impedance_control package</description>
+  <description>The corgi_force_control package</description>
   <maintainer email="r12522823@ntu.edu.tw">yisyuan</maintainer>
   <license>TODO</license>
 
