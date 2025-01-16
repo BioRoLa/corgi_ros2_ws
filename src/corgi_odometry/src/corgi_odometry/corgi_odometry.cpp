@@ -21,6 +21,7 @@ using namespace estimation_model;
 #define MOTOR_OFFSET_Z 0.0
 #define WHEEL_RADIUS 0.1
 #define WHEEL_WIDTH 0.012
+#define GRAVITY 9.80665
 
 // CSV file parameters
 std::vector<std::string> headers = {
@@ -183,10 +184,10 @@ int main(int argc, char **argv) {
     
     //Legs encoder
     // motor a,d for left side, which rotation is opposite to right side
-    Encoder encoder_lf(&motor_state.module_a, &imu, true);
-    Encoder encoder_rf(&motor_state.module_b, &imu, false);
-    Encoder encoder_rh(&motor_state.module_c, &imu, false);
-    Encoder encoder_lh(&motor_state.module_d, &imu, true);
+    Encoder encoder_lf(&motor_state.module_a, &imu, false);
+    Encoder encoder_rf(&motor_state.module_b, &imu, true);
+    Encoder encoder_rh(&motor_state.module_c, &imu, true);
+    Encoder encoder_lh(&motor_state.module_d, &imu, false);
 
     //Dynamic predictor
     DP lf(J + 1, lf_leg, &u);
@@ -194,6 +195,7 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
+    //Rotate imu data to body frame
     rot <<  1,  0,  0, 
             0,  1,  0,
             0,  0,  1;
@@ -254,7 +256,7 @@ int main(int argc, char **argv) {
                 initialized = true;
             }
             //Update encoder states
-            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z - GRAVITY);
             w = Eigen::Vector3f(imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z);
             q = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
 
