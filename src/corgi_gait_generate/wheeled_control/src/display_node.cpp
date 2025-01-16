@@ -30,8 +30,8 @@ void wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 void steeringStateCallback(const corgi_msgs::SteeringStateStamped::ConstPtr& msg)
 {
   ROS_INFO_STREAM("SteeringState => angle=" << msg->current_angle
-                  << ", state=" << msg->current_state
-                  << ", cmd_finish=" << (msg->cmd_finish ? "TRUE" : "FALSE"));
+                  << ", state=" << (msg->current_state ? "TRUE" : "FALSE")
+                  << ", cmd_finish=" << (msg->cmd_finish ));
 }
 
 int main(int argc, char** argv)

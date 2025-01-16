@@ -56,11 +56,11 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     // 1) Turn off hold
     direction_hold_active_ = false;
 
-    // 2) Steering angle = 0, voltage=4095 (or 0 if you prefer)
+    // 2) Steering angle = 0, voltage=4000 (or 0 if you prefer)
     corgi_msgs::SteeringCmdStamped steering_reset;
     steering_reset.header.stamp = ros::Time::now();
     steering_reset.angle   = 0.0;
-    steering_reset.voltage = 4095;  // keep consistent with your usage
+    steering_reset.voltage = 0;  // keep consistent with your usage
     steering_cmd_pub_.publish(steering_reset);
 
     // 3) WheelCmd => direction=false, stop=true, velocity=0
@@ -113,7 +113,7 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
   // ===============================================================
   // D) SteeringCmd if state == 2, using digital or analog logic
   // ===============================================================
-  if (current_steering_state_.current_state == 2 && control_mode_ != ControlMode::UNKNOWN)
+  if (current_steering_state_.current_state == true && control_mode_ != ControlMode::UNKNOWN)
   {
     corgi_msgs::SteeringCmdStamped steering_cmd;
     steering_cmd.header.stamp = ros::Time::now();
@@ -140,10 +140,12 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     // clamp
     new_angle = clamp(new_angle, -10.0, 10.0);
     steering_cmd.angle   = new_angle;
-    steering_cmd.voltage = 4095;
+    steering_cmd.voltage = 4000;
 
     steering_cmd_pub_.publish(steering_cmd);
   }
+
+
 
   // ===============================================================
   // E) WheelCmd => direction + incremental velocity + hold

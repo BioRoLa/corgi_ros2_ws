@@ -48,8 +48,8 @@ StatePublisher::StatePublisher()
   // Initialize the steering state
   current_steering_state_.header.stamp = ros::Time::now();
   current_steering_state_.current_angle = 0;
-  current_steering_state_.current_state = 0; // default
-  current_steering_state_.cmd_finish    = false;
+  current_steering_state_.current_state = false; // default
+  current_steering_state_.cmd_finish    = 0;
 
   // Publish an initial debug message
   std_msgs::String dbg;
@@ -71,7 +71,7 @@ void StatePublisher::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
   // Press B => set current_state=2
   if (joy->buttons[button_b_] == 1)
   {
-    current_steering_state_.current_state = 2;
+    current_steering_state_.current_state = true;
     current_steering_state_.header.stamp = ros::Time::now();
     steering_state_pub_.publish(current_steering_state_);
 
@@ -83,7 +83,7 @@ void StatePublisher::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
   // Press Y => set current_state=1
   if (joy->buttons[button_y_] == 1)
   {
-    current_steering_state_.current_state = 1;
+    current_steering_state_.current_state = false;
     current_steering_state_.header.stamp = ros::Time::now();
     steering_state_pub_.publish(current_steering_state_);
 
