@@ -135,7 +135,7 @@ class CorgiControlPanel(QWidget):
         self.btn_hall_cal   = QPushButton('Hall Calibrate', self)
         self.btn_motor_mode = QPushButton('Motor Mode', self)
         
-        btn_mode_list = [self.btn_rest_mode, self.btn_config, self.btn_set_zero, self.btn_hall_cal, self.btn_motor_mode]
+        btn_mode_list = [self.btn_rest_mode, self.btn_set_zero, self.btn_hall_cal, self.btn_motor_mode, self.btn_config]
         btn_mode_style = '''QPushButton {background-color: white; color: black; text-align: center; border-radius: 5px;}
                             QPushButton:checked {background-color: palegreen; color: black;}
                             QPushButton:hover:!checked {background-color: silver; color: black;}
