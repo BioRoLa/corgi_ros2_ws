@@ -449,7 +449,7 @@ class CorgiControlPanel(QWidget):
         self.btn_rest_mode.setEnabled(not self.btn_csv_run.isChecked())
         self.btn_set_zero.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
         self.btn_hall_cal.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
-        self.btn_steer_cal.setEnabled(self.power_state.robot_mode in [4, 5] and self.steer_state.current_state != 2)
+        self.btn_steer_cal.setEnabled(self.power_state.robot_mode in [4, 5] and not self.steer_state.current_state)
         self.btn_motor_mode.setEnabled(self.power_state.robot_mode in [2, 4, 5])
         self.btn_rt_mode.setEnabled(self.btn_motor_mode.isChecked() and not self.btn_csv_run.isChecked())
         self.btn_csv_mode.setEnabled(self.btn_motor_mode.isChecked())
@@ -510,7 +510,7 @@ class CorgiControlPanel(QWidget):
         
     
     def update_steer_status(self):
-        if self.steer_state.current_state == 2:
+        if self.steer_state.current_state:
             self.btn_steer_cal.setChecked(False)
         self.set_btn_enable()
 
