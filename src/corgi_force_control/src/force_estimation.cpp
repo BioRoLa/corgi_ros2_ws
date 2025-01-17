@@ -1,10 +1,15 @@
 #include "force_estimation.hpp"
 
 
+LegModel legmodel(true);
+
+corgi_msgs::MotorStateStamped motor_state;
+corgi_msgs::ForceStateStamped force_state;
+
+
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
 }
-
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
     Eigen::Rotation2D<double> rotation(alpha);
@@ -35,7 +40,6 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
     return P_poly;
 }
 
-
 Eigen::MatrixXd calculate_jacobian(Eigen::MatrixXd P_theta, Eigen::MatrixXd P_theta_deriv, double beta){
     double cos_beta = cos(beta);
     double sin_beta = sin(beta);
@@ -60,7 +64,6 @@ Eigen::MatrixXd calculate_jacobian(Eigen::MatrixXd P_theta, Eigen::MatrixXd P_th
 
     return jacobian;
 }
-
 
 Eigen::MatrixXd estimate_force(double theta, double beta, double torque_r, double torque_l){
     legmodel.contact_map(theta, beta);

@@ -11,11 +11,6 @@
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
 
-LegModel legmodel(true);
-
-corgi_msgs::MotorStateStamped motor_state;
-corgi_msgs::ForceStateStamped force_state;
-
 Eigen::MatrixXd H_l_poly(2, 8);
 Eigen::MatrixXd F_l_poly(2, 8);
 Eigen::MatrixXd F_r_poly(2, 8);
