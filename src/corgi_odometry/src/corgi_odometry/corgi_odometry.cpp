@@ -147,8 +147,8 @@ int main(int argc, char **argv) {
         }
     }
     // ROS Publishers
-    ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("estimated_velocity", 10);
-    ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("estimated_position", 10);
+    ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
+    ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
@@ -299,6 +299,7 @@ int main(int argc, char **argv) {
             position_msg.x = p(0);
             position_msg.y = p(1);
             position_msg.z = p(2);
+            position_pub.publish(position_msg);
 
             counter ++;
         }
