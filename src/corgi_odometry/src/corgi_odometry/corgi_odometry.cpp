@@ -147,22 +147,8 @@ int main(int argc, char **argv) {
         }
     }
     // ROS Publishers
-    /* TODO: add state publisher
-    std::vector<std::string> cols = {
-        "v_.x", "v_.y", "v_.z", 
-        "p.x", "p.y", "p.z", 
-        "zLF.x", "zLF.y", "zLF.z", 
-        "zRF.x", "zRF.y", "zRF.z", 
-        "zRH.x", "zRH.y", "zRH.z", 
-        "zLH.x", "zLH.y", "zLH.z", 
-        "zP.x", "zP.y", "zP.z", 
-        "ba.x", "ba.y", "ba.z", 
-        "lf.contact","rf.contact","rh.contact","lh.contact",
-        "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
-        "lf.c","rf.c","rh.c","lh.c",
-        "threshold",
-        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
-    };*/
+    ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("estimated_velocity", 10);
+    ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("estimated_position", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
@@ -301,6 +287,18 @@ int main(int argc, char **argv) {
             estimate_state.segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
             
             logger.logState(estimate_state);
+
+            // Publish the estimated velocity and position
+            geometry_msgs::Vector3 velocity_msg;
+            velocity_msg.x = x(3 * J - 3);
+            velocity_msg.y = x(3 * J - 2);
+            velocity_msg.z = x(3 * J - 1);
+            velocity_pub.publish(velocity_msg);
+
+            geometry_msgs::Vector3 position_msg;
+            position_msg.x = p(0);
+            position_msg.y = p(1);
+            position_msg.z = p(2);
 
             counter ++;
         }
