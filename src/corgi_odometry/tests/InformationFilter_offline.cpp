@@ -55,7 +55,7 @@ int main (int argc, char* argv[]) {
     Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero((float)(n - start_index)/SAMPLE_RATIO, 46);  //TODO: refactor to make it more readable, "magic number" 46
 
     // read data from csv
-    Eigen::Vector3f a(df.iloc("imu_lin_acc_x", start_index), df.iloc("imu_lin_acc_y", start_index), df.iloc("imu_lin_acc_z", start_index) - GRAVITY);
+    Eigen::Vector3f a(df.iloc("imu_lin_acc_x", start_index), df.iloc("imu_lin_acc_y", start_index), df.iloc("imu_lin_acc_z", start_index));
     Eigen::Quaternionf q(df.iloc("imu_orien_w", start_index), df.iloc("imu_orien_x", start_index), df.iloc("imu_orien_y", start_index), df.iloc("imu_orien_z", start_index));
     Eigen::Vector<float, 5> encoder_lf(df.iloc("state_theta_a", start_index), df.iloc("state_beta_a", start_index), 0, df.iloc("imu_ang_vel_y", start_index), 0);
     Eigen::Vector<float, 5> encoder_rf(df.iloc("state_theta_b", start_index), -df.iloc("state_beta_b", start_index), 0, df.iloc("imu_ang_vel_y", start_index), 0);
@@ -133,7 +133,7 @@ int main (int argc, char* argv[]) {
     for (int i = start_index+1; i < n; i+=SAMPLE_RATIO) {
         std::cout << counter << "\n";
         // Eigen::Quaternionf qt265(df.iloc("t265.qw", i-1), df.iloc("t265.qx", i-1), df.iloc("t265.qy", i-1), df.iloc("t265.qz", i-1));
-        Eigen::Vector3f a(df.iloc("imu_lin_acc_x", i), df.iloc("imu_lin_acc_y", i), df.iloc("imu_lin_acc_z", i) - GRAVITY);
+        Eigen::Vector3f a(df.iloc("imu_lin_acc_x", i), df.iloc("imu_lin_acc_y", i), df.iloc("imu_lin_acc_z", i));
         Eigen::Quaternionf q(df.iloc("imu_orien_w", i-SAMPLE_RATIO), df.iloc("imu_orien_x", i-SAMPLE_RATIO), df.iloc("imu_orien_y", i-SAMPLE_RATIO), df.iloc("imu_orien_z", i-SAMPLE_RATIO));
         Eigen::Vector3f w(df.iloc("imu_ang_vel_x", i), df.iloc("imu_ang_vel_y", i), df.iloc("imu_ang_vel_z", i));
 

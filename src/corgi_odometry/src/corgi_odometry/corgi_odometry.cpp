@@ -93,7 +93,7 @@ class Encoder{
 
 // Variables
 bool trigger = false;
-float dt = 1 / (float)SAMPLE_RATE;
+float dt = 1. / (float)SAMPLE_RATE;
 bool initialized = false;
 Eigen::VectorXf x = Eigen::VectorXf::Zero(6 * J);
 Eigen::Vector3f p;
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
                 initialized = true;
             }
             //Update encoder states
-            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z - GRAVITY);
+            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
             w = Eigen::Vector3f(imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z);
             q = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
 
