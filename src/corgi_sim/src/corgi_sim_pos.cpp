@@ -1,5 +1,7 @@
 #include <iostream>
 #include <signal.h>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
 #include "sensor_msgs/Imu.h"
@@ -82,16 +84,22 @@ void update_motor_pid(corgi_sim::motor_set_control_pid &R_motor_pid_srv, corgi_s
     L_motor_pid_srv.request.controld = kd;
 }
 
+double find_closest_phi(double phi_ref, double phi_fb) {
+    double diff = fmod(phi_ref - phi_fb + M_PI, 2 * M_PI);
+    if (diff < 0) diff += 2 * M_PI;
+    return phi_fb + diff - M_PI;
+}
+
 void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
     theta = (phi_l - phi_r) / 2.0 + 17 / 180.0 * M_PI;
     beta  = (phi_l + phi_r) / 2.0;
 }
 
-void tb2phi(double theta, double beta, double &phi_r, double &phi_l){
+void tb2phi(double theta, double beta, double &phi_r, double &phi_l, double phi_r_fb, double phi_l_fb){
     double theta_0 = 17 / 180.0 * M_PI;
     if (theta < theta_0) {theta = theta_0;}
-    phi_r = beta - theta + theta_0;
-    phi_l = beta + theta - theta_0;
+    phi_r = find_closest_phi(beta - theta + theta_0, phi_r_fb);
+    phi_l = find_closest_phi(beta + theta - theta_0, phi_l_fb);
 }
 
 std::string get_lastest_input() {
@@ -185,23 +193,23 @@ int main(int argc, char **argv) {
     update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 30, 0, 0.1);
     update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 30, 0, 0.1);
     
+    AR_motor_pid_client.call(AR_motor_pid_srv);
+    AL_motor_pid_client.call(AL_motor_pid_srv);
+    BR_motor_pid_client.call(BR_motor_pid_srv);
+    BL_motor_pid_client.call(BL_motor_pid_srv);
+    CR_motor_pid_client.call(CR_motor_pid_srv);
+    CL_motor_pid_client.call(CL_motor_pid_srv);
+    DR_motor_pid_client.call(DR_motor_pid_srv);
+    DL_motor_pid_client.call(DL_motor_pid_srv);
+
     int loop_counter = 0;
     while (ros::ok() && time_step_client.call(time_step_srv)){
         ros::spinOnce();
 
-        AR_motor_pid_client.call(AR_motor_pid_srv);
-        AL_motor_pid_client.call(AL_motor_pid_srv);
-        BR_motor_pid_client.call(BR_motor_pid_srv);
-        BL_motor_pid_client.call(BL_motor_pid_srv);
-        CR_motor_pid_client.call(CR_motor_pid_srv);
-        CL_motor_pid_client.call(CL_motor_pid_srv);
-        DR_motor_pid_client.call(DR_motor_pid_srv);
-        DL_motor_pid_client.call(DL_motor_pid_srv);
-
-        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value);
-        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value);
+        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value, AR_phi, AL_phi);
+        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value, BR_phi, BL_phi);
+        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value, CR_phi, CL_phi);
+        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value, DR_phi, DL_phi);
 
         AR_motor_pos_client.call(AR_motor_pos_srv);
         AL_motor_pos_client.call(AL_motor_pos_srv);
@@ -218,6 +226,16 @@ int main(int argc, char **argv) {
         phi2tb(DR_phi, DL_phi, motor_state.module_d.theta, motor_state.module_d.beta);
 
         motor_state.header.seq = loop_counter;
+
+        Eigen::Quaterniond orientation(imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z);
+        Eigen::Vector3d linear_acceleration(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+        Eigen::Vector3d gravity_global(0, 0, 9.81);
+        Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
+
+        linear_acceleration -= gravity_body;
+        imu.linear_acceleration.x = linear_acceleration(0);
+        imu.linear_acceleration.y = linear_acceleration(1);
+        imu.linear_acceleration.z = linear_acceleration(2);
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
