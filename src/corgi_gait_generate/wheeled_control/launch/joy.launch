@@ -4,10 +4,6 @@
   <node pkg="wheeled_control" type="publisher" name="publisher" output="screen">
   </node>
   <node pkg="wheeled_control" type="joystick_control" name="joystick_control" output="screen">
-    <param name="axis_left_right"         value="3"/>
-    <param name="axis_left_right_digital" value="6"/>
-    <param name="axis_forward_back"       value="7"/>
-    <param name="axis_velocity"           value="1"/>
   </node>
   <node pkg="wheeled_control" type="display" name="display" output="screen">
   </node>
