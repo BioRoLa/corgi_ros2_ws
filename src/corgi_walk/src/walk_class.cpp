@@ -76,11 +76,10 @@ class WalkGait {
                 duty = {1 - 2 * swing_time, 0.5 - 2 * swing_time, 0.5 - swing_time, 1 - swing_time};
             }//end if else
             // Get foothold in world coordinate
-            double hip[4][2] = {{BL/2, stand_height} ,
-                                {BL/2, stand_height} ,
-                                {-BL/2, stand_height},
-                                {-BL/2, stand_height}};
-            std::array<std::array<double, 2>, 4> foothold;
+            hip = {{{BL/2, stand_height} ,
+                    {BL/2, stand_height} ,
+                    {-BL/2, stand_height},
+                    {-BL/2, stand_height}}};
             // Initial leg configuration
             for (int i=0; i<4; i++) {
                 foothold[i] = {hip[i][0] + relative_foothold[i][0] + CoM_bias, hip[i][1] + relative_foothold[i][1]};

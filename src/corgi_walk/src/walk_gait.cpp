@@ -117,7 +117,6 @@ int main(int argc, char **argv) {
     std::array<double, 4> current_beta;
     std::array<double, 4> next_theta;
     std::array<double, 4> next_beta;
-    std::array<std::array<double, 2>, 4> next_hip;
     double dS = velocity / sampling;
     double incre_duty = dS / step_length;
     double traveled_distance = 0.0;
