@@ -1,4 +1,4 @@
 Headers header
 float64 current_angle
-uint32 current_state
-bool cmd_finish
+bool current_state
+uint32 cmd_finish

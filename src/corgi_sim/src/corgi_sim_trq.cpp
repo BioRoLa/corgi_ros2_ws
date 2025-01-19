@@ -1,5 +1,7 @@
 #include <iostream>
 #include <signal.h>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
 #include "sensor_msgs/Imu.h"
@@ -144,7 +146,6 @@ int main(int argc, char **argv) {
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/values", 1, imu_cb);
 
     ros::Subscriber motor_cmd_sub = nh.subscribe<corgi_msgs::MotorCmdStamped>("motor/command", 1, motor_cmd_cb);
-
     ros::Publisher motor_state_pub = nh.advertise<corgi_msgs::MotorStateStamped>("motor/state", 1000);
     ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
     ros::Publisher trigger_pub = nh.advertise<corgi_msgs::TriggerStamped>("trigger", 1000);
@@ -201,6 +202,16 @@ int main(int argc, char **argv) {
         motor_state.module_c.velocity_l = CL_phi_dot;
         motor_state.module_d.velocity_r = DR_phi_dot;
         motor_state.module_d.velocity_l = DL_phi_dot;
+
+        Eigen::Quaterniond orientation(imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z);
+        Eigen::Vector3d linear_acceleration(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+        Eigen::Vector3d gravity_global(0, 0, 9.81);
+        Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
+
+        linear_acceleration -= gravity_body;
+        imu.linear_acceleration.x = linear_acceleration(0);
+        imu.linear_acceleration.y = linear_acceleration(1);
+        imu.linear_acceleration.z = linear_acceleration(2);
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);

@@ -3,3 +3,5 @@ devel
 logs
 .*
 *TEST*
+# src/corgi_odometry/data/*
+!src/corgi_odometry/data/data01.csv
