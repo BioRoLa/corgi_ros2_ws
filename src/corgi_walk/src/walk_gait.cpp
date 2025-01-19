@@ -156,11 +156,11 @@ int main(int argc, char **argv) {
         } else {
             motor_cmd_modules[i]->beta  = -current_beta[i];
         }
-        // motor_cmd_modules[i]->kp  = 90;
-        // motor_cmd_modules[i]->kp  = 0;
-        // motor_cmd_modules[i]->kp  = 5;
-        motor_cmd_modules[i]->torque_r  = 0;
-        motor_cmd_modules[i]->torque_l  = 0;
+        motor_cmd_modules[i]->kp  = 90;
+        motor_cmd_modules[i]->ki  = 0;
+        motor_cmd_modules[i]->kd  = 1.75;
+        motor_cmd_modules[i]->torque_r = 0;
+        motor_cmd_modules[i]->torque_l = 0;
         std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
         std::cout << "current_beta " << i << ": "<< current_beta[i]*180.0/M_PI << std::endl;
     }//end for
