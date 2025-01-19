@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
     double forward_distance = 2.0;
 
     double init_eta[8] = {1.7908786895256839,0.7368824288764617,1.1794001564068406,-0.07401410141135822,1.1744876957173913,-1.8344700758454735e-15,1.790992783013031,5.5466991499313485};
-    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};;
+    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
     double init_beta[4] = {init_eta[1], init_eta[3], init_eta[5], init_eta[7]};
     init_beta[0] *= -1.0;
     init_beta[3] *= -1.0;
@@ -129,11 +129,11 @@ int main(int argc, char **argv) {
     std::array<double, 2> result_eta;
     std::string rim_list[5] = {"G", "L_l", "L_r", "U_l", "U_r"};
     int rim_idx[5] = {3, 2, 4, 1, 5};
-    double contact_hieght_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
+    double contact_height_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
     for (int i=0; i<4; i++) {
         // calculate contact rim of initial pose
         for (int j=0; j<5; j++) {
-            double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_hieght_list[j]};
+            double contact_point[2] = {foothold[i][0] - hip[i][0], foothold[i][1] - hip[i][1] + contact_height_list[j]};
             result_eta = leg_model.inverse(contact_point, rim_list[j]);
             leg_model.contact_map(result_eta[0], result_eta[1]);
             if (leg_model.rim == rim_idx[j])
@@ -156,9 +156,9 @@ int main(int argc, char **argv) {
         } else {
             motor_cmd_modules[i]->beta  = -current_beta[i];
         }
-        motor_cmd_modules[i]->kp  = 90;
-        motor_cmd_modules[i]->ki  = 0;
-        motor_cmd_modules[i]->kd  = 1.75;
+        motor_cmd_modules[i]->kp = 90;
+        motor_cmd_modules[i]->ki = 0;
+        motor_cmd_modules[i]->kd = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
         std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
@@ -190,10 +190,10 @@ int main(int argc, char **argv) {
                 foothold[i] = {hip[i][0] + ((1-swing_time)/2+swing_time)*step_length, 0};
                 // Bezier curve for swing phase
                 leg_model.forward(next_theta[i], next_beta[i]);
-                double p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
+                std::array<double, 2> p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
                 for (int j=0; j<3; j++) {   // G, L_l, U_l
-                    double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_hieght_list[j]};
+                    double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height_list[j]};
                     result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                     leg_model.contact_map(result_eta[0], result_eta[1]);
                     if (leg_model.rim == touch_rim_idx[j]) {
@@ -211,8 +211,7 @@ int main(int argc, char **argv) {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                double p_td_arr[2] = {p_td[0], p_td[1]};
-                sp[i] = SwingProfile(p_lo, p_td_arr, step_height);
+                sp[i] = SwingProfile(p_lo, p_td, step_height);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;
