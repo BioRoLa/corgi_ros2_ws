@@ -30,6 +30,10 @@ class WalkGait {
             dS = velocity / rate;
             incre_duty = dS / step_length;
             initialize(init_theta, init_beta);
+            for (int i=0; i<4; i++) {
+                current_theta[i] = init_theta[i];
+                current_beta[i] = init_beta[i];
+            }//end for
         }//end WalkGait
 
         void initialize(double init_theta[4], double init_beta[4]) {
@@ -62,7 +66,6 @@ class WalkGait {
                     first_swing_leg = i;
                 }//end if
             }//end for 
-            std::array<double, 4> duty;
             if (first_swing_leg == 0) {
                 duty = {1 - swing_time, 0.5 - swing_time, 0.5, 0.0};
             } else if (first_swing_leg == 1) {
