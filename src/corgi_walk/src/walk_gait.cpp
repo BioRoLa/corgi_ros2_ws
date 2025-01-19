@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
                 foothold[i] = {hip[i][0] + ((1-swing_time)/2+swing_time)*step_length, 0};
                 // Bezier curve for swing phase
                 leg_model.forward(next_theta[i], next_beta[i]);
-                std::array<double, 2> p_lo[2] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
+                std::array<double, 2> p_lo = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
                 for (int j=0; j<3; j++) {   // G, L_l, U_l
                     double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height_list[j]};

@@ -17,12 +17,12 @@
 class WalkGait {
     public:
         WalkGait(double init_eta[8], bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2) : 
-            leg_model(true),
+            leg_model(sim),
             CoM_bias(CoM_bias),
             rate(rate), 
             BL(BL),
             BW(BW),
-            BH(BH),
+            BH(BH)
         {
             double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
             double init_beta[4] = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
@@ -84,14 +84,14 @@ class WalkGait {
             }//end for
         }//end initialize
 
-        std::array<std::array<double, 2>, 4> step() {
+        std::array<std::array<double, 4>, 2> step() {
             for (int i=0; i<4; i++) {
                 if (swing_phase[i] == 0) { // Stance phase
                     result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
                 } else { // Swing phase
                     swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                     curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-                    curve_point[2] = {curve_point_temp[0] - hip[i][0], curve_point_temp[1] - hip[i][1]};
+                    double curve_point[2] = {curve_point_temp[0] - hip[i][0], curve_point_temp[1] - hip[i][1]};
                     result_eta = leg_model.inverse(curve_point, "G");
                 }//end if else
                 next_theta[i] = result_eta[0];
@@ -177,7 +177,6 @@ class WalkGait {
         double contact_height_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
         double swing_phase_ratio;
         std::array<double, 2> curve_point_temp;
-        double curve_point[2];
         std::array<double, 2> result_eta;
         std::array<double, 2> p_lo;
         std::array<double, 2> p_td;
@@ -203,25 +202,25 @@ int main(int argc, char** argv) {
     }//end for 
 
     double CoM_bias = 0.0;
-    int rate = 1000;
-    ros::Rate rate(rate);
+    int sampling_rate = 1000;
+    ros::Rate rate(sampling_rate);
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    WalkGait walk_gait(init_eta, true, CoM_bias, rate);
+    WalkGait walk_gait(init_eta, true, CoM_bias, sampling_rate);
 
-    std::array<std::array<double, 2>, 4> eta_list;
+    std::array<std::array<double, 4>, 2> eta_list;
     while (ros::ok()) {
         eta_list = walk_gait.step();
         // Publish motor commands
         for (int i=0; i<4; i++) {
-            if (eta_list[i][0] > M_PI*160.0/180.0) {
+            if (eta_list[0][i] > M_PI*160.0/180.0) {
                 std::cout << "Exceed upper bound." << std::endl;
             }//end if 
-            if (eta_list[i][0] < M_PI*17.0/180.0) {
+            if (eta_list[0][i] < M_PI*17.0/180.0) {
                 std::cout << "Exceed lower bound." << std::endl;
             }//end if 
-            motor_cmd_modules[i]->theta = eta_list[i][0];
-            motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[i][1] : -eta_list[i][1];
+            motor_cmd_modules[i]->theta = eta_list[0][i];
+            motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
         }
         motor_pub.publish(motor_cmd);
         rate.sleep();
