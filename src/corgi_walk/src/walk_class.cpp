@@ -31,8 +31,8 @@ class WalkGait {
             incre_duty = dS / step_length;
             initialize(init_theta, init_beta);
             for (int i=0; i<4; i++) {
-                current_theta[i] = init_theta[i];
-                current_beta[i] = init_beta[i];
+                theta[i] = init_theta[i];
+                beta[i] = init_beta[i];
             }//end for
         }//end WalkGait
 
@@ -90,26 +90,27 @@ class WalkGait {
         std::array<std::array<double, 4>, 2> step() {
             for (int i=0; i<4; i++) {
                 if (swing_phase[i] == 0) { // Stance phase
-                    result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
+                    result_eta = leg_model.move(theta[i], beta[i], {dS, 0});
                 } else { // Swing phase
                     swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                     curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
                     double curve_point[2] = {curve_point_temp[0] - hip[i][0], curve_point_temp[1] - hip[i][1]};
                     result_eta = leg_model.inverse(curve_point, "G");
                 }//end if else
-                next_theta[i] = result_eta[0];
-                next_beta[i] = result_eta[1];
+                theta[i] = result_eta[0];
+                beta[i] = result_eta[1];
 
                 duty[i] += incre_duty;
                 if (duty[i] >= (1 - swing_time) && swing_phase[i] == 0) {
                     swing_phase[i] = 1;
                     foothold[i] = {hip[i][0] + ((1-swing_time)/2+swing_time)*step_length, 0};
                     // Bezier curve setup
-                    leg_model.forward(next_theta[i], next_beta[i]);
+                    leg_model.forward(theta[i], beta[i]);
                     p_lo = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
                     // calculate contact rim when touch ground
                     for (int j=0; j<3; j++) {   // G, L_l, U_l
-                        double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height_list[j]};
+                        double contact_height = j==0? leg_model.r : leg_model.radius;
+                        double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height};
                         result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                         leg_model.contact_map(result_eta[0], result_eta[1]);
                         if (leg_model.rim == touch_rim_idx[j]) {
@@ -134,7 +135,7 @@ class WalkGait {
 
                 hip[i][0] += dS;
             }//end for
-            return {next_theta, next_beta};
+            return {theta, beta};
         }//end step
 
         // void set_velocity(double new_vel);
@@ -162,10 +163,8 @@ class WalkGait {
         double step_height  = 0.05;
 
         // state
-        std::array<double, 4> current_theta;
-        std::array<double, 4> current_beta;
-        std::array<double, 4> next_theta;
-        std::array<double, 4> next_beta;
+        std::array<double, 4> theta;
+        std::array<double, 4> beta;
         std::array<std::array<double, 2>, 4> foothold;
         std::array<std::array<double, 2>, 4> hip;
 
@@ -177,7 +176,6 @@ class WalkGait {
         int current_rim;
         std::string touch_rim_list[3] = {"G", "L_l", "U_l"};
         int touch_rim_idx[3] = {3, 2, 1};
-        double contact_height_list[5] = {leg_model.r, leg_model.radius, leg_model.radius, leg_model.radius, leg_model.radius};
         double swing_phase_ratio;
         std::array<double, 2> curve_point_temp;
         std::array<double, 2> result_eta;

@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
             } else { // Swing phase
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
-                std::array<double, 2>  temp = sp[i].getFootendPoint(swing_phase_ratio);
+                std::array<double, 2> temp = sp[i].getFootendPoint(swing_phase_ratio);
                 double curve_point[2] = {temp[0]-hip[i][0], temp[1]-hip[i][1]};
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
