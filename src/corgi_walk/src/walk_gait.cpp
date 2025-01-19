@@ -156,6 +156,11 @@ int main(int argc, char **argv) {
         } else {
             motor_cmd_modules[i]->beta  = -current_beta[i];
         }
+        // motor_cmd_modules[i]->kp  = 90;
+        // motor_cmd_modules[i]->kp  = 0;
+        // motor_cmd_modules[i]->kp  = 5;
+        motor_cmd_modules[i]->torque_r  = 0;
+        motor_cmd_modules[i]->torque_l  = 0;
         std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
         std::cout << "current_beta " << i << ": "<< current_beta[i]*180.0/M_PI << std::endl;
     }//end for
@@ -172,7 +177,7 @@ int main(int argc, char **argv) {
             } else { // Swing phase
                 double swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
                 // Placeholder swing profile calculation
-                double* temp = sp[i].getFootendPoint(swing_phase_ratio);
+                std::array<double, 2>  temp = sp[i].getFootendPoint(swing_phase_ratio);
                 double curve_point[2] = {temp[0]-hip[i][0], temp[1]-hip[i][1]};
                 result_eta = leg_model.inverse(curve_point, "G");
             }//end if else
@@ -206,7 +211,7 @@ int main(int argc, char **argv) {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                double p_td_arr[2] = {p_td[0], p_td[1]}
+                double p_td_arr[2] = {p_td[0], p_td[1]};
                 sp[i] = SwingProfile(p_lo, p_td_arr, step_height);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;

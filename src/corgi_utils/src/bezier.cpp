@@ -12,7 +12,7 @@ Bezier::Bezier(const std::vector<std::array<double, 2>>& control_pts) :
     bz_cff = bz_coeff(control_pts);
 }//end Bezier
 
-std::array<double, 2> Bezier::getBzPoint(double t, double offset_x = 0, double offset_y = 0) {
+std::array<double, 2> Bezier::getBzPoint(double t, double offset_x, double offset_y) {
     auto bzt_cff = bzt_coeff(control_pts, t);
     double x = 0;
     double y = 0;
