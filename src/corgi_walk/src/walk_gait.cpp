@@ -206,7 +206,8 @@ int main(int argc, char **argv) {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                sp[i] = SwingProfile(p_td[0] - p_lo[0], step_height, 0.0, 0.0, 0.0, 0.0, 0.0, p_lo[0], p_lo[1], p_td[1] - p_lo[1]);
+                double p_td_arr[2] = {p_td[0], p_td[1]}
+                sp[i] = SwingProfile(p_lo, p_td_arr, step_height);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;
