@@ -15,6 +15,8 @@
 #include "sensor_msgs/Imu.h"
 #include "corgi_msgs/ImpedanceCmdStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
+#include "corgi_msgs/SimDataStamped.h"
+
 
 bool trigger = false;
 corgi_msgs::MotorCmdStamped motor_cmd;
@@ -24,6 +26,8 @@ corgi_msgs::PowerStateStamped power_state;
 sensor_msgs::Imu imu;
 corgi_msgs::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::ForceStateStamped force_state;
+corgi_msgs::SimDataStamped sim_data;
+
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -116,6 +120,10 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
                         << "force_Fx_c" << "," << "force_Fy_c" << ","
                         << "force_Fx_d" << "," << "force_Fy_d" << ","
 
+                        << "sim_seq" << "," << "sim_sec" << "," << "sim_usec" << ","
+                        << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
+                        << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
+
                         << "power_seq" << "," << "power_sec" << "," << "power_usec" << ","
                         << "v_0" << "," << "i_0" << ","
                         << "v_1" << "," << "i_1" << ","
@@ -174,6 +182,10 @@ void force_state_cb(const corgi_msgs::ForceStateStamped state){
     force_state = state;
 }
 
+void sim_data_cb(const corgi_msgs::SimDataStamped data){
+    sim_data = data;
+}
+
 
 void write_data() {
     if (!output_file.is_open()){
@@ -227,6 +239,10 @@ void write_data() {
                 << force_state.module_c.Fx    << "," << force_state.module_c.Fy << ","
                 << force_state.module_d.Fx    << "," << force_state.module_d.Fy << ","
 
+                << sim_data.header.seq << "," << sim_data.header.stamp.sec << "," << sim_data.header.stamp.nsec << ","
+                << sim_data.position.x << "," << sim_data.position.y << "," << sim_data.position.z << ","
+                << sim_data.orientation.x << "," << sim_data.orientation.y << "," << sim_data.orientation.z << "," << sim_data.orientation.w << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nsec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -260,6 +276,7 @@ int main(int argc, char **argv) {
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
     ros::Subscriber imp_cmd_sub = nh.subscribe<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
     ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
+    ros::Subscriber sim_data_sub = nh.subscribe<corgi_msgs::SimDataStamped>("sim/data", 1000, sim_data_cb);
     ros::Rate rate(1000);
 
     signal(SIGINT, signal_handler);
