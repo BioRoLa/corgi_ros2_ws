@@ -11,7 +11,7 @@
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "walk_gait.hpp"
 
-WalkGait::WalkGait(double init_eta[8], bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2) : 
+WalkGait::WalkGait(double init_eta[8], bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */
     leg_model(sim),
     CoM_bias(CoM_bias),
