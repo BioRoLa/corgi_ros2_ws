@@ -10,6 +10,8 @@
 #include "ros/ros.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "walk_gait.hpp"
+#include "leg_model.hpp"
+#include "bezier.hpp"
 
 WalkGait::WalkGait(double init_eta[8], bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */

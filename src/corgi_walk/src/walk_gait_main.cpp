@@ -10,6 +10,8 @@
 #include "ros/ros.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "walk_gait.hpp"
+#include "leg_model.hpp"
+#include "bezier.hpp"
 
 
 int main(int argc, char** argv) {
