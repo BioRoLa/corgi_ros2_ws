@@ -5,7 +5,6 @@
 #include <mip/mip_device.hpp>
 #include <mip/platform/serial_connection.hpp>
 #include <mip/mip_logging.h>
-
 #include <array>
 #include <vector>
 #include <chrono>
@@ -32,6 +31,7 @@ struct Utils{
 };
 
 // refer to example code: examples/example_utils.cpp
+// connect the device by serial port
 std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
     auto utils = std::unique_ptr<Utils>(new Utils());
     if( baud == 0 )
@@ -86,10 +86,8 @@ class CX5_AHRS {
                 exit_gracefully("ERROR: Could not ping the device!");
             if(commands_base::setIdle(*device) != CmdResult::ACK_OK)
                 exit_gracefully("ERROR: Could not set the device to idle!");
-            // if(commands_base::ping(*device) != CmdResult::ACK_OK)
-            //    exit_gracefully("ERROR: Could not ping the device!");
-            // if(commands_3dm::defaultDeviceSettings(*device) != CmdResult::ACK_OK)
-            //     exit_gracefully("ERROR: Could not load default device settings!");
+            if(commands_3dm::defaultDeviceSettings(*device) != CmdResult::ACK_OK)
+                exit_gracefully("ERROR: Could not load default device settings!");
 
             uint16_t sensor_base_rate;
             if(commands_3dm::imuGetBaseRate(*device, &sensor_base_rate) != CmdResult::ACK_OK)
@@ -123,11 +121,13 @@ class CX5_AHRS {
                 exit_gracefully("ERROR: Could not set filter autoinit control!");
             if(commands_filter::reset(*device) != CmdResult::ACK_OK)
                 exit_gracefully("ERROR: Could not reset the filter!");
+
             DispatchHandler sensor_data_handlers[4];
             device->registerExtractor(sensor_data_handlers[0], &raw_attitude);
             device->registerExtractor(sensor_data_handlers[1], &raw_gyro);
             device->registerExtractor(sensor_data_handlers[2], &raw_accel);
             device->registerExtractor(sensor_data_handlers[3], &g);
+
             if(commands_base::resume(*device) != CmdResult::ACK_OK)
                 exit_gracefully("ERROR: Could not resume the device!");
             // bool filter_state_ahrs = false;
@@ -135,8 +135,7 @@ class CX5_AHRS {
             rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
             while(1) {
                 device->update();
-                // if((!filter_state_ahrs))
-                // {
+                // if((!filter_state_ahrs)){
                 //     if (filter_status.filter_state == data_filter::FilterMode::AHRS) filter_state_ahrs = true;
                 //     else continue;
                 // }

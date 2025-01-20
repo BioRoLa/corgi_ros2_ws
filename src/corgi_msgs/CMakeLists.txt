@@ -4,6 +4,7 @@ project(corgi_msgs)
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
+  sensor_msgs
 )
 
 add_message_files(
@@ -21,15 +22,22 @@ add_message_files(
   PowerStateStamped.msg
   TriggerStamped.msg
   SensorEnableStamped.msg
+  IMUStamped.msg
+)
+
+add_service_files(
+  FILES
+  imu.srv
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
 )
 
 catkin_package(
-  CATKIN_DEPENDS message_generation std_msgs
+  CATKIN_DEPENDS message_generation std_msgs sensor_msgs
 )
 include_directories(
   ${catkin_INCLUDE_DIRS}

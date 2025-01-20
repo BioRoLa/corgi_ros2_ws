@@ -1,9 +1,8 @@
 #include "ros/ros.h"
 #include "sensor_msgs/Imu.h"
-#include "corgi_msgs/IMUStamped.h" // This is the message file: imu mode
 #include "corgi_msgs/imu.h" // This is the service file
-#include "corgi_msgs/Headers.h"
-#include "cx5.hpp"
+#include "corgi_msgs/Headers.h" // This is the header file
+#include "cx5.hpp" 
 #include <sys/time.h>
 #include <mutex>
 #include <thread>
@@ -18,7 +17,7 @@ enum SensorMode {
     RESET = 3
 };            
 
-int mode = REST; // Initial state: REST (0: REST, 1: CALIBRATION, 2: SENSOR, 3: RESET)
+int mode = REST;
 bool cb(corgi_msgs::imu::Request &req, corgi_msgs::imu::Response &res){
     cb_lock.lock();
     switch (req.mode) {
@@ -54,11 +53,12 @@ bool cb(corgi_msgs::imu::Request &req, corgi_msgs::imu::Response &res){
 int main(int argc, char **argv) {
     ros::init(argc, argv, "imu_node");
     ros::NodeHandle nh;
+    
     printf("Starting IMU node\n");
-    imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 115200, 1000, 500); //ttyTHS0
+    imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 115200, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate (origin port: ttyTHS0)
     ros::Rate rate(1000);
 
-    ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
+    ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu", 1000); // "imu" is the topic name
     ros::ServiceServer srv = nh.advertiseService("imu_service", cb);
 
     std::thread imu_thread([&]() {
@@ -68,7 +68,6 @@ int main(int argc, char **argv) {
     sensor_msgs::Imu imu_msg;
     corgi_msgs::Headers headers_msg;
     headers_msg.frame_id = "imu_base";
-    // imu_msg.header.frame_id = "imu_base";
 
     Eigen::Vector3f acceleration, twist;
     Eigen::Quaternionf orientation;
@@ -83,17 +82,18 @@ int main(int argc, char **argv) {
         headers_msg.seq = seq++;
         headers_msg.stamp.sec = currentTime.tv_sec;
         headers_msg.stamp.nsec = currentTime.tv_usec * 1000;
-        // imu_msg.header.seq = seq++;
-        // imu_msg.header.stamp.sec = currentTime.tv_sec;
-        // imu_msg.header.stamp.nsec = currentTime.tv_usec * 1000;
+        
         imu_msg.header.seq = headers_msg.seq;
         imu_msg.header.stamp = headers_msg.stamp;
+
         imu_msg.linear_acceleration.x = acceleration.x();
         imu_msg.linear_acceleration.y = acceleration.y();
         imu_msg.linear_acceleration.z = acceleration.z();
+
         imu_msg.angular_velocity.x = twist.x();
         imu_msg.angular_velocity.y = twist.y();
         imu_msg.angular_velocity.z = twist.z();
+
         imu_msg.orientation.x = orientation.x();
         imu_msg.orientation.y = orientation.y();
         imu_msg.orientation.z = orientation.z();
@@ -103,6 +103,5 @@ int main(int argc, char **argv) {
 
         rate.sleep();
     }
-    // ros::spin();
     return 0;
 }
