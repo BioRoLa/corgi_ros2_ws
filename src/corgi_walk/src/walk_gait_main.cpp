@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     std::array<std::array<double, 4>, 2> eta_list;
     // while (ros::ok()) {
     auto start = std::chrono::high_resolution_clock::now();
-    for (int count=0; count<200000, count++){
+    for (int count=0; count<200000; count++){
         eta_list = walk_gait.step();
         // Publish motor commands
         for (int i=0; i<4; i++) {

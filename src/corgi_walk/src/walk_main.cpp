@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     // Start walking
     auto start = std::chrono::high_resolution_clock::now();
     // while (traveled_distance <= forward_distance) {
-    for (int count=0; count<200000, count++){
+    for (int count=0; count<200000; count++){
         for (int i=0; i<4; i++) {
             if (swing_phase[i] == 0) { // Stance phase
                 result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
