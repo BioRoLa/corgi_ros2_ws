@@ -41,9 +41,9 @@ int main(int argc, char** argv) {
     WalkGait walk_gait(init_eta, true, CoM_bias, sampling_rate);
 
     std::array<std::array<double, 4>, 2> eta_list;
-    // while (ros::ok()) {
     auto start = std::chrono::high_resolution_clock::now();
-    for (int count=0; count<200000; count++){
+    while (ros::ok()) {
+    // for (int count=0; count<200000; count++){
         eta_list = walk_gait.step();
         // Publish motor commands
         for (int i=0; i<4; i++) {
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
             motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
         }
         motor_pub.publish(motor_cmd);
-        // rate.sleep();
+        rate.sleep();
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

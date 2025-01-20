@@ -164,13 +164,13 @@ int main(int argc, char **argv) {
     }//end for
     for (int i=0; i<1000; i++) {
         motor_pub.publish(motor_cmd);
-        // rate.sleep();
+        rate.sleep();
     }
     
     // Start walking
     auto start = std::chrono::high_resolution_clock::now();
-    // while (traveled_distance <= forward_distance) {
-    for (int count=0; count<200000; count++){
+    while (traveled_distance <= forward_distance) {
+    // for (int count=0; count<200000; count++){
         for (int i=0; i<4; i++) {
             if (swing_phase[i] == 0) { // Stance phase
                 result_eta = leg_model.move(current_theta[i], current_beta[i], {dS, 0});
@@ -237,11 +237,9 @@ int main(int argc, char **argv) {
             }
             current_theta[i] = next_theta[i];
             current_beta[i]  = next_beta[i];
-            std::cout << "current_theta " << i << ": "<< current_theta[i]*180.0/M_PI << std::endl;
-            std::cout << "current_beta " << i << ": "<< current_beta[i]*180.0/M_PI << std::endl;
         }//end for
         motor_pub.publish(motor_cmd);
-        // rate.sleep();
+        rate.sleep();
     }//end while
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
