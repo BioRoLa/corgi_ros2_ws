@@ -49,13 +49,13 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
     while (ros::ok()) {
     // for (int count=0; count<200000; count++){
-        // velocity = 0.2*cos((count++)/1500.0);
+        // velocity = 0.2*cos((count++)/1711.0);
         // walk_gait.set_velocity(velocity);
-        stand_height = 0.25 + 0.05*cos((count++)/1000.0);
+        stand_height = 0.25 + 0.05*cos((count++)/1211.0);
         walk_gait.set_stand_height(stand_height);
-        // step_length = (count++/1000)%2 == 0? 0.3 : 0.2;
+        // step_length = (count++/1211.0)%2 == 0? 0.3 : 0.2;
         // walk_gait.set_step_length(step_length);
-        // step_height = (count++/1000)%2 == 0? 0.05 : 0.04;
+        // step_height = (count++/1211.0)%2 == 0? 0.08 : 0.04;
         // walk_gait.set_step_height(step_height);
         eta_list = walk_gait.step();
         // Publish motor commands
