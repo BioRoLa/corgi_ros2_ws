@@ -31,3 +31,10 @@ include_directories(
 find_library(CORGI_UTILS corgi_utils)
 
 add_subdirectory(src)
+
+add_library(${PROJECT_NAME}
+  src/walk_gait.cpp
+)
+target_link_libraries(${PROJECT_NAME}
+  ${CORGI_UTILS}
+)
