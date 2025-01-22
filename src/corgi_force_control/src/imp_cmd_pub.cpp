@@ -29,25 +29,44 @@ int main(int argc, char **argv) {
         
         int mod_idx = 0;
         for (auto& cmd : imp_cmd_modules){
-             if (loop_count < 1000){
+            cmd->theta = 60/180.0*M_PI;
+            cmd->beta = 0/180.0*M_PI;
+            cmd->Fx = 0;
+            cmd->Fy = 0;
+
+            if (loop_count < 1000){
+                cmd->theta = 17/180.0*M_PI;
+            }
+            else if (loop_count < 3000){
+                cmd->theta = (17+43*(loop_count-1000)/2000.0)/180.0*M_PI;
+            }
+            else if (loop_count < 5000){
+                cmd->theta = (60+10*sin((loop_count-1000)/400.0*M_PI))/180.0*M_PI;
+            }
+            else if (loop_count < 5500){
                 cmd->theta = 60/180.0*M_PI;
             }
-            else if (loop_count < 1200){
-                cmd->Fy = -58;
-            }
-            else if (loop_count < 1400){
-                cmd->Fy = -55;
+            else if (loop_count < 6500){
+                cmd->Fy = -56 + 5*sin((loop_count-5500)/100.0*M_PI);
             }
             else {
                 cmd->Fy = 0;
             }
 
-            cmd->Mx = 5.652;
-            cmd->My = 5.652;
-            cmd->Kx = 20000;
-            cmd->Ky = 20000;
+            cmd->Mx = 0.652;
+            cmd->My = 0.652;
+            cmd->Kx = 200000;
+            cmd->Ky = 200000;
             cmd->Dx = 400;
             cmd->Dy = 400;
+
+            // cmd->Mx = 0;
+            // cmd->My = 0;
+            // cmd->Kx = 2000;
+            // cmd->Ky = 2000;
+            // cmd->Dx = 100;
+            // cmd->Dy = 100;
+
             cmd->adaptive_kp_x = 30;
             cmd->adaptive_kp_y = 30;
             cmd->adaptive_ki_x = 10;

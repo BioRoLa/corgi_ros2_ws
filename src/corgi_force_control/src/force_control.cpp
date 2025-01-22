@@ -176,10 +176,11 @@ int main(int argc, char **argv) {
 
             motor_cmd_modules[i]->kp = 90;
             motor_cmd_modules[i]->kd = 1.75;
-            if (torque_cmd_modules[i] != Eigen::MatrixXd::Zero(2, 1)){
-                motor_cmd_modules[i]->kp = 0;
-                motor_cmd_modules[i]->kd = 0;
+            if (!torque_cmd_modules[i].isZero() && !force_cmd_modules[i].isZero()){
+                motor_cmd_modules[i]->kp = 1;
+                motor_cmd_modules[i]->kd = 0.02;
             }
+            if (eta_cmd_modules[i](0, 0) < 17/180.0*M_PI){ eta_cmd_modules[i](0, 0) = 17/180.0*M_PI; }
             motor_cmd_modules[i]->theta = eta_cmd_modules[i](0, 0);
             motor_cmd_modules[i]->beta = eta_cmd_modules[i](1, 0);
             motor_cmd_modules[i]->torque_r = torque_cmd_modules[i](0, 0);
