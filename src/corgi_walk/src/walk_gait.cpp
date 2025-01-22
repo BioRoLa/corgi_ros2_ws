@@ -88,39 +88,30 @@ void WalkGait::initialize(double init_theta[4], double init_beta[4]) {
 std::array<std::array<double, 4>, 2> WalkGait::step() {
     for (int i=0; i<4; i++) {
         next_hip[i][0] += dS;
-        if (swing_phase[i] == 0) { // Stance phase
-            result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0]-hip[i][0], next_hip[i][1]-hip[i][1]});
-        } else { // Swing phase
-            if ( sp[i].getDirection()==1 ) {    // direction == 1
-                swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
-            } else {    // direction == -1
-                swing_phase_ratio = (1.0 - duty[i]) / swing_time;
-            }//end if else
-            curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-            double curve_point[2] = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
-            result_eta = leg_model.inverse(curve_point, "G");
-        }//end if else
-        theta[i] = result_eta[0];
-        beta[i] = result_eta[1];
-
         duty[i] += incre_duty;
+    }//end for 
+    for (int i=0; i<4; i++) {
+        /* Keep duty in the range [0, 1] */
         if (duty[i] < 0){
             duty[i] += 1.0;
-        }//end if
+        } else if (duty[i] > 1.0) {
+            duty[i] -= 1.0;
+        }//end if else
+        /* Calculate next foothold if entering swing phase */
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            if (change_incre_duty) {
+            if (change_incre_duty) {    // change incre duty corresponding to new step length when hind leg start to swing (after first front leg have adjusted to the new step length)
                 incre_duty = dS / step_length;
                 change_incre_duty = false;
             }//end if
-            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  // change step length when front leg start to swing
+            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  // change to new step length when front leg start to swing
                 foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*new_step_length + direction*(swing_time)*step_length, 0};
                 step_length = new_step_length;
                 change_incre_duty = true;
             } else {
                 foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*step_length, 0};
             }//end if else
-            // Bezier curve setup
+            /* Bezier curve setup */
             leg_model.forward(theta[i], beta[i]);
             p_lo = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};
             // calculate contact rim when touch ground
@@ -148,13 +139,26 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_r[0], foothold[i][1] + leg_model.G[1]-leg_model.U_r[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
-        } else if ( (direction == 1) && (duty[i] > 1.0)) {             // entering stance phase when velocirty > 0
+        } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
-            duty[i] -= 1.0;
         } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
             swing_phase[i] = 0;
         }//end if else
-
+        /* Calculate next theta, beta */
+        if (swing_phase[i] == 0) { // Stance phase
+            result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0]-hip[i][0], next_hip[i][1]-hip[i][1]});
+        } else { // Swing phase
+            if ( sp[i].getDirection()==1 ) {    // direction == 1
+                swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
+            } else {    // direction == -1
+                swing_phase_ratio = (1.0 - duty[i]) / swing_time;
+            }//end if else
+            curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
+            double curve_point[2] = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
+            result_eta = leg_model.inverse(curve_point, "G");
+        }//end if else
+        theta[i] = result_eta[0];
+        beta[i] = result_eta[1];
         hip[i] = next_hip[i];
     }//end for
     return {theta, beta};
