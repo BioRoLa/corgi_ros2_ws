@@ -109,11 +109,17 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
         }//end if
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {
-                step_length = new_step_length;
+            if (change_incre_duty) {
                 incre_duty = dS / step_length;
-            }//end if 
-            foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*step_length, 0};
+                change_incre_duty = false;
+            }//end if
+            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  // change step length when front leg start to swing
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*new_step_length + direction*(swing_time)*step_length, 0};
+                step_length = new_step_length;
+                change_incre_duty = true;
+            } else {
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*step_length, 0};
+            }//end if else
             // Bezier curve setup
             leg_model.forward(theta[i], beta[i]);
             p_lo = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};

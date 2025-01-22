@@ -65,6 +65,7 @@ class WalkGait {
         std::array<double, 2> p_td;
         double new_step_length = step_length;
         int direction = 1;
+        bool change_incre_duty = false;
 };//end class WalkGait
 
 #endif // WALKGAIT_HPP
