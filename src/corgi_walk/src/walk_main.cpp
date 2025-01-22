@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
                 } else if (current_rim == 1) {  // U_l
                     p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
                 }//end if else
-                sp[i] = SwingProfile(p_lo, p_td, step_height);
+                sp[i] = SwingProfile(p_lo, p_td, step_height, 1);
             } else if (duty[i] >= 1.0) {
                 swing_phase[i] = 0;
                 duty[i] -= 1.0;

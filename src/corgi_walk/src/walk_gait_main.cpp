@@ -39,11 +39,22 @@ int main(int argc, char** argv) {
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
     WalkGait walk_gait(init_eta, true, CoM_bias, sampling_rate);
-
     std::array<std::array<double, 4>, 2> eta_list;
+    double velocity     = 0.1;
+    double stand_height = 0.2;
+    double step_length  = 0.3;
+    double step_height  = 0.05;
+    int count = 0;
+
     auto start = std::chrono::high_resolution_clock::now();
     while (ros::ok()) {
     // for (int count=0; count<200000; count++){
+        stand_height = 0.25 * 0.05*cos(count++);
+        // velocity = 0.2*cos(count);
+        // walk_gait.set_velocity(velocity)
+        walk_gait.set_stand_height(stand_height);
+        // walk_gait.set_step_length(step_length);
+        // walk_gait.set_step_height(step_height);
         eta_list = walk_gait.step();
         // Publish motor commands
         for (int i=0; i<4; i++) {
