@@ -114,7 +114,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             leg_model.forward(theta[i], beta[i]);
             p_lo = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};
             // calculate contact rim when touch ground
-            for (int j=0; j<3; j++) {   // G, L_l, U_l
+            for (int j=0; j<5; j++) {   // G, L_l, U_l
                 double contact_height = j==0? leg_model.r : leg_model.radius;
                 double contact_point[2] = {direction*step_length/2*(1-swing_time), -stand_height+contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
@@ -130,8 +130,12 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0], foothold[i][1] + leg_model.r};
             } else if (current_rim == 2) {  // L_l
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.L_l[0], foothold[i][1] + leg_model.G[1]-leg_model.L_l[1] + leg_model.radius};
+            } else if (current_rim == 4) {  // L_r
+                p_td = {foothold[i][0] + leg_model.G[0]-leg_model.L_r[0], foothold[i][1] + leg_model.G[1]-leg_model.L_r[1] + leg_model.radius};
             } else if (current_rim == 1) {  // U_l
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
+            } else if (current_rim == 5) {  // U_r
+                p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_r[0], foothold[i][1] + leg_model.G[1]-leg_model.U_r[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
             if ( ((direction == 1) && (i==2 || i==3)) || ((direction == -1) && (i==0 || i==1)) ) {

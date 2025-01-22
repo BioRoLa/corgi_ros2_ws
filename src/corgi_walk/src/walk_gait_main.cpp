@@ -49,8 +49,8 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
     while (ros::ok()) {
     // for (int count=0; count<200000; count++){
-        // velocity = 0.2*cos((count++)/2000.0);
-        // walk_gait.set_velocity(velocity)
+        // velocity = 0.2*cos((count++)/1500.0);
+        // walk_gait.set_velocity(velocity);
         stand_height = 0.25 + 0.05*cos((count++)/1000.0);
         walk_gait.set_stand_height(stand_height);
         // step_length = (count++/1000)%2 == 0? 0.3 : 0.2;

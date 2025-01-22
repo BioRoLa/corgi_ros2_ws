@@ -56,8 +56,8 @@ class WalkGait {
 
         // Intermediate variables
         int current_rim;
-        std::string touch_rim_list[3] = {"G", "L_l", "U_l"};
-        int touch_rim_idx[3] = {3, 2, 1};
+        std::string touch_rim_list[5] = {"G", "L_l", "L_r", "U_l", "U_r"};
+        int touch_rim_idx[5] = {3, 2, 4, 1, 5};
         double swing_phase_ratio;
         std::array<double, 2> curve_point_temp;
         std::array<double, 2> result_eta;

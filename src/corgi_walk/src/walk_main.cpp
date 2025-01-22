@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
                 leg_model.forward(next_theta[i], next_beta[i]);
                 std::array<double, 2> p_lo = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};  // G position when leave ground
                 // calculate contact rim when touch ground
-                for (int j=0; j<3; j++) {   // G, L_l, U_l
+                for (int j=0; j<5; j++) {   // G, L_l, U_l
                     double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height_list[j]};
                     result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                     leg_model.contact_map(result_eta[0], result_eta[1]);
