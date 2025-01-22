@@ -94,9 +94,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
         /* Keep duty in the range [0, 1] */
         if (duty[i] < 0){
             duty[i] += 1.0;
-        } else if (duty[i] > 1.0) {
-            duty[i] -= 1.0;
-        }//end if else
+        }//end if
         /* Calculate next foothold if entering swing phase */
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
@@ -141,6 +139,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
         } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
+            duty[i] -= 1.0; // Keep duty in the range [0, 1]
         } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
             swing_phase[i] = 0;
         }//end if else
