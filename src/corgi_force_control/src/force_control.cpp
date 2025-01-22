@@ -1,7 +1,7 @@
 #include "force_control.hpp"
 
 
-LegModel legmodel(true);
+LegModel legmodel(false);
 
 corgi_msgs::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::ForceStateStamped force_state;
@@ -79,6 +79,10 @@ Eigen::MatrixXd calculate_jacobian(Eigen::MatrixXd P_theta, Eigen::MatrixXd P_th
 Eigen::MatrixXd calculate_torque(Eigen::MatrixXd eta, Eigen::MatrixXd force){
     double theta = eta(0, 0);
     double beta = eta(1, 0);
+
+    if (eta.isZero() && force.isZero()) {
+        return Eigen::MatrixXd::Zero(2, 1);
+    }
 
     legmodel.contact_map(theta, beta);
 
