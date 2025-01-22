@@ -109,6 +109,10 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
         }//end if
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
+            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {
+                step_length = new_step_length;
+                incre_duty = dS / step_length;
+            }//end if 
             foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*step_length, 0};
             // Bezier curve setup
             leg_model.forward(theta[i], beta[i]);
@@ -138,9 +142,6 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_r[0], foothold[i][1] + leg_model.G[1]-leg_model.U_r[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
-            if ( ((direction == 1) && (i==2 || i==3)) || ((direction == -1) && (i==0 || i==1)) ) {
-                step_length = new_step_length;
-            }//end if 
         } else if ( (direction == 1) && (duty[i] > 1.0)) {             // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
             duty[i] -= 1.0;
