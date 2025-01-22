@@ -74,10 +74,11 @@ void WalkGait::initialize(double init_theta[4], double init_beta[4]) {
         duty = {1 - 2 * swing_time, 0.5 - 2 * swing_time, 0.5 - swing_time, 1 - swing_time};
     }//end if else
     // Get foothold in world coordinate
-    next_hip = {{{BL/2, stand_height} ,
-                 {BL/2, stand_height} ,
-                 {-BL/2, stand_height},
-                 {-BL/2, stand_height}}};
+    hip = {{{BL/2, stand_height} ,
+            {BL/2, stand_height} ,
+            {-BL/2, stand_height},
+            {-BL/2, stand_height}}};
+    next_hip = hip;
     // Initial leg configuration
     for (int i=0; i<4; i++) {
         foothold[i] = {next_hip[i][0] + relative_foothold[i][0] + CoM_bias, next_hip[i][1] + relative_foothold[i][1]};
