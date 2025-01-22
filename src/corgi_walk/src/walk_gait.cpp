@@ -74,40 +74,48 @@ void WalkGait::initialize(double init_theta[4], double init_beta[4]) {
         duty = {1 - 2 * swing_time, 0.5 - 2 * swing_time, 0.5 - swing_time, 1 - swing_time};
     }//end if else
     // Get foothold in world coordinate
-    hip = {{{BL/2, stand_height} ,
-            {BL/2, stand_height} ,
-            {-BL/2, stand_height},
-            {-BL/2, stand_height}}};
+    next_hip = {{{BL/2, stand_height} ,
+                 {BL/2, stand_height} ,
+                 {-BL/2, stand_height},
+                 {-BL/2, stand_height}}};
     // Initial leg configuration
     for (int i=0; i<4; i++) {
-        foothold[i] = {hip[i][0] + relative_foothold[i][0] + CoM_bias, hip[i][1] + relative_foothold[i][1]};
+        foothold[i] = {next_hip[i][0] + relative_foothold[i][0] + CoM_bias, next_hip[i][1] + relative_foothold[i][1]};
     }//end for
 }//end initialize
 
 std::array<std::array<double, 4>, 2> WalkGait::step() {
     for (int i=0; i<4; i++) {
+        next_hip[i][0] += dS;
         if (swing_phase[i] == 0) { // Stance phase
-            result_eta = leg_model.move(theta[i], beta[i], {dS, stand_height_diff});
+            result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0]-hip[i][0], next_hip[i][1]-hip[i][1]});
         } else { // Swing phase
-            swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
+            if (duty[i] < 0.0) {    // direction == -1
+                swing_phase_ratio = - duty[i] / swing_time;
+            } else {    // duty[i] > (1 - swing_time) -> direction == 1
+                swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
+            }//end if else
             curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-            double curve_point[2] = {curve_point_temp[0] - hip[i][0], curve_point_temp[1] - hip[i][1]};
+            double curve_point[2] = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
             result_eta = leg_model.inverse(curve_point, "G");
         }//end if else
         theta[i] = result_eta[0];
         beta[i] = result_eta[1];
 
         duty[i] += incre_duty;
-        if (duty[i] >= (1 - swing_time) && swing_phase[i] == 0) {
+        if (duty[i] <=0){
+            duty[i] += 1.0;
+        }//end if
+        if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            foothold[i] = {hip[i][0] + ((1-swing_time)/2+swing_time)*step_length, 0};
+            foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*step_length, 0};
             // Bezier curve setup
             leg_model.forward(theta[i], beta[i]);
-            p_lo = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
+            p_lo = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};
             // calculate contact rim when touch ground
             for (int j=0; j<3; j++) {   // G, L_l, U_l
                 double contact_height = j==0? leg_model.r : leg_model.radius;
-                double contact_point[2] = {step_length/2*(1-swing_time), -stand_height+contact_height};
+                double contact_point[2] = {direction*step_length/2*(1-swing_time), -stand_height+contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                 leg_model.contact_map(result_eta[0], result_eta[1]);
                 if (leg_model.rim == touch_rim_idx[j]) {
@@ -125,14 +133,18 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_l[0], foothold[i][1] + leg_model.G[1]-leg_model.U_l[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height);
-        } else if (duty[i] >= 1.0) {
+            if ( ((direction == 1) && (i==2 || i==3)) || ((direction == -1) && (i==0 || i==1)) ) {
+                step_length = new_step_length;
+            }//end if 
+        } else if ( (direction == 1) && (duty[i] > 1.0)) {             // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
             duty[i] -= 1.0;
+        } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
+            swing_phase[i] = 0;
         }//end if else
 
-        hip[i][0] += dS;
+        hip[i] = next_hip[i];
     }//end for
-    stand_height_diff = 0;
     return {theta, beta};
 }//end step
 
@@ -140,17 +152,20 @@ void WalkGait::set_velocity(double new_value){
     velocity = new_value;
     dS = velocity / rate;
     incre_duty = dS / step_length;
+    direction = velocity>=0? 1 : -1;
 }//end set_velocity
 
 void WalkGait::set_stand_height(double new_value){
-    stand_height_diff = new_value - stand_height;
     stand_height = new_value;
+    for (int i=0; i<4; i++) {
+        next_hip[i][1] = stand_height;
+    }//end for
 }//end set_stand_height
 
 void WalkGait::set_step_length(double new_value){
-    // this->step_length = new_value;
+    new_step_length = new_value;
 }//end set_step_length
 
 void WalkGait::set_step_height(double new_value){
-    // this->step_height = new_value;
+    step_height = new_value;
 }//end set_step_height

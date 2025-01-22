@@ -48,6 +48,7 @@ class WalkGait {
         std::array<double, 4> beta;
         std::array<std::array<double, 2>, 4> foothold;
         std::array<std::array<double, 2>, 4> hip;
+        std::array<std::array<double, 2>, 4> next_hip;
 
         std::array<SwingProfile, 4> sp;
         std::array<double, 4> duty;
@@ -62,7 +63,8 @@ class WalkGait {
         std::array<double, 2> result_eta;
         std::array<double, 2> p_lo;
         std::array<double, 2> p_td;
-        double stand_height_diff = 0.0;
+        double new_step_length = step_length;
+        int direction = 1;
 };//end class WalkGait
 
 #endif // WALKGAIT_HPP
