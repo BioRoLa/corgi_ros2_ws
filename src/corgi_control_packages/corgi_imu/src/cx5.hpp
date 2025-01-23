@@ -56,7 +56,7 @@ void exit_gracefully(const char *message){
 class CX5_AHRS {
     public:
         CX5_AHRS(std::string port, uint32_t baud, uint16_t _sensor_sample_rate, uint16_t _filter_sample_rate) {
-            utils = assign_serial(port, baud);
+            utils = assign_serial(port, 115200);
             sensor_sample_rate = _sensor_sample_rate;
             filter_sample_rate = _filter_sample_rate;
             if(commands_base::setIdle(*utils->device) != CmdResult::ACK_OK) {
@@ -66,22 +66,22 @@ class CX5_AHRS {
                 };
             }
             // Connect by UART
-            // else {
-            //     if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
-            //         exit_gracefully("ERROR: Could not set the device baudrate!");
-            //     }
-            //     usleep(300000);
-            //     utils = assign_serial(port, baud);
-            // }
+            else {
+                if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
+                    exit_gracefully("ERROR: Could not set the device baudrate!");
+                }
+                usleep(300000);
+                utils = assign_serial(port, baud);
+            }
             twist_bias = Eigen::Vector3f(0,0,0);
         }
 
         void start() {
             std::unique_ptr<DeviceInterface>& device = utils->device;
-            // while (commands_base::ping(*device) != CmdResult::ACK_OK){
-            //     sleep(0.5);
-            //     std::cout << "while loop\n";
-            // }
+            while (commands_base::ping(*device) != CmdResult::ACK_OK){
+                sleep(0.5);
+                std::cout << "while loop\n";
+            }
             if(commands_base::ping(*device) != CmdResult::ACK_OK)
                 exit_gracefully("ERROR: Could not ping the device!");
             if(commands_base::setIdle(*device) != CmdResult::ACK_OK)
