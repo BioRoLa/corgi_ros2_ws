@@ -5,3 +5,5 @@ logs
 *TEST*
 # src/corgi_odometry/data/*
 !src/corgi_odometry/data/data01.csv
+output_data
+input_csv
