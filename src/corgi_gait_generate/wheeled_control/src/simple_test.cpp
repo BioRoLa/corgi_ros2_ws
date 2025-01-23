@@ -43,16 +43,16 @@ simple_test::simple_test()
 
     // Subscribers
     steering_state_sub_ = nh_.subscribe("steering_state", 1,  &simple_test::steeringStateCallback, this);
-    state =0;
+    state =3;
 }
 
 
 void simple_test::steeringStateCallback(const corgi_msgs::SteeringStateStamped::ConstPtr& msg)
 {
   current_steering_state_ = *msg;
-  if (current_steering_state_.current_state == false || current_steering_state_.cmd_finish == 1 )
+  if (current_steering_state_.cmd_finish == 1 )
   {
-    std::cout << "Wrong cmd or not yet calibration! "<< std::endl;
+    std::cout << "Wrong cmd! "<< std::endl;
   }
   else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 0 &&state ==0)
   {
@@ -66,40 +66,14 @@ void simple_test::steeringStateCallback(const corgi_msgs::SteeringStateStamped::
     collaborate2();
     std::cout << "simple test1 finished"<< std::endl;
     std::cout << "simple test2 "<< std::endl;
-  }
-
-  else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 0 && state ==1)
-  {
-    collaborate2();
-    std::cout << "simple test2 sending"<< std::endl;
-  }
-
-  else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 2 && state ==1)
-  {
-    state = 2;    
-    set_zero();
-    std::cout << "simple test2 finished"<< std::endl;
-    std::cout << "simple test3 "<< std::endl;  
-  }
-
-  else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 0 && state ==2)
-  {
-    set_zero();
-    std::cout << "simple test3 sending"<< std::endl;
-  }
-
-  else if (current_steering_state_.current_state == 2 && current_steering_state_.cmd_finish == 2 && state ==2)
-  {
-    state = 3;  
     corgi_msgs::SteeringCmdStamped current_steering_cmd4;
     current_steering_cmd4.voltage = 0;
     current_steering_cmd4.angle = 0;
     current_steering_cmd4.header.stamp = ros::Time::now();
     steering_cmd_pub_.publish(current_steering_cmd4);
-    std::cout << current_steering_cmd4 << std::endl;
-    std::cout << "simple test3 finished"<< std::endl;
-    std::cout << "end"<< std::endl;  
   }
+
+ 
   
 }
 
