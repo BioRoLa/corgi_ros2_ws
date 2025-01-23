@@ -65,15 +65,14 @@ class CX5_AHRS {
                     exit_gracefully("ERROR: Could not set the device idel!");
                 };
             }
-            // Connect by UART
-            else {
-                if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
-                    exit_gracefully("ERROR: Could not set the device baudrate!");
-                }
-                usleep(300000);
-                utils = assign_serial(port, baud);
-            }
-            twist_bias = Eigen::Vector3f(0,0,0);
+            // else {
+            //     if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
+            //         exit_gracefully("ERROR: Could not set the device baudrate!");
+            //     }
+            //     usleep(300000);
+            //     utils = assign_serial(port, baud);
+            // }
+            // twist_bias = Eigen::Vector3f(0,0,0);
         }
 
         void start() {
