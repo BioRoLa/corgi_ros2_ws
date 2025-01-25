@@ -57,7 +57,7 @@ std::vector<double> Bezier::bzt_coeff(const std::vector<std::array<double, 2>>& 
 /* class SwingProfile */
 // p_l: position of G when lift leg
 // p_t: position of G when touch ground
-SwingProfile::SwingProfile(double p_l[2], double p_t[2], double step_height) :
+SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height) :
     /* Initializer List */
     L(p_t[0] - p_l[0]), 
     h(step_height), 

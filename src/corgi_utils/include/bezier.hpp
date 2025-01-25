@@ -20,12 +20,12 @@ class Bezier {
         int comb(int n, int k);
         std::vector<int> bz_coeff(const std::vector<std::array<double, 2>>& cp_list);
         std::vector<double> bzt_coeff(const std::vector<std::array<double, 2>>& cp_list, double t);
-};
+};//end class Bezier
 
 class SwingProfile {
     public:
         SwingProfile() {};  // Default constructor
-        SwingProfile(double p_l[2], double p_t[2], double step_height);
+        SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height);
 
         std::array<double, 2> getFootendPoint(double t_duty);
 
@@ -36,6 +36,6 @@ class SwingProfile {
         Bezier bezier;
 
         void getControlPoints();
-};
+};//end class SwingProfile
 
 #endif // BEZIER_HPP

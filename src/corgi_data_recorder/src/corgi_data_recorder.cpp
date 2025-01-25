@@ -81,9 +81,9 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
                         << "cmd_theta_b" << "," << "cmd_beta_b"  << ","
                         << "cmd_trq_r_b" << "," << "cmd_trq_l_b" << ","
                         << "cmd_theta_c" << "," << "cmd_beta_c"  << ","
-                        << "cmd_trq_r_c" << "," << "cmd_trq_l_b" << ","
+                        << "cmd_trq_r_c" << "," << "cmd_trq_l_c" << ","
                         << "cmd_theta_d" << "," << "cmd_beta_d"  << ","
-                        << "cmd_trq_r_d" << "," << "cmd_trq_l_b" << ","
+                        << "cmd_trq_r_d" << "," << "cmd_trq_l_d" << ","
 
                         << "state_seq" << "," << "state_sec" << "," << "state_usec" << ","
                         << "state_theta_a" << "," << "state_beta_a"  << ","
