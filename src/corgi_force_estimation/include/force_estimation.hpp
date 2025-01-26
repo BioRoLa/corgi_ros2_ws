@@ -11,6 +11,8 @@
 #include "ros/ros.h"
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
+#include "corgi_msgs/ImpedanceCmdStamped.h"
+#include "corgi_msgs/MotorCmdStamped.h"
 
 bool sim = true;
 LegModel legmodel(sim);
