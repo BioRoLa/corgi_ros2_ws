@@ -20,7 +20,6 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_force_estimation)
 
 catkin_package(
-  INCLUDE_DIRS include
   CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_force_estimation
 )
 
