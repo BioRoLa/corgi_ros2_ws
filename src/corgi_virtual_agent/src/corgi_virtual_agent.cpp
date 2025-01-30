@@ -80,6 +80,7 @@ void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
     steer_state.set_current_angle(cmd.angle());
     steer_state.set_current_state(cmd.voltage());
 
+    std::cout << cmd.angle() << std::endl;
 
     timeval currentTime;
     gettimeofday(&currentTime, nullptr);
