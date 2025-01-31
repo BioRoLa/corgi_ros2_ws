@@ -283,7 +283,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
     for (size_t iter = 0; iter < max_iter; ++iter) {
-        std::array<double, 2> cost = this->objective(guess_dq, {theta_in, beta_in}, move_vec, contact_rim);     // 计算当前函数值
+        std::array<double, 2> cost = this->objective(guess_dq, {theta, beta}, move_vec, contact_rim);     // 计算当前函数值
         Eigen::Vector2d cost_vec(cost[0], cost[1]);
 
         double norm_cost = cost_vec.norm();          // 计算残差范数
@@ -298,7 +298,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
         for (size_t i = 0; i < 2; ++i) {
             std::array<double, 2> dq_eps = guess_dq;
             dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
-            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta_in, beta_in}, move_vec, contact_rim);
+            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta, beta}, move_vec, contact_rim);
             Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
             Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
         }//end for
