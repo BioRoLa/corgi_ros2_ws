@@ -17,7 +17,7 @@
 #define WHEEL_MODE 2
 #define WALK_MODE 3
 #define WLW_MODE 4
-#define TRANSFORM_MODE 5
-#define STOP_MODE 6
+#define TO_WALK_MODE 5
+#define TO_WHEEL_MODE 6
 
 #endif
