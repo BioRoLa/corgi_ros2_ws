@@ -261,8 +261,8 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
 std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, double tol, size_t max_iter) {
     this->contact_map(theta_in, beta_in, slope);
     if (slope != 0.0) {
-        double x_new = move_vec[0]*cos(slope) - move_vec[1]*sin(slope);
-        double y_new = move_vec[0]*sin(slope) + move_vec[1]*cos(slope);
+        double x_new = move_vec[0]*cos(-slope) - move_vec[1]*sin(-slope);
+        double y_new = move_vec[0]*sin(-slope) + move_vec[1]*cos(-slope);
         move_vec = {x_new, y_new};
     }//end if
 
