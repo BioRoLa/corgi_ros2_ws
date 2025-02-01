@@ -11,6 +11,8 @@
 class WheelToLegTransformer {
     public:
         int stage = 0;
+        bool transform_finished = false;
+        int stay_time_step = 0;
 
         WheelToLegTransformer(double init_eta[8], bool sim=true);
 
@@ -24,8 +26,6 @@ class WheelToLegTransformer {
         std::array<std::array<double, 4>, 2> step();
 
     private:
-        bool transform_finished = false;
-
         LegModel leg_model;
         double G_p[2] = {0, 0};
 
@@ -39,7 +39,7 @@ class WheelToLegTransformer {
         double last_transform_step_x = 0.15;
         double body_vel = 0.1;
         double stance_height = 0.2;
-
+        double step_height = 0.05;
         double dt = 0.001;
 
         double wheel_delta_beta;
@@ -56,25 +56,35 @@ class WheelToLegTransformer {
         double LF_delta_beta, LF_delta_theta;
 
         std::array<double, 2> hybrid_steps;
-        double step_num, step_length;
+        int step_num;
+        double step_length;
 
         double body_angle;
 
-
         int delta_time_step_each;
+        std::array<double, 2> p_lo, p_td;
         SwingProfile sp;
 
-        std::vector<double> swing_target_theta_traj;
-        std::vector<double> swing_target_beta_traj;
-        std::array<double, 2> hip_pos;
+        std::array<double, 2> curve_point_temp;
+        double curve_point[2];
+        std::array<double, 2> swing_eta;
 
-        std::vector<double> stance_target_theta_traj;
-        std::vector<double> stance_target_beta_traj;
-        double stance_theta, stance_beta;
+        std::array<double, 2> stance_eta;
         std::array<double, 2> move_vector;
 
         int traj_idx;
+
+        double transform_start_beta, transform_start_theta;
+        double transform_target_beta, transform_target_theta;
+        double transform_delta_beta, transform_delta_theta;
+
+        double last_start_beta, last_start_theta;
+        double last_target_theta, last_target_beta;
+        double last_delta_beta, last_delta_theta;
+
+        double hind_body_height;
         
+        double LF_target_pos[2], RF_target_pos[2];
 };
 
 

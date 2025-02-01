@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         motor_cmd_modules[i]->torque_l = 0;
     }
 
-    double init_eta[8] = {17/180.0*M_PI, 0, 17/180.0*M_PI, 0/180.0*M_PI, 17/180.0*M_PI, 0, 17/180.0*M_PI, 0};
+    double init_eta[8] = {17/180.0*M_PI, 0, 17/180.0*M_PI, 55/180.0*M_PI, 17/180.0*M_PI, 0, 17/180.0*M_PI, 0};
     WheelToLegTransformer WheelToLegTransformer(init_eta, true);
 
     std::array<std::array<double, 4>, 2> eta_list;
@@ -39,6 +39,8 @@ int main(int argc, char** argv) {
     auto start = std::chrono::high_resolution_clock::now();
 
     while (ros::ok()) {
+        if (WheelToLegTransformer.transform_finished) { break; }
+        
         eta_list = WheelToLegTransformer.step();
 
         for (int i=0; i<4; i++) {
