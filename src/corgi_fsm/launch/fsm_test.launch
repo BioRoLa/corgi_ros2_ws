@@ -1,3 +1,0 @@
-<launch>
-    <node name="fsm_control" pkg="corgi_fsm" type="fsm_control" output="screen"/>
-</launch>
