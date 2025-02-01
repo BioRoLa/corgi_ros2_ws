@@ -13,7 +13,7 @@
 #include "leg_model.hpp"
 #include "bezier.hpp"
 
-WalkGait::WalkGait(double init_eta[8], bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : 
+WalkGait::WalkGait(bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */
     leg_model(sim),
     CoM_bias(CoM_bias),
@@ -22,19 +22,14 @@ WalkGait::WalkGait(double init_eta[8], bool sim, double CoM_bias, int rate, doub
     BW(BW),
     BH(BH)
 {
-    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
-    double init_beta[4] = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
-
+    // Initial dS & incre_duty
     dS = velocity / rate;
     incre_duty = dS / step_length;
-    initialize(init_theta, init_beta);
-    for (int i=0; i<4; i++) {
-        theta[i] = init_theta[i];
-        beta[i] = init_beta[i];
-    }//end for
 }//end WalkGait
 
-void WalkGait::initialize(double init_theta[4], double init_beta[4]) {
+void WalkGait::initialize(double init_eta[8]) {
+    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
+    double init_beta[4]  = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
     int current_rim = 0;
@@ -82,6 +77,11 @@ void WalkGait::initialize(double init_theta[4], double init_beta[4]) {
     // Initial leg configuration
     for (int i=0; i<4; i++) {
         foothold[i] = {next_hip[i][0] + relative_foothold[i][0] + CoM_bias, next_hip[i][1] + relative_foothold[i][1]};
+    }//end for
+    // Initial theta/beta
+    for (int i=0; i<4; i++) {
+        theta[i] = init_theta[i];
+        beta[i]  = init_beta[i];
     }//end for
 }//end initialize
 

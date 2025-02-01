@@ -13,9 +13,9 @@
 #include "bezier.hpp"
 class WalkGait {
     public:
-        WalkGait(double init_eta[8], bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
+        WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
-        void initialize(double init_theta[4], double init_beta[4]);
+        void initialize(double init_eta[8]);
 
         std::array<std::array<double, 4>, 2> step();
 
