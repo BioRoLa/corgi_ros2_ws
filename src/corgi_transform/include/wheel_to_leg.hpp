@@ -14,7 +14,7 @@ class WheelToLegTransformer {
         bool transform_finished = false;
         int stay_time_step = 0;
 
-        WheelToLegTransformer(double init_eta[8], bool sim=true);
+        WheelToLegTransformer(bool sim=true);
 
         void initialize(double init_eta[8]);
 

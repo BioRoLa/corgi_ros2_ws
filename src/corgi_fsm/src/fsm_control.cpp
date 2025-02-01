@@ -66,9 +66,10 @@ int main(int argc, char **argv) {
     std::array<std::array<double, 4>, 2> eta_list;
 
     double init_eta[8] = {18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0};
-    WalkGait walk_gait(init_eta, sim, 0.0, 1000);
-    WheelToLegTransformer wheel_to_leg_transformer(init_eta, sim);
-
+    WalkGait walk_gait(sim, 0.0, 1000);
+    walk_gait.initialize(init_eta);
+    WheelToLegTransformer wheel_to_leg_transformer(sim);
+    wheel_to_leg_transformer.initialize(init_eta);
 
     int loop_count = 0;
     while (ros::ok()) {
@@ -120,8 +121,9 @@ int main(int argc, char **argv) {
                     for (int i=0; i<4; i++){
                         init_eta[2*i] = motor_state_modules[i]->theta;
                         init_eta[2*i+1] = motor_state_modules[i]->beta;
+                        leg_model.contact_map(init_eta[2*i], init_eta[2*i+1]);
                     }
-                    walk_gait = WalkGait(init_eta, sim, 0.0, 1000);
+                    walk_gait.initialize(init_eta);
                     ROS_INFO("FSM: Entering WALK MODE");
                     break;
 
@@ -189,7 +191,7 @@ int main(int argc, char **argv) {
                     if (eta_list[0][i] > M_PI*160.0/180.0) {
                         std::cout << "Exceed upper bound." << std::endl;
                     }
-                    if (eta_list[0][i] < M_PI*17.0/180.0) {
+                    if (eta_list[0][i] < M_PI*16.9/180.0) {
                         std::cout << "Exceed lower bound." << std::endl;
                     }
                     motor_cmd_modules[i]->theta = eta_list[0][i];

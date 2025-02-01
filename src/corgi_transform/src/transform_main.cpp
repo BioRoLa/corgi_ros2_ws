@@ -32,8 +32,9 @@ int main(int argc, char** argv) {
     }
 
     double init_eta[8] = {17/180.0*M_PI, 0, 17/180.0*M_PI, 55/180.0*M_PI, 17/180.0*M_PI, 0, 17/180.0*M_PI, 0};
-    WheelToLegTransformer WheelToLegTransformer(init_eta, true);
-
+    WheelToLegTransformer WheelToLegTransformer(true);
+    WheelToLegTransformer.initialize(init_eta);
+    
     std::array<std::array<double, 4>, 2> eta_list;
 
     auto start = std::chrono::high_resolution_clock::now();

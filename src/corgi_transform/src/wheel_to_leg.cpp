@@ -1,13 +1,14 @@
 #include "wheel_to_leg.hpp"
 
-WheelToLegTransformer::WheelToLegTransformer(double init_eta[8], bool sim) :
+WheelToLegTransformer::WheelToLegTransformer(bool sim) :
     leg_model(sim)
 {
-    initialize(init_eta);
+    
 }
 
 void WheelToLegTransformer::initialize(double init_eta[8]){
-    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
+    // double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
+    double init_theta[4] = {17/180.0*M_PI, 17/180.0*M_PI, 17/180.0*M_PI, 17/180.0*M_PI};
     double init_beta[4] = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
 
     for (int i=0; i<4; i++) {
