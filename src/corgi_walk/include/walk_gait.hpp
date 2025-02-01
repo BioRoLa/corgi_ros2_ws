@@ -13,9 +13,9 @@
 #include "bezier.hpp"
 class WalkGait {
     public:
-        WalkGait(double init_eta[8], bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
+        WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
-        void initialize(double init_theta[4], double init_beta[4]);
+        void initialize(double init_eta[8]);
 
         std::array<std::array<double, 4>, 2> step();
 
@@ -48,6 +48,7 @@ class WalkGait {
         std::array<double, 4> beta;
         std::array<std::array<double, 2>, 4> foothold;
         std::array<std::array<double, 2>, 4> hip;
+        std::array<std::array<double, 2>, 4> next_hip;
 
         std::array<SwingProfile, 4> sp;
         std::array<double, 4> duty;
@@ -55,14 +56,16 @@ class WalkGait {
 
         // Intermediate variables
         int current_rim;
-        std::string touch_rim_list[3] = {"G", "L_l", "U_l"};
-        int touch_rim_idx[3] = {3, 2, 1};
+        std::string touch_rim_list[5] = {"G", "L_l", "L_r", "U_l", "U_r"};
+        int touch_rim_idx[5] = {3, 2, 4, 1, 5};
         double swing_phase_ratio;
         std::array<double, 2> curve_point_temp;
         std::array<double, 2> result_eta;
         std::array<double, 2> p_lo;
         std::array<double, 2> p_td;
-        double stand_height_diff = 0.0;
+        double new_step_length = step_length;
+        int direction = 1;
+        bool change_incre_duty = false;
 };//end class WalkGait
 
 #endif // WALKGAIT_HPP
