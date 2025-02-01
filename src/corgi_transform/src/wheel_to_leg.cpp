@@ -3,19 +3,22 @@
 WheelToLegTransformer::WheelToLegTransformer(double init_eta[8], bool sim) :
     leg_model(sim)
 {
-    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
-    double init_beta[4] = {-init_eta[1], init_eta[3], -init_eta[5], init_eta[7]};
-
-    initialize(init_theta, init_beta);
+    initialize(init_eta);
 }
 
-void WheelToLegTransformer::initialize(double init_theta[4], double init_beta[4]){
+void WheelToLegTransformer::initialize(double init_eta[8]){
+    double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
+    double init_beta[4] = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
+
     for (int i=0; i<4; i++) {
         curr_theta[i] = init_theta[i];
         curr_beta[i] = init_beta[i];
     }
 
     wheel_delta_beta = -body_vel/leg_model.radius*dt;
+
+    stage = 0;
+    transform_finished = false;
 }
 
 double WheelToLegTransformer::round_3(double value){

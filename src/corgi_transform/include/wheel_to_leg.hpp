@@ -16,7 +16,7 @@ class WheelToLegTransformer {
 
         WheelToLegTransformer(double init_eta[8], bool sim=true);
 
-        void initialize(double init_theta[4], double init_beta[4]);
+        void initialize(double init_eta[8]);
 
         double round_3(double value);
         double round_6(double value);
