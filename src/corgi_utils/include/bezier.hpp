@@ -25,13 +25,16 @@ class Bezier {
 class SwingProfile {
     public:
         SwingProfile() {};  // Default constructor
-        SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height);
+        SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height, int direction);
 
         std::array<double, 2> getFootendPoint(double t_duty);
+
+        int getDirection();
 
     private:
         double L, h, dh, dL1, dL2, dL3, dL4;
         double offset_x, offset_y, diff_h;
+        int direction;
         std::vector<std::array<double, 2>> control_points;
         Bezier bezier;
 
