@@ -1,20 +1,29 @@
 #include <iostream>
 #include <signal.h>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include "ros/ros.h"
 #include "rosgraph_msgs/Clock.h"
+#include "geometry_msgs/Point.h"
+#include "geometry_msgs/Quaternion.h"
 #include "sensor_msgs/Imu.h"
 #include "corgi_sim/set_int.h"
 #include "corgi_sim/set_float.h"
+#include "corgi_sim/get_uint64.h"
 #include "corgi_sim/motor_set_control_pid.h"
+#include "corgi_sim/node_get_position.h"
+#include "corgi_sim/node_get_orientation.h"
 #include "corgi_sim/Float64Stamped.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/SimDataStamped.h"
 
 
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::TriggerStamped trigger;
+corgi_msgs::SimDataStamped sim_data;
 sensor_msgs::Imu imu;
 
 double AR_phi = 0.0;
@@ -45,6 +54,10 @@ corgi_sim::motor_set_control_pid DR_motor_pid_srv;
 corgi_sim::motor_set_control_pid DL_motor_pid_srv;
 
 corgi_sim::set_int time_step_srv;
+
+corgi_sim::get_uint64 node_value_srv;
+corgi_sim::node_get_position node_pos_srv;
+corgi_sim::node_get_orientation node_orien_srv;
 
 rosgraph_msgs::Clock simulationClock;
 
@@ -131,6 +144,9 @@ int main(int argc, char **argv) {
 
     ros::ServiceClient time_step_client = nh.serviceClient<corgi_sim::set_int>("robot/time_step");
 
+    ros::ServiceClient node_pos_client = nh.serviceClient<corgi_sim::node_get_position>("supervisor/node/get_position");
+    ros::ServiceClient node_orient_client = nh.serviceClient<corgi_sim::node_get_orientation>("supervisor/node/get_orientation");
+
     ros::ServiceClient AR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lf_left_motor/set_position");
     ros::ServiceClient AL_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("lf_right_motor/set_position");
     ros::ServiceClient BR_motor_pos_client = nh.serviceClient<corgi_sim::set_float>("rf_left_motor/set_position");
@@ -175,8 +191,15 @@ int main(int argc, char **argv) {
     ros::Publisher motor_state_pub = nh.advertise<corgi_msgs::MotorStateStamped>("motor/state", 1000);
     ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 1000);
     ros::Publisher trigger_pub = nh.advertise<corgi_msgs::TriggerStamped>("trigger", 1000);
+    ros::Publisher sim_data_pub = nh.advertise<corgi_msgs::SimDataStamped>("sim/data", 1000);
     
     ros::WallRate rate(1000);
+
+    node_value_srv.request.ask = true;
+    ros::service::call("/supervisor/get_self", node_value_srv);
+
+    node_pos_srv.request.node = node_value_srv.response.value;
+    node_orien_srv.request.node = node_value_srv.response.value;
     
     signal(SIGINT, signal_handler);
 
@@ -204,6 +227,13 @@ int main(int argc, char **argv) {
     while (ros::ok() && time_step_client.call(time_step_srv)){
         ros::spinOnce();
 
+        node_pos_client.call(node_pos_srv);
+        node_orient_client.call(node_orien_srv);
+
+        sim_data.header.seq = loop_counter;
+        sim_data.position = node_pos_srv.response.position;
+        sim_data.orientation = node_orien_srv.response.orientation;
+
         tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value, AR_phi, AL_phi);
         tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value, BR_phi, BL_phi);
         tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value, CR_phi, CL_phi);
@@ -225,9 +255,20 @@ int main(int argc, char **argv) {
 
         motor_state.header.seq = loop_counter;
 
+        Eigen::Quaterniond orientation(imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z);
+        Eigen::Vector3d linear_acceleration(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+        Eigen::Vector3d gravity_global(0, 0, 9.81);
+        Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
+
+        linear_acceleration -= gravity_body;
+        imu.linear_acceleration.x = linear_acceleration(0);
+        imu.linear_acceleration.y = linear_acceleration(1);
+        imu.linear_acceleration.z = linear_acceleration(2);
+
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
         imu_pub.publish(imu);
+        sim_data_pub.publish(sim_data);
 
         double clock = loop_counter*0.001;
         simulationClock.clock.sec = (int)clock;

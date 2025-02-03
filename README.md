@@ -82,3 +82,33 @@ rosrun your_real_time_package your_real_time_node
 ```
 
 Note: Publish ```/motor/command``` topic to control the robot.
+
+## Odometry
+
+The odometry package estimates the robot's velocity and global position.
+
+### Running the Odometry Node
+
+To run the odometry node and estimate the robot's velocity and position, use the following command:
+
+```bash
+rosrun corgi_odometry corgi_odometry [output_file_name (optional)]
+```
+
+- `output_file_name` (optional): Specify a file name to save the odometry data. If not provided, the data will not be saved.
+
+### Offline Tools
+
+#### if_estimate
+Place your test data in `src/corgi_odometry/data`. An example dataset named `data01` is already provided.
+
+```bash
+rosrun corgi_odometry corgi_information_filter_offline_estimate [your_test_data]
+```
+
+#### quick_test
+Use this command to quickly test the leg kinematics:
+
+```bash
+rosrun corgi_odometry corgi_kinematic_quick_test
+```

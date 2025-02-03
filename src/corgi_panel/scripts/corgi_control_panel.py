@@ -448,9 +448,9 @@ class CorgiControlPanel(QWidget):
         self.btn_power_off.setEnabled(self.btn_rest_mode.isChecked())
         self.btn_rest_mode.setEnabled(not self.btn_csv_run.isChecked())
         self.btn_set_zero.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
-        self.btn_hall_cal.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
-        self.btn_steer_cal.setEnabled(self.power_state.robot_mode in [4, 5] and self.steer_state.current_state != 2)
-        self.btn_motor_mode.setEnabled(self.power_state.robot_mode in [2, 4, 5])
+        self.btn_hall_cal.setEnabled(self.power_state.robot_mode in [1, 2])
+        self.btn_steer_cal.setEnabled(self.power_state.robot_mode == 3 and not self.steer_state.current_state)
+        self.btn_motor_mode.setEnabled(self.power_state.robot_mode in [1, 3])
         self.btn_rt_mode.setEnabled(self.btn_motor_mode.isChecked() and not self.btn_csv_run.isChecked())
         self.btn_csv_mode.setEnabled(self.btn_motor_mode.isChecked())
         self.label_csv.setEnabled(self.btn_motor_mode.isChecked() and self.btn_csv_mode.isChecked())
@@ -493,12 +493,12 @@ class CorgiControlPanel(QWidget):
         self.power_status_values[0] = 'ON' if self.power_state.digital else 'OFF'
         self.power_status_values[1] = 'ON' if self.power_state.signal else 'OFF'
         self.power_status_values[2] = 'ON' if self.power_state.power else 'OFF'
-        self.power_status_values[3] = ['Rest Mode', 'Config Mode', 'Set Zero', 'Hall Calibrate', 'Motor Mode', 'Control Mode'][self.power_state.robot_mode]
+        self.power_status_values[3] = ['Rest Mode', 'Set Zero', 'Hall Calibrate', 'Motor Mode', 'Config Mode'][self.power_state.robot_mode]
         
         for i in range(len(self.power_status_values)):
             self.label_power_status_values[i].setText(self.power_status_values[i])
 
-        if self.btn_hall_cal.isChecked() and self.power_state.robot_mode == 4:
+        if self.btn_hall_cal.isChecked() and self.power_state.robot_mode == 3:
             self.btn_motor_mode.setEnabled(True)
             self.btn_motor_mode.setChecked(True)
         
@@ -510,7 +510,7 @@ class CorgiControlPanel(QWidget):
         
     
     def update_steer_status(self):
-        if self.steer_state.current_state == 2:
+        if self.steer_state.current_state:
             self.btn_steer_cal.setChecked(False)
         self.set_btn_enable()
 
