@@ -28,7 +28,7 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 
     current_motor_cmd_.header.stamp = ros::Time::now();
     for (size_t i = 0; i < 4; ++i) {
-        motor_cmds[i]->theta = = 17 * (M_PI / 180.0);
+        motor_cmds[i]->theta = 17 * (M_PI / 180.0);
         if (i == 1 || i == 2) {
             motor_cmds[i]->beta = motor_state_modules[i]->beta - beta_adjustment;
         } else if (i == 0 || i == 3) {
