@@ -182,8 +182,10 @@ int main(int argc, char **argv) {
             trq_cmd = impedance_control(imp_cmd_modules[i], motor_state_modules[i], force_state_modules[i],
                                         pos_err_hist_modules[i], force_err_hist_modules[i], force_state_hist_modules[i]);
 
-            motor_cmd_modules[i]->kp = 0;
-            motor_cmd_modules[i]->kd = 0;
+            motor_cmd_modules[i]->kp_r = 0;
+            motor_cmd_modules[i]->kp_l = 0;
+            motor_cmd_modules[i]->kd_r = 0;
+            motor_cmd_modules[i]->kd_l = 0;
             
             motor_cmd_modules[i]->theta = 1;
             motor_cmd_modules[i]->beta = 0;
