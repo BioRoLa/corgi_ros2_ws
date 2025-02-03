@@ -13,7 +13,7 @@ Wheeled::Wheeled()
 
 void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 {
-    std::cout << "Received" << std::endl;
+    // std::cout << "Received" << std::endl;
     current_wheel_cmd_ = *msg;
     
     float beta_adjustment = (current_wheel_cmd_.velocity / 0.119) * (M_PI / 180.0); // Convert velocity to radians based on wheel radius
@@ -28,7 +28,7 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 
     current_motor_cmd_.header.stamp = ros::Time::now();
     for (size_t i = 0; i < 4; ++i) {
-        motor_cmds[i]->theta = motor_state_modules[i]->theta;
+        motor_cmds[i]->theta = = 17 * (M_PI / 180.0);
         if (i == 1 || i == 2) {
             motor_cmds[i]->beta = motor_state_modules[i]->beta - beta_adjustment;
         } else if (i == 0 || i == 3) {
