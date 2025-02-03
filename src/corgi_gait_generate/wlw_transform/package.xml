@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>wlw_gen</name>
+  <name>wlw_trans</name>
   <version>0.0.0</version>
-  <description>wlw gait generation</description>
+  <description>wlw transformation</description>
   <maintainer email="997726tina@gmail.com">Yatinghsu000627</maintainer>
   <license>TODO</license>
 

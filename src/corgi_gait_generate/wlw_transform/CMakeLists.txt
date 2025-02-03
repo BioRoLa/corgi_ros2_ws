@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-project(wlw_gen LANGUAGES C CXX)
+project(wlw_trans LANGUAGES C CXX)
 
 set(CMAKE_EXE_LINKER_FLAGS)
 set(CMAKE_CXX_STANDARD 17)
