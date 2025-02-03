@@ -13,14 +13,15 @@ Wheeled::Wheeled()
 
 void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 {
-    std::cout << "Received wheel cmd" << std::endl;
+    std::cout << "Received" << std::endl;
     current_wheel_cmd_ = *msg;
     
     float beta_adjustment = (current_wheel_cmd_.velocity / 0.119) * (M_PI / 180.0); // Convert velocity to radians based on wheel radius
 
-    if (current_wheel_cmd_.direction) {
-        beta_adjustment = -beta_adjustment; // Reverse adjustment if direction is 1
+    if (current_wheel_cmd_.direction == false) {
+        beta_adjustment = -beta_adjustment; // Reverse adjustment if direction is 0
     }
+
     if (current_wheel_cmd_.stop == true){
         beta_adjustment = 0;
     }
@@ -29,9 +30,9 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
     for (size_t i = 0; i < 4; ++i) {
         motor_cmds[i]->theta = motor_state_modules[i]->theta;
         if (i == 1 || i == 2) {
-            motor_cmds[i]->beta = motor_state_modules[i]->beta + beta_adjustment;
-        } else if (i == 0 || i == 3) {
             motor_cmds[i]->beta = motor_state_modules[i]->beta - beta_adjustment;
+        } else if (i == 0 || i == 3) {
+            motor_cmds[i]->beta = motor_state_modules[i]->beta + beta_adjustment;
         }
         motor_cmds[i]->kp = 90;
         motor_cmds[i]->ki = 0;

@@ -169,11 +169,11 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     double vel_axis = joy->axes[axis_velocity_];
     if (vel_axis > 0.1)
     {
-      current_velocity_ += 0.01;
+      current_velocity_ += 0.05;
     }
     else if (vel_axis < -0.1)
     {
-      current_velocity_ -= 0.01;
+      current_velocity_ -= 0.05;
     }
   }
 
