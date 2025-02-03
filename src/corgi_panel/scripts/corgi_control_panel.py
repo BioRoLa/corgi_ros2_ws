@@ -150,6 +150,11 @@ class CorgiControlPanel(QWidget):
         
         self.btn_rest_mode.setChecked(True)
         
+        self.btn_steer_cal  = QPushButton('Steer Calibrate', self)
+        self.btn_steer_cal.setCheckable(True)
+        self.btn_steer_cal.setStyleSheet(btn_mode_style)
+        self.btn_steer_cal.clicked.connect(self.publish_power_cmd)
+        
         
         ### Motor Mode Selection ###
         self.btn_group_motor = QButtonGroup(self)
@@ -284,18 +289,19 @@ class CorgiControlPanel(QWidget):
         layout.addWidget(self.btn_rest_mode,   8, 0, 1, 2)
         layout.addWidget(self.btn_set_zero,    9, 0, 1, 2)
         layout.addWidget(self.btn_hall_cal,    10,0, 1, 2)
-        layout.addWidget(self.btn_motor_mode,  11,0, 1, 2)
-        layout.addWidget(self.btn_rt_mode,     12,0, 1, 1)
-        layout.addWidget(self.btn_csv_mode,    12,1, 1, 1)
+        layout.addWidget(self.btn_steer_cal,   11,0, 1, 2)
+        layout.addWidget(self.btn_motor_mode,  12,0, 1, 2)
+        layout.addWidget(self.btn_rt_mode,     13,0, 1, 1)
+        layout.addWidget(self.btn_csv_mode,    13,1, 1, 1)
         layout.addWidget(vlines[0],            0, 2, 13,1)
         layout.addWidget(self.label_csv,       0, 3, 1, 2)
         layout.addWidget(self.edit_csv,        1, 3, 1, 1)
         layout.addWidget(self.btn_csv_select,  1, 4, 1, 1)
         layout.addWidget(self.btn_csv_run,     2, 3, 1, 2)
-        layout.addWidget(self.label_output,    6, 3, 1, 2)
-        layout.addWidget(self.edit_output,     7, 3, 1, 2)
-        layout.addWidget(self.btn_trigger,     8, 3, 1, 2)
-        layout.addWidget(self.btn_reset,       9, 3, 1, 2)
+        layout.addWidget(self.label_output,    7, 3, 1, 2)
+        layout.addWidget(self.edit_output,     8, 3, 1, 2)
+        layout.addWidget(self.btn_trigger,     9, 3, 1, 2)
+        layout.addWidget(self.btn_reset,       10,3, 1, 2)
         layout.addWidget(vlines[1],            0, 5, 13,1)
         layout.addWidget(self.label_status,    0, 6, 1, 2)
         for i in range(len(label_status_headers)):
@@ -331,16 +337,18 @@ class CorgiControlPanel(QWidget):
         
         self.power_state_sub = rospy.Subscriber('power/state', PowerStateStamped, self.power_state_cb)
         self.motor_state_sub = rospy.Subscriber('motor/state', MotorStateStamped, self.motor_state_cb)
+        self.steer_state_sub = rospy.Subscriber('steer/state', SteeringStateStamped, self.steer_state_cb)
         
         self.power_state = PowerStateStamped()
         self.motor_state = MotorCmdStamped()
+        self.steer_state = SteeringStateStamped()
     
     
     def select_csv_file(self):
         file_dialog = QFileDialog(self)
         file_dialog.setWindowTitle('Open CSV File')
         file_dialog.setNameFilter('CSV Files (*.csv)')
-        file_dialog.setDirectory(os.path.expanduser('~/corgi_ws/corgi_ros_ws/src/corgi_control_packages/csv_control/input_csv/'))
+        file_dialog.setDirectory(os.path.expanduser('~/corgi_ws/corgi_ros_ws/input_csv/'))
         file_dialog.setStyleSheet('''background-color: white; font-family: Ubuntu; font-size: 24px; padding: 3px''')
 
         if file_dialog.exec() == QFileDialog.Accepted:
@@ -388,6 +396,7 @@ class CorgiControlPanel(QWidget):
         power_cmd.power = self.btn_power_on.isChecked()
         power_cmd.clean = False
         power_cmd.robot_mode = self.btn_group_mode.checkedId()
+        power_cmd.steering_cali = self.btn_steer_cal.isChecked()
         
         self.power_cmd_pub.publish(power_cmd)
         
@@ -440,6 +449,7 @@ class CorgiControlPanel(QWidget):
         self.btn_rest_mode.setEnabled(not self.btn_csv_run.isChecked())
         self.btn_set_zero.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
         self.btn_hall_cal.setEnabled(self.btn_digital_on.isChecked() and self.btn_power_on.isChecked() and not self.btn_motor_mode.isChecked())
+        self.btn_steer_cal.setEnabled(self.power_state.robot_mode in [4, 5] and self.steer_state.current_state != 2)
         self.btn_motor_mode.setEnabled(self.power_state.robot_mode in [2, 4, 5])
         self.btn_rt_mode.setEnabled(self.btn_motor_mode.isChecked() and not self.btn_csv_run.isChecked())
         self.btn_csv_mode.setEnabled(self.btn_motor_mode.isChecked())
@@ -464,7 +474,7 @@ class CorgiControlPanel(QWidget):
     
     
     def power_state_cb(self, state):
-        if (self.power_state.digital, self.power_state.power, self.power_state.signal, self.power_state.robot_mode) !=(state.digital, state.power, state.signal, state.robot_mode):
+        if (self.power_state.digital, self.power_state.power, self.power_state.signal, self.power_state.robot_mode) != (state.digital, state.power, state.signal, state.robot_mode):
             self.power_state = state
             self.update_power_status()
         else:
@@ -473,7 +483,11 @@ class CorgiControlPanel(QWidget):
         
     def motor_state_cb(self, state):
         self.motor_state = state
-    
+        
+        
+    def steer_state_cb(self, state):
+        self.steer_state = state
+        self.update_steer_status()
     
     def update_power_status(self):
         self.power_status_values[0] = 'ON' if self.power_state.digital else 'OFF'
@@ -492,7 +506,12 @@ class CorgiControlPanel(QWidget):
         
 
     def update_motor_status(self):
+        self.set_btn_enable()
         
+    
+    def update_steer_status(self):
+        if self.steer_state.current_state == 2:
+            self.btn_steer_cal.setChecked(False)
         self.set_btn_enable()
 
     
