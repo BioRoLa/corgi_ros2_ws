@@ -42,10 +42,11 @@ int main(int argc, char **argv) {
             
             if (loop_count < 1000){
                 cmd->theta = 60/180.0*M_PI;
+                // cmd->theta = (17 + 43*loop_count/1000.0)/180.0*M_PI;
             }
             else if (loop_count < 2000){
-                // cmd->theta = 60/180.0*M_PI;
-                cmd->theta = (60 + 10*sin((loop_count-1000)/200.0*M_PI))/180.0*M_PI;
+                cmd->theta = 60/180.0*M_PI;
+                // cmd->theta = (60 + 10*sin((loop_count-1000)/200.0*M_PI))/180.0*M_PI;
                 // cmd->beta = (70*(loop_count-1000)/1000.0)/180.0*M_PI;
             }
             else if (loop_count < 3000){
@@ -53,19 +54,19 @@ int main(int argc, char **argv) {
             }
             else if (loop_count < 5000){
                 cmd->theta = 60/180.0*M_PI;
-                cmd->Fy = -50 + 20*sin((loop_count-3000)/200.0*M_PI);
-                cmd->Bx = 30;
-                cmd->By = 30;
-                cmd->Kx = 3000;
-                cmd->Ky = 3000;
+                if (mod_idx == 0) {
+                    cmd->Fy = -50 + 20*sin((loop_count-3000)/200.0*M_PI);
+                }
+                else {
+                    cmd->Fy = -50;
+                }
+                cmd->Bx = 20;
+                cmd->By = 20;
+                cmd->Kx = 1500;
+                cmd->Ky = 1500;
             }
             else if (loop_count < 7000){
                 cmd->theta = 60/180.0*M_PI;
-                cmd->Fy = -70 + 20*sin((loop_count-5000)/200.0*M_PI);
-                cmd->Bx = 30;
-                cmd->By = 30;
-                cmd->Kx = 3000;
-                cmd->Ky = 3000;
             }
             else{
                 cmd->theta = 60/180.0*M_PI;
@@ -78,6 +79,7 @@ int main(int argc, char **argv) {
             cmd->adaptive_kd_x = 20;
             cmd->adaptive_kd_y = 20;
             
+            if (mod_idx == 1 || mod_idx == 2) { cmd->beta *= -1; }
 
             mod_idx++;
         }
