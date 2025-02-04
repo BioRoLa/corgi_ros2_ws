@@ -17,12 +17,12 @@ JoystickControl::JoystickControl()
   pnh.param("button_reset",      button_reset_,       0);
 
   // Publishers
-  steering_cmd_pub_ = nh_.advertise<corgi_msgs::SteeringCmdStamped>("steering_cmd", 1);
+  steering_cmd_pub_ = nh_.advertise<corgi_msgs::SteeringCmdStamped>("/steer/command", 1);
   wheel_cmd_pub_    = nh_.advertise<corgi_msgs::WheelCmd>("wheel_cmd", 1);
   debug_pub_        = nh_.advertise<std_msgs::String>("debug_info",   10);
 
   // Subscribers
-  steering_state_sub_ = nh_.subscribe("steering_state", 1,
+  steering_state_sub_ = nh_.subscribe("/steer/state", 1,
       &JoystickControl::steeringStateCallback, this);
   joy_sub_ = nh_.subscribe("joy", 1,
       &JoystickControl::joyCallback, this);
