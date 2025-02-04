@@ -32,7 +32,10 @@ JoystickControl::JoystickControl()
       ros::Duration(0.001),  // 1 ms
       &JoystickControl::wheelCmdTimerCallback,
       this);
-
+  steering_cmd_timer_= nh_.createTimer(
+      ros::Duration(0.001),  // 1 ms
+      &JoystickControl::steerCmdTimerCallback,
+      this);
   // Initialize last_wheel_cmd_ => stop=true
   last_wheel_cmd_.header.stamp = ros::Time::now();
   last_wheel_cmd_.stop         = true;
@@ -53,6 +56,16 @@ void JoystickControl::wheelCmdTimerCallback(const ros::TimerEvent&)
   {
     last_wheel_cmd_.header.stamp = ros::Time::now();
     wheel_cmd_pub_.publish(last_wheel_cmd_);
+  }
+}
+
+void JoystickControl::steerCmdTimerCallback(const ros::TimerEvent&)
+{
+  // If stop=false => continuously publish at 1000 Hz
+  if (steer.voltage != 0.0)
+  {
+    steer.header.stamp = ros::Time::now();
+    steering_cmd_pub_.publish(steer);
   }
 }
 
@@ -79,7 +92,7 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 
     // Steering reset => angle=0
     {
-      corgi_msgs::SteeringCmdStamped steer;
+      
       steer.header.stamp = ros::Time::now();
       steer.angle   = 0.0;
       steer.voltage = 0;
@@ -121,7 +134,7 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
   // 3) SteeringCmd => e.g. if current_state==true => analog angle
   if (current_steering_state_.current_state)
   {
-    corgi_msgs::SteeringCmdStamped steer;
+    // corgi_msgs::SteeringCmdStamped steer;
     steer.header.stamp = ros::Time::now();
     if ((int)joy->axes.size() > axis_left_right_)
     {

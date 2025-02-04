@@ -25,6 +25,7 @@ private:
 
   // Timer callback for 1 kHz
   void wheelCmdTimerCallback(const ros::TimerEvent&);
+  void steerCmdTimerCallback(const ros::TimerEvent&);
 
   double clamp(double value, double min_val, double max_val);
 
@@ -39,10 +40,10 @@ private:
 
   // Timer at 1 kHz
   ros::Timer wheel_cmd_timer_;
-
+  ros::Timer steering_cmd_timer_;
   // Store the current steering state
   corgi_msgs::SteeringStateStamped current_steering_state_;
-
+  corgi_msgs::SteeringCmdStamped steer;
   // Indices for axes/buttons
   int axis_left_right_;
   int axis_forward_back_;
