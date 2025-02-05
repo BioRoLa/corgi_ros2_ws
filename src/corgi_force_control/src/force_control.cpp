@@ -55,12 +55,12 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     Eigen::MatrixXd pos_err(2, 1);
     pos_err = pos_des - pos_fb;
     
-    // std::cout << "force_err: " << force_err(0, 0) << ", " << force_err(1, 0) << std::endl << std::endl;
-    // std::cout << "pos_des: " << pos_des(0, 0) << ", " << pos_des(1, 0) << std::endl;
-    // std::cout << "pos_fb : " << pos_fb(0, 0)  << ", " << pos_fb(1, 0)  << std::endl;
-    // std::cout << "vel_fb : " << vel_fb(0, 0)  << ", " << vel_fb(1, 0)  << std::endl;
-    // std::cout << "acc_fb : " << acc_fb(0, 0)  << ", " << acc_fb(1, 0)  << std::endl << std::endl;
-    // std::cout << "pos_err: " << pos_err(0, 0) << ", " << pos_err(1, 0) << std::endl << std::endl;
+    std::cout << "force_err: " << force_err(0, 0) << ", " << force_err(1, 0) << std::endl << std::endl;
+    std::cout << "pos_des: " << pos_des(0, 0) << ", " << pos_des(1, 0) << std::endl;
+    std::cout << "pos_fb : " << pos_fb(0, 0)  << ", " << pos_fb(1, 0)  << std::endl;
+    std::cout << "vel_fb : " << vel_fb(0, 0)  << ", " << vel_fb(1, 0)  << std::endl;
+    std::cout << "acc_fb : " << acc_fb(0, 0)  << ", " << acc_fb(1, 0)  << std::endl << std::endl;
+    std::cout << "pos_err: " << pos_err(0, 0) << ", " << pos_err(1, 0) << std::endl << std::endl;
 
     // calculate jacobian
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
@@ -76,8 +76,6 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(eta_hist_.col(0)(0, 0), i); 
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(eta_hist_.col(0)(0, 0), i); 
     
-    std::cout << eta_hist_.col(0)(1, 0) << std::endl;
-
     Eigen::MatrixXd J_fb(2, 2);
     J_fb = calculate_jacobian(P_theta, P_theta_deriv, eta_hist_.col(0)(1, 0));
 
@@ -99,7 +97,7 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     K << imp_cmd_->Kx, 0, 0, imp_cmd_->Ky;
 
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta;
-    trq_cmd = J_fb.transpose() * ((force_des) + M*(-acc_fb));
+    trq_cmd = J_fb.transpose() * (force_des + M*(-acc_fb));
 
     // calculate phi command
     Eigen::MatrixXd phi_des(2, 1);
@@ -119,8 +117,8 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     kp_cmd << J_fb(0, 0) * K(0, 0) * J_fb(0, 0) + J_fb(1, 0) * K(1, 1) * J_fb(1, 0),
               J_fb(0, 1) * K(0, 0) * J_fb(0, 1) + J_fb(1, 1) * K(1, 1) * J_fb(1, 1);
 
-    trq_cmd(0, 0) += (J_fb(0, 0) * K(0, 0) * J_fb(0, 1) + J_fb(1, 0) * K(1, 1) * J_fb(1, 1)) * phi_err(1, 0);
-    trq_cmd(1, 0) += (J_fb(0, 1) * K(0, 0) * J_fb(0, 0) + J_fb(1, 1) * K(1, 1) * J_fb(1, 0)) * phi_err(0, 0);
+    trq_cmd(0, 0) += (J_fb(0, 0) * K(0, 0) * J_fb(0, 1) + J_fb(1, 0) * K(1, 1) * J_fb(1, 1)) * (-phi_err)(1, 0);
+    trq_cmd(1, 0) += (J_fb(0, 1) * K(0, 0) * J_fb(0, 0) + J_fb(1, 1) * K(1, 1) * J_fb(1, 0)) * (-phi_err)(0, 0);
 
     // kd compensate
     kd_cmd << J_fb(0, 0) * B(0, 0) * J_fb(0, 0) + J_fb(1, 0) * B(1, 1) * J_fb(1, 0),
@@ -137,9 +135,9 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     std::cout << "kp_cmd : " << kp_cmd(0, 0) << ", " << kp_cmd(1, 0) << std::endl;
     std::cout << "kd_cmd : " << kd_cmd(0, 0) << ", " << kd_cmd(1, 0) << std::endl << std::endl;
 
-    trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*(pos_des-pos_fb));
-    kp_cmd << 0, 0;
-    kd_cmd << 0, 0;
+    // trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*(pos_des-pos_fb));
+    // kp_cmd << 0, 0;
+    // kd_cmd << 0, 0;
 
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
@@ -206,7 +204,7 @@ int main(int argc, char **argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
-        for (int i=0; i<4; i++){
+        for (int i=0; i<1; i++){
             eta_hist_modules[i].col(2) = eta_hist_modules[i].col(1);
             eta_hist_modules[i].col(1) = eta_hist_modules[i].col(0);
             eta_hist_modules[i].col(0) << motor_state_modules[i]->theta, motor_state_modules[i]->beta;
