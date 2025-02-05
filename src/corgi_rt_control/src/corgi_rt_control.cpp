@@ -1,0 +1,122 @@
+#include <iostream>
+#include "ros/ros.h"
+
+#include "corgi_msgs/MotorCmdStamped.h"
+#include "corgi_msgs/TriggerStamped.h"
+
+bool trigger = false;
+
+void trigger_cb(const corgi_msgs::TriggerStamped msg){
+    trigger = msg.enable;
+}
+
+int main(int argc, char **argv) {
+    ros::init(argc, argv, "corgi_rt_control");
+
+    ros::NodeHandle nh;
+    ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
+    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
+    ros::Rate rate(1000);
+
+    corgi_msgs::MotorCmdStamped motor_cmd;
+
+    std::vector<corgi_msgs::MotorCmd*> motor_cmds = {
+        &motor_cmd.module_a,
+        &motor_cmd.module_b,
+        &motor_cmd.module_c,
+        &motor_cmd.module_d
+    };
+
+    ROS_INFO("Leg Transform Starts\n");
+    
+    for (int i=0; i<1000; i++){
+        for (auto& cmd : motor_cmds){
+            cmd->theta = 17/180.0*M_PI;
+            cmd->beta = 0/180.0*M_PI;
+
+            cmd->kp_r = 90;
+            cmd->kp_l = 90;
+            cmd->ki_r = 0;
+            cmd->ki_l = 0;
+            cmd->kd_r = 1.75;
+            cmd->kd_l = 1.75;
+        }
+
+        motor_cmd.header.seq = -1;
+
+        motor_cmd_pub.publish(motor_cmd);
+
+        rate.sleep();
+    }
+
+    ROS_INFO("Leg Transform Finished\n");
+
+    while (ros::ok()){
+        ros::spinOnce();
+
+        if (trigger){
+            ROS_INFO("Real Time Trajectory Starts\n");
+
+            int seq = 0;
+            double loop_count = 0.0;
+            while (ros::ok()) {
+                if (loop_count < 1000) {
+                    motor_cmds[0]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[0]->beta -= 30/1000.0/180.0*M_PI;
+
+                    motor_cmds[1]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[1]->beta += 30/1000.0/180.0*M_PI;
+
+                    motor_cmds[2]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[2]->beta += 30/1000.0/180.0*M_PI;
+
+                    motor_cmds[3]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[3]->beta -= 30/1000.0/180.0*M_PI;
+                }
+
+                else if (loop_count < 3000) {
+                    motor_cmds[0]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[0]->beta -= 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[1]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[1]->beta += 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[2]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[2]->beta += 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[3]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[3]->beta -= 30/2000.0/180.0*M_PI;
+                }
+
+                else {
+
+                }
+
+                for (auto& cmd : motor_cmds) {
+                    cmd->kp_r = 90;
+                    cmd->kp_l = 90;
+                    cmd->ki_r = 0;
+                    cmd->ki_l = 0;
+                    cmd->kd_r = 1.75;
+                    cmd->kd_l = 1.75;
+                }
+
+                motor_cmd.header.seq = seq;
+
+                motor_cmd_pub.publish(motor_cmd);
+
+                seq++;
+                loop_count++;
+
+                rate.sleep();
+            }
+            break;
+        }
+    }
+
+    ROS_INFO("Real Time Trajectory Finished\n");
+
+    ros::shutdown();
+    
+    return 0;
+}
