@@ -127,6 +127,11 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     trq_cmd(0, 0) += (J_fb(0, 0) * B(0, 0) * J_fb(0, 1) + J_fb(1, 0) * B(1, 1) * J_fb(1, 1)) * (-phi_vel)(1, 0);
     trq_cmd(1, 0) += (J_fb(0, 1) * B(0, 0) * J_fb(0, 0) + J_fb(1, 1) * B(1, 1) * J_fb(1, 0)) * (-phi_vel)(0, 0);
     
+    // torque version impedance control
+    trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*(pos_des-pos_fb));
+    kp_cmd << 0, 0;
+    kd_cmd << 0, 0;
+
     std::cout << "phi_err : " << phi_err(0, 0) << ", " << phi_err(1, 0) << std::endl;
     std::cout << "phi_vel : " << phi_vel(0, 0) << ", " << phi_vel(1, 0) << std::endl << std::endl;
 
@@ -134,10 +139,6 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     std::cout << "trq_cmd: " << trq_cmd(0, 0) << ", " << trq_cmd(1, 0) << std::endl;
     std::cout << "kp_cmd : " << kp_cmd(0, 0) << ", " << kp_cmd(1, 0) << std::endl;
     std::cout << "kd_cmd : " << kd_cmd(0, 0) << ", " << kd_cmd(1, 0) << std::endl << std::endl;
-
-    // trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*(pos_des-pos_fb));
-    // kp_cmd << 0, 0;
-    // kd_cmd << 0, 0;
 
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
@@ -208,6 +209,8 @@ int main(int argc, char **argv) {
             eta_hist_modules[i].col(2) = eta_hist_modules[i].col(1);
             eta_hist_modules[i].col(1) = eta_hist_modules[i].col(0);
             eta_hist_modules[i].col(0) << motor_state_modules[i]->theta, motor_state_modules[i]->beta;
+
+            if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
 
             force_control(imp_cmd_modules[i], eta_hist_modules[i], force_state_modules[i], motor_cmd_modules[i]);
         }

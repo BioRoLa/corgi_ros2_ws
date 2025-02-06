@@ -11,5 +11,5 @@
     <!-- <node name="admittance_control" pkg="corgi_force_control" type="admittance_control" output="screen"/> -->
     <!-- <node name="impedance_control" pkg="corgi_force_control" type="impedance_control" output="screen"/> -->
     <node name="force_control" pkg="corgi_force_control" type="force_control" output="screen"/>
-    <node name="imp_cmd_pub" pkg="corgi_force_control" type="imp_cmd_pub" output="screen"/>
+    <!-- <node name="imp_cmd_pub" pkg="corgi_force_control" type="imp_cmd_pub" output="screen"/> -->
 </launch>
