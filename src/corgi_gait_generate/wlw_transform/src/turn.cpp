@@ -7,7 +7,7 @@
 #include <complex>
 #include <cmath>
 
-// 角度與弧度轉換
+
 static inline double deg2rad(double deg) {
     return deg * M_PI / 180.0;
 }
@@ -15,10 +15,6 @@ static inline double rad2deg(double rad) {
     return rad * 180.0 / M_PI;
 }
 
-//-----------------------------------------------
-// phi2tb: 將 (phi0, phi1) -> (theta, beta)，單位都是「弧度」。
-// 題主提供的複數指數邏輯。
-//-----------------------------------------------
 Eigen::Vector2d phi2tb(const Eigen::Vector2d &phi)
 {
     Eigen::Vector2d tb;

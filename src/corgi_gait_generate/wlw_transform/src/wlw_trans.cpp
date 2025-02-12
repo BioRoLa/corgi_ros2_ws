@@ -10,7 +10,6 @@ double rad2deg(double radians) {
 
 double find_closest_beta(double target_beta, double ref_beta)
 {
-    // We'll approximate the Python "round(..., 6)"
     auto r6 = [](double v){ return std::round(v * 1e6) / 1e6; };
 
     if (r6(target_beta) < r6(ref_beta)) {
@@ -86,16 +85,16 @@ void wlw_transform_main()
 {
     // Setup
     std::vector<double> ideal_theta = {
-        deg2rad(76.81), // LF
-        deg2rad(70.15), // RF
-        deg2rad(70.15), // RH
-        deg2rad(76.81)  // LH
+        1.34154, // LF
+        1.22377, // RF
+        1.22503, // RH
+        1.3401  // LH
     };
     std::vector<double> ideal_beta = {
-        deg2rad(-39.56),   // LF
-        deg2rad(34.64),  // RF
-        deg2rad(-34.64),   // RH
-        deg2rad(39.56)   // LH
+        0.690684,   // LF
+        -5.67911,  // RF
+        -0.605124,   // RH
+        5.59344   // LH
     };
     std::cout << "= = = Wheel to WLW Start = = =" << std::endl;
     // Wheeled mode
@@ -188,9 +187,9 @@ void wlw_transform_main()
     double RF_target_beta_new = ideal_beta[1];
     RF_target_beta_new = find_smaller_closest_beta(RF_target_beta_new, curr_beta[1]);
     double RF_target_theta = ideal_theta[1];
+    // double RF_target_theta = leg.inverse({0, -stance_height+leg.r},"G")[1];
 
-
-    std::cout << "Body Angle = " << -ideal_beta[1] << std::endl;
+    std::cout << "Body Angle = " << RF_target_beta_new << std::endl;
 
     std::cout << "RF Target Theta = " << (RF_target_theta * 180.0 / M_PI) << std::endl;
 
@@ -312,9 +311,9 @@ void wlw_transform_main()
     }
 
     // 8) Save to c_traj.csv
-    std::ofstream fout("t_traj.csv");
+    std::ofstream fout("0212.csv");
     if (!fout.is_open()) {
-        std::cerr << "Could not open t_traj.csv for writing.\n";
+        std::cerr << "Could not open 0212.csv for writing.\n";
         return;
     }
     for (auto & row : traj_final) {
@@ -328,7 +327,7 @@ void wlw_transform_main()
     }
     fout.close();
 
-    std::cout << "Saved t_traj.csv with "
+    std::cout << "Saved 0212.csv with "
               << all_theta.size() << " rows.\n";
 
     std::cout << "= = = Wheel to WLW End = = =" << std::endl;
