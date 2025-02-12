@@ -1,7 +1,4 @@
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
 #include "ros/ros.h"
 
 #include "corgi_msgs/MotorCmdStamped.h"
@@ -14,7 +11,7 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "corgi_csv_control");
+    ros::init(argc, argv, "corgi_rt_control");
 
     ros::NodeHandle nh;
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
@@ -30,41 +27,12 @@ int main(int argc, char **argv) {
         &motor_cmd.module_d
     };
 
-    if (argc < 2){
-        ROS_INFO("Please input csv file path\n");
-        return 1;
-    }
-    
-    std::string csv_file_path;
-    csv_file_path = std::getenv("HOME");
-    csv_file_path += "/corgi_ws/corgi_ros_ws/input_csv/";
-    csv_file_path += argv[1];
-    csv_file_path += ".csv";
-    
-
-    std::ifstream csv_file(csv_file_path);
-    if (!csv_file.is_open()) {
-        ROS_INFO("Failed to open the CSV file\n");
-        return 1;
-    }
-
-    std::string line;
-    
-
     ROS_INFO("Leg Transform Starts\n");
     
-    for (int i=0; i<5000; i++){
-        std::getline(csv_file, line);
-        std::vector<double> columns;
-        std::stringstream ss(line);
-        std::string item;
-        
+    for (int i=0; i<1000; i++){
         for (auto& cmd : motor_cmds){
-            std::getline(ss, item, ',');
-            cmd->theta = std::stod(item);
-
-            std::getline(ss, item, ',');
-            cmd->beta = std::stod(item);
+            cmd->theta = 17/180.0*M_PI;
+            cmd->beta = 0/180.0*M_PI;
 
             cmd->kp_r = 90;
             cmd->kp_l = 90;
@@ -83,26 +51,48 @@ int main(int argc, char **argv) {
 
     ROS_INFO("Leg Transform Finished\n");
 
-    
     while (ros::ok()){
         ros::spinOnce();
 
         if (trigger){
-            ROS_INFO("CSV Trajectory Starts\n");
+            ROS_INFO("Real Time Trajectory Starts\n");
 
             int seq = 0;
-            while (ros::ok() && std::getline(csv_file, line)) {
-                std::vector<double> columns;
-                std::stringstream ss(line);
-                std::string item;
-                
-                for (auto& cmd : motor_cmds){
-                    std::getline(ss, item, ',');
-                    cmd->theta = std::stod(item);
+            double loop_count = 0.0;
+            while (ros::ok()) {
+                if (loop_count < 1000) {
+                    motor_cmds[0]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[0]->beta -= 30/1000.0/180.0*M_PI;
 
-                    std::getline(ss, item, ',');
-                    cmd->beta = std::stod(item);
+                    motor_cmds[1]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[1]->beta += 30/1000.0/180.0*M_PI;
 
+                    motor_cmds[2]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[2]->beta += 30/1000.0/180.0*M_PI;
+
+                    motor_cmds[3]->theta += 43/1000.0/180.0*M_PI;
+                    motor_cmds[3]->beta -= 30/1000.0/180.0*M_PI;
+                }
+
+                else if (loop_count < 3000) {
+                    motor_cmds[0]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[0]->beta -= 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[1]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[1]->beta += 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[2]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[2]->beta += 30/2000.0/180.0*M_PI;
+
+                    motor_cmds[3]->theta -= 30/2000.0/180.0*M_PI;
+                    motor_cmds[3]->beta -= 30/2000.0/180.0*M_PI;
+                }
+
+                else {
+
+                }
+
+                for (auto& cmd : motor_cmds) {
                     cmd->kp_r = 90;
                     cmd->kp_l = 90;
                     cmd->ki_r = 0;
@@ -116,6 +106,7 @@ int main(int argc, char **argv) {
                 motor_cmd_pub.publish(motor_cmd);
 
                 seq++;
+                loop_count++;
 
                 rate.sleep();
             }
@@ -123,7 +114,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    ROS_INFO("CSV Trajectory Finished\n");
+    ROS_INFO("Real Time Trajectory Finished\n");
 
     ros::shutdown();
     

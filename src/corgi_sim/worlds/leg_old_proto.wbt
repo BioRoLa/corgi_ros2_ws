@@ -39,7 +39,7 @@ Solid {
                     metalness 0
                   }
                   geometry Box {
-                    size 0.1 0.1 0.1
+                    size 0.1 0.6 0.1
                   }
                 }
                 DistanceSensor {
@@ -140,7 +140,7 @@ Solid {
                   ]
                   endPoint DEF LF_rmotorbar Solid {
                     translation 0 0 -0.12
-                    rotation 0.9697964005582006 0.2439158449685787 4.514003016704795e-05 6.283172776516791
+                    rotation 0.9697964005582008 0.24391584496857877 4.5140030167047955e-05 6.283172776516791
                     children [
                       DEF group_rmotorbar Group {
                         children [

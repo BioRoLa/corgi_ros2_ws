@@ -57,7 +57,7 @@ Eigen::MatrixXd admittance_control(const corgi_msgs::ImpedanceCmd* imp_cmd_, con
     std::cout << "a1: " << a1(0, 0) << ", " << a1(1, 1) << std::endl;
     std::cout << "pos_err_hist_1: " << pos_err_hist(0, 0) << ", " << pos_err_hist(1, 0) << std::endl << std::endl;
 
-    std::cout << "a2: " << a2(0, 0) << ", " << a2(1, 1) << std::endl << std::endl;
+    std::cout << "a2: " << a2(0, 0) << ", " << a2(1, 1) << std::endl;
     std::cout << "pos_err_hist_2: " << pos_err_hist(0, 1) << ", " << pos_err_hist(1, 1) << std::endl << std::endl;
 
     std::cout << "force_cmd: " << imp_cmd_->Fx << ", " << imp_cmd_->Fy << std::endl;
@@ -83,7 +83,6 @@ Eigen::MatrixXd admittance_control(const corgi_msgs::ImpedanceCmd* imp_cmd_, con
 
     std::array<double, 2> eta;
     double contact_center[2];
-
 
     switch (target_rim)
     {
@@ -117,6 +116,9 @@ Eigen::MatrixXd admittance_control(const corgi_msgs::ImpedanceCmd* imp_cmd_, con
     }
 
     eta_cmd << eta[0], eta[1];
+    std::cout << "target_rim: " << target_rim << std::endl;
+    std::cout << "contact_center: " << contact_center[0] << ", " << contact_center[1] << std::endl;
+    std::cout << "eta_cmd: " << eta_cmd(0, 0)/M_PI*180 << ", " << eta_cmd(1, 0)/M_PI*180 << std::endl << std::endl;
 
     return eta_cmd;
 }
@@ -186,8 +188,10 @@ int main(int argc, char **argv) {
             eta_cmd = admittance_control(imp_cmd_modules[i], motor_state_modules[i], force_state_modules[i],
                                          pos_err_hist_modules[i], force_err_hist_modules[i]);
 
-            motor_cmd_modules[i]->kp = 90;
-            motor_cmd_modules[i]->kd = 1.75;
+            motor_cmd_modules[i]->kp_r = 90;
+            motor_cmd_modules[i]->kp_l = 90;
+            motor_cmd_modules[i]->kd_r = 1.75;
+            motor_cmd_modules[i]->kd_l = 1.75;
             
             motor_cmd_modules[i]->theta = eta_cmd(0, 0);
             motor_cmd_modules[i]->beta = eta_cmd(1, 0);
