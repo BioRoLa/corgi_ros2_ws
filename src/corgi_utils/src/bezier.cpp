@@ -57,14 +57,15 @@ std::vector<double> Bezier::bzt_coeff(const std::vector<std::array<double, 2>>& 
 /* class SwingProfile */
 // p_l: position of G when lift leg
 // p_t: position of G when touch ground
-SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height) :
+SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height, int direction) :
     /* Initializer List */
     L(p_t[0] - p_l[0]), 
     h(step_height), 
     offset_x(p_l[0]), 
     offset_y(p_l[1]), 
     diff_h(p_t[1] - p_l[1]),
-    dh(0), dL1(0), dL2(0), dL3(0), dL4(0)
+    dh(0), dL1(0), dL2(0), dL3(0), dL4(0),
+    direction(direction)
 {
     getControlPoints();
     bezier = Bezier(control_points);
@@ -73,6 +74,10 @@ SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t,
 std::array<double, 2> SwingProfile::getFootendPoint(double t_duty) {
     return bezier.getBzPoint(t_duty, offset_x, offset_y);
 }//end getFootendPoint
+
+int SwingProfile::getDirection() {
+    return direction;
+}//end getDirection
 
 void SwingProfile::getControlPoints() {
     std::array<double, 2> c0 = {0, 0};

@@ -173,6 +173,11 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
         rim = min_index==5? 0 : min_index+1;
         alpha = arc_list[min_index][1];
         contact_p = {arc_list[min_index][2], arc_list[min_index][0]};
+        if (slope != 0.0) {
+            double x_new = contact_p[0]*cos(slope) - contact_p[1]*sin(slope);
+            double y_new = contact_p[0]*sin(slope) + contact_p[1]*cos(slope);
+            contact_p = {x_new, y_new};
+        }//end if
 }//end contact_map
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
@@ -253,9 +258,14 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
     return {theta, beta};
 }//end inverse
 
-std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper, double tol, size_t max_iter) {
-    this->contact_map(theta_in, beta_in);
-    
+std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, double tol, size_t max_iter) {
+    this->contact_map(theta_in, beta_in, slope);
+    if (slope != 0.0) {
+        double x_new = move_vec[0]*cos(-slope) - move_vec[1]*sin(-slope);
+        double y_new = move_vec[0]*sin(-slope) + move_vec[1]*cos(-slope);
+        move_vec = {x_new, y_new};
+    }//end if
+
     // Contact point logic
     int contact_rim;
     if (contact_upper) {
@@ -273,7 +283,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
     for (size_t iter = 0; iter < max_iter; ++iter) {
-        std::array<double, 2> cost = this->objective(guess_dq, {theta_in, beta_in}, move_vec, contact_rim);     // 计算当前函数值
+        std::array<double, 2> cost = this->objective(guess_dq, {theta, beta}, move_vec, contact_rim);     // 计算当前函数值
         Eigen::Vector2d cost_vec(cost[0], cost[1]);
 
         double norm_cost = cost_vec.norm();          // 计算残差范数
@@ -288,7 +298,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
         for (size_t i = 0; i < 2; ++i) {
             std::array<double, 2> dq_eps = guess_dq;
             dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
-            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta_in, beta_in}, move_vec, contact_rim);
+            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta, beta}, move_vec, contact_rim);
             Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
             Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
         }//end for
@@ -311,7 +321,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
 
     // update theta, beta
     theta += guess_dq[0];
-    beta  += guess_dq[1];
+    beta  += guess_dq[1] + slope;
     return {theta, beta};
 }//end move
 
