@@ -29,19 +29,22 @@ int main(int argc, char **argv) {
         &imp_cmd.module_c,
         &imp_cmd.module_d
     };
-    
+
+    double M = 0;
+    double K = 5000;
+    double B = 500;
+
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
         cmd->Fx = 0;
         cmd->Fy = 0;
-
-        cmd->Mx = 0;
-        cmd->My = 0;
-        cmd->Bx = 80;
-        cmd->By = 80;
-        cmd->Kx = 8000;
-        cmd->Ky = 8000;
+        cmd->Mx = M;
+        cmd->My = M;
+        cmd->Bx = B;
+        cmd->By = B;
+        cmd->Kx = K;
+        cmd->Ky = K;
         
         cmd->adaptive_kp_x = 30;
         cmd->adaptive_kp_y = 30;
@@ -88,19 +91,19 @@ int main(int argc, char **argv) {
                     // imp_cmd_modules[3]->Fy = -50;
 
                     for (int i=0; i<4; i++){
-                        imp_cmd_modules[i]->Kx = 500;
-                        imp_cmd_modules[i]->Ky = 500;
-                        imp_cmd_modules[i]->Bx = 10;
-                        imp_cmd_modules[i]->By = 10;
+                        imp_cmd_modules[i]->Kx = 300;
+                        imp_cmd_modules[i]->Ky = 300;
+                        imp_cmd_modules[i]->Bx = 5;
+                        imp_cmd_modules[i]->By = 5;
                     }
                 }
 
                 else if (loop_count < 7000) {
                     for (int i=0; i<4; i++){
-                        imp_cmd_modules[i]->Kx += 1;
-                        imp_cmd_modules[i]->Ky += 1;
-                        imp_cmd_modules[i]->Bx += 0.01;
-                        imp_cmd_modules[i]->By += 0.01;
+                        imp_cmd_modules[i]->Kx += 2.7;
+                        imp_cmd_modules[i]->Ky += 2.7;
+                        imp_cmd_modules[i]->Bx += 0.045;
+                        imp_cmd_modules[i]->By += 0.045;
                     }
                 }
 

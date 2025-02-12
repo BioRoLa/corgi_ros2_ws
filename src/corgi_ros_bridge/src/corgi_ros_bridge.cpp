@@ -76,12 +76,12 @@ void ros_motor_cmd_cb(const corgi_msgs::MotorCmdStamped cmd) {
     for (int i = 0; i < 4; i++) {
         grpc_motor_modules[i]->set_theta(ros_motor_modules[i].theta);
         grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta);
-        grpc_motor_modules[i]->set_kp(ros_motor_modules[i].kp_r);
-        grpc_motor_modules[i]->set_kp(ros_motor_modules[i].kp_l);
-        grpc_motor_modules[i]->set_ki(ros_motor_modules[i].ki_r);
-        grpc_motor_modules[i]->set_ki(ros_motor_modules[i].ki_l);
-        grpc_motor_modules[i]->set_kd(ros_motor_modules[i].kd_r);
-        grpc_motor_modules[i]->set_kd(ros_motor_modules[i].kd_l);
+        grpc_motor_modules[i]->set_kp_r(ros_motor_modules[i].kp_r);
+        grpc_motor_modules[i]->set_kp_l(ros_motor_modules[i].kp_l);
+        grpc_motor_modules[i]->set_ki_r(ros_motor_modules[i].ki_r);
+        grpc_motor_modules[i]->set_ki_l(ros_motor_modules[i].ki_l);
+        grpc_motor_modules[i]->set_kd_r(ros_motor_modules[i].kd_r);
+        grpc_motor_modules[i]->set_kd_l(ros_motor_modules[i].kd_l);
         grpc_motor_modules[i]->set_torque_r(-ros_motor_modules[i].torque_r);
         grpc_motor_modules[i]->set_torque_l(-ros_motor_modules[i].torque_l);
     }

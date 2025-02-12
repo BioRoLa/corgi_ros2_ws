@@ -243,8 +243,6 @@ int main(int argc, char **argv) {
         imu.linear_acceleration.y = linear_acceleration(1);
         imu.linear_acceleration.z = linear_acceleration(2);
 
-        std::cout << imu.linear_acceleration.z << std::endl;
-
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
         imu_pub.publish(imu);

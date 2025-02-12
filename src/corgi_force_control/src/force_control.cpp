@@ -55,12 +55,14 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     Eigen::MatrixXd pos_err(2, 1);
     pos_err = pos_des - pos_fb;
     
+    std::cout << "force_des: " << force_des(0, 0) << ", " << force_des(1, 0) << std::endl;
+    std::cout << "force_fb : " << force_state_->Fx << ", " << force_state_->Fy << std::endl;
     std::cout << "force_err: " << force_err(0, 0) << ", " << force_err(1, 0) << std::endl << std::endl;
     std::cout << "pos_des: " << pos_des(0, 0) << ", " << pos_des(1, 0) << std::endl;
     std::cout << "pos_fb : " << pos_fb(0, 0)  << ", " << pos_fb(1, 0)  << std::endl;
+    std::cout << "pos_err: " << pos_err(0, 0) << ", " << pos_err(1, 0) << std::endl << std::endl;
     std::cout << "vel_fb : " << vel_fb(0, 0)  << ", " << vel_fb(1, 0)  << std::endl;
     std::cout << "acc_fb : " << acc_fb(0, 0)  << ", " << acc_fb(1, 0)  << std::endl << std::endl;
-    std::cout << "pos_err: " << pos_err(0, 0) << ", " << pos_err(1, 0) << std::endl << std::endl;
 
     // calculate jacobian
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
@@ -79,9 +81,9 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     Eigen::MatrixXd J_fb(2, 2);
     J_fb = calculate_jacobian(P_theta, P_theta_deriv, eta_hist_.col(0)(1, 0));
 
-    std::cout << "J_fb: " << std::endl
-              << J_fb(0, 0) << ", " << J_fb(0, 1) << std::endl
-              << J_fb(1, 0) << ", " << J_fb(1, 1) << std::endl << std::endl;
+    // std::cout << "J_fb: " << std::endl
+    //           << J_fb(0, 0) << ", " << J_fb(0, 1) << std::endl
+    //           << J_fb(1, 0) << ", " << J_fb(1, 1) << std::endl << std::endl;
 
     // impedance control
     Eigen::MatrixXd M(2, 2);
@@ -98,6 +100,7 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
 
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta;
     trq_cmd = J_fb.transpose() * (force_des + M*(-acc_fb));
+    std::cout << "trq_cmd : " << trq_cmd(0, 0) << ", " << trq_cmd(1, 0) << std::endl << std::endl;
 
     // calculate phi command
     Eigen::MatrixXd phi_des(2, 1);
@@ -114,31 +117,34 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd eta_hist_
     Eigen::MatrixXd phi_vel = (phi_fb.col(0)-phi_fb.col(1))*1000;
 
     // kp compensate
-    kp_cmd << J_fb(0, 0) * K(0, 0) * J_fb(0, 0) + J_fb(1, 0) * K(1, 1) * J_fb(1, 0),
-              J_fb(0, 1) * K(0, 0) * J_fb(0, 1) + J_fb(1, 1) * K(1, 1) * J_fb(1, 1);
+    kp_cmd << J_fb(0, 0) * J_fb(0, 0) * K(0, 0) + J_fb(1, 0) * J_fb(1, 0) * K(1, 1),
+              J_fb(0, 1) * J_fb(0, 1) * K(0, 0) + J_fb(1, 1) * J_fb(1, 1) * K(1, 1);
 
-    trq_cmd(0, 0) += (J_fb(0, 0) * K(0, 0) * J_fb(0, 1) + J_fb(1, 0) * K(1, 1) * J_fb(1, 1)) * (-phi_err)(1, 0);
-    trq_cmd(1, 0) += (J_fb(0, 1) * K(0, 0) * J_fb(0, 0) + J_fb(1, 1) * K(1, 1) * J_fb(1, 0)) * (-phi_err)(0, 0);
+    trq_cmd(0, 0) += (J_fb(0, 0) * J_fb(0, 1) * K(0, 0) + J_fb(1, 0) * J_fb(1, 1) * K(1, 1)) * phi_err(1, 0);
+    trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * K(0, 0) + J_fb(1, 0) * J_fb(1, 1) * K(1, 1)) * phi_err(0, 0);
 
     // kd compensate
-    kd_cmd << J_fb(0, 0) * B(0, 0) * J_fb(0, 0) + J_fb(1, 0) * B(1, 1) * J_fb(1, 0),
-              J_fb(0, 1) * B(0, 0) * J_fb(0, 1) + J_fb(1, 1) * B(1, 1) * J_fb(1, 1);
+    kd_cmd << J_fb(0, 0) * J_fb(0, 0) * B(0, 0) + J_fb(0, 1) * J_fb(1, 0) * B(1, 1),
+              J_fb(0, 1) * J_fb(1, 0) * B(0, 0) + J_fb(1, 1) * J_fb(1, 1) * B(1, 1);
 
-    trq_cmd(0, 0) += (J_fb(0, 0) * B(0, 0) * J_fb(0, 1) + J_fb(1, 0) * B(1, 1) * J_fb(1, 1)) * (-phi_vel)(1, 0);
-    trq_cmd(1, 0) += (J_fb(0, 1) * B(0, 0) * J_fb(0, 0) + J_fb(1, 1) * B(1, 1) * J_fb(1, 0)) * (-phi_vel)(0, 0);
+    trq_cmd(0, 0) += (J_fb(0, 0) * J_fb(1, 0) * B(0, 0) + J_fb(1, 0) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(1, 0));
+    trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * B(0, 0) + J_fb(0, 1) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(0, 0));
     
     // torque version impedance control
-    trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*(pos_des-pos_fb));
-    kp_cmd << 0, 0;
-    kd_cmd << 0, 0;
+    // trq_cmd << J_fb.transpose() * (force_err + M*(-acc_fb) + B*(-vel_fb));
+    // kp_cmd << 0, 0;
+    // kd_cmd << 0, 0;
 
-    std::cout << "phi_err : " << phi_err(0, 0) << ", " << phi_err(1, 0) << std::endl;
+    std::cout << "kp_cmd  : " << kp_cmd(0, 0) << ", " << kp_cmd(1, 0) << std::endl;
+    std::cout << "phi_err : " << phi_err(0, 0) << ", " << phi_err(1, 0) << std::endl << std::endl;
+
+    std::cout << "kd_cmd  : " << kd_cmd(0, 0) << ", " << kd_cmd(1, 0) << std::endl;
     std::cout << "phi_vel : " << phi_vel(0, 0) << ", " << phi_vel(1, 0) << std::endl << std::endl;
 
-    std::cout << "eta_cmd: " << eta_cmd(0, 0) << ", " << eta_cmd(1, 0) << std::endl;
+    // std::cout << "eta_cmd: " << eta_cmd(0, 0) << ", " << eta_cmd(1, 0) << std::endl;
+    std::cout << "trq_kp  : " << kp_cmd(0, 0)*phi_err(0, 0) << ", " << kp_cmd(1, 0)*phi_err(1, 0) << std::endl;
+    std::cout << "trq_kd  : " << -kd_cmd(0, 0)*phi_vel(0, 0) << ", " << -kd_cmd(1, 0)*phi_vel(1, 0) << std::endl;
     std::cout << "trq_cmd: " << trq_cmd(0, 0) << ", " << trq_cmd(1, 0) << std::endl;
-    std::cout << "kp_cmd : " << kp_cmd(0, 0) << ", " << kp_cmd(1, 0) << std::endl;
-    std::cout << "kd_cmd : " << kd_cmd(0, 0) << ", " << kd_cmd(1, 0) << std::endl << std::endl;
 
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
