@@ -1,0 +1,111 @@
+#include <ros/ros.h>
+#include <sensor_msgs/Joy.h>
+#include <std_msgs/String.h>
+#include <corgi_msgs/SteeringStateStamped.h>
+
+/**
+ * A node that publishes SteeringStateStamped based on joystick button presses.
+ * - B (button index 1) => set current_state=2
+ * - Y (button index 3) => set current_state=1
+ * - RB (button index 5) => shutdown
+ */
+class StatePublisher
+{
+public:
+  StatePublisher();
+
+private:
+  void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
+
+  ros::NodeHandle nh_;
+  ros::Publisher steering_state_pub_;
+  ros::Publisher debug_pub_; 
+  ros::Subscriber joy_sub_;
+
+  corgi_msgs::SteeringStateStamped current_steering_state_;
+
+  // For indexing the B/Y/RB buttons
+  int button_b_;
+  int button_y_;
+  int button_rb_;
+};
+
+StatePublisher::StatePublisher()
+{
+  // Load parameters or use defaults
+  ros::NodeHandle pnh("~");
+  pnh.param("button_b",  button_b_,  1);
+  pnh.param("button_y",  button_y_,  3);
+  pnh.param("button_rb", button_rb_, 5);
+
+  // Advertise SteeringState and debug_info
+  steering_state_pub_ = nh_.advertise<corgi_msgs::SteeringStateStamped>("steering_state", 1);
+  debug_pub_ = nh_.advertise<std_msgs::String>("debug_info", 10);
+
+  // Subscribe to joystick
+  joy_sub_ = nh_.subscribe("joy", 1, &StatePublisher::joyCallback, this);
+
+  // Initialize the steering state
+  current_steering_state_.header.stamp = ros::Time::now();
+  current_steering_state_.current_angle = 0;
+  current_steering_state_.current_state = false; // default
+  current_steering_state_.cmd_finish    = 0;
+
+  // Publish an initial debug message
+  std_msgs::String dbg;
+  dbg.data = "[StatePublisher] Initialized. Listening for B/Y/RB presses.";
+  debug_pub_.publish(dbg);
+}
+
+void StatePublisher::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
+{
+  // Check we have enough buttons
+  if (joy->buttons.size() <= std::max({button_b_, button_y_, button_rb_}))
+  {
+    std_msgs::String dbg;
+    dbg.data = "[StatePublisher] Not enough joystick buttons for B/Y/RB!";
+    debug_pub_.publish(dbg);
+    return;
+  }
+
+  // Press B => set current_state=2
+  if (joy->buttons[button_b_] == 1)
+  {
+    current_steering_state_.current_state = true;
+    current_steering_state_.header.stamp = ros::Time::now();
+    steering_state_pub_.publish(current_steering_state_);
+
+    std_msgs::String dbg;
+    dbg.data = "[StatePublisher] B pressed => set current_state=2";
+    debug_pub_.publish(dbg);
+  }
+
+  // Press Y => set current_state=1
+  if (joy->buttons[button_y_] == 1)
+  {
+    current_steering_state_.current_state = false;
+    current_steering_state_.header.stamp = ros::Time::now();
+    steering_state_pub_.publish(current_steering_state_);
+
+    std_msgs::String dbg;
+    dbg.data = "[StatePublisher] Y pressed => set current_state=1";
+    debug_pub_.publish(dbg);
+  }
+
+  // Press RB => shutdown
+  if (joy->buttons[button_rb_] == 1)
+  {
+    std_msgs::String dbg;
+    dbg.data = "[StatePublisher] RB pressed => shutting down!";
+    debug_pub_.publish(dbg);
+    ros::shutdown();
+  }
+}
+
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "state_publisher");
+  StatePublisher node;
+  ros::spin();
+  return 0;
+}

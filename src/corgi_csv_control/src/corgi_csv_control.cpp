@@ -37,7 +37,11 @@ int main(int argc, char **argv) {
     
     std::string csv_file_path;
     csv_file_path = std::getenv("HOME");
+<<<<<<< HEAD
     csv_file_path += "/corgi_ws/corgi_ros_ws/src/corgi_csv_control/input_csv/";
+=======
+    csv_file_path += "/corgi_ws/corgi_ros_ws/input_csv/";
+>>>>>>> dev
     csv_file_path += argv[1];
     csv_file_path += ".csv";
     

@@ -4,13 +4,14 @@ project(corgi_msgs)
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
+  geometry_msgs
 )
 
 add_message_files(
   FILES
   Headers.msg
-  ForceCmd.msg
-  ForceCmdStamped.msg
+  ImpedanceCmd.msg
+  ImpedanceCmdStamped.msg
   ForceState.msg
   ForceStateStamped.msg
   MotorCmd.msg
@@ -21,15 +22,22 @@ add_message_files(
   PowerStateStamped.msg
   TriggerStamped.msg
   SensorEnableStamped.msg
+  SteeringCmdStamped.msg
+  SteeringStateStamped.msg
+  WheelCmd.msg
+  SimDataStamped.msg
+  FsmCmdStamped.msg
+  FsmStateStamped.msg
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  geometry_msgs
 )
 
 catkin_package(
-  CATKIN_DEPENDS message_generation std_msgs
+  CATKIN_DEPENDS message_generation std_msgs geometry_msgs
 )
 include_directories(
   ${catkin_INCLUDE_DIRS}

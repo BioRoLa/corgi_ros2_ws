@@ -12,12 +12,22 @@
 #include "corgi_msgs/PowerCmdStamped.h"
 #include "corgi_msgs/PowerStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "sensor_msgs/Imu.h"
+#include "corgi_msgs/ImpedanceCmdStamped.h"
+#include "corgi_msgs/ForceStateStamped.h"
+#include "corgi_msgs/SimDataStamped.h"
+
 
 bool trigger = false;
 corgi_msgs::MotorCmdStamped motor_cmd;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::PowerCmdStamped power_cmd;
 corgi_msgs::PowerStateStamped power_state;
+sensor_msgs::Imu imu;
+corgi_msgs::ImpedanceCmdStamped imp_cmd;
+corgi_msgs::ForceStateStamped force_state;
+corgi_msgs::SimDataStamped sim_data;
+
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -49,7 +59,7 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
     output_file_name = msg.output_filename;
     
     if (trigger && msg.output_filename != "") {
-        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/src/corgi_control_packages/corgi_data_recorder/output_data/" + output_file_name;
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
 
         int index = 1;
         std::string file_path_with_extension = output_file_path + ".csv";
@@ -66,14 +76,14 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
             output_file.open(output_file_path);
             output_file << "Time" << ","
                         << "cmd_seq" << "," << "cmd_sec" << "," << "cmd_usec" << ","
-                        << "cmd_theta_a"    << "," << "cmd_beta_a" << ","
+                        << "cmd_theta_a" << "," << "cmd_beta_a" << ","
                         << "cmd_trq_r_a" << "," << "cmd_trq_l_a" << ","
                         << "cmd_theta_b" << "," << "cmd_beta_b"  << ","
                         << "cmd_trq_r_b" << "," << "cmd_trq_l_b" << ","
                         << "cmd_theta_c" << "," << "cmd_beta_c"  << ","
-                        << "cmd_trq_r_c" << "," << "cmd_trq_l_b" << ","
+                        << "cmd_trq_r_c" << "," << "cmd_trq_l_c" << ","
                         << "cmd_theta_d" << "," << "cmd_beta_d"  << ","
-                        << "cmd_trq_r_d" << "," << "cmd_trq_l_b" << ","
+                        << "cmd_trq_r_d" << "," << "cmd_trq_l_d" << ","
 
                         << "state_seq" << "," << "state_sec" << "," << "state_usec" << ","
                         << "state_theta_a" << "," << "state_beta_a"  << ","
@@ -88,6 +98,31 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
                         << "state_theta_d" << "," << "state_beta_d"  << ","
                         << "state_vel_r_d" << "," << "state_vel_l_d" << ","
                         << "state_trq_r_d" << "," << "state_trq_l_d" << ","
+
+                        << "imu_seq" << "," << "imu_sec" << "," << "imu_usec" << ","
+                        << "imu_orien_x" << "," << "imu_orien_y" << "," << "imu_orien_z" << "," << "imu_orien_w" << ","
+                        << "imu_ang_vel_x" << "," << "imu_ang_vel_y" << "," << "imu_ang_vel_z" << ","
+                        << "imu_lin_acc_x" << "," << "imu_lin_acc_y" << "," << "imu_lin_acc_z" << ","
+
+                        << "imp_seq" << "," << "imp_sec" << "," << "imp_usec" << ","
+                        << "imp_cmd_theta_a" << "," << "imp_cmd_beta_a" << ","
+                        << "imp_cmd_Fx_a"    << "," << "imp_cmd_Fy_a"   << ","
+                        << "imp_cmd_theta_b" << "," << "imp_cmd_beta_b" << ","
+                        << "imp_cmd_Fx_b"    << "," << "imp_cmd_Fy_b"   << ","
+                        << "imp_cmd_theta_c" << "," << "imp_cmd_beta_c" << ","
+                        << "imp_cmd_Fx_c"    << "," << "imp_cmd_Fy_c"   << ","
+                        << "imp_cmd_theta_d" << "," << "imp_cmd_beta_d" << ","
+                        << "imp_cmd_Fx_d"    << "," << "imp_cmd_Fy_d"   << ","
+
+                        << "force_seq" << "," << "force_sec" << "," << "force_usec" << ","
+                        << "force_Fx_a" << "," << "force_Fy_a" << ","
+                        << "force_Fx_b" << "," << "force_Fy_b" << ","
+                        << "force_Fx_c" << "," << "force_Fy_c" << ","
+                        << "force_Fx_d" << "," << "force_Fy_d" << ","
+
+                        << "sim_seq" << "," << "sim_sec" << "," << "sim_usec" << ","
+                        << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
+                        << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_usec" << ","
                         << "v_0" << "," << "i_0" << ","
@@ -135,6 +170,22 @@ void power_state_cb(const corgi_msgs::PowerStateStamped state){
     power_state = state;
 }
 
+void imu_cb(const sensor_msgs::Imu values){
+    imu = values;
+}
+
+void imp_cmd_cb(const corgi_msgs::ImpedanceCmdStamped cmd){
+    imp_cmd = cmd;
+}
+
+void force_state_cb(const corgi_msgs::ForceStateStamped state){
+    force_state = state;
+}
+
+void sim_data_cb(const corgi_msgs::SimDataStamped data){
+    sim_data = data;
+}
+
 
 void write_data() {
     if (!output_file.is_open()){
@@ -167,6 +218,31 @@ void write_data() {
                 << motor_state.module_d.velocity_r << "," << motor_state.module_d.velocity_l << ","
                 << motor_state.module_d.torque_r   << "," << motor_state.module_d.torque_l << ","
 
+                << imu.header.seq << "," << imu.header.stamp.sec << "," << imu.header.stamp.nsec << ","
+                << imu.orientation.x << "," << imu.orientation.y << "," << imu.orientation.z << "," << imu.orientation.w << ","
+                << imu.angular_velocity.x << "," << imu.angular_velocity.y << "," << imu.angular_velocity.z << ","
+                << imu.linear_acceleration.x << "," << imu.linear_acceleration.y << "," << imu.linear_acceleration.z << ","
+
+                << imp_cmd.header.seq << "," << imp_cmd.header.stamp.sec << "," << imp_cmd.header.stamp.nsec << ","
+                << imp_cmd.module_a.theta << "," << imp_cmd.module_a.beta << ","
+                << imp_cmd.module_a.Fx    << "," << imp_cmd.module_a.Fy << ","
+                << imp_cmd.module_b.theta << "," << imp_cmd.module_b.beta << ","
+                << imp_cmd.module_b.Fx    << "," << imp_cmd.module_b.Fy << ","
+                << imp_cmd.module_c.theta << "," << imp_cmd.module_c.beta << ","
+                << imp_cmd.module_c.Fx    << "," << imp_cmd.module_c.Fy << ","
+                << imp_cmd.module_d.theta << "," << imp_cmd.module_d.beta << ","
+                << imp_cmd.module_d.Fx    << "," << imp_cmd.module_d.Fy << ","
+
+                << force_state.header.seq << "," << force_state.header.stamp.sec << "," << force_state.header.stamp.nsec << ","
+                << force_state.module_a.Fx    << "," << force_state.module_a.Fy << ","
+                << force_state.module_b.Fx    << "," << force_state.module_b.Fy << ","
+                << force_state.module_c.Fx    << "," << force_state.module_c.Fy << ","
+                << force_state.module_d.Fx    << "," << force_state.module_d.Fy << ","
+
+                << sim_data.header.seq << "," << sim_data.header.stamp.sec << "," << sim_data.header.stamp.nsec << ","
+                << sim_data.position.x << "," << sim_data.position.y << "," << sim_data.position.z << ","
+                << sim_data.orientation.x << "," << sim_data.orientation.y << "," << sim_data.orientation.z << "," << sim_data.orientation.w << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nsec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -197,6 +273,10 @@ int main(int argc, char **argv) {
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber power_cmd_sub = nh.subscribe<corgi_msgs::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
     ros::Subscriber power_state_sub = nh.subscribe<corgi_msgs::PowerStateStamped>("power/state", 1000, power_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
+    ros::Subscriber imp_cmd_sub = nh.subscribe<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
+    ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
+    ros::Subscriber sim_data_sub = nh.subscribe<corgi_msgs::SimDataStamped>("sim/data", 1000, sim_data_cb);
     ros::Rate rate(1000);
 
     signal(SIGINT, signal_handler);
