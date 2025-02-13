@@ -34,9 +34,12 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
         } else if (i == 0 || i == 3) {
             motor_cmds[i]->beta = motor_state_modules[i]->beta + beta_adjustment;
         }
-        motor_cmds[i]->kp = 90;
-        motor_cmds[i]->ki = 0;
-        motor_cmds[i]->kd = 1.75;
+        motor_cmds[i]->kp_r = 90;
+        motor_cmds[i]->ki_r = 0;
+        motor_cmds[i]->kd_r = 1.75;
+        motor_cmds[i]->kp_l = 90;
+        motor_cmds[i]->ki_l = 0;
+        motor_cmds[i]->kd_l = 1.75;
     }
     current_motor_cmd_.header.seq = current_motor_state_.header.seq;
     motor_cmd_pub_.publish(current_motor_cmd_);
