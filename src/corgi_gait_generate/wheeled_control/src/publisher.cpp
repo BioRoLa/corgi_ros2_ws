@@ -38,7 +38,7 @@ StatePublisher::StatePublisher()
   pnh.param("button_rb", button_rb_, 5);
 
   // Advertise SteeringState and debug_info
-  steering_state_pub_ = nh_.advertise<corgi_msgs::SteeringStateStamped>("steering_state", 1);
+  steering_state_pub_ = nh_.advertise<corgi_msgs::SteeringStateStamped>("/steer/state", 1);
   debug_pub_ = nh_.advertise<std_msgs::String>("debug_info", 10);
 
   // Subscribe to joystick

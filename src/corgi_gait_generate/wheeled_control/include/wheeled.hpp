@@ -49,6 +49,7 @@ private:
         &current_motor_cmd_.module_c,
         &current_motor_cmd_.module_d
     };
+    int check;
 };
 
 
