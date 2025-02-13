@@ -415,9 +415,12 @@ class CorgiControlPanel(QWidget):
         for cmd in [motor_cmd.module_a, motor_cmd.module_b, motor_cmd.module_c, motor_cmd.module_d]:
             cmd.theta = np.deg2rad(17)
             cmd.beta = 0
-            cmd.kp = kp
-            cmd.ki = ki
-            cmd.kd = kd
+            cmd.kp_r = kp
+            cmd.kp_l = kp
+            cmd.ki_r = ki
+            cmd.ki_l = ki
+            cmd.kd_r = kd
+            cmd.kd_l = kd
             
         self.motor_cmd_pub.publish(motor_cmd)
         

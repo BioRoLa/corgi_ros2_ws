@@ -49,9 +49,12 @@ int main(int argc, char **argv) {
     for (auto& cmd : motor_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0;
-        cmd->kp = 90;
-        cmd->ki = 0;
-        cmd->kd = 1.75;
+        cmd->kp_r = 90;
+        cmd->kp_l = 90;
+        cmd->ki_r = 0;
+        cmd->ki_l = 0;
+        cmd->kd_r = 1.75;
+        cmd->kd_l = 1.75;
     }
 
     bool sim = true;
