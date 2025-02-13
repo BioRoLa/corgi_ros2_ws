@@ -82,20 +82,21 @@ std::pair<int, double> find_hybrid_step(double RH_beta,
 }
 
 void wlw_transform_main()
-{
+
     // Setup
     std::vector<double> ideal_theta = {
-        1.34154, // LF
-        1.22377, // RF
-        1.22503, // RH
-        1.3401  // LH
+        1.96037, // LF
+        0.90964, // RF
+        1.96182, // RH
+        0.90953  // LH
     };
     std::vector<double> ideal_beta = {
-        0.690684,   // LF
-        -5.67911,  // RF
-        -0.605124,   // RH
-        5.59344   // LH
+        -5.26102,   // LF
+        -6.34391,  // RF
+        6.22363,   // RH
+        6.22363   // LH
     };
+
     std::cout << "= = = Wheel to WLW Start = = =" << std::endl;
     // Wheeled mode
     static std::mt19937 gen(std::random_device{}());

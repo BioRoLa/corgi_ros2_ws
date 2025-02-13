@@ -230,9 +230,12 @@ int main(int argc, char **argv) {
         } else {
             motor_cmd_modules[i]->beta  = -new_theta_beta2[1];
         }
-        motor_cmd_modules[i]->kp = 90;
-        motor_cmd_modules[i]->ki = 0;
-        motor_cmd_modules[i]->kd = 1.75;
+        motor_cmd_modules[i]->kp_r = 90;
+        motor_cmd_modules[i]->ki_r = 0;
+        motor_cmd_modules[i]->kd_r = 1.75;
+        motor_cmd_modules[i]->kp_l = 90;
+        motor_cmd_modules[i]->ki_l = 0;
+        motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }//end for
