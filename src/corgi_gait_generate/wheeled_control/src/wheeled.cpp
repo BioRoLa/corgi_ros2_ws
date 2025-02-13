@@ -52,7 +52,6 @@ void Wheeled::motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr&
 
 int main(int argc, char** argv)
 {
-    check = 0;
     ros::init(argc, argv, "wheel_control");
     Wheeled wheel_node;
     ros::spin();
