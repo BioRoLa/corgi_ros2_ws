@@ -13,8 +13,6 @@ Wheeled::Wheeled()
 
 void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 {
-    if (check==1)
-    {
         // std::cout << "Received" << std::endl;
         current_wheel_cmd_ = *msg;
         
@@ -45,14 +43,12 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
         }
         current_motor_cmd_.header.seq = current_motor_state_.header.seq;
         motor_cmd_pub_.publish(current_motor_cmd_);
-    }
 }
 
 void Wheeled::motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr& msg)
 {
     // std::cout << "Received motor state: " << std::endl;
     current_motor_state_ = *msg;
-    check = 1;
     // for (int i = 0; i < 4; i++) {
     //     std::cout << i << " = " << motor_state_modules[i]->theta << "," << motor_state_modules[i]->beta << std::endl;
     // }
