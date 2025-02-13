@@ -47,11 +47,7 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
 
 void Wheeled::motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr& msg)
 {
-    // std::cout << "Received motor state: " << std::endl;
     current_motor_state_ = *msg;
-    // for (int i = 0; i < 4; i++) {
-    //     std::cout << i << " = " << motor_state_modules[i]->theta << "," << motor_state_modules[i]->beta << std::endl;
-    // }
 }
 
 int main(int argc, char** argv)
