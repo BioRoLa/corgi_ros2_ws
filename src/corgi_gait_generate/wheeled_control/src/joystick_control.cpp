@@ -139,7 +139,7 @@ void JoystickControl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     if ((int)joy->axes.size() > axis_left_right_)
     {
       double lr = joy->axes[axis_left_right_];
-      steer.angle = clamp(lr * 10.0, -10.0, 10.0);
+      steer.angle = clamp(lr * 10.0, -8.0, 8.0);
     }
     else
     {
