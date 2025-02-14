@@ -27,7 +27,6 @@ private:
     void collaborate1();
     void collaborate2();
     void set_zero();
-    void out();
     
 public:
     simple_test();
@@ -38,9 +37,9 @@ simple_test::simple_test()
 {
     ros::NodeHandle pnh("~");
     // Publishers
-    steering_cmd_pub_ = nh_.advertise<corgi_msgs::SteeringCmdStamped>("steer/command", 1);
+    steering_cmd_pub_ = nh_.advertise<corgi_msgs::SteeringCmdStamped>("steering_cmd", 1);
     wheel_cmd_pub_    = nh_.advertise<corgi_msgs::WheelCmd>("wheel_cmd", 1);
-    debug_pub_ = nh_.advertise<std_msgs::String>("debug_info", 1);
+    debug_pub_ = nh_.advertise<std_msgs::String>("debug_info", 10);
 
     // Subscribers
     steering_state_sub_ = nh_.subscribe("steering_state", 1,  &simple_test::steeringStateCallback, this);
@@ -55,10 +54,10 @@ void simple_test::steeringStateCallback(const corgi_msgs::SteeringStateStamped::
   {
     std::cout << "Wrong cmd! "<< std::endl;
   }
-  else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 0)
+  else if (current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 0 &&state ==0)
   {
     collaborate1();
-    std::cout << " test1 "<< std::endl;
+    std::cout << "simple test1 sending"<< std::endl;
   }
 
   else if(current_steering_state_.current_state == true && current_steering_state_.cmd_finish == 2 &&state ==0)
@@ -83,9 +82,9 @@ void simple_test::collaborate1()
     corgi_msgs::SteeringCmdStamped current_steering_cmd1;
     current_steering_cmd1.header.stamp = ros::Time::now();
     current_steering_cmd1.voltage = 4000;
-    current_steering_cmd1.angle = 5;
+    current_steering_cmd1.angle = 15;
     steering_cmd_pub_.publish(current_steering_cmd1);
-    // std::cout << current_steering_cmd1<< std::endl;
+    std::cout << current_steering_cmd1<< std::endl;
 }
 
 void simple_test::collaborate2()
@@ -93,9 +92,9 @@ void simple_test::collaborate2()
     corgi_msgs::SteeringCmdStamped current_steering_cmd2;
     current_steering_cmd2.header.stamp = ros::Time::now();
     current_steering_cmd2.voltage = 4000;
-    current_steering_cmd2.angle = -5;
+    current_steering_cmd2.angle = -15;
     steering_cmd_pub_.publish(current_steering_cmd2);
-    // std::cout << current_steering_cmd2<< std::endl;
+    std::cout << current_steering_cmd2<< std::endl;
 }
 
 void simple_test::set_zero()
@@ -105,20 +104,9 @@ void simple_test::set_zero()
     current_steering_cmd3.voltage = 4000;
     current_steering_cmd3.angle = 0;
     steering_cmd_pub_.publish(current_steering_cmd3);
-    // std::cout << current_steering_cmd3 << std::endl;
+    std::cout << current_steering_cmd3 << std::endl;
 
 }
-
-void simple_test::out()
-{
-    corgi_msgs::SteeringCmdStamped current_steering_cmd1;
-    current_steering_cmd1.header.stamp = ros::Time::now();
-    current_steering_cmd1.voltage = 4000;
-    current_steering_cmd1.angle = 20;
-    steering_cmd_pub_.publish(current_steering_cmd1);
-    // std::cout << current_steering_cmd1<< std::endl;
-}
-
 
 int main(int argc, char** argv)
 {
