@@ -32,13 +32,13 @@ int main(int argc, char **argv) {
 
     double M = 0;
     double K = 5000;
-    double B = 500;
+    double B = 100;
 
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
         cmd->Fx = 0;
-        cmd->Fy = 0;
+        cmd->Fy = -60;
         cmd->Mx = M;
         cmd->My = M;
         cmd->Bx = B;
@@ -53,22 +53,26 @@ int main(int argc, char **argv) {
         cmd->adaptive_kd_x = 20;
         cmd->adaptive_kd_y = 20;
     }
-
+        
     while (ros::ok()) {
         ros::spinOnce();
-
+        
         if (trigger){
             int loop_count = 0;
             while (ros::ok()) {
                 if (loop_count < 1000) {
-
+                    
                 }
 
                 else if (loop_count < 2000) {
                     imp_cmd_modules[0]->theta += 43/1000.0/180.0*M_PI;
-                    // imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
-                    // imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
-                    // imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
+                    imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
+                    imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
+                    imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
+                    imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
+                    imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
+                    imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
+                    imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
                 }
 
                 else if (loop_count < 3000) {
@@ -90,21 +94,21 @@ int main(int argc, char **argv) {
                     // imp_cmd_modules[2]->Fy = -50;
                     // imp_cmd_modules[3]->Fy = -50;
 
-                    for (int i=0; i<4; i++){
-                        imp_cmd_modules[i]->Kx = 300;
-                        imp_cmd_modules[i]->Ky = 300;
-                        imp_cmd_modules[i]->Bx = 5;
-                        imp_cmd_modules[i]->By = 5;
-                    }
+                    // for (int i=0; i<4; i++){
+                    //     imp_cmd_modules[i]->Kx = 300;
+                    //     imp_cmd_modules[i]->Ky = 300;
+                    //     imp_cmd_modules[i]->Bx = 5;
+                    //     imp_cmd_modules[i]->By = 5;
+                    // }
                 }
 
                 else if (loop_count < 7000) {
-                    for (int i=0; i<4; i++){
-                        imp_cmd_modules[i]->Kx += 2.7;
-                        imp_cmd_modules[i]->Ky += 2.7;
-                        imp_cmd_modules[i]->Bx += 0.045;
-                        imp_cmd_modules[i]->By += 0.045;
-                    }
+                    // for (int i=0; i<4; i++){
+                    //     imp_cmd_modules[i]->Kx += 2.7;
+                    //     imp_cmd_modules[i]->Ky += 2.7;
+                    //     imp_cmd_modules[i]->Bx += 0.045;
+                    //     imp_cmd_modules[i]->By += 0.045;
+                    // }
                 }
 
                 else {

@@ -22,11 +22,11 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
         U_r_coef(0, i) = -U_x_coef[i];
         U_r_coef(1, i) = U_y_coef[i];
         
-        L_l_coef(0, i) = U_x_coef[i];
-        L_l_coef(1, i) = U_y_coef[i];
+        L_l_coef(0, i) = L_x_coef[i];
+        L_l_coef(1, i) = L_y_coef[i];
         
-        L_r_coef(0, i) = -U_x_coef[i];
-        L_r_coef(1, i) = U_y_coef[i];
+        L_r_coef(0, i) = -L_x_coef[i];
+        L_r_coef(1, i) = L_y_coef[i];
         
         F_l_coef(0, i) = F_x_coef[i];
         F_l_coef(1, i) = F_y_coef[i];
@@ -44,7 +44,7 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
 
     if      (rim == 1) P_poly = rot_alpha * (H_l_coef-U_l_coef) * scaled_radius + U_l_coef;
     else if (rim == 2) P_poly = rot_alpha * (F_l_coef-L_l_coef) * scaled_radius + L_l_coef;
-    else if (rim == 3) P_poly = G_coef * scaled_radius;
+    else if (rim == 3) P_poly = G_coef; // * scaled_radius;
     else if (rim == 4) P_poly = rot_alpha * (G_coef-L_r_coef) * scaled_radius + L_r_coef;
     else if (rim == 5) P_poly = rot_alpha * (F_r_coef-U_r_coef) * scaled_radius + U_r_coef;
     else P_poly = Eigen::MatrixXd::Zero(2, 8);
