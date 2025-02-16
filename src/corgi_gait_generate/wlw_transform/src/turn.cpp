@@ -41,14 +41,14 @@ Eigen::Vector2d phi2tb(const Eigen::Vector2d &phi)
 
 int main()
 {
-    std::ifstream fin("14_WLW_rotate_h179_v_50_D_2_SL_0.38931_SS_0.054108_phiRL_.csv");
+    std::ifstream fin("turning_test_0216.csv");
     if (!fin.is_open()) {
         std::cerr << "無法開啟檔案: traj.csv" << std::endl;
         return 1;
     }
 
     // 輸出檔名可以自訂
-    std::ofstream fout("re_traj.csv");
+    std::ofstream fout("0216_turn.csv");
     if (!fout.is_open()) {
         std::cerr << "無法開啟輸出檔案:re_traj.csv" << std::endl;
         return 1;
@@ -123,6 +123,6 @@ int main()
     fin.close();
     fout.close();
 
-    std::cout << "處理完成，結果請見 re_traj.csv" << std::endl;
+    std::cout << "see re_traj.csv" << std::endl;
     return 0;
 }

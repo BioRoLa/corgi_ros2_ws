@@ -81,7 +81,7 @@ std::pair<int, double> find_hybrid_step(double RH_beta,
     return std::make_pair(0, 0.0);
 }
 
-void wlw_transform_main()
+void wlw_transform_main(){
 
     // Setup
     std::vector<double> ideal_theta = {
