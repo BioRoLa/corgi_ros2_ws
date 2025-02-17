@@ -40,7 +40,7 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
                 motor_cmds[i]->kd_l = 1.75;
             }
         }
-        else if((current_steer_cmd_.angle < 0.0)){ 
+        else if((current_steer_cmd_.angle > 0.0)){ 
             // right turn
             float beta_adjustment_l = (current_wheel_cmd_.velocity*1.5 / 0.119) * (M_PI / 180.0);
             float beta_adjustment_r = (current_wheel_cmd_.velocity*0.5 / 0.119) * (M_PI / 180.0);
