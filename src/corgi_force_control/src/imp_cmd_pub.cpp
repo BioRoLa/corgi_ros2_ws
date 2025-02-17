@@ -31,27 +31,20 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 5000;
+    double K = 1000;
     double B = 100;
 
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
         cmd->Fx = 0;
-        cmd->Fy = -60;
+        cmd->Fy = 0;
         cmd->Mx = M;
         cmd->My = M;
         cmd->Bx = B;
         cmd->By = B;
         cmd->Kx = K;
         cmd->Ky = K;
-        
-        cmd->adaptive_kp_x = 30;
-        cmd->adaptive_kp_y = 30;
-        cmd->adaptive_ki_x = 10;
-        cmd->adaptive_ki_y = 10;
-        cmd->adaptive_kd_x = 20;
-        cmd->adaptive_kd_y = 20;
     }
         
     while (ros::ok()) {
@@ -66,13 +59,13 @@ int main(int argc, char **argv) {
 
                 else if (loop_count < 2000) {
                     imp_cmd_modules[0]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
-                    imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
-                    imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
-                    imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
                 }
 
                 else if (loop_count < 3000) {
@@ -88,7 +81,7 @@ int main(int argc, char **argv) {
                 }
 
                 else if (loop_count < 6000) {
-                    imp_cmd_modules[0]->Fy = -60 + 20*sin((loop_count-5000)/50.0*M_PI);
+                    // imp_cmd_modules[0]->Fy = -60 + 20*sin((loop_count-5000)/50.0*M_PI);
                     // imp_cmd_modules[0]->Fy = -50;
                     // imp_cmd_modules[1]->Fy = -50;
                     // imp_cmd_modules[2]->Fy = -50;
@@ -123,8 +116,12 @@ int main(int argc, char **argv) {
 
                 rate.sleep();
             }
-            break;
+
+            ros::shutdown();
+            
+            return 0;
         }
+
         rate.sleep();
     }
 
