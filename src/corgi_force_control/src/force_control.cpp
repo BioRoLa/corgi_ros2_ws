@@ -129,9 +129,9 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * B(0, 0) + J_fb(0, 1) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(0, 0));
     
     // torque version impedance control
-    trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*pos_err);
-    kp_cmd << 0, 0;
-    kd_cmd << 0, 0;
+    // trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*pos_err);
+    // kp_cmd << 0, 0;
+    // kd_cmd << 0, 0;
 
     // std::cout << (force_des)(0, 0) << ", " << force_des(1, 0) << std::endl;
     // std::cout << (K*pos_err)(0, 0) << ", " << (K*pos_err)(1, 0) << std::endl;

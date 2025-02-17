@@ -31,8 +31,8 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 1000;
-    double B = 100;
+    double K = 6000;
+    double B = 80;
 
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
                 }
 
                 else if (loop_count < 6000) {
-                    // imp_cmd_modules[0]->Fy = -60 + 20*sin((loop_count-5000)/50.0*M_PI);
+                    imp_cmd_modules[0]->Fy = -60 + 20*sin((loop_count-5000)/50.0*M_PI);
                     // imp_cmd_modules[0]->Fy = -50;
                     // imp_cmd_modules[1]->Fy = -50;
                     // imp_cmd_modules[2]->Fy = -50;
