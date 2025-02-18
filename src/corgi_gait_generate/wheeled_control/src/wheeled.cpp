@@ -48,6 +48,10 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
                 beta_adjustment_l = 0;
                 beta_adjustment_r = 0;
             }
+            if (current_wheel_cmd_.direction == false) {
+                beta_adjustment_l = -beta_adjustment_l; // Reverse adjustment if direction is 0
+                beta_adjustment_r = -beta_adjustment_r; // Reverse adjustment if direction is 0
+            }
             current_motor_cmd_.header.stamp = ros::Time::now();
             for (size_t i = 0; i < 4; ++i) {
                 motor_cmds[i]->theta = 17 * (M_PI / 180.0);
@@ -71,6 +75,10 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
             if (current_wheel_cmd_.stop == true){
                 beta_adjustment_l = 0;
                 beta_adjustment_r = 0;
+            }
+            if (current_wheel_cmd_.direction == false) {
+                beta_adjustment_l = -beta_adjustment_l; // Reverse adjustment if direction is 0
+                beta_adjustment_r = -beta_adjustment_r; // Reverse adjustment if direction is 0
             }
             current_motor_cmd_.header.stamp = ros::Time::now();
             for (size_t i = 0; i < 4; ++i) {
