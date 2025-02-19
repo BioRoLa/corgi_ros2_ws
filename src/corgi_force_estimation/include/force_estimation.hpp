@@ -2,6 +2,7 @@
 #define FORCE_ESTIMATION_HPP
 
 #include <iostream>
+#include <algorithm>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 

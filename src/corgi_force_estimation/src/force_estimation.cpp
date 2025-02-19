@@ -15,18 +15,28 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
     for (int i=0; i<8; i++){
         H_l_coef(0, i) = H_x_coef[i];
         H_l_coef(1, i) = H_y_coef[i];
+
         U_l_coef(0, i) = U_x_coef[i];
         U_l_coef(1, i) = U_y_coef[i];
+
+        U_r_coef(0, i) = -U_x_coef[i];
+        U_r_coef(1, i) = U_y_coef[i];
+        
+        L_l_coef(0, i) = U_x_coef[i];
+        L_l_coef(1, i) = U_y_coef[i];
+        
+        L_r_coef(0, i) = -U_x_coef[i];
+        L_r_coef(1, i) = U_y_coef[i];
+        
         F_l_coef(0, i) = F_x_coef[i];
         F_l_coef(1, i) = F_y_coef[i];
+        
+        F_r_coef(0, i) = -F_x_coef[i];
+        F_r_coef(1, i) = F_y_coef[i];
+        
         G_coef(0, i) = 0;
         G_coef(1, i) = G_y_coef[i];
     }
-
-    L_r_coef = L_l_coef * (-1, 1);
-    F_r_coef = F_l_coef * (-1, 1);
-    U_r_coef = U_l_coef * (-1, 1);
-
 
     Eigen::MatrixXd P_poly(2, 8);
 
@@ -126,7 +136,7 @@ int main(int argc, char **argv) {
                                                        motor_state_modules[i]->torque_r, motor_state_modules[i]->torque_l);
 
             force_state_modules[i]->Fx =  force_est(0, 0);
-            force_state_modules[i]->Fy = -force_est(1, 0);
+            force_state_modules[i]->Fy =  force_est(1, 0);
         }
 
         force_state.header.seq = motor_state.header.seq;

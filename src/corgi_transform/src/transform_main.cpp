@@ -24,16 +24,20 @@ int main(int argc, char** argv) {
     };
 
     for (int i=0; i<4; i++) {
-        motor_cmd_modules[i]->kp = 90;
-        motor_cmd_modules[i]->ki = 0;
-        motor_cmd_modules[i]->kd = 1.75;
+        motor_cmd_modules[i]->kp_r = 90;
+        motor_cmd_modules[i]->kp_l = 90;
+        motor_cmd_modules[i]->ki_r = 0;
+        motor_cmd_modules[i]->ki_l = 0;
+        motor_cmd_modules[i]->kd_r = 1.75;
+        motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }
 
     double init_eta[8] = {17/180.0*M_PI, 0, 17/180.0*M_PI, 55/180.0*M_PI, 17/180.0*M_PI, 0, 17/180.0*M_PI, 0};
-    WheelToLegTransformer WheelToLegTransformer(init_eta, true);
-
+    WheelToLegTransformer WheelToLegTransformer(true);
+    WheelToLegTransformer.initialize(init_eta);
+    
     std::array<std::array<double, 4>, 2> eta_list;
 
     auto start = std::chrono::high_resolution_clock::now();

@@ -26,6 +26,8 @@ add_message_files(
   SteeringStateStamped.msg
   WheelCmd.msg
   SimDataStamped.msg
+  FsmCmdStamped.msg
+  FsmStateStamped.msg
 )
 
 generate_messages(
