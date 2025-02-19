@@ -168,7 +168,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
 }//end step
 
 void WalkGait::set_velocity(double new_value){
-    if (std:abs(new_value) > 0.5) {
+    if (std::abs(new_value) > 0.5) {
         throw std::runtime_error("Velocity should not exceed 0.5 m/s.");
     }//end if
     velocity = new_value;
@@ -215,7 +215,7 @@ void WalkGait::set_curvature(double new_value){
         new_diff_step_length = 0.0;
         diff_dS = 0.0;
     } else {
-        double turn_radius = 1.0 / std:abs(curvature);
+        double turn_radius = 1.0 / std::abs(curvature);
         outer_radius = turn_radius + BW/2.0;
         inner_radius = turn_radius - BW/2.0;
         /*
