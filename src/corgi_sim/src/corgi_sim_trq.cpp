@@ -25,6 +25,7 @@ corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::TriggerStamped trigger;
 corgi_msgs::SimDataStamped sim_data;
 sensor_msgs::Imu imu;
+sensor_msgs::Imu imu_filtered;
 
 double AR_phi = 0.0;
 double AL_phi = 0.0;
@@ -239,13 +240,22 @@ int main(int argc, char **argv) {
         Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
 
         linear_acceleration -= gravity_body;
-        imu.linear_acceleration.x = linear_acceleration(0);
-        imu.linear_acceleration.y = linear_acceleration(1);
-        imu.linear_acceleration.z = linear_acceleration(2);
+        
+        imu_filtered.header.seq = loop_counter;
+        imu_filtered.orientation.w = imu.orientation.w;
+        imu_filtered.orientation.x = imu.orientation.x;
+        imu_filtered.orientation.y = imu.orientation.y;
+        imu_filtered.orientation.z = imu.orientation.z;
+        imu_filtered.angular_velocity.x = imu.angular_velocity.x;
+        imu_filtered.angular_velocity.y = imu.angular_velocity.y;
+        imu_filtered.angular_velocity.z = imu.angular_velocity.z; 
+        imu_filtered.linear_acceleration.x = linear_acceleration(0);
+        imu_filtered.linear_acceleration.y = linear_acceleration(1);
+        imu_filtered.linear_acceleration.z = linear_acceleration(2);
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
-        imu_pub.publish(imu);
+        imu_pub.publish(imu_filtered);
         sim_data_pub.publish(sim_data);
 
         double clock = loop_counter*0.001;
