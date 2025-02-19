@@ -9,7 +9,7 @@
 #include <iostream>
 #include <std_msgs/String.h>
 
-
+#include "joystick_control.hpp"
 
 #include <corgi_msgs/WheelCmd.h>
 #include <corgi_msgs/MotorState.h>
@@ -29,7 +29,7 @@ private:
     void motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr& msg);
     void steerStateCallback(const corgi_msgs::SteeringCmdStamped::ConstPtr& msg);
 
-
+    
     ros::NodeHandle wnh_;
     ros::Publisher  motor_cmd_pub_;
     ros::Subscriber wheel_cmd_sub_;

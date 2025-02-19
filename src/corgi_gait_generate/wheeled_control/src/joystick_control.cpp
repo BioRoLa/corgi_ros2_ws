@@ -207,10 +207,10 @@ double JoystickControl::clamp(double value, double min_val, double max_val)
   return std::min(std::max(value, min_val), max_val);
 }
 
-int main(int argc, char** argv)
-{
-  ros::init(argc, argv, "joystick_control");
-  JoystickControl node;
-  ros::spin();
-  return 0;
-}
+// int main(int argc, char** argv)
+// {
+//   ros::init(argc, argv, "joystick_control");
+//   JoystickControl node;
+//   ros::spin();
+//   return 0;
+// }

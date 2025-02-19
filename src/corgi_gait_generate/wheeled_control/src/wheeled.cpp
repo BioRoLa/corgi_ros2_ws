@@ -10,6 +10,7 @@ Wheeled::Wheeled()
     wheel_cmd_sub_ = wnh_.subscribe("/wheel_cmd", 1000, &Wheeled::wheelCmdCallback, this);
     motor_state_sub_ = wnh_.subscribe("/motor/state", 1000, &Wheeled::motorsStateCallback, this);
     steer_cmd_sub_ = wnh_.subscribe("/steer/command", 1000, &Wheeled::steerStateCallback, this);
+    
 }
 
 void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
@@ -114,6 +115,7 @@ void Wheeled::steerStateCallback(const corgi_msgs::SteeringCmdStamped::ConstPtr&
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "wheel_control");
+    JoystickControl node;
     Wheeled wheel_node;
     ros::spin();
     return 0;
