@@ -105,7 +105,6 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             }//end if
             // change to new step length when front leg start to swing
             if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  
-                if (i==0 || i==3)
                 foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + direction*(swing_time)*(step_length + sign_diff[i]*diff_step_length), 0};
                 step_length = new_step_length;
                 diff_step_length = new_diff_step_length;
