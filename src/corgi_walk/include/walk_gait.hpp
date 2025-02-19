@@ -16,13 +16,12 @@ class WalkGait {
         WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
         void initialize(double init_eta[8]);
-
         std::array<std::array<double, 4>, 2> step();
-
         void set_velocity(double new_value);
         void set_stand_height(double new_value);
         void set_step_length(double new_value);
         void set_step_height(double new_value);
+        void set_curvature(double new_value);
 
     private:
         LegModel leg_model;
@@ -41,7 +40,8 @@ class WalkGait {
         double velocity     = 0.1;
         double stand_height = 0.2;
         double step_length  = 0.3;
-        double step_height  = 0.05;
+        double step_height  = 0.04;
+        double curvature    = 0.0;  // +: turn left, -:turn right, 0: straight
 
         // state
         std::array<double, 4> theta;
@@ -66,6 +66,13 @@ class WalkGait {
         double new_step_length = step_length;
         int direction = 1;
         bool change_incre_duty = false;
+        /* for turning */
+        double outer_radius;
+        double inner_radius;
+        double diff_step_length = 0.0;  // Differential step length 
+        double new_diff_step_length = 0.0;  // New differential step length
+        double diff_dS = 0.0;   // Differential dS
+        int sign_diff[4];   // Differential sign
 };//end class WalkGait
 
 #endif // WALKGAIT_HPP
