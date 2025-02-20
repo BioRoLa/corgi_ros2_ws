@@ -22,6 +22,7 @@ class WalkGait {
         void set_step_length(double new_value);
         void set_step_height(double new_value);
         void set_curvature(double new_value);
+        std::array<int, 4> get_step_count();
 
     private:
         LegModel leg_model;
@@ -53,6 +54,7 @@ class WalkGait {
         std::array<SwingProfile, 4> sp;
         std::array<double, 4> duty;
         std::array<int, 4> swing_phase = {0, 0, 0, 0};
+        std::array<int, 4> step_count  = {0, 0, 0, 0};
 
         // Intermediate variables
         int current_rim;

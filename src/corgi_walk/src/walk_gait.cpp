@@ -142,9 +142,11 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
         } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
+            step_count[i] += 1;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
         } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
             swing_phase[i] = 0;
+            step_count[i] -= 1;
         }//end if else
         /* Calculate next theta, beta */
         if (swing_phase[i] == 0) { // Stance phase
@@ -238,3 +240,7 @@ void WalkGait::set_curvature(double new_value){
         }//end if else
     }// end if else
 }//end set_curvature
+
+std::array<int, 4> get_step_count() {
+    return step_count;
+}//end get_step_count
