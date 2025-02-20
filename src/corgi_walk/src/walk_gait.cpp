@@ -247,5 +247,5 @@ void WalkGait::set_curvature(double new_value){
 }//end set_curvature
 
 std::array<int, 4> get_step_count() {
-    return step_count;
+    return this->step_count;
 }//end get_step_count
