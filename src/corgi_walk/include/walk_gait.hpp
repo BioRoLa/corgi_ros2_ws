@@ -27,14 +27,14 @@ class WalkGait {
     private:
         LegModel leg_model;
 
-        // constant value
+        // Constant value
         const double BL;  // body length
         const double BW;  // body width
         const double BH;  // body height
         const double CoM_bias;
         const double swing_time = 0.2;
 
-        // variable
+        // Variable
         int rate;
         double dS;
         double incre_duty;
@@ -44,17 +44,20 @@ class WalkGait {
         double step_height  = 0.04;
         double curvature    = 0.0;  // +: turn left, -:turn right, 0: straight
 
-        // state
+        // State
         std::array<double, 4> theta;
         std::array<double, 4> beta;
         std::array<std::array<double, 2>, 4> foothold;
         std::array<std::array<double, 2>, 4> hip;
         std::array<std::array<double, 2>, 4> next_hip;
 
-        std::array<SwingProfile, 4> sp;
         std::array<double, 4> duty;
         std::array<int, 4> swing_phase = {0, 0, 0, 0};
         std::array<int, 4> step_count  = {0, 0, 0, 0};
+        std::array<double, 4> current_step_length = {step_length, step_length, step_length, step_length};
+        std::array<double, 4> next_step_length    = {step_length, step_length, step_length, step_length};
+        double new_step_length = step_length;
+        int direction = 1;
 
         // Intermediate variables
         int current_rim;
@@ -65,10 +68,9 @@ class WalkGait {
         std::array<double, 2> result_eta;
         std::array<double, 2> p_lo;
         std::array<double, 2> p_td;
-        double new_step_length = step_length;
-        int direction = 1;
-        bool change_incre_duty = false;
-        /* for turning */
+        std::array<SwingProfile, 4> sp;
+
+        // For turning 
         double outer_radius;
         double inner_radius;
         double diff_step_length = 0.0;  // Differential step length 

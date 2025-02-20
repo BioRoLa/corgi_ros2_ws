@@ -98,19 +98,18 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
         /* Calculate next foothold if entering swing phase */
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            // change incre_duty corresponding to new step length when hind leg start to swing (after first front leg have adjusted to the new step length)
-            if (change_incre_duty) {    
-                incre_duty = dS / step_length;
-                change_incre_duty = false;
-            }//end if
             // change to new step length when front leg start to swing
-            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  
+            if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  // front leg swing
+                // apply new step length and differential
                 foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + direction*(swing_time)*(step_length + sign_diff[i]*diff_step_length), 0};
-                step_length = new_step_length;
+                next_step_length[i] = new_step_length;   
                 diff_step_length = new_diff_step_length;
-                change_incre_duty = true;
-            } else {
+            } else {    // hind leg swing
+                int last_leg = (i+2) % 4;   // Contralateral front leg
+                step_length = current_step_length[last_leg];    // apply step length corresponding to the front leg's.
+                next_step_length[i] = step_length;
                 foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*(step_length + sign_diff[i]*diff_step_length), 0};
+                incre_duty = dS / step_length;  // change incre_duty corresponding to new step length when hind leg start to swing.
             }//end if else
             /* Bezier curve setup */
             leg_model.forward(theta[i], beta[i]);
@@ -142,11 +141,17 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
         } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
             swing_phase[i] = 0;
-            step_count[i] += 1;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
+            if (sp[i].getDirection() == direction){
+                step_count[i] += 1;
+                current_step_length[i] = next_step_length[i];   
+            }//end if
         } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
             swing_phase[i] = 0;
-            step_count[i] -= 1;
+            if (sp[i].getDirection() == direction){
+                step_count[i] -= 1;
+                current_step_length[i] = next_step_length[i];   
+            }//end if
         }//end if else
         /* Calculate next theta, beta */
         if (swing_phase[i] == 0) { // Stance phase
