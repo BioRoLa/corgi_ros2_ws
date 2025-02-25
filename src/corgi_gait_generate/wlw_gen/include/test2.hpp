@@ -10,6 +10,7 @@
 #include <array>
 #include <vector>
 #include <cmath>
+#include <random>
 #include <iomanip>
 #include "nlopt.h"
 #include <algorithm>
@@ -17,7 +18,10 @@
 #include <Eigen/Geometry>
 
 #include "ros/ros.h"
-#include "corgi_msgs/MotorCmdStamped.h"
+#include <corgi_msgs/MotorState.h>
+#include <corgi_msgs/MotorStateStamped.h>
+#include <corgi_msgs/MotorCmd.h>
+#include <corgi_msgs/MotorCmdStamped.h>
 
 #include "leg_model.hpp"
 #include "bezier.hpp"
@@ -33,13 +37,18 @@ public:
             double BW=0.4,
             double BH=0.2);
     ~WLWGait();
-    void Initialize(int index, int pub_time, int swing_index, int do_pub);
+    void motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr& msg);
     void setCmd(std::array<double, 2> send, int index, bool dir);
     void publish(int freq);
     std::array<double, 2> find_pose(double height, float shift, float steplength);
     void Send(int freq);
+    void Initialize(int swing_index, int pub_time, int do_pub);
+    void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
+    void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, double eta[4][2], int swing_leg, double duty_ratio);
     void Step(int pub_time, int do_pub);
+    void Transform(int type, int do_pub);
 
+    
 private:
     LegModel leg_model;
     const double CoM_bias;
@@ -61,10 +70,19 @@ private:
     std::array<std::array<double, 2>, 4> next_hip;
     std::array<double, 4> duty;
     std::array<int, 4> swing_phase = {0, 0, 0, 0};
+    std::array<double, 2> swing_pose;
+    std::array<double, 2> swing_variation;
 
     ros::Publisher motor_pub;
+    ros::Subscriber motor_state_sub_;
     ros::Rate* rate_ptr;
-
+    corgi_msgs::MotorStateStamped current_motor_state_;
+    std::vector<corgi_msgs::MotorState*> motor_state_modules = {
+        &current_motor_state_.module_a,
+        &current_motor_state_.module_b,
+        &current_motor_state_.module_c,
+        &current_motor_state_.module_d
+    };
     corgi_msgs::MotorCmdStamped motor_cmd;
     std::array<corgi_msgs::MotorCmd*, 4> motor_cmd_modules = {
         &motor_cmd.module_a,

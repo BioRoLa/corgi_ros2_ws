@@ -63,7 +63,7 @@ void setCmd(std::array<double, 2> send, int index, bool dir);
 void publish(int freq);
 std::array<double, 2> find_pose(double height, float shift, float steplength);
 void Send(double eta[4][2], int position_index, int freq);  // <-- forward declaration
-void Initialize(double SL, int index, double expected_height, double eta[4][2], int pub_time, int swing_index);
+void Initialize(double SL, int swing_index, double expected_height, double eta[4][2], int pub_time);
 void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
 void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, double eta[4][2], int swing_leg, int total_swing_step, int current_step);
 void move_forward(double relative_eta[4][2], double eta[4][2], double move_distance, int swing_index, double Height, double SL);
@@ -122,9 +122,9 @@ void Send(double eta[4][2], int position_index, int freq){
     publish(freq);
 }
 
-void Initialize(double SL, int index, double expected_height, double eta[4][2], int pub_time, int swing_index) {
+void Initialize(double SL, int swing_index, double expected_height, double eta[4][2], int pub_time) {
     // 1>3>0>2, index = who swings first
-    switch (index) {
+    switch (swing_index) {
         case 0:
         {
             duty= {1 - swing_time, 0.5 - swing_time, 0.5, 0.0};
@@ -223,10 +223,6 @@ void Initialize(double SL, int index, double expected_height, double eta[4][2], 
         relative_foothold[i][1] = -expected_height;
          // set current duty position
     }
-
-   
-    
-    
     Send(eta, swing_index, pub_time);
 }
 
@@ -310,7 +306,7 @@ int main(int argc, char **argv) {
     next_hip = hip;
 
     // single looop generation on a flat terrain
-    Initialize(steplength, 0, Height, current_eta, 1000, 0); 
+    Initialize(steplength, 1, Height, current_eta, 500); 
     sleep(3);
     // Initial leg configuration (Stability)
     for (int i=0; i<4; i++) {
