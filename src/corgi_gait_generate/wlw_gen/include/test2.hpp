@@ -42,11 +42,13 @@ public:
     void publish(int freq);
     std::array<double, 2> find_pose(double height, float shift, float steplength);
     void Send(int freq);
-    void Initialize(int swing_index, int pub_time, int do_pub);
+    void Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec); 
     void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
     void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, double eta[4][2], int swing_leg, double duty_ratio);
     void Step(int pub_time, int do_pub);
-    void Transform(int type, int do_pub);
+    void Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec);
+    std::vector<double> linspace(double start, double end, int num_steps);
+    void Transfer(int transfer_sec, int wait_sec, int do_pub);
 
     
 private:
@@ -64,7 +66,10 @@ private:
     double stand_height = 0.159;
     double step_length  = 0.3;
 
-    double eta[4][2];
+    double current_eta[4][2];
+    double next_eta[4][2];
+    // Get foothold in hip coordinate from initial configuration
+    double relative_foothold[4][2] = {};
     std::array<std::array<double, 2>, 4> foothold;
     std::array<std::array<double, 2>, 4> hip;
     std::array<std::array<double, 2>, 4> next_hip;
