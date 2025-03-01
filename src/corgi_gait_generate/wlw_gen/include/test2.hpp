@@ -40,12 +40,13 @@ public:
     void motorsStateCallback(const corgi_msgs::MotorStateStamped::ConstPtr& msg);
     void setCmd(std::array<double, 2> send, int index, bool dir);
     void publish(int freq);
-    std::array<double, 2> find_pose(double height, float shift, float steplength);
+    std::array<double, 2> find_pose(double height, float shift, float steplength, double slope);
     void Send(int freq);
     void Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec); 
     void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
     void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, double eta[4][2], int swing_leg, double duty_ratio);
     void Step(int pub_time, int do_pub);
+    double closer_beta(double ref_rad, int leg_index);
     void Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec);
     std::vector<double> linspace(double start, double end, int num_steps);
     void Transfer(int transfer_sec, int wait_sec, int do_pub);
@@ -62,7 +63,7 @@ private:
     int pub_rate;
     double dS;
     double incre_duty;
-    double velocity     = 0.15; // m/s
+    double velocity     = 0.1; // m/s
     double stand_height = 0.159;
     double step_length  = 0.3;
 
@@ -77,6 +78,25 @@ private:
     std::array<int, 4> swing_phase = {0, 0, 0, 0};
     std::array<double, 2> swing_pose;
     std::array<double, 2> swing_variation;
+
+    std::random_device rd;                     
+    std::mt19937 rng;                          
+    std::uniform_int_distribution<int> dist;   
+    
+    double wheel_delta_beta;
+    double check_beta[2];
+    double delta_beta;
+    double delta_theta;
+    double body_move_dist;
+    int delta_time_step;
+    double target_theta;
+    bool state;
+    double body_angle ;
+    std::array<double, 2> temp;
+    std::array<double, 2> pos;
+    std::array<double, 4> duty_temp;
+    std::array<int, 4> swing_phase_temp = {0, 0, 0, 0};
+   
 
     ros::Publisher motor_pub;
     ros::Subscriber motor_state_sub_;

@@ -9,7 +9,9 @@ WLWGait::WLWGait(ros::NodeHandle& nh, bool sim, double CoM_bias, int pub_rate, d
     BL(BL), 
     BW(BW), 
     BH(BH), 
-    pub_rate(pub_rate)
+    pub_rate(pub_rate),
+    rng(rd()), 
+    dist(0, 359)
 {
     motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("/motor/command", 1000);
     motor_state_sub_ = nh.subscribe("/motor/state", 1000, &WLWGait::motorsStateCallback, this);
@@ -17,7 +19,7 @@ WLWGait::WLWGait(ros::NodeHandle& nh, bool sim, double CoM_bias, int pub_rate, d
     
     // Initialize dS & incre_duty
     dS = velocity / pub_rate;
-    incre_duty = dS / step_length;
+    incre_duty = dS / step_length;    
 }
 
 WLWGait::~WLWGait() {
@@ -53,18 +55,18 @@ void WLWGait::publish(int freq) {
     }
 }
 
-std::array<double, 2> WLWGait::find_pose(double height, float shift, float steplength) {
+std::array<double, 2> WLWGait::find_pose(double height, float shift, float steplength, double slope) {
     
     std::array<double, 2> pose;
-    double pos[2] = {0, -height + 0.0125};
+    double pos[2] = {0, -height + leg_model.r};
     pose = leg_model.inverse(pos, "G");
     if (steplength >= 0) {
         for (double i = 0; i < shift + steplength; i += 0.001) {
-            pose = leg_model.move(pose[0], pose[1], {0.001, 0}, 0);
+            pose = leg_model.move(pose[0], pose[1], {0.001, 0}, slope);
         }
     } else {
         for (double i = 0; i > shift + steplength; i -= 0.001) {
-            pose = leg_model.move(pose[0], pose[1], {-0.001, 0}, 0);
+            pose = leg_model.move(pose[0], pose[1], {-0.001, 0}, slope);
         }
     }
     return pose;
@@ -116,12 +118,12 @@ void WLWGait::Initialize(int swing_index, int pub_time, int do_pub, int transfer
     
     for(int i =0; i<4;i++){
         if (i!=swing_index){
-            auto tmp0 = find_pose(stand_height, 0.00, (step_length/2) - (duty[i]/(1-swing_time)) * step_length);
+            auto tmp0 = find_pose(stand_height, 0.00, (step_length/2) - (duty[i]/(1-swing_time)) * step_length, 0);
             next_eta[i][0] = tmp0[0];
             next_eta[i][1] = tmp0[1];
         }
         else{
-            auto tmp0 = find_pose(stand_height, 0.00, -(step_length/2));
+            auto tmp0 = find_pose(stand_height, 0.00, -(step_length/2), 0);
             next_eta[i][0] = tmp0[0];
             next_eta[i][1] = tmp0[1];
         }
@@ -198,7 +200,7 @@ void WLWGait::Step(int pub_time, int do_pub){
         // Enter SW (calculate swing phase traj)
         if ((duty[i] >= (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            swing_pose = find_pose(stand_height, 0.00, (step_length*3/6));  
+            swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
             Swing(current_eta, swing_pose, swing_variation, i);
             
         } 
@@ -232,20 +234,36 @@ void WLWGait::Step(int pub_time, int do_pub){
 
 }
 
+double WLWGait::closer_beta(double ref_rad, int leg_index)
+{
+    double val0 = motor_state_modules[leg_index]->beta;
+    double delta_beta;
+    // current_eta[leg_index][1];
+    if (leg_index ==1 | leg_index ==2){
+        while (val0 < ref_rad){
+            ref_rad -= 2*PI;
+        }
+        delta_beta = val0 - ref_rad ;
+    }
+    else{
+        while (val0 > ref_rad){
+            ref_rad += 2*PI;
+        }
+        delta_beta = ref_rad - val0;
+    }
+    return delta_beta;
+}
+
 void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec){    
-    // tranform according to type
+    // tranform according to type (according duty)
     switch (type)
     {
     case 0:
         // wheel to wlw
-        // assumption (wheel mode random)
-        std::mt19937 gen(std::random_device{}());
-        std::uniform_int_distribution<int> dist(0, 359); 
         for(int i = 0; i < 4; i++){
-            int randomDeg = dist(gen); 
+            int randomDeg = dist(rng); 
             next_eta[i][0] = 17.0 * PI / 180.0;
             next_eta[i][1] = randomDeg * PI / 180.0;
-            // std::cout << i << " = " << next_eta[i][0] * 180 / PI << " , " << next_eta[i][1]* 180 / PI  << std::endl;
         }
 
         // transfer to random wheel pose
@@ -253,15 +271,266 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             Transfer(transfer_sec, wait_sec, do_pub);
         }
         else{
+            for(int i=0;i<4;i++){
+                for(int j =0;j<2;j++){
+                    current_eta[i][j] =  next_eta[i][j];
+                }
+            }
             if(do_pub){
-                Send(100);
+                Send(200);
             }
         } 
+        
+        cout<<"start transform"<<endl;
+        // Rotate in Wheel Mode until RF/LF_beta = 45 deg
+        wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
+        check_beta[0] = closer_beta(-45*PI/180, 0);
+        check_beta[1] = closer_beta( 45*PI/180, 1);  
+        if(check_beta[0]<= check_beta[1]){
+            state = false;
+        }
+        else{
+            state = true;
+        }
+        body_move_dist = (leg_model.radius * check_beta[state]);
+        delta_time_step = int(check_beta[state]/wheel_delta_beta);
+        for (int i =0;i<delta_time_step;i++){
+            for (int j=0;j<4;j++){
+                current_eta[j][0] = 17 * PI/180;
+                current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+            }
+            Send(1);
+        }
+        // Front Transform
+        body_angle = asin((stand_height - leg_model.radius) / BL);
+        if(state ==0){
+            check_beta[state] = closer_beta(-body_angle, state);
+        }
+        else{
+            check_beta[state] = closer_beta(body_angle, state);
+        }        
+        pos = {0, -stand_height+leg_model.r};
+        temp = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
+        target_theta = temp[0];
+        body_move_dist = (leg_model.radius * check_beta[state]);
+        
+        delta_time_step = int(check_beta[state] /wheel_delta_beta);
+        target_theta = (target_theta - current_eta[state][0])/delta_time_step;
+
+        pos = {step_length/2, -stand_height+leg_model.r};
+        temp = find_pose(stand_height, 0.00, (step_length/2), -body_angle);   
+        if (state ==0){
+            check_beta[!state] = closer_beta(-temp[1], !state);
+        }
+        else{
+            check_beta[!state] = closer_beta(temp[1], !state);
+        }       
+
+        delta_beta = (check_beta[!state]-wheel_delta_beta*delta_time_step/3)/(delta_time_step*2/3);
+        delta_theta = (temp[0]-current_eta[!state][0])/(delta_time_step*2/3);
+
+        for (int i =0;i<delta_time_step;i++){
+            for (int j=0;j<4;j++){
+                if (j == state){
+                    current_eta[j][0] += target_theta;
+                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                }
+                else if(j == !state && i>=(delta_time_step*1/3)){
+                    current_eta[j][0] += delta_theta;
+                    current_eta[j][1] = abs(current_eta[j][1]) +  delta_beta;
+                }  
+                else if(j == !state){
+                    current_eta[j][0] = 17 * PI/180;
+                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                }
+                else{
+                    current_eta[j][0] = 17 * PI/180;
+                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                }
+            }
+            Send(1);
+        }
+        // Hybrid mode 
+        // find the closest to the initial pose
+        if (state ==0){
+            duty_temp = {0.5, 0, (0.5-swing_time)*2/3, 0.5+(0.5-swing_time)*2/3};   
+        }
+        else{
+            duty_temp = {0, 0.5 ,0.5+(0.5-swing_time)*2/3, (0.5-swing_time)*2/3};
+        }
+        swing_phase_temp = {0,0,0,0};
+        state = 0;
+        cout << "still walking!" << endl;
+        while(state == false){
+            for (int i=0; i<4; i++) {
+                duty_temp[i] += incre_duty;     
+            }        
+            for(int j =2; j<4; j++){
+                if (duty_temp[j] < 0.0){ duty_temp[j] += 1.0; }
+                if ((duty_temp[j] >= (1 - swing_time)) && swing_phase_temp[j] == 0) {
+                    swing_phase_temp[j] = 1;
+                } 
+                else if ((duty_temp[j] > 1.0)) {                  
+                    swing_phase_temp[j] = 0;
+                    duty_temp[j] -= 1.0; 
+                }
+
+                current_eta[j][0] = 17 * PI/180;
+                current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;                
+            }
+            for (int i=0; i<2; i++) {
+                if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
+                if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
+                    swing_phase_temp[i] = 1;
+                    swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), -body_angle);  
+                    Swing(current_eta, swing_pose, swing_variation, i);
+                } 
+                else if ((duty_temp[i] > 1.0)) {                  
+                    swing_phase_temp[i] = 0;
+                    duty_temp[i] -= 1.0; 
+                }
+        
+                if (swing_phase_temp[i] == 0) { 
+                    leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+                    std::array<double, 2> result_eta;
+                    result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, -body_angle);
+                    current_eta[i][0] = result_eta[0];
+                    current_eta[i][1] = result_eta[1];
+                } 
+                // read the next Swing phase traj
+                else { 
+                    Swing_step(swing_pose, swing_variation, current_eta, i, duty_temp[i]);
+                }
+            }
+            // add when the hear leg with extend
+            // 1. front legs both not in swing
+            // 2. see who reach the ideal one and the other one swing to the position 
+            
+            if(swing_phase_temp[0] == 0 && swing_phase_temp[1] == 0 ){
+                if(duty_temp[2]>=duty_temp[3]){
+                    // ideal hear pose
+                    for (int i = 2; i<4;i++){
+                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2) - (duty_temp[i]+(0.8-duty_temp[2])/(1-swing_time)) * step_length, 0);
+                        next_eta[i][0] = tmp0[0];
+                        next_eta[i][1] = tmp0[1];
+                    }
+                }
+                else{
+                    // ideal hear pose
+                    for (int i = 2; i<4;i++){
+                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2) - (duty_temp[i]+(0.8-duty_temp[3])/(1-swing_time)) * step_length, 0);
+                        next_eta[i][0] = tmp0[0];
+                        next_eta[i][1] = tmp0[1];
+                    }
+                }                
+                check_beta[2] = closer_beta( next_eta[2][1], 2);
+                check_beta[3] = closer_beta(-next_eta[3][1], 3);
+                // cout<< "2" << ": " << check_beta[2] *180/PI <<endl;
+                // cout<< "3" << ": " << check_beta[3] *180/PI <<endl;
+                // cout << "next 0.3 distance: " << dS*(0.8-duty_temp[0])/incre_duty <<endl;
+                for (int i = 0; i<2;i++){
+                    if(duty_temp[0]>=duty_temp[1]){
+                        if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[0])/incre_duty)){
+                            state = true;
+                        }
+                    }
+                    else{
+                        if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[1])/incre_duty)){
+                            state = true;
+                        }
+                    }
+                }
+            }          
+            Send(1);
+        }
+        
+        cout<< "hear_transform" <<endl;
+        // find the one that is going to change -> decide the #step
+        // the other one swing to the ideal position
+        // the front leg walk as original
+        // calculate ( 30 the same side -)
+        if(check_beta[2]<= check_beta[3]){
+            state = false;
+        }
+        else{
+            state = true;
+        }
+        // the hear closer leg
+        body_move_dist = (leg_model.radius * check_beta[state+2]);
+        delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
+        target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
+        // the hear further leg        
+        delta_beta = (check_beta[(!state)+2]-wheel_delta_beta*delta_time_step/3)/(delta_time_step*2/3);
+        delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
+        cout << "target_theta: " << target_theta << endl;
+        // cout << "swing_phase_temp: "<< swing_phase_temp[0] << " , " << swing_phase_temp[1] << " , " << swing_phase_temp[2] << " , " << swing_phase_temp[3] << endl; 
+        // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
+        // cout << (state+2) << endl;
+        for (int j =0;j<delta_time_step;j++){
+            for (int i=0; i<4; i++) {
+                duty_temp[i] += incre_duty;     
+            }
+            for (int i=0; i<4; i++) {
+                /* Keep duty in the range [0, 1] */
+                if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
+                /* Calculate next foothold if entering swing phase(1) */
+                // Enter SW (calculate swing phase traj)
+                if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
+                    swing_phase_temp[i] = 1;                    
+                } 
+                // Enter TD
+                else if ((duty_temp[i] > 1.0)) {                  
+                    swing_phase_temp[i] = 0;
+                    duty_temp[i] -= 1.0; 
+                }
+                // calculate the nest Stance phase traj
+                // front leg  slope -> 0
+                if (i == 0 || i == 1){
+                    leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+                    std::array<double, 2> result_eta;
+                    result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, (-body_angle+body_angle*(j/delta_time_step)));
+                    current_eta[i][0] = result_eta[0];
+                    current_eta[i][1] = result_eta[1];
+                }
+                // hear leg 
+                else if(i == (state+2)){
+                    // closer one
+                    current_eta[i][0] += target_theta;
+                    current_eta[i][1] = abs(current_eta[i][1]) +  wheel_delta_beta;
+                }
+                else{
+                    if(j>=(delta_time_step*1/3)){
+                        current_eta[i][0] += delta_theta;
+                        current_eta[i][1] = abs(current_eta[i][1]) +  delta_beta;
+                    }
+                    else{
+                        current_eta[i][0] = 17 * PI/180;
+                        current_eta[i][1] = abs(current_eta[i][1]) +  wheel_delta_beta;
+                    }
+                }
+               
+            }
+            Send(1);
+        }
+        for (int i = 0;i<4 ;i++){
+            swing_phase[i] =  swing_phase_temp[i];
+            duty[i] =   duty_temp[i];
+        }
+        
         break;
-    
-    default:
+    case 1:
+        // wlw to wheel
+        cout<<"wlw to wheel"<<endl;
         break;
-    }    
+    case 2:
+        // leg to wlw
+        cout<<"leg to wlw"<<endl;
+        break;
+    case 3:
+        // wlw to leg
+        cout<<"wlw to leg"<<endl;
+        break;
+    };   
 }
 
 std::vector<double> WLWGait::linspace(double start, double end, int num_steps) {
@@ -324,18 +593,20 @@ int main(int argc, char** argv) {
     /*  wlw functions  */
     // initialize
     WLWGait wlw_gait(nh, true, CoM_bias, pub_rate);   
-    // transform
-    wlw_gait.Transform(0, 1, 1, 3, 0);
+    
     // wlw initial pose
     wlw_gait.Initialize(2, 300, 0, 0, 5, 2);
-    
-    
+
+    // transform
+    // wheel to wlw
+    wlw_gait.Transform(0, 1, 0, 3, 0);
+    cout<<"end transform"<<endl;
 
     // real-time wlw
-    // // the loop decide the distance
-    // for (int step = 0;step<5000;step++) {
-    //     wlw_gait.Step(1,1);
-    // }
+    for (int step = 0;step<5000;step++) {
+        wlw_gait.Step(1,1);
+    }
+    cout<<"end"<<endl;
     ros::shutdown();
     return 0;
 }
