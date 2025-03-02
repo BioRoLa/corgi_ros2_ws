@@ -25,7 +25,8 @@
 
 #include "leg_model.hpp"
 #include "bezier.hpp"
-#include "wlw.hpp"
+// #include "wlw.hpp"
+#include "walk_gait.hpp"
 
 class WLWGait {
 public:
@@ -42,15 +43,32 @@ public:
     void publish(int freq);
     std::array<double, 2> find_pose(double height, float shift, float steplength, double slope);
     void Send(int freq);
-    void Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec); 
+    void Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec, double shift); 
     void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
     void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, double eta[4][2], int swing_leg, double duty_ratio);
-    void Step(int pub_time, int do_pub);
+    void Step(int pub_time, int do_pub, double shift);
     double closer_beta(double ref_rad, int leg_index);
-    void Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec);
+    void Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec, double shift);
     std::vector<double> linspace(double start, double end, int num_steps);
     void Transfer(int transfer_sec, int wait_sec, int do_pub);
-
+    
+    ros::Publisher motor_pub;
+    ros::Subscriber motor_state_sub_;
+    ros::Rate* rate_ptr;
+    corgi_msgs::MotorStateStamped current_motor_state_;
+    std::vector<corgi_msgs::MotorState*> motor_state_modules = {
+        &current_motor_state_.module_a,
+        &current_motor_state_.module_b,
+        &current_motor_state_.module_c,
+        &current_motor_state_.module_d
+    };
+    corgi_msgs::MotorCmdStamped motor_cmd;
+    std::array<corgi_msgs::MotorCmd*, 4> motor_cmd_modules = {
+        &motor_cmd.module_a,
+        &motor_cmd.module_b,
+        &motor_cmd.module_c,
+        &motor_cmd.module_d
+    };
     
 private:
     LegModel leg_model;
@@ -64,8 +82,8 @@ private:
     double dS;
     double incre_duty;
     double velocity     = 0.1; // m/s
-    double stand_height = 0.159;
-    double step_length  = 0.3;
+    double stand_height = 0.149;
+    double step_length  = 0.4;
 
     double current_eta[4][2];
     double next_eta[4][2];
@@ -95,26 +113,7 @@ private:
     std::array<double, 2> temp;
     std::array<double, 2> pos;
     std::array<double, 4> duty_temp;
-    std::array<int, 4> swing_phase_temp = {0, 0, 0, 0};
-   
-
-    ros::Publisher motor_pub;
-    ros::Subscriber motor_state_sub_;
-    ros::Rate* rate_ptr;
-    corgi_msgs::MotorStateStamped current_motor_state_;
-    std::vector<corgi_msgs::MotorState*> motor_state_modules = {
-        &current_motor_state_.module_a,
-        &current_motor_state_.module_b,
-        &current_motor_state_.module_c,
-        &current_motor_state_.module_d
-    };
-    corgi_msgs::MotorCmdStamped motor_cmd;
-    std::array<corgi_msgs::MotorCmd*, 4> motor_cmd_modules = {
-        &motor_cmd.module_a,
-        &motor_cmd.module_b,
-        &motor_cmd.module_c,
-        &motor_cmd.module_d
-    };
+    std::array<int, 4> swing_phase_temp = {0, 0, 0, 0};    
 };
 
 #endif

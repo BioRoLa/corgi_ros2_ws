@@ -2,6 +2,7 @@
 
 using namespace std;
 using namespace Eigen;
+const double PI = M_PI;
 
 WLWGait::WLWGait(ros::NodeHandle& nh, bool sim, double CoM_bias, int pub_rate, double BL, double BW, double BH): 
     leg_model(sim), 
@@ -85,7 +86,7 @@ void WLWGait::Send(int freq){
     publish(freq);
 }
 
-void WLWGait::Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec) {
+void WLWGait::Initialize(int swing_index, int pub_time, int do_pub, int transfer_state, int transfer_sec, int wait_sec, double shift) {
     // 1>3>0>2, swing_index = who swings first
     switch (swing_index) {
         case 0:
@@ -118,12 +119,12 @@ void WLWGait::Initialize(int swing_index, int pub_time, int do_pub, int transfer
     
     for(int i =0; i<4;i++){
         if (i!=swing_index){
-            auto tmp0 = find_pose(stand_height, 0.00, (step_length/2) - (duty[i]/(1-swing_time)) * step_length, 0);
+            auto tmp0 = find_pose(stand_height, shift, (step_length/2) - (duty[i]/(1-swing_time)) * step_length, 0);
             next_eta[i][0] = tmp0[0];
             next_eta[i][1] = tmp0[1];
         }
         else{
-            auto tmp0 = find_pose(stand_height, 0.00, -(step_length/2), 0);
+            auto tmp0 = find_pose(stand_height, shift, -(step_length/2), 0);
             next_eta[i][0] = tmp0[0];
             next_eta[i][1] = tmp0[1];
         }
@@ -186,7 +187,7 @@ void WLWGait::Swing_step(std::array<double, 2> target, std::array<double, 2> var
     current_eta[swing_leg][1] = currentY;
 }
 
-void WLWGait::Step(int pub_time, int do_pub){
+void WLWGait::Step(int pub_time, int do_pub, double shift){
     for (int i=0; i<4; i++) {
         next_hip[i][0] += dS ;
         duty[i] += incre_duty;     
@@ -200,7 +201,7 @@ void WLWGait::Step(int pub_time, int do_pub){
         // Enter SW (calculate swing phase traj)
         if ((duty[i] >= (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
-            swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
+            swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
             Swing(current_eta, swing_pose, swing_variation, i);
             
         } 
@@ -254,7 +255,7 @@ double WLWGait::closer_beta(double ref_rad, int leg_index)
     return delta_beta;
 }
 
-void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec){    
+void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec, double shift){    
     // tranform according to type (according duty)
     switch (type){
         case 0:
@@ -309,7 +310,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 check_beta[state] = closer_beta(body_angle, state);
             }        
             pos = {0, -stand_height+leg_model.r};
-            temp = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
+            temp = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
             target_theta = temp[0];
             body_move_dist = (leg_model.radius * check_beta[state]);
             
@@ -317,7 +318,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             target_theta = (target_theta - current_eta[state][0])/delta_time_step;
 
             pos = {step_length/2, -stand_height+leg_model.r};
-            temp = find_pose(stand_height, 0.00, (step_length/2), -body_angle);   
+            temp = find_pose(stand_height, shift, (step_length/2), -body_angle);   
             if (state ==0){
                 check_beta[!state] = closer_beta(-temp[1], !state);
             }
@@ -383,7 +384,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                     if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
                     if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
                         swing_phase_temp[i] = 1;
-                        swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), -body_angle);  
+                        swing_pose = find_pose(stand_height, shift, (step_length*3/6), -body_angle);  
                         Swing(current_eta, swing_pose, swing_variation, i);
                     } 
                     else if ((duty_temp[i] > 1.0)) {                  
@@ -409,18 +410,18 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 if(swing_phase_temp[0] == 0 && swing_phase_temp[1] == 0 ){
                     if(duty_temp[2]>=duty_temp[3]){
                         // ideal hear pose
-                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
+                        auto tmp0 = find_pose(stand_height, shift, (step_length/2), 0);
                         next_eta[2][0] = tmp0[0];
                         next_eta[2][1] = tmp0[1];
-                        auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
+                        auto tmp1 = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
                         next_eta[3][0] = tmp1[0];
                         next_eta[3][1] = tmp1[1];
                     }
                     else{
-                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
+                        auto tmp0 = find_pose(stand_height, shift, (step_length/2), 0);
                         next_eta[3][0] = tmp0[0];
                         next_eta[3][1] = tmp0[1];
-                        auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
+                        auto tmp1 = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
                         next_eta[2][0] = tmp1[0];
                         next_eta[2][1] = tmp1[1];
                     }                
@@ -459,10 +460,25 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
             target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
             // the hear further leg  (swing backward)
-            // delta_beta = (check_beta[(!state)+2]-wheel_delta_beta*delta_time_step*2/3)/(delta_time_step*1/3);//*2/3
+            if ((duty[(!state)+2]+incre_duty*delta_time_step)>0.8) {
+                swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
+                Swing(current_eta, swing_pose, swing_variation, (!state)+2);
+
+                double ratio_temp = ((duty[(!state)+2]+incre_duty*delta_time_step)-(1-swing_time))/swing_time;
+                double currentX_temp = swing_pose[0] + swing_variation[0] * ratio_temp;
+                double currentY_temp = swing_pose[1] + swing_variation[1] * ratio_temp;
+                if((!state)+2 ==3){
+                    check_beta[(!state)+2] = closer_beta(-currentY_temp, (!state)+2);
+                }
+                else{
+                    check_beta[(!state)+2] = closer_beta( currentY_temp, (!state)+2);
+                }
+                
+            }
             delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
             delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
-        
+            
+             
             for (int j =0;j<delta_time_step;j++){
                 // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
                 for (int i=0; i<4; i++) {
@@ -514,7 +530,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 swing_phase[i] =  swing_phase_temp[i];
                 duty[i] =   duty_temp[i];
                 if (duty[i]>=(1-swing_time) ){
-                    swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
+                    swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
                     Swing(current_eta, swing_pose, swing_variation, i);
                 }
             }
@@ -532,6 +548,57 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
         case 3:
             // wlw to leg
             cout<<"wlw to leg"<<endl;
+            // /* Strategy */
+            // // read current duty and swing_phase
+            // // if get in swing phase then turn into walk pose
+            // int check_point=0;
+            // while(check_point<4){
+            //     // keep walk until transform finish
+            //     for (int i=0; i<4; i++) {
+            //         next_hip[i][0] += dS ;
+            //         duty[i] += incre_duty;     
+            //     }
+            
+            //     for (int i=0; i<4; i++) {
+            //         /* Keep duty in the range [0, 1] */
+            //         if (duty[i] < 0){ duty[i] += 1.0; }
+            
+            //         /* Calculate next foothold if entering swing phase(1) */
+            //         // Enter SW (calculate swing phase traj)
+            //         if ((duty[i] >= (1 - swing_time)) && swing_phase[i] == 0) {
+            //             swing_phase[i] = 1;
+            //             swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
+            //             Swing(current_eta, swing_pose, swing_variation, i);
+                        
+            //         } 
+            //         // Enter TD
+            //         else if ((duty[i] > 1.0)) {                  
+            //             swing_phase[i] = 0;
+            //             duty[i] -= 1.0; // Keep duty in the range [0, 1]
+            //         }
+            
+            //         /* Calculate next eta */
+            //         // calculate the nest Stance phase traj
+            //         if (swing_phase[i] == 0) { 
+            //             leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+            //             std::array<double, 2> result_eta;
+            //             result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, 0);
+            //             current_eta[i][0] = result_eta[0];
+            //             current_eta[i][1] = result_eta[1];
+            //         } 
+            //         // read the next Swing phase traj
+            //         else { 
+            //             Swing_step(swing_pose, swing_variation, current_eta, i, duty[i]);
+            //         }
+            //         // update the hip position
+            //         hip[i] = next_hip[i];
+            //     }
+                
+            //     // Send eta 
+            //     if(do_pub){
+            //         Send(pub_time);
+            //     }
+            // }
             break;
     };   
 }
@@ -598,16 +665,55 @@ int main(int argc, char** argv) {
     WLWGait wlw_gait(nh, true, CoM_bias, pub_rate);   
 
     /*  wlw initial pose  */
-    wlw_gait.Initialize(2, 300, 0, 0, 5, 2);
+    wlw_gait.Initialize(2, 300, 0, 0, 5, 2, -0.03);
 
     /*  wheel to wlw transform  */
-    wlw_gait.Transform(0, 1, 1, 3, 0);
-    // sleep(5);
+    wlw_gait.Transform(0, 1, 0, 3, 0, -0.03);
+    sleep(5);
 
     /*  wlw real-time   */
     for (int step = 0;step<6000;step++) {
-        wlw_gait.Step(1,1);
+        wlw_gait.motor_cmd.header.seq = step;
+        wlw_gait.motor_cmd.header.stamp = ros::Time::now();
+        wlw_gait.Step(1, 1, -0.05);
     }
+
+    /*  wlw to walk transform   */
+    // wlw_gait.Transform(3, 1, 0, 3, 0);
+
+    /*  try walk real-time   */
+    // WalkGait walk_gait(true, 0.0, 1000);
+    // double init_eta[8] = {18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0};
+    // std::array<std::array<double, 4>, 2> eta_list;
+    // for (int i=0; i<4; i++){
+    //     init_eta[2*i] = wlw_gait.motor_state_modules[i]->theta;
+    //     init_eta[2*i+1] = wlw_gait.motor_state_modules[i]->beta;
+    // }
+    // walk_gait.initialize(init_eta);
+    // for (int step = 0;step<6000;step++) {
+    //     eta_list = walk_gait.step();
+    //     for (int i=0; i<4; i++) {
+    //         if (eta_list[0][i] > M_PI*159.9/180.0) {
+    //             ROS_INFO("Exceed Upper Bound.\n");
+    //             eta_list[0][i] = M_PI*159.9/180.0;
+    //         }
+    //         if (eta_list[0][i] < M_PI*16.9/180.0) {
+    //             ROS_INFO("Exceed Lower Bound.\n");
+    //             eta_list[0][i] = M_PI*16.9/180.0;
+    //         }
+    //         wlw_gait.motor_cmd_modules[i]->theta = eta_list[0][i];
+    //         wlw_gait.motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
+    //         wlw_gait.motor_cmd_modules[i]->kp_r = 150;
+    //         wlw_gait.motor_cmd_modules[i]->ki_r = 0;
+    //         wlw_gait.motor_cmd_modules[i]->kd_r = 1.75;
+    //         wlw_gait.motor_cmd_modules[i]->kp_l = 150;
+    //         wlw_gait.motor_cmd_modules[i]->ki_l = 0;
+    //         wlw_gait.motor_cmd_modules[i]->kd_l = 1.75;
+    //         wlw_gait.motor_cmd.header.seq = step;
+    //         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
+    //     }
+    //     wlw_gait.publish(1);
+    // }
     
 
     ros::shutdown();
