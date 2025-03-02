@@ -256,284 +256,283 @@ double WLWGait::closer_beta(double ref_rad, int leg_index)
 
 void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec){    
     // tranform according to type (according duty)
-    switch (type)
-    {
-    case 0:
-        // wheel to wlw
-        for(int i = 0; i < 4; i++){
-            int randomDeg = dist(rng); 
-            next_eta[i][0] = 17.0 * PI / 180.0;
-            next_eta[i][1] = randomDeg * PI / 180.0;
-        }
+    switch (type){
+        case 0:
+            // wheel to wlw
+            for(int i = 0; i < 4; i++){
+                int randomDeg = dist(rng); 
+                next_eta[i][0] = 17.0 * PI / 180.0;
+                next_eta[i][1] = randomDeg * PI / 180.0;
+            }
 
-        // transfer to random wheel pose
-        if (transfer_state){
-            Transfer(transfer_sec, wait_sec, do_pub);
-        }
-        else{
-            for(int i=0;i<4;i++){
-                for(int j =0;j<2;j++){
-                    current_eta[i][j] =  next_eta[i][j];
+            // transfer to random wheel pose
+            if (transfer_state){
+                Transfer(transfer_sec, wait_sec, do_pub);
+            }
+            else{
+                for(int i=0;i<4;i++){
+                    for(int j =0;j<2;j++){
+                        current_eta[i][j] =  next_eta[i][j];
+                    }
                 }
-            }
-            if(do_pub){
-                Send(200);
-            }
-        } 
-        
-        // cout<<"start transform"<<endl;
-        // Rotate in Wheel Mode until RF/LF_beta = 45 deg
-        wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
-        check_beta[0] = closer_beta(-45*PI/180, 0);
-        check_beta[1] = closer_beta( 45*PI/180, 1);  
-        if(check_beta[0]<= check_beta[1]){
-            state = false;
-        }
-        else{
-            state = true;
-        }
-        body_move_dist = (leg_model.radius * check_beta[state]);
-        delta_time_step = int(check_beta[state]/wheel_delta_beta);
-        for (int i =0;i<delta_time_step;i++){
-            for (int j=0;j<4;j++){
-                current_eta[j][0] = 17 * PI/180;
-                current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
-            }
-            Send(1);
-        }
-        // Front Transform
-        body_angle = asin((stand_height - leg_model.radius) / BL);
-        if(state ==0){
-            check_beta[state] = closer_beta(-body_angle, state);
-        }
-        else{
-            check_beta[state] = closer_beta(body_angle, state);
-        }        
-        pos = {0, -stand_height+leg_model.r};
-        temp = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
-        target_theta = temp[0];
-        body_move_dist = (leg_model.radius * check_beta[state]);
-        
-        delta_time_step = int(check_beta[state] /wheel_delta_beta);
-        target_theta = (target_theta - current_eta[state][0])/delta_time_step;
-
-        pos = {step_length/2, -stand_height+leg_model.r};
-        temp = find_pose(stand_height, 0.00, (step_length/2), -body_angle);   
-        if (state ==0){
-            check_beta[!state] = closer_beta(-temp[1], !state);
-        }
-        else{
-            check_beta[!state] = closer_beta(temp[1], !state);
-        }       
-
-        delta_beta = (check_beta[!state]-wheel_delta_beta*delta_time_step/3)/(delta_time_step*2/3);
-        delta_theta = (temp[0]-current_eta[!state][0])/(delta_time_step*2/3);
-
-        for (int i =0;i<delta_time_step;i++){
-            for (int j=0;j<4;j++){
-                if (j == state){
-                    current_eta[j][0] += target_theta;
-                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                if(do_pub){
+                    Send(200);
                 }
-                else if(j == !state && i>=(delta_time_step*1/3)){
-                    current_eta[j][0] += delta_theta;
-                    current_eta[j][1] = abs(current_eta[j][1]) +  delta_beta;
-                }  
-                else if(j == !state){
+            } 
+            
+            // cout<<"start transform"<<endl;
+            // Rotate in Wheel Mode until RF/LF_beta = 45 deg
+            wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
+            check_beta[0] = closer_beta(-45*PI/180, 0);
+            check_beta[1] = closer_beta( 45*PI/180, 1);  
+            if(check_beta[0]<= check_beta[1]){
+                state = false;
+            }
+            else{
+                state = true;
+            }
+            body_move_dist = (leg_model.radius * check_beta[state]);
+            delta_time_step = int(check_beta[state]/wheel_delta_beta);
+            for (int i =0;i<delta_time_step;i++){
+                for (int j=0;j<4;j++){
                     current_eta[j][0] = 17 * PI/180;
                     current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
                 }
-                else{
-                    current_eta[j][0] = 17 * PI/180;
-                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
-                }
+                Send(1);
             }
-            Send(1);
-        }
-        // Hybrid mode 
-        // find the closest to the initial pose
-        if (state ==0){
-            duty_temp = {0.5, 0, (0.5-swing_time)*2/3, 0.5+(0.5-swing_time)*2/3};   
-        }
-        else{
-            duty_temp = {0, 0.5 ,0.5+(0.5-swing_time)*2/3, (0.5-swing_time)*2/3};
-        }
-        // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
-        
-        swing_phase_temp = {0,0,0,0};
-        state = 0;
-        // cout << "still walking!" << endl;
-        while(state == false){
-            for (int i=0; i<4; i++) {
-                duty_temp[i] += incre_duty;     
+            // Front Transform
+            body_angle = asin((stand_height - leg_model.radius) / BL);
+            if(state ==0){
+                check_beta[state] = closer_beta(-body_angle, state);
+            }
+            else{
+                check_beta[state] = closer_beta(body_angle, state);
             }        
-            for(int j =2; j<4; j++){
-                if (duty_temp[j] < 0.0){ duty_temp[j] += 1.0; }
-                if ((duty_temp[j] >= (1 - swing_time)) && swing_phase_temp[j] == 0) {
-                    swing_phase_temp[j] = 1;
-                } 
-                else if ((duty_temp[j] > 1.0)) {                  
-                    swing_phase_temp[j] = 0;
-                    duty_temp[j] -= 1.0; 
-                }
+            pos = {0, -stand_height+leg_model.r};
+            temp = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
+            target_theta = temp[0];
+            body_move_dist = (leg_model.radius * check_beta[state]);
+            
+            delta_time_step = int(check_beta[state] /wheel_delta_beta);
+            target_theta = (target_theta - current_eta[state][0])/delta_time_step;
 
-                current_eta[j][0] = 17 * PI/180;
-                current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;                
+            pos = {step_length/2, -stand_height+leg_model.r};
+            temp = find_pose(stand_height, 0.00, (step_length/2), -body_angle);   
+            if (state ==0){
+                check_beta[!state] = closer_beta(-temp[1], !state);
             }
-            for (int i=0; i<2; i++) {
-                if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
-                if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
-                    swing_phase_temp[i] = 1;
-                    swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), -body_angle);  
-                    Swing(current_eta, swing_pose, swing_variation, i);
-                } 
-                else if ((duty_temp[i] > 1.0)) {                  
-                    swing_phase_temp[i] = 0;
-                    duty_temp[i] -= 1.0; 
-                }
-        
-                if (swing_phase_temp[i] == 0) { 
-                    leg_model.forward(current_eta[i][0], current_eta[i][1],true);
-                    std::array<double, 2> result_eta;
-                    result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, -body_angle);
-                    current_eta[i][0] = result_eta[0];
-                    current_eta[i][1] = result_eta[1];
-                } 
-                // read the next Swing phase traj
-                else { 
-                    Swing_step(swing_pose, swing_variation, current_eta, i, duty_temp[i]);
-                }
-            }
-            // add when the hear leg with extend
-            // 1. front legs both not in swing
-            // 2. see who reach the ideal one and the other one swing to the position 
-            if(swing_phase_temp[0] == 0 && swing_phase_temp[1] == 0 ){
-                if(duty_temp[2]>=duty_temp[3]){
-                    // ideal hear pose
-                    auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
-                    next_eta[2][0] = tmp0[0];
-                    next_eta[2][1] = tmp0[1];
-                    auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
-                    next_eta[3][0] = tmp1[0];
-                    next_eta[3][1] = tmp1[1];
-                }
-                else{
-                    auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
-                    next_eta[3][0] = tmp0[0];
-                    next_eta[3][1] = tmp0[1];
-                    auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
-                    next_eta[2][0] = tmp1[0];
-                    next_eta[2][1] = tmp1[1];
-                }                
-                check_beta[2] = closer_beta( next_eta[2][1], 2);
-                check_beta[3] = closer_beta(-next_eta[3][1], 3);
-                for (int i = 0; i<2;i++){
-                    if(duty_temp[0]>=duty_temp[1]){
-                        if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[0])/incre_duty)){
-                            state = true;
-                        }
+            else{
+                check_beta[!state] = closer_beta(temp[1], !state);
+            }       
+
+            delta_beta = (check_beta[!state]-wheel_delta_beta*delta_time_step/3)/(delta_time_step*2/3);
+            delta_theta = (temp[0]-current_eta[!state][0])/(delta_time_step*2/3);
+
+            for (int i =0;i<delta_time_step;i++){
+                for (int j=0;j<4;j++){
+                    if (j == state){
+                        current_eta[j][0] += target_theta;
+                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                    }
+                    else if(j == !state && i>=(delta_time_step*1/3)){
+                        current_eta[j][0] += delta_theta;
+                        current_eta[j][1] = abs(current_eta[j][1]) +  delta_beta;
+                    }  
+                    else if(j == !state){
+                        current_eta[j][0] = 17 * PI/180;
+                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
                     }
                     else{
-                        if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[1])/incre_duty)){
-                            state = true;
-                        }
+                        current_eta[j][0] = 17 * PI/180;
+                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
                     }
                 }
-            }          
-            Send(1);
-        }
-        
-        // cout<< "hear_transform" <<endl;
-        // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
-        // find the one that is going to change -> decide the #step
-        // the other one swing to the ideal position
-        // the front leg walk as original
-        // calculate ( 30 the same side -)
-        if(check_beta[2]<= check_beta[3]){
-            state = false;
-        }
-        else{
-            state = true;
-        }
-        // the hear closer leg
-        body_move_dist = (leg_model.radius * check_beta[state+2]);
-        delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
-        target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
-        // the hear further leg  (swing backward)
-        // delta_beta = (check_beta[(!state)+2]-wheel_delta_beta*delta_time_step*2/3)/(delta_time_step*1/3);//*2/3
-        delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-        delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
-       
-        for (int j =0;j<delta_time_step;j++){
+                Send(1);
+            }
+            // Hybrid mode 
+            // find the closest to the initial pose
+            if (state ==0){
+                duty_temp = {0.5, 0, (0.5-swing_time)*2/3, 0.5+(0.5-swing_time)*2/3};   
+            }
+            else{
+                duty_temp = {0, 0.5 ,0.5+(0.5-swing_time)*2/3, (0.5-swing_time)*2/3};
+            }
             // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
-            for (int i=0; i<4; i++) {
-                duty_temp[i] += incre_duty;     
-            }
-            for (int i=0; i<4; i++) {
-                /* Keep duty in the range [0, 1] */
-                if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
-                /* Calculate next foothold if entering swing phase(1) */
-                // Enter SW (calculate swing phase traj)
-                if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
-                    swing_phase_temp[i] = 1;                    
-                } 
-                // Enter TD
-                else if ((duty_temp[i] > 1.0)) {                  
-                    swing_phase_temp[i] = 0;
-                    duty_temp[i] -= 1.0; 
+            
+            swing_phase_temp = {0,0,0,0};
+            state = 0;
+            // cout << "still walking!" << endl;
+            while(state == false){
+                for (int i=0; i<4; i++) {
+                    duty_temp[i] += incre_duty;     
+                }        
+                for(int j =2; j<4; j++){
+                    if (duty_temp[j] < 0.0){ duty_temp[j] += 1.0; }
+                    if ((duty_temp[j] >= (1 - swing_time)) && swing_phase_temp[j] == 0) {
+                        swing_phase_temp[j] = 1;
+                    } 
+                    else if ((duty_temp[j] > 1.0)) {                  
+                        swing_phase_temp[j] = 0;
+                        duty_temp[j] -= 1.0; 
+                    }
+
+                    current_eta[j][0] = 17 * PI/180;
+                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;                
                 }
-                // calculate the nest Stance phase traj
-                // front leg  slope -> 0
-                if (i == 0 || i == 1){
-                    leg_model.forward(current_eta[i][0], current_eta[i][1],true);
-                    std::array<double, 2> result_eta;
-                    result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, (-body_angle+body_angle*(j/delta_time_step)));
-                    current_eta[i][0] = result_eta[0];
-                    current_eta[i][1] = result_eta[1];
+                for (int i=0; i<2; i++) {
+                    if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
+                    if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
+                        swing_phase_temp[i] = 1;
+                        swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), -body_angle);  
+                        Swing(current_eta, swing_pose, swing_variation, i);
+                    } 
+                    else if ((duty_temp[i] > 1.0)) {                  
+                        swing_phase_temp[i] = 0;
+                        duty_temp[i] -= 1.0; 
+                    }
+            
+                    if (swing_phase_temp[i] == 0) { 
+                        leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+                        std::array<double, 2> result_eta;
+                        result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, -body_angle);
+                        current_eta[i][0] = result_eta[0];
+                        current_eta[i][1] = result_eta[1];
+                    } 
+                    // read the next Swing phase traj
+                    else { 
+                        Swing_step(swing_pose, swing_variation, current_eta, i, duty_temp[i]);
+                    }
                 }
-                // hear leg 
-                else if(i == (state+2)){
-                    // closer one
-                    current_eta[i][0] += target_theta;
-                    current_eta[i][1] = abs(current_eta[i][1]) +  wheel_delta_beta;
-                }
-                else{
-                    if(j>=(delta_time_step*1/3)){
-                        current_eta[i][0] += delta_theta;
-                        current_eta[i][1] = abs(current_eta[i][1]) -  delta_beta;
+                // add when the hear leg with extend
+                // 1. front legs both not in swing
+                // 2. see who reach the ideal one and the other one swing to the position 
+                if(swing_phase_temp[0] == 0 && swing_phase_temp[1] == 0 ){
+                    if(duty_temp[2]>=duty_temp[3]){
+                        // ideal hear pose
+                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
+                        next_eta[2][0] = tmp0[0];
+                        next_eta[2][1] = tmp0[1];
+                        auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
+                        next_eta[3][0] = tmp1[0];
+                        next_eta[3][1] = tmp1[1];
                     }
                     else{
-                        current_eta[i][0] = 17 * PI/180;
-                        current_eta[i][1] = abs(current_eta[i][1]) - wheel_delta_beta;
+                        auto tmp0 = find_pose(stand_height, 0.00, (step_length/2), 0);
+                        next_eta[3][0] = tmp0[0];
+                        next_eta[3][1] = tmp0[1];
+                        auto tmp1 = find_pose(stand_height, 0.00, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
+                        next_eta[2][0] = tmp1[0];
+                        next_eta[2][1] = tmp1[1];
+                    }                
+                    check_beta[2] = closer_beta( next_eta[2][1], 2);
+                    check_beta[3] = closer_beta(-next_eta[3][1], 3);
+                    for (int i = 0; i<2;i++){
+                        if(duty_temp[0]>=duty_temp[1]){
+                            if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[0])/incre_duty)){
+                                state = true;
+                            }
+                        }
+                        else{
+                            if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty_temp[1])/incre_duty)){
+                                state = true;
+                            }
+                        }
                     }
+                }          
+                Send(1);
+            }
+            
+            // cout<< "hear_transform" <<endl;
+            // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
+            // find the one that is going to change -> decide the #step
+            // the other one swing to the ideal position
+            // the front leg walk as original
+            // calculate ( 30 the same side -)
+            if(check_beta[2]<= check_beta[3]){
+                state = false;
+            }
+            else{
+                state = true;
+            }
+            // the hear closer leg
+            body_move_dist = (leg_model.radius * check_beta[state+2]);
+            delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
+            target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
+            // the hear further leg  (swing backward)
+            // delta_beta = (check_beta[(!state)+2]-wheel_delta_beta*delta_time_step*2/3)/(delta_time_step*1/3);//*2/3
+            delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
+            delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
+        
+            for (int j =0;j<delta_time_step;j++){
+                // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
+                for (int i=0; i<4; i++) {
+                    duty_temp[i] += incre_duty;     
                 }
-               
+                for (int i=0; i<4; i++) {
+                    /* Keep duty in the range [0, 1] */
+                    if (duty_temp[i] < 0){ duty_temp[i] += 1.0; }
+                    /* Calculate next foothold if entering swing phase(1) */
+                    // Enter SW (calculate swing phase traj)
+                    if ((duty_temp[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
+                        swing_phase_temp[i] = 1;                    
+                    } 
+                    // Enter TD
+                    else if ((duty_temp[i] > 1.0)) {                  
+                        swing_phase_temp[i] = 0;
+                        duty_temp[i] -= 1.0; 
+                    }
+                    // calculate the nest Stance phase traj
+                    // front leg  slope -> 0
+                    if (i == 0 || i == 1){
+                        leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+                        std::array<double, 2> result_eta;
+                        result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, (-body_angle+body_angle*(j/delta_time_step)));
+                        current_eta[i][0] = result_eta[0];
+                        current_eta[i][1] = result_eta[1];
+                    }
+                    // hear leg 
+                    else if(i == (state+2)){
+                        // closer one
+                        current_eta[i][0] += target_theta;
+                        current_eta[i][1] = abs(current_eta[i][1]) +  wheel_delta_beta;
+                    }
+                    else{
+                        if(j>=(delta_time_step*1/3)){
+                            current_eta[i][0] += delta_theta;
+                            current_eta[i][1] = abs(current_eta[i][1]) -  delta_beta;
+                        }
+                        else{
+                            current_eta[i][0] = 17 * PI/180;
+                            current_eta[i][1] = abs(current_eta[i][1]) - wheel_delta_beta;
+                        }
+                    }
+                
+                }
+                Send(1);
             }
-            Send(1);
-        }
-        for (int i = 0;i<4 ;i++){
-            swing_phase[i] =  swing_phase_temp[i];
-            duty[i] =   duty_temp[i];
-            if (duty[i]>=(1-swing_time) ){
-                swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
-                Swing(current_eta, swing_pose, swing_variation, i);
+            for (int i = 0;i<4 ;i++){
+                swing_phase[i] =  swing_phase_temp[i];
+                duty[i] =   duty_temp[i];
+                if (duty[i]>=(1-swing_time) ){
+                    swing_pose = find_pose(stand_height, 0.00, (step_length*3/6), 0);  
+                    Swing(current_eta, swing_pose, swing_variation, i);
+                }
             }
-        }
-        // cout << "swing_phase_temp: "<< swing_phase_temp[0] << " , " << swing_phase_temp[1] << " , " << swing_phase_temp[2] << " , " << swing_phase_temp[3] << endl; 
-        // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
-        break;
-    case 1:
-        // wlw to wheel
-        cout<<"wlw to wheel"<<endl;
-        break;
-    case 2:
-        // leg to wlw
-        cout<<"leg to wlw"<<endl;
-        break;
-    case 3:
-        // wlw to leg
-        cout<<"wlw to leg"<<endl;
-        break;
+            // cout << "swing_phase_temp: "<< swing_phase_temp[0] << " , " << swing_phase_temp[1] << " , " << swing_phase_temp[2] << " , " << swing_phase_temp[3] << endl; 
+            // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
+            break;
+        case 1:
+            // wlw to wheel
+            cout<<"wlw to wheel"<<endl;
+            break;
+        case 2:
+            // leg to wlw
+            cout<<"leg to wlw"<<endl;
+            break;
+        case 3:
+            // wlw to leg
+            cout<<"wlw to leg"<<endl;
+            break;
     };   
 }
 
@@ -602,7 +601,7 @@ int main(int argc, char** argv) {
     wlw_gait.Initialize(2, 300, 0, 0, 5, 2);
 
     /*  wheel to wlw transform  */
-    wlw_gait.Transform(0, 1, 0, 3, 0);
+    wlw_gait.Transform(0, 1, 1, 3, 0);
     // sleep(5);
 
     /*  wlw real-time   */
