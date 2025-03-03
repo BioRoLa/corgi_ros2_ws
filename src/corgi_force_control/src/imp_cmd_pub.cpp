@@ -58,9 +58,9 @@ int main(int argc, char **argv) {
         // imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
         // imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
 
-        motor_cmd.header.seq = -1;
+        imp_cmd.header.seq = -1;
 
-        motor_cmd_pub.publish(motor_cmd);
+        imp_cmd_pub.publish(imp_cmd);
 
         rate.sleep();
     }
