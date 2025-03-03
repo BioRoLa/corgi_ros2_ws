@@ -31,20 +31,38 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 3000;
+    double K = 2000;
     double B = 30;
 
+    // robot weight ~= 220 N
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
         cmd->Fx = 0;
-        cmd->Fy = -50;
+        cmd->Fy = -55;
         cmd->Mx = M;
         cmd->My = M;
         cmd->Bx = B;
         cmd->By = B;
         cmd->Kx = K;
         cmd->Ky = K;
+    }
+
+    for (int i=0; i<5000; i++){
+        imp_cmd_modules[0]->theta += 43/5000.0/180.0*M_PI;
+        imp_cmd_modules[1]->theta += 43/5000.0/180.0*M_PI;
+        imp_cmd_modules[2]->theta += 43/5000.0/180.0*M_PI;
+        imp_cmd_modules[3]->theta += 43/5000.0/180.0*M_PI;
+        // imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
+        // imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
+        // imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
+        // imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
+
+        motor_cmd.header.seq = -1;
+
+        motor_cmd_pub.publish(motor_cmd);
+
+        rate.sleep();
     }
         
     while (ros::ok()) {
@@ -53,52 +71,79 @@ int main(int argc, char **argv) {
         if (trigger){
             int loop_count = 0;
             while (ros::ok()) {
-                if (loop_count < 10000) {
+                if (loop_count < 1000) {
                     
                 }
 
-                else if (loop_count < 12000) {
-                    imp_cmd_modules[0]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
-                    imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
+                else if (loop_count < 2000) {
+                    // imp_cmd_modules[0]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[1]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[2]->theta += 43/1000.0/180.0*M_PI;
+                    // imp_cmd_modules[3]->theta += 43/1000.0/180.0*M_PI;
                     // imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
                     // imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
                     // imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
                     // imp_cmd_modules[3]->beta += 90/1000.0/180.0*M_PI;
                 }
 
-                else if (loop_count < 13000) {
+                else if (loop_count < 3000) {
 
                 }
 
-                else if (loop_count < 14000) {
-                    imp_cmd_modules[0]->Fy = -20;
-                    imp_cmd_modules[1]->Fy = -80;
-                    imp_cmd_modules[2]->Fy = -20;
-                    imp_cmd_modules[3]->Fy = -80;
+                else if (loop_count < 6000) {
+                    imp_cmd_modules[0]->Fy = -35;
+                    imp_cmd_modules[1]->Fy = -75;
+                    imp_cmd_modules[2]->Fy = -35;
+                    imp_cmd_modules[3]->Fy = -75;
                 }
 
-                else if (loop_count < 15000) {
-
+                else if (loop_count < 7000) {
+                    imp_cmd_modules[0]->Fy = -55;
+                    imp_cmd_modules[1]->Fy = -55;
+                    imp_cmd_modules[2]->Fy = -55;
+                    imp_cmd_modules[3]->Fy = -55;
                 }
 
-                else if (loop_count < 16000) {
-                    imp_cmd_modules[0]->Fy = -80;
-                    imp_cmd_modules[1]->Fy = -20;
-                    imp_cmd_modules[2]->Fy = -80;
-                    imp_cmd_modules[3]->Fy = -20;
+                else if (loop_count < 8000) {
+                    imp_cmd_modules[0]->Fy = -75;
+                    imp_cmd_modules[1]->Fy = -35;
+                    imp_cmd_modules[2]->Fy = -75;
+                    imp_cmd_modules[3]->Fy = -35;
                 }
 
-                else if (loop_count < 17000) {
+                else if (loop_count < 9000) {
+                    imp_cmd_modules[0]->Fy = -55;
+                    imp_cmd_modules[1]->Fy = -55;
+                    imp_cmd_modules[2]->Fy = -55;
+                    imp_cmd_modules[3]->Fy = -55;
+                }
 
+                else if (loop_count < 10000) {
+                    imp_cmd_modules[0]->Fy = -35;
+                    imp_cmd_modules[1]->Fy = -75;
+                    imp_cmd_modules[2]->Fy = -35;
+                    imp_cmd_modules[3]->Fy = -75;
+                }
+
+                else if (loop_count < 11000) {
+                    imp_cmd_modules[0]->Fy = -55;
+                    imp_cmd_modules[1]->Fy = -55;
+                    imp_cmd_modules[2]->Fy = -55;
+                    imp_cmd_modules[3]->Fy = -55;
+                }
+
+                else if (loop_count < 12000) {
+                    imp_cmd_modules[0]->Fy = -75;
+                    imp_cmd_modules[1]->Fy = -35;
+                    imp_cmd_modules[2]->Fy = -75;
+                    imp_cmd_modules[3]->Fy = -35;
                 }
 
                 else {
-                    imp_cmd_modules[0]->Fy = -50;
-                    imp_cmd_modules[1]->Fy = -50;
-                    imp_cmd_modules[2]->Fy = -50;
-                    imp_cmd_modules[3]->Fy = -50;
+                    imp_cmd_modules[0]->Fy = -55;
+                    imp_cmd_modules[1]->Fy = -55;
+                    imp_cmd_modules[2]->Fy = -55;
+                    imp_cmd_modules[3]->Fy = -55;
                 }
 
                 imp_cmd.header.seq = loop_count;
