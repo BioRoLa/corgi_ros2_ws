@@ -50,12 +50,11 @@ class LegModel {
         const double arc_HF;
         const double arc_BC;
         const double l1, l2, l3, l4, l5, l6, l7, l8;
-        const double l_AE, l_BF, l_BH, ang_UBC, ang_LFG;
+        const double l_AE, l_BF, l_BH, ang_UBC, ang_LFG, ang_BCF;
 
         // Intermediate variables
         double l_BD;
         double ang_OEA;
-        double ang_BCF;
         double ang_DBC;
         double ang_OGF;
 

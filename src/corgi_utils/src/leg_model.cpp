@@ -33,7 +33,8 @@ LegModel::LegModel(bool sim) :
     l_BF(2.0 * R * sin((arc_HF - theta0) / 2.0)),
     l_BH(2.0 * R * sin(theta0 / 2.0)),
     ang_UBC((M_PI - arc_BC) / 2.0),
-    ang_LFG((M_PI - (M_PI - arc_HF)) / 2.0) 
+    ang_LFG((M_PI - (M_PI - arc_HF)) / 2.0),
+    ang_BCF(std::acos((l3*l3 + l7*l7 - l_BF*l_BF) / (2.0*l3*l7)))
 {
     // Initialize positions
     this->forward(theta0, 0.0);
@@ -66,16 +67,15 @@ void LegModel::calculate() {
     // Forward kinematics calculations
     A_l_c = l1 * std::exp(1i * theta);
     B_l_c = R * std::exp(1i * theta);
-    ang_OEA = std::asin((l1 / l_AE) * sin(theta));
-    E_c = l1 * cos(theta) - l_AE * cos(ang_OEA);
+    ang_OEA = std::asin(std::abs(A_l_c.imag()) / l_AE);
+    E_c = A_l_c.real() - l_AE * cos(ang_OEA);
     D_l_c = E_c + l6 * std::exp(1i * ang_OEA);
     l_BD = std::abs(D_l_c - B_l_c);
     ang_DBC = std::acos((l_BD * l_BD + l3 * l3 - l4 * l4) / (2.0 * l_BD * l3));
     C_l_c = B_l_c + (D_l_c - B_l_c) * std::exp(-1i * ang_DBC) * (l3 / l_BD);
-    ang_BCF = std::acos((l3 * l3 + l7 * l7 - l_BF * l_BF) / (2.0 * l3 * l7));
     F_l_c = C_l_c + (B_l_c - C_l_c) * std::exp(-1i * ang_BCF) * (l7 / l3);
     ang_OGF = std::asin(std::abs(F_l_c.imag()) / l8);
-    G_c = F_l_c - l8 * std::exp(1i * ang_OGF);
+    G_c = F_l_c.real() - l8 * cos(ang_OGF);
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
