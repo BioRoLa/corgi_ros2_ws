@@ -145,19 +145,21 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
 
         this->forward(theta_in, beta_adjusted, false);
 
-        std::complex<double> G_l_tmp = (G_c - L_l_c) / R * radius + L_l_c;
-        std::complex<double> G_r_tmp = (G_c - L_r_c) / R * radius + L_r_c;
-        std::complex<double> H_l_tmp = (H_l_c - U_l_c) / R * radius + U_l_c;
-        std::complex<double> H_r_tmp = (H_r_c - U_r_c) / R * radius + U_r_c;
-        std::complex<double> F_l_tmp = (F_l_c - U_l_c) / R * radius + U_l_c;
-        std::complex<double> F_r_tmp = (F_r_c - U_r_c) / R * radius + U_r_c;
+        std::complex<double> LG_l = (G_c - L_l_c) / R * radius + L_l_c;     // L_l -> G -> rim point
+        std::complex<double> LG_r = (G_c - L_r_c) / R * radius + L_r_c;     // L_r -> G -> rim point
+        std::complex<double> UH_l = (H_l_c - U_l_c) / R * radius + U_l_c;   // U_l -> H_l -> rim point
+        std::complex<double> UH_r = (H_r_c - U_r_c) / R * radius + U_r_c;   // U_r -> H_r -> rim point
+        std::complex<double> LF_l = (F_l_c - L_l_c) / R * radius + L_l_c;   // L_l -> F_l -> rim point
+        std::complex<double> LF_r = (F_r_c - L_r_c) / R * radius + L_r_c;   // L_r -> F_r -> rim point
+        std::complex<double> UF_l = (F_l_c - U_l_c) / R * radius + U_l_c;   // U_l -> F_l -> rim point
+        std::complex<double> UF_r = (F_r_c - U_r_c) / R * radius + U_r_c;   // U_r -> F_r -> rim point
 
         std::array<std::array<double, 3>, 6> arc_list = {
-            this->arc_min(H_l_tmp, F_l_tmp, U_l_c, "left upper"),
-            this->arc_min(F_l_tmp, G_l_tmp, L_l_c, "left lower"),
-            this->arc_min(G_l_tmp, G_r_tmp, G_c, "G"),
-            this->arc_min(G_r_tmp, F_r_tmp, L_r_c, "right lower"),
-            this->arc_min(F_r_tmp, H_r_tmp, U_r_c, "right upper"),
+            this->arc_min(UH_l, UF_l, U_l_c, "left upper"),
+            this->arc_min(LF_l, LG_l, L_l_c, "left lower"),
+            this->arc_min(LG_l, LG_r, G_c, "G"),
+            this->arc_min(LG_r, LF_r, L_r_c, "right lower"),
+            this->arc_min(UF_r, UH_r, U_r_c, "right upper"),
             {0.0, 0.0, 0.0}
         };
 
