@@ -39,12 +39,22 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     Eigen::MatrixXd pos_fb(2, 1);
 
     legmodel.forward(motor_state_->theta, motor_state_->beta);
-        if      (target_rim == 1) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
-        else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
-        else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
-        else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
-        else if (target_rim == 5) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
-        else { pos_fb << 0, 0; }
+    if      (target_rim == 1) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
+    else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
+    else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
+    else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
+    else if (target_rim == 5) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
+    else {
+        motor_cmd_->theta = imp_cmd_->theta;
+        motor_cmd_->beta = imp_cmd_->beta;
+        motor_cmd_->kp_r = 90;
+        motor_cmd_->kp_l = 90;
+        motor_cmd_->kd_r = 1.75;
+        motor_cmd_->kd_l = 1.75;
+        motor_cmd_->torque_r = 0;
+        motor_cmd_->torque_l = 0;
+        return;
+    }
 
     Eigen::MatrixXd pos_err(2, 1);
     pos_err = pos_des - pos_fb;
@@ -161,6 +171,18 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     motor_cmd_->torque_l = trq_cmd(1, 0);
 }
 
+void position_control(corgi_msgs::ImpedanceCmd* imp_cmd_, corgi_msgs::MotorCmd* motor_cmd_) {
+    motor_cmd_->theta = imp_cmd_->theta;
+    motor_cmd_->beta = imp_cmd_->beta;
+    motor_cmd_->kp_r = 50;
+    motor_cmd_->kp_l = 50;
+    motor_cmd_->kd_r = 1;
+    motor_cmd_->kd_l = 1;
+    motor_cmd_->torque_r = 0;
+    motor_cmd_->torque_l = 0;
+}
+
+
 int main(int argc, char **argv) {
 
     ROS_INFO("Force Control Starts\n");
@@ -216,9 +238,13 @@ int main(int argc, char **argv) {
         ros::spinOnce();
 
         for (int i=0; i<4; i++){
-            if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
-
-            force_control(imp_cmd_modules[i], phi_vel_prev_modules[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i]);
+            if (imp_cmd_modules[i]->Kx == 0 && imp_cmd_modules[i]->Ky == 0 && imp_cmd_modules[i]->Bx == 0 && imp_cmd_modules[i]->By == 0) {
+                position_control(imp_cmd_modules[i], motor_cmd_modules[i]);
+            }
+            else {
+                if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
+                force_control(imp_cmd_modules[i], phi_vel_prev_modules[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i]);
+            }
 
             phi_vel_prev_modules[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
         }

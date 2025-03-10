@@ -31,8 +31,8 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 10000;
-    double B = 100;
+    double K = 1000;
+    double B = 30;
 
     if (argc < 2){
         ROS_INFO("Please input csv file path\n");
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
             cmd->Bx = B;
             cmd->By = B;
             cmd->Kx = K;
-            cmd->Ky = K;    
+            cmd->Ky = K;
         }
 
         imp_cmd.header.seq = -1;
@@ -113,6 +113,7 @@ int main(int argc, char **argv) {
                     cmd->By = B;
                     cmd->Kx = K;
                     cmd->Ky = K;
+                    cmd->Fy = -55;
                 }
 
                 imp_cmd.header.seq = seq;

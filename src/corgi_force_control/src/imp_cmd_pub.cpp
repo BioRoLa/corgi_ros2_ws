@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 2000;
+    double K = 1000;
     double B = 30;
 
     // robot weight ~= 220 N
@@ -48,11 +48,11 @@ int main(int argc, char **argv) {
         cmd->Ky = K;
     }
 
-    for (int i=0; i<5000; i++){
-        imp_cmd_modules[0]->theta += 43/5000.0/180.0*M_PI;
-        imp_cmd_modules[1]->theta += 43/5000.0/180.0*M_PI;
-        imp_cmd_modules[2]->theta += 43/5000.0/180.0*M_PI;
-        imp_cmd_modules[3]->theta += 43/5000.0/180.0*M_PI;
+    for (int i=0; i<2000; i++){
+        imp_cmd_modules[0]->theta += 43/2000.0/180.0*M_PI;
+        imp_cmd_modules[1]->theta += 43/2000.0/180.0*M_PI;
+        imp_cmd_modules[2]->theta += 43/2000.0/180.0*M_PI;
+        imp_cmd_modules[3]->theta += 43/2000.0/180.0*M_PI;
         // imp_cmd_modules[0]->beta += 90/1000.0/180.0*M_PI;
         // imp_cmd_modules[1]->beta += 90/1000.0/180.0*M_PI;
         // imp_cmd_modules[2]->beta += 90/1000.0/180.0*M_PI;
