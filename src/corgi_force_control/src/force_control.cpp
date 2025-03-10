@@ -4,6 +4,7 @@ corgi_msgs::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::ForceStateStamped force_state;
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::MotorCmdStamped motor_cmd;
+sensor_msgs::Imu imu;
 
 
 void imp_cmd_cb(const corgi_msgs::ImpedanceCmdStamped cmd){
@@ -18,7 +19,11 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
 }
 
-void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_prev_, corgi_msgs::MotorState* motor_state_, corgi_msgs::ForceState* force_state_, corgi_msgs::MotorCmd* motor_cmd_){
+void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
+    imu = *msg;
+}
+
+void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_prev_, corgi_msgs::MotorState* motor_state_, corgi_msgs::ForceState* force_state_, corgi_msgs::MotorCmd* motor_cmd_, double pitch){
     // force command
     Eigen::MatrixXd force_des(2, 1);
     force_des << imp_cmd_->Fx, imp_cmd_->Fy;
@@ -38,7 +43,7 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
 
     Eigen::MatrixXd pos_fb(2, 1);
 
-    legmodel.forward(motor_state_->theta, motor_state_->beta);
+    legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
     if      (target_rim == 1) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
     else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
     else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
@@ -72,7 +77,7 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
 
-    legmodel.contact_map(motor_state_->theta, motor_state_->beta);
+    legmodel.contact_map(motor_state_->theta, motor_state_->beta + pitch);
     P_poly = calculate_P_poly(legmodel.rim, legmodel.alpha);
     
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
@@ -81,7 +86,7 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i); 
     
     Eigen::MatrixXd J_fb(2, 2);
-    J_fb = calculate_jacobian(P_theta, P_theta_deriv, motor_state_->beta);
+    J_fb = calculate_jacobian(P_theta, P_theta_deriv, motor_state_->beta + pitch);
 
     // std::cout << "J_fb: " << std::endl
     //           << J_fb(0, 0) << ", " << J_fb(0, 1) << std::endl
@@ -119,8 +124,8 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
                eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI;
 
     Eigen::MatrixXd phi_fb(2, 1);
-    phi_fb << motor_state_->beta - motor_state_->theta + 17/180.0*M_PI,
-              motor_state_->beta + motor_state_->theta - 17/180.0*M_PI;
+    phi_fb << motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
+              motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI;
 
     Eigen::MatrixXd phi_err = phi_des-phi_fb;
 
@@ -193,9 +198,14 @@ int main(int argc, char **argv) {
     ros::Subscriber imp_cmd_sub = nh.subscribe<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
     ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
     ros::Rate rate(1000);
 
+    Eigen::Quaterniond body_angle_quat;
+    double roll = 0;
+    double pitch = 0;
+    double yaw = 0;
 
     std::vector<corgi_msgs::ImpedanceCmd*> imp_cmd_modules = {
         &imp_cmd.module_a,
@@ -237,13 +247,23 @@ int main(int argc, char **argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
+        body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
+        quaternionToEuler(body_angle_quat, roll, pitch, yaw);
+
         for (int i=0; i<4; i++){
             if (imp_cmd_modules[i]->Kx == 0 && imp_cmd_modules[i]->Ky == 0 && imp_cmd_modules[i]->Bx == 0 && imp_cmd_modules[i]->By == 0) {
                 position_control(imp_cmd_modules[i], motor_cmd_modules[i]);
             }
             else {
                 if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
-                force_control(imp_cmd_modules[i], phi_vel_prev_modules[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i]);
+
+                if (i == 1 || i == 2) {
+                    force_control(imp_cmd_modules[i], phi_vel_prev_modules[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
+                }
+                else {
+                    force_control(imp_cmd_modules[i], phi_vel_prev_modules[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
+                }
+                
             }
 
             phi_vel_prev_modules[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
