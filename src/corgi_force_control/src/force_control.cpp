@@ -269,7 +269,7 @@ int main(int argc, char **argv) {
             phi_vel_prev_modules[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
         }
 
-        std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
+        // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
 
         motor_cmd.header.seq = loop_count;
         motor_cmd.header.stamp = ros::Time::now();

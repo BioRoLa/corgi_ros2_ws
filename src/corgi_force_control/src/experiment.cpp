@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
         &imp_cmd.module_d
     };
 
-    int exp_case = 2;  // 0: G, 1: L, 2: U
+    int exp_case = 0;  // G=0, L=1, U=2
     double F_init = -20;
 
     double M = 0;

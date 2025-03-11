@@ -17,9 +17,15 @@ with open(os.path.join(os.getenv('HOME'), 'corgi_ws/corgi_ros_ws/output_data/sim
     
     while robot.step(timestep) != -1:
         row = [value for plate in force_plates for value in plate.getValues()[:3]]
+        
         row[2] -= 9.81
         row[5] -= 9.81
         row[8] -= 9.81
         row[11] -= 9.81
+        
+        row[2] *= -1
+        row[5] *= -1
+        row[8] *= -1
+        row[11] *= -1
         
         writer.writerow(row)
