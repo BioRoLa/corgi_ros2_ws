@@ -194,8 +194,8 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
         } else if (rim == "left lower") {
             // bias_alpha = -M_PI / 3.6; // -50 degrees
         } else if (rim == "G") {
-            std::complex<double> direction_G = p1 + p2;
-            bias_alpha = std::arg((p1 - O) / direction_G);
+            // std::complex<double> direction_G = p1 + p2;
+            // bias_alpha = std::arg((p1 - O) / direction_G);
         } else if (rim == "right lower") {
             // bias_alpha = 0.0;
         } else if (rim == "right upper") {
@@ -357,8 +357,11 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     } else if (contact_rim == 3) {
         // G
         current_G_exp = 1i*G_poly[1](current_q[0]) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_L_exp = ( L_l_poly[0](current_q[0])+1i*L_l_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
         guessed_G_exp = 1i*G_poly[1](guessed_q[0]) *std::exp( std::complex<double>(0, guessed_q[1]) );
-        double roll_d = -d_q[1] * r;
+        guessed_L_exp = ( L_l_poly[0](guessed_q[0])+1i*L_l_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_G_exp - guessed_L_exp) ) - std::arg( -1i/(current_G_exp - current_L_exp) );
+        double roll_d = d_alpha * r;
         std::array<double, 2> next_G = {current_G_exp.real() + roll_d, current_G_exp.imag()};
         guessed_hip = {next_G[0] - guessed_G_exp.real(), next_G[1] - guessed_G_exp.imag()}; // next_G - guessed_G
     } else if (contact_rim == 4) {
