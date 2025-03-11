@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             std::getline(ss, item, ',');
             cmd->beta = std::stod(item);
 
-            cmd->Fy = 0;
+            cmd->Fy = -55;
 
             cmd->Mx = M;
             cmd->My = M;
