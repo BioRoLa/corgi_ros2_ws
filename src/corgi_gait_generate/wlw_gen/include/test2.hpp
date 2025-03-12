@@ -51,7 +51,9 @@ public:
     void Transform(int type, int do_pub, int transfer_state, int transfer_sec, int wait_sec, double shift);
     std::vector<double> linspace(double start, double end, int num_steps);
     void Transfer(int transfer_sec, int wait_sec, int do_pub);
-    
+    void change_Height(double new_value);
+    void change_Step_length(double new_value);
+
     ros::Publisher motor_pub;
     ros::Subscriber motor_state_sub_;
     ros::Rate* rate_ptr;
@@ -69,6 +71,13 @@ public:
         &motor_cmd.module_c,
         &motor_cmd.module_d
     };
+
+    std::array<double, 4> duty;
+    std::array<int, 4> swing_phase = {0, 0, 0, 0};
+    double incre_duty;
+    double velocity     = 0.1; // m/s
+    double stand_height = 0.129; //0.149
+    double step_length  = 0.4; //0.4
     
 private:
     LegModel leg_model;
@@ -80,10 +89,7 @@ private:
 
     int pub_rate;
     double dS;
-    double incre_duty;
-    double velocity     = 0.1; // m/s
-    double stand_height = 0.149;
-    double step_length  = 0.4;
+   
 
     double current_eta[4][2];
     double next_eta[4][2];
@@ -92,14 +98,17 @@ private:
     std::array<std::array<double, 2>, 4> foothold;
     std::array<std::array<double, 2>, 4> hip;
     std::array<std::array<double, 2>, 4> next_hip;
-    std::array<double, 4> duty;
-    std::array<int, 4> swing_phase = {0, 0, 0, 0};
+    
     std::array<double, 2> swing_pose;
+    std::array<double, 2> swing_pose_temp;
     std::array<double, 2> swing_variation;
+    std::array<double, 2> swing_variation_temp;
 
     std::random_device rd;                     
     std::mt19937 rng;                          
-    std::uniform_int_distribution<int> dist;   
+    std::uniform_int_distribution<int> dist;
+    
+    std::array<int, 4> walk_transform = {0, 0, 0, 0};
     
     double wheel_delta_beta;
     double check_beta[2];
@@ -114,6 +123,11 @@ private:
     std::array<double, 2> pos;
     std::array<double, 4> duty_temp;
     std::array<int, 4> swing_phase_temp = {0, 0, 0, 0};    
+
+    std::array<double, 4> current_step_length = {step_length, step_length, step_length, step_length};
+    std::array<double, 4> next_step_length    = {step_length, step_length, step_length, step_length};
+    double new_step_length = step_length;
+    
 };
 
 #endif
