@@ -139,7 +139,7 @@ void LegModel::to_vector() {
     L_r = {L_r_c.real(), L_r_c.imag()};
 }
 
-void LegModel::contact_map(double theta_in, double beta_in, double slope) {
+void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {
         using namespace std::complex_literals;
         double beta_adjusted = beta_in - slope;
 
@@ -162,7 +162,15 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
             this->arc_min(UF_r, UH_r, U_r_c, "right upper"),
             {0.0, 0.0, 0.0}
         };
-
+        if (!contact_upper) {
+            arc_list[0][0] = 1.0;
+            arc_list[4][0] = 1.0;
+        }//end if
+        if (!contact_lower) {
+            arc_list[1][0] = 1.0;
+            arc_list[3][0] = 1.0;
+        }//end if 
+        
         double min_value = arc_list[0][0];
         int min_index = 0;
         for(int i=1; i<6; i++){
@@ -260,27 +268,27 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
     return {theta, beta};
 }//end inverse
 
-std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, double tol, size_t max_iter) {
-    this->contact_map(theta_in, beta_in, slope);
+std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, bool contact_lower, double tol, size_t max_iter) {
+    this->contact_map(theta_in, beta_in, slope=slope, contact_upper=contact_upper, contact_lower=contact_lower);
+    int contact_rim = rim;
     if (slope != 0.0) {
         double x_new = move_vec[0]*cos(-slope) - move_vec[1]*sin(-slope);
         double y_new = move_vec[0]*sin(-slope) + move_vec[1]*cos(-slope);
         move_vec = {x_new, y_new};
     }//end if
 
-    // Contact point logic
-    int contact_rim;
-    if (contact_upper) {
-        contact_rim = rim;
-    } else {
-        if (rim == 2 || rim == 3 || rim == 4) {
-            contact_rim = rim;
-        } else if (beta > 0) {
-            contact_rim = 2;
-        } else {
-            contact_rim = 4;
-        }//end if else
-    }//end if else
+    /* Contact point logic: solve in contact_map */
+    // if (contact_upper) {
+    //     contact_rim = rim;
+    // } else {
+    //     if (rim == 2 || rim == 3 || rim == 4) {
+    //         contact_rim = rim;
+    //     } else if (beta > 0) {
+    //         contact_rim = 2;
+    //     } else {
+    //         contact_rim = 4;
+    //     }//end if else
+    // }//end if else
 
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)

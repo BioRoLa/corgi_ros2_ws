@@ -16,10 +16,10 @@ class LegModel {
         std::array<double, 2> inverse(const double pos[2], const std::string &joint = "G");
 
         // Contact map
-        void contact_map(double theta_in, double beta_in, double slope = 0.0);
+        void contact_map(double theta_in, double beta_in, double slope=0.0, bool contact_upper=true, bool contact_lower=true);
 
         // Move
-        std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper=true, double tol = 1e-14, size_t max_iter = 100);
+        std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope=0.0, bool contact_upper=true, bool contact_lower=true, double tol = 1e-14, size_t max_iter = 100);
 
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
