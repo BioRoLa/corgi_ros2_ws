@@ -10,8 +10,9 @@ WorldInfo {
   basicTimeStep 1
 }
 Viewpoint {
-  orientation -0.2164996933923109 0.1388926400912517 0.9663522739092186 2.031684935375158
-  position 1.3929778946180387 -2.057943434309227 1.3245565055186708
+  orientation -0.1541109922558999 0.09246371851484193 0.9837175726926455 2.075228026294425
+  position 1.6063722980393906 -2.149852434929793 0.960701491030044
+  follow "robot"
 }
 TexturedBackground {
 }
@@ -19,8 +20,8 @@ TexturedBackgroundLight {
 }
 Floor {
   appearance Parquetry {
-    type "light strip"
-    colorOverride 0.913725 0.72549 0.431373
+    type "chequered"
+    colorOverride 0.933333 0.933333 0.92549
   }
 }
 DEF CORGI Robot {
@@ -207,7 +208,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LF_rmotorbar Solid {
         translation 0.222 0 -0.2
-        rotation 0.9697964005582008 0.24391584496857877 4.5140030167047955e-05 6.283172776516791
+        rotation 0.9697964005582006 0.2439158449685787 4.514003016704795e-05 6.283172776516791
         children [
           DEF group_rmotorbar Group {
             children [
@@ -2038,7 +2039,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_rmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation -0.11181075802177978 0.9937295177211148 5.960385482923934e-07 6.283175930808174
+        rotation -0.1118107580217798 0.993729517721115 5.960385482923935e-07 6.283175930808174
         children [
           USE group_rmotorbar
           DEF LH_Rl5l6 HingeJoint {
@@ -2174,7 +2175,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_lmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation 0.9995835214168741 -0.028857734097284215 -0.0001220434832233418 6.283183818256037
+        rotation 0.9995835214168743 -0.028857734097284222 -0.00012204348322334183 6.283183818256037
         children [
           USE group_lmotorbar
           DEF LH_Ll5l6 HingeJoint {
@@ -2439,7 +2440,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RF_lmotorbar Solid {
         translation 0.222 0 0.2
-        rotation 3.5893171776834067e-10 0.9999999999387917 -1.1064205190456563e-05 3.141636699015246
+        rotation 3.589317177683407e-10 0.9999999999387919 -1.1064205190456565e-05 3.141636699015246
         children [
           USE group_lmotorbar
           DEF RF_Ll5l6 HingeJoint {
@@ -2704,7 +2705,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RH_lmotorbar Solid {
         translation -0.222 0 0.2
-        rotation 4.44473624555075e-12 -0.9999999999996939 -7.824504824462814e-07 3.14160104444671
+        rotation 4.444736245550751e-12 -0.999999999999694 -7.824504824462814e-07 3.14160104444671
         children [
           USE group_lmotorbar
           DEF RH_Ll5l6 HingeJoint {

@@ -53,6 +53,7 @@ public:
     void Transfer(int transfer_sec, int wait_sec, int do_pub);
     void change_Height(double new_value);
     void change_Step_length(double new_value);
+    void change_Velocity(double new_value);
 
     ros::Publisher motor_pub;
     ros::Subscriber motor_state_sub_;
@@ -75,9 +76,9 @@ public:
     std::array<double, 4> duty;
     std::array<int, 4> swing_phase = {0, 0, 0, 0};
     double incre_duty;
-    double velocity     = 0.1; // m/s
+    double velocity     = 0.05; // m/s
     double stand_height = 0.129; //0.149
-    double step_length  = 0.4; //0.4
+    double step_length  = 0.2; //0.4
     
 private:
     LegModel leg_model;
@@ -123,6 +124,7 @@ private:
     std::array<double, 2> pos;
     std::array<double, 4> duty_temp;
     std::array<int, 4> swing_phase_temp = {0, 0, 0, 0};    
+    int check_point=0;
 
     std::array<double, 4> current_step_length = {step_length, step_length, step_length, step_length};
     std::array<double, 4> next_step_length    = {step_length, step_length, step_length, step_length};

@@ -42,7 +42,7 @@ class WalkGait {
         double dS;
         double incre_duty;
         double velocity     = 0.1;
-        double stand_height = 0.2;
+        double stand_height = 0.165;
         double step_length  = 0.3;
         double step_height  = 0.04;
         double curvature    = 0.0;  // +: turn left, -:turn right, 0: straight
