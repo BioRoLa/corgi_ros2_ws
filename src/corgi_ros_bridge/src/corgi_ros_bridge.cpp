@@ -74,7 +74,7 @@ void ros_motor_cmd_cb(const corgi_msgs::MotorCmdStamped cmd) {
     };
 
     for (int i = 0; i < 4; i++) {
-        grpc_motor_modules[i]->set_theta(ros_motor_modules[i].theta);
+        grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta, 17/180.0*M_PI), 160/180.0*M_PI));
         grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta);
         grpc_motor_modules[i]->set_kp_r(ros_motor_modules[i].kp_r);
         grpc_motor_modules[i]->set_kp_l(ros_motor_modules[i].kp_l);
