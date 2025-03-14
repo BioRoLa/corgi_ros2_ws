@@ -8,6 +8,7 @@
 
 #include "corgi_msgs/ImpedanceCmdStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/ForceStateStamped.h"
 #include "sensor_msgs/Imu.h"
 #include "geometry_msgs/Vector3.h"
 

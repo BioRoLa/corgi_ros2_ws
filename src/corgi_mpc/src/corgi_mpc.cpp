@@ -2,12 +2,17 @@
 
 
 bool trigger = false;
+corgi_msgs::ForceStateStamped force_state;
 geometry_msgs::Vector3 odom_pos;
 geometry_msgs::Vector3 odom_vel;
 sensor_msgs::Imu imu;
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
     trigger = msg.enable;
+}
+
+void force_state_cb(const corgi_msgs::ForceStateStamped msg){
+    force_state = msg;
 }
 
 void odom_pos_cb(const geometry_msgs::Vector3::ConstPtr &msg){
@@ -31,11 +36,12 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     ros::Publisher imp_cmd_pub = nh.advertise<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
+    ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
     ros::Subscriber odom_pos_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/position", 1000, odom_pos_cb);
     ros::Subscriber odom_vel_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/velocity", 1000, odom_vel_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
 
-    ros::Rate rate(1000);
+    ros::Rate rate(100);
 
     corgi_msgs::ImpedanceCmdStamped imp_cmd;
 
@@ -46,11 +52,18 @@ int main(int argc, char **argv) {
         &imp_cmd.module_d
     };
 
+    std::vector<corgi_msgs::ForceState*> force_state_modules = {
+        &force_state.module_a,
+        &force_state.module_b,
+        &force_state.module_c,
+        &force_state.module_d
+    };
+
     double M = 0;
     double K = 1000;
     double B = 30;
 
-    for (int i=0; i<2000; i++){
+    for (int i=0; i<1; i++){
         for (auto& cmd : imp_cmd_modules){
             cmd->theta = 18/180.0*M_PI;
             cmd->beta = 0/180.0*M_PI;
@@ -83,9 +96,14 @@ int main(int argc, char **argv) {
             while (ros::ok()) {
                 ros::spinOnce();
 
+                std::cout << "Force A = [" << force_state_modules[0]->Fx << ", " << force_state_modules[0]->Fy << "]" << std::endl;
+                std::cout << "Force B = [" << force_state_modules[1]->Fx << ", " << force_state_modules[1]->Fy << "]" << std::endl;
+                std::cout << "Force C = [" << force_state_modules[2]->Fx << ", " << force_state_modules[2]->Fy << "]" << std::endl;
+                std::cout << "Force D = [" << force_state_modules[3]->Fx << ", " << force_state_modules[3]->Fy << "]" << std::endl << std::endl;
                 std::cout << "Odom Pos = [" << odom_pos.x << ", " << odom_pos.y << ", " << odom_pos.z << "]" << std::endl;
                 std::cout << "Odom Vel = [" << odom_vel.x << ", " << odom_vel.y << ", " << odom_vel.z << "]" << std::endl;
                 std::cout << "Imu = [" << imu.orientation.x << ", " << imu.orientation.y << ", " << imu.orientation.z << "," << imu.orientation.w << "]" << std::endl << std::endl;
+                std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 
 
                 if (seq < 1000) {
