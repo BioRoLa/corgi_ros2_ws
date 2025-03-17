@@ -26,7 +26,11 @@ class WalkGait {
 
         std::array<double, 4> duty;
         std::array<int, 4> swing_phase = {0, 0, 0, 0};
+        std::array<std::array<double, 2>, 4> foothold;
+        std::array<std::array<double, 2>, 4> hip;
+        std::array<std::array<double, 2>, 4> next_hip;
 
+        
     private:
         LegModel leg_model;
 
@@ -41,19 +45,16 @@ class WalkGait {
         int rate;
         double dS;
         double incre_duty;
-        double velocity     = 0.1;
+        double velocity     = 0.05;
         double stand_height = 0.165;
-        double step_length  = 0.3;
-        double step_height  = 0.04;
+        double step_length  = 0.2;
+        double step_height  = 0.03;
         double curvature    = 0.0;  // +: turn left, -:turn right, 0: straight
 
         // State
         std::array<double, 4> theta;
         std::array<double, 4> beta;
-        std::array<std::array<double, 2>, 4> foothold;
-        std::array<std::array<double, 2>, 4> hip;
-        std::array<std::array<double, 2>, 4> next_hip;
-
+        
         
         std::array<int, 4> step_count  = {0, 0, 0, 0};
         std::array<double, 4> current_step_length = {step_length, step_length, step_length, step_length};

@@ -575,17 +575,59 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             break;
         case 1:
             // wlw to wheel
+            // variation height to wheel
             cout<<"wlw to wheel"<<endl;
-            break;
+            int check_theta;
+            int check_phase;
+            
+            
+            while(check_theta<4){
+                check_theta=0;
+                check_phase=0;
+                for(int i = 0; i < 4; i++){
+                    if (swing_phase[i]==0){
+                        check_phase++;
+                    }
+
+                }
+                if(check_phase==4){
+                    if(stand_height>=leg_model.radius+0.0001){
+                        change_Height(stand_height- 0.0001);
+                    }   
+                    Step(1, 1, -0.05);
+                    for(int i = 0; i < 4; i++){
+                        if(current_eta[i][0]<=18*PI/180){
+                            check_theta++;
+                        }
+                    }
+                }
+                else{
+                    Step(1, 1, -0.05);
+                }
+               
+            }
+            for(int i=0;i<5000;i++){
+                wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
+                for(int i = 0; i < 4; i++){
+                    current_eta[i][0] = 17.0 * PI / 180.0;
+                    current_eta[i][1] = current_eta[i][1]+wheel_delta_beta;
+                }
+                if(do_pub){
+                    Send(1);
+                }
+            }
+            break;            
         case 2:
             // leg to wlw
             cout<<"leg to wlw"<<endl;
             /* Strategy */
             // read current duty and swing_phase
-            // if get in swing phase then turn into walk pose
+            // if get in swing phase then turn into walk pose 
             check_point=0;
             walk_transform = {0, 0, 0, 0};
             while(check_point<4){
+                // cout << "Duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << endl; 
+            
                 for (int i=0; i<4; i++) {
                     next_hip[i][0] += dS ;
                     duty[i] += incre_duty;     
@@ -621,37 +663,39 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                             cout<< "check_point add " << i << " ,current= " << check_point<< endl;
                             
                         }
-                        else if(walk_transform[i]!=2){
-                            cout<< i << " still in walk" << endl;  
-                        }
+                        // else if(walk_transform[i]!=2){
+                        //     cout<< i << " still in walk" << endl;  
+                        // }
                     }
             
                     /* Calculate next eta */
                     // calculate the nest Stance phase traj
                     if (swing_phase[i] == 0) { 
-                            leg_model.forward(current_eta[i][0], current_eta[i][1],true);
+                            // cout<<"set"<<endl;
+                            // leg_model.forward(current_eta[i][0], current_eta[i][1],true);
                             std::array<double, 2> result_eta;
                             result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, 0);
+                            // result_eta = leg_model.move(current_eta[i][0], current_eta[i][1], {next_hip[i][0]-hip[i][0], next_hip[i][1]-hip[i][1]});
+                            // cout<<"here"<<endl;
+                            // cout<<result_eta[0]<<endl;
+                            // cout<<result_eta[1]<<endl;
+
                             current_eta[i][0] = result_eta[0];
                             current_eta[i][1] = result_eta[1];                 
                     } 
                     // read the next Swing phase traj
                     else { 
-                        if (walk_transform[i]!=0){
-                            // to walk
-                            Swing_step(swing_pose_temp, swing_variation_temp, current_eta, i, duty[i]);
-                        }
-                        else{
-                            // origin tranform
-                            Swing_step(swing_pose, swing_variation, current_eta, i, duty[i]);
-                        }
+                        Swing_step(swing_pose, swing_variation, current_eta, i, duty[i]);
                         
                     }
+                    hip[i] = next_hip[i];
                 }
+                
                 // Send eta 
                 if(do_pub){
                     Send(1);
                 }
+
 
             }
 
@@ -664,6 +708,8 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             // if get in swing phase then turn into walk pose
             check_point=0;
             walk_transform = {0, 0, 0, 0};
+            dS = velocity / pub_rate;
+            incre_duty = dS / step_length;   
             while(check_point<4){
                 // keep walk until transform finish
                 for (int i=0; i<4; i++) {
@@ -824,7 +870,7 @@ int main(int argc, char** argv) {
     double CoM_bias = 0.0;
     int pub_rate = 1000;
     
-    ////*  wlw functions  *////
+    //*  wlw functions  *//
     /*  wlw initialize  */
     WLWGait wlw_gait(nh, true, CoM_bias, pub_rate);   
 
@@ -849,17 +895,19 @@ int main(int argc, char** argv) {
     cout<< "Height from 0.129 to 0.165"<<endl;
     for (int step = 0;step<10000;step++) {
         // Test change_Height
-        
-        wlw_gait.change_Height(0.129 + 0.036*(step)/10000);
+        if(step <= 8000){
+            wlw_gait.change_Height(0.129 + 0.036*(step)/8000);
+        }
+       
        
         // Test change_Step_length
         if (step >= 5000){
             if(step == 5000){
                 cout<< "SL from 0.2 to 0.3"<<endl;
-                cout<< "V from 0.05 to 0.1"<<endl;
+                cout<< "V from 0.025 to 0.05"<<endl;
             }
             wlw_gait.change_Step_length(0.3);
-            wlw_gait.change_Velocity(0.1);
+            wlw_gait.change_Velocity(0.05);
             wlw_gait.motor_cmd.header.seq = step;
             wlw_gait.motor_cmd.header.stamp = ros::Time::now();
             wlw_gait.Step(1, 1, -0.05);
@@ -887,49 +935,121 @@ int main(int argc, char** argv) {
     std::array<std::array<double, 4>, 2> eta_list;
     double init_eta[8];
     for (int i=0; i<4; i++){
-        init_eta[2*i] = wlw_gait.motor_state_modules[i]->theta ;
-        init_eta[2*i+1] = wlw_gait.motor_state_modules[i]->beta ;
+        init_eta[2*i] = wlw_gait.current_eta[i][0] ;
+        if(i==1 | i==2){
+            init_eta[2*i+1] =-wlw_gait.current_eta[i][1] ;
+        }
+        else{
+            init_eta[2*i+1] = wlw_gait.current_eta[i][1] ;
+        }
     }
-
+    
+    // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
+    // double init_eta[8] = {
+    //       0.8340308101719882 , -0.025117378374684307 
+    //     , 1.381705425444313  , 0.779336487921992 
+    //     , 1.052012758141898  , 0.5300286393524838 
+    //     , 0.9164608588034946 , 0.3283090821356041};
     cout<< "initialize"<<endl;
     walk_gait.initialize(init_eta);    
 
     cout<< "start walk"<<endl;
+    int check_walk = 0;
     for (int step = 0;step<6000;step++) {
-        eta_list = walk_gait.step();
-        for (int i=0; i<4; i++) {
-            if (eta_list[0][i] > M_PI*159.9/180.0) {
-                ROS_INFO("Exceed Upper Bound.\n");
-                eta_list[0][i] = M_PI*159.9/180.0;
+        walk_gait.set_stand_height(0.165-0.005*(step+1)/6000);
+        if (check_walk!=4){
+            check_walk = 0;
+            for(int phase=0;phase<4;phase++){
+                if(walk_gait.swing_phase[phase]==0 && step>5000){
+                    check_walk++;
+                }
             }
-            if (eta_list[0][i] < M_PI*16.9/180.0) {
-                ROS_INFO("Exceed Lower Bound.\n");
-                eta_list[0][i] = M_PI*16.9/180.0;
+            eta_list = walk_gait.step();
+            for (int i=0; i<4; i++) {
+                if (eta_list[0][i] > M_PI*159.9/180.0) {
+                    ROS_INFO("Exceed Upper Bound.\n");
+                    eta_list[0][i] = M_PI*159.9/180.0;
+                }
+                if (eta_list[0][i] < M_PI*16.9/180.0) {
+                    ROS_INFO("Exceed Lower Bound.\n");
+                    eta_list[0][i] = M_PI*16.9/180.0;
+                }
+                wlw_gait.motor_cmd_modules[i]->theta = eta_list[0][i];
+                wlw_gait.motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
+                wlw_gait.motor_cmd_modules[i]->kp_r = 150;
+                wlw_gait.motor_cmd_modules[i]->ki_r = 0;
+                wlw_gait.motor_cmd_modules[i]->kd_r = 1.75;
+                wlw_gait.motor_cmd_modules[i]->kp_l = 150;
+                wlw_gait.motor_cmd_modules[i]->ki_l = 0;
+                wlw_gait.motor_cmd_modules[i]->kd_l = 1.75;
+                wlw_gait.motor_cmd.header.seq = step;
+                wlw_gait.motor_cmd.header.stamp = ros::Time::now();
             }
-            wlw_gait.motor_cmd_modules[i]->theta = eta_list[0][i];
-            wlw_gait.motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
-            wlw_gait.motor_cmd_modules[i]->kp_r = 150;
-            wlw_gait.motor_cmd_modules[i]->ki_r = 0;
-            wlw_gait.motor_cmd_modules[i]->kd_r = 1.75;
-            wlw_gait.motor_cmd_modules[i]->kp_l = 150;
-            wlw_gait.motor_cmd_modules[i]->ki_l = 0;
-            wlw_gait.motor_cmd_modules[i]->kd_l = 1.75;
-            wlw_gait.motor_cmd.header.seq = step;
-            wlw_gait.motor_cmd.header.stamp = ros::Time::now();
+            wlw_gait.publish(1);
         }
-        wlw_gait.publish(1);
+        else{
+            cout << "Duty: "<< walk_gait.duty[0] << " , " << walk_gait.duty[1] << " , " << walk_gait.duty[2] << " , " << walk_gait.duty[3] << endl; 
+            cout << "swing_phase: "<< walk_gait.swing_phase[0] << " , " << walk_gait.swing_phase[1] << " , " << walk_gait.swing_phase[2] << " , " << walk_gait.swing_phase[3] << endl; 
+            break;
+        }
+                
     }
     
+     // cout << "current_eta walk" << endl;
+    // for (int i=0; i<4; i++){
+    //     cout<< i <<": "<<eta_list[i][0]<<" , " <<eta_list[i][1] << endl;
+    // }
+  
     /*  walk to wlw transform   */
+    wlw_gait.velocity     = 0.05;
+    wlw_gait.stand_height = 0.160;
+    wlw_gait.step_length  = 0.3;
+    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.05);
+    for (int i=0; i<4; i++){
+        wlw_gait.foothold[i][0] = walk_gait.foothold[i][0];
+        wlw_gait.foothold[i][0] = walk_gait.foothold[i][1];
+        
+        wlw_gait.hip[i][0] = walk_gait.hip[i][0];
+        wlw_gait.hip[i][1] = walk_gait.hip[i][1];
+
+        wlw_gait.next_hip[i][0] = walk_gait.next_hip[i][0];
+        wlw_gait.next_hip[i][1] = walk_gait.next_hip[i][1];
+        
+        wlw_gait.duty[i] = walk_gait.duty[i];
+        wlw_gait.swing_phase[i] = walk_gait.swing_phase[i];
+        // change to read the current from topic
+        wlw_gait.current_eta[i][0] = eta_list[0][i] ;
+        wlw_gait.current_eta[i][1] = -eta_list[1][i];
+    }        
+    
     cout<< "-----transform to wlw------"<<endl;
     wlw_gait.Transform(2, 1, 0, 3, 0, -0.05);
 
-    cout<< "wlw walking"<<endl;
-    for (int step = 0;step<3000;step++) {
+
+    cout<< "-----wlw walking-----"<<endl;
+    for (int step = 0;step<10000;step++) {
         wlw_gait.motor_cmd.header.seq = step;
         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
         wlw_gait.Step(1, 1, -0.05);
     }
+
+    cout<< "-----transform to wheel-----"<<endl;
+    wlw_gait.Transform(1, 1, 0, 3, 0, -0.05);
+    // for (int step = 0;step<7500;step++) {
+    //     wlw_gait.change_Height(0.165 - (0.165-0.1125)*(step)/7500);
+    //     wlw_gait.change_Step_length(0.3+0.1*(step)/7500);
+    //     wlw_gait.motor_cmd.header.seq = step;
+    //     wlw_gait.motor_cmd.header.stamp = ros::Time::now();
+    //     wlw_gait.Step(1, 1, -0.05);
+    // }
+    // // until theta = 17+PI/180
+    // for (int step = 0;step<1000;step++) {
+    //     wlw_gait.change_Height(0.1125);
+    //     wlw_gait.motor_cmd.header.seq = step;
+    //     wlw_gait.motor_cmd.header.stamp = ros::Time::now();
+    //     wlw_gait.Step(1, 1, -0.05);
+    // }
+    
 
     cout<< "-----end-----"<<endl;
     ros::shutdown();

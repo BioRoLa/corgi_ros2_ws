@@ -80,6 +80,13 @@ public:
     double stand_height = 0.129; //0.149
     double step_length  = 0.2; //0.4
     
+    double current_eta[4][2];
+    double next_eta[4][2];
+    std::array<std::array<double, 2>, 4> foothold;
+    std::array<std::array<double, 2>, 4> hip;
+    std::array<std::array<double, 2>, 4> next_hip;
+    double dS;
+
 private:
     LegModel leg_model;
     const double CoM_bias;
@@ -89,16 +96,11 @@ private:
     const double swing_time = 0.2;
 
     int pub_rate;
-    double dS;
+    
    
-
-    double current_eta[4][2];
-    double next_eta[4][2];
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
-    std::array<std::array<double, 2>, 4> foothold;
-    std::array<std::array<double, 2>, 4> hip;
-    std::array<std::array<double, 2>, 4> next_hip;
+    
     
     std::array<double, 2> swing_pose;
     std::array<double, 2> swing_pose_temp;
