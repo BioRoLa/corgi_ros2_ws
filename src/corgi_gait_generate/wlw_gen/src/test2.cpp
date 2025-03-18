@@ -289,6 +289,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
 
             // transfer to random wheel pose
             if (transfer_state){
+                cout<< "Transfer" <<endl;
                 Transfer(transfer_sec, wait_sec, do_pub);
             }
             else{
@@ -606,7 +607,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 }
                
             }
-            for(int i=0;i<5000;i++){
+            for(int i=0;i<10000;i++){
                 wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
                 for(int i = 0; i < 4; i++){
                     current_eta[i][0] = 17.0 * PI / 180.0;
@@ -880,7 +881,7 @@ int main(int argc, char** argv) {
     
     /*  wheel to wlw transform  */
     cout<< "-----transform to wlw------"<<endl;
-    wlw_gait.Transform(0, 1, 0, 3, 0, -0.05);
+    wlw_gait.Transform(0, 1, 1, 3, 5, -0.05);
 
     /*  wlw real-time   */
     cout<< "-----wlw------"<<endl;
