@@ -13,15 +13,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 
 set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(NLopt REQUIRED)
+# find_package(NLopt REQUIRED)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils)
 catkin_package(CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils)
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
-  ${NLopt_INCLUDE_DIRS}
+  
   include
 )
-
+# ${NLopt_INCLUDE_DIRS}
 find_library(CORGI_UTILS corgi_utils)
 add_subdirectory(src)

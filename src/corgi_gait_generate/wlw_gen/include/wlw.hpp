@@ -10,7 +10,7 @@
 #include <vector>
 #include <cmath>
 #include <iomanip>
-#include "nlopt.h"
+// #include "nlopt.h"
 #include <algorithm>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
