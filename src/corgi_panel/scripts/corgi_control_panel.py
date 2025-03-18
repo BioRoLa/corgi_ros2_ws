@@ -293,7 +293,7 @@ class CorgiControlPanel(QWidget):
         layout.addWidget(self.btn_motor_mode,  12,0, 1, 2)
         layout.addWidget(self.btn_rt_mode,     13,0, 1, 1)
         layout.addWidget(self.btn_csv_mode,    13,1, 1, 1)
-        layout.addWidget(vlines[0],            0, 2, 13,1)
+        layout.addWidget(vlines[0],            0, 2, 14,1)
         layout.addWidget(self.label_csv,       0, 3, 1, 2)
         layout.addWidget(self.edit_csv,        1, 3, 1, 1)
         layout.addWidget(self.btn_csv_select,  1, 4, 1, 1)
@@ -302,7 +302,7 @@ class CorgiControlPanel(QWidget):
         layout.addWidget(self.edit_output,     8, 3, 1, 2)
         layout.addWidget(self.btn_trigger,     9, 3, 1, 2)
         layout.addWidget(self.btn_reset,       10,3, 1, 2)
-        layout.addWidget(vlines[1],            0, 5, 13,1)
+        layout.addWidget(vlines[1],            0, 5, 14,1)
         layout.addWidget(self.label_status,    0, 6, 1, 2)
         for i in range(len(label_status_headers)):
             layout.addWidget(label_status_headers[i], i+1, 6, 1, 1)
