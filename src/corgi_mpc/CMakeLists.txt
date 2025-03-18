@@ -15,8 +15,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
 set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
+set(OSQP_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/osqp")
+set(OSQP_EIGEN_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/OsqpEigen")
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(osqp REQUIRED)
+find_package(OsqpEigen REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS 
   roscpp 
   std_msgs 
@@ -45,6 +50,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
   ${EIGEN3_INCLUDE_DIR}
+  ${OSQP_INCLUDE_DIRS}
+  ${OSQP_EIGEN_INCLUDE_DIRS}
   include
 )
 
