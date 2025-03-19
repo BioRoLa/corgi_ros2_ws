@@ -23,6 +23,9 @@ class LegModel {
 
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
+        
+        // Joint Positions in complex
+        std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
 
         // Constants
         const double R; // Wheel radius
@@ -39,8 +42,6 @@ class LegModel {
         double alpha;
         std::array<double, 2> contact_p;
     private:
-        // Joint Positions in complex
-        std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
 
         // Constants
         const double max_theta;
