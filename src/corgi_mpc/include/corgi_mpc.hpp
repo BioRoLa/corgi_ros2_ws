@@ -19,6 +19,8 @@
 
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
+#include "walk_gait.hpp"
+#include "bezier.hpp"
 
 bool sim = true;
 LegModel legmodel(sim);

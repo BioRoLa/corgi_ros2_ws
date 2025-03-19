@@ -82,7 +82,7 @@ void init_matrices(const double *ra, const double *rb, const double *rc, const d
          -300/13/m*ra[1]*dt, 300/13/m*ra[0]*dt, 0, -300/13/m*rb[1]*dt, 300/13/m*rb[0]*dt, 0, -300/13/m*rc[1]*dt, 300/13/m*rc[0]*dt, 0, -300/13/m*rd[1]*dt, 300/13/m*rd[0]*dt, 0;
 
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 1e9, 0, 1e9, 1e7, 0, 1e7, 1e9, 1e9, 1e9, 1e6, 1e6, 1e6;
+    Q.diagonal() << 2e9, 0, 1e9, 1e7, 0, 1e7, 1e9, 1e9, 1e9, 1e6, 1e6, 1e6;
     // Q.diagonal() << 1e9, 1e9, 1e9, 1e7, 1e7, 1e7, 0, 0, 0, 0, 0, 0;
     R = Eigen::MatrixXd::Identity(n_u, n_u);
 }
@@ -151,15 +151,15 @@ Eigen::VectorXd model_predictive_control(const Eigen::VectorXd &x, const Eigen::
         constraints.insert(i, i) = 1.0;
 
         if (i % 3 == 0) {
-            lower_bound(i) = -100;
-            upper_bound(i) = 100;
+            lower_bound(i) = -50;
+            upper_bound(i) = 50;
         }
         else if (i % 3 == 1) {
             lower_bound(i) = 0;
             upper_bound(i) = 0;
         }
         else {
-            lower_bound(i) = -0;
+            lower_bound(i) = -80;
             upper_bound(i) = 200;
         }
     }
@@ -190,6 +190,7 @@ Eigen::VectorXd model_predictive_control(const Eigen::VectorXd &x, const Eigen::
     solver.data()->setUpperBound(upper_bound);
 
     // -------------------- OSQP Solver Settings --------------------
+    solver.settings()->setVerbosity(false);
     // solver.settings()->setAbsoluteTolerance(1.0e-3);
     // solver.settings()->setRelativeTolerance(1.0e-3);
     // solver.settings()->setPrimalInfeasibilityTolerance(1.0e-4);
@@ -265,12 +266,13 @@ int main(int argc, char **argv) {
     };
 
     double M = 0;
-    double K = 1000;
+    double K = 5000;
     double B = 30;
 
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
+        cmd->Fy = -55;
 
         cmd->Mx = M;
         cmd->My = M;
@@ -280,25 +282,76 @@ int main(int argc, char **argv) {
         cmd->Ky = K;
     }
 
-
     ROS_INFO("Transform Finished\n");
+
+
+    // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
+    double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
+    WalkGait walk_gait(true, 0, 100);
+    walk_gait.initialize(init_eta);
+    std::array<std::array<double, 4>, 2> eta_list;
+    double velocity     = 0.1;
+    double stand_height = 0.25;
+    double step_length  = 0.3;
+    double step_height  = 0.1;
+    double curvature = 0.0;
+    int count = 0;
+    bool touched[4] = {true, true, true, true};
+    bool selection_matrix[4] = {true, true, true, true};
+    
+    walk_gait.set_velocity(velocity);
+    walk_gait.set_stand_height(stand_height);
+    walk_gait.set_step_length(step_length);
+    walk_gait.set_step_height(step_height);
+    walk_gait.set_curvature(curvature);
+
+
+    for (int i=0; i<200; i++) {
+        for (int j=0; j<4; j++) {
+            imp_cmd_modules[j]->theta += init_eta[2*j]/200.0;
+            imp_cmd_modules[j]->beta += init_eta[2*j+1]/200.0;
+        }
+        imp_cmd.header.seq = -1;
+        imp_cmd_pub.publish(imp_cmd);
+        rate.sleep();
+    }
+
+    for (int i=0; i<200; i++) {
+        imp_cmd.header.seq = -1;
+        imp_cmd_pub.publish(imp_cmd);
+        rate.sleep();
+    }
+
 
     int loop_count = 0;
     while (ros::ok()) {
         ros::spinOnce();
+
+        for (auto& cmd : imp_cmd_modules){
+            cmd->Kx = 1000;
+            cmd->Ky = 1000;
+        }
 
         if (trigger){
             int seq = 0;
             while (ros::ok()) {
                 ros::spinOnce();
 
-                bool selection_matrix[4] = {true, true, true, true};
+                eta_list = walk_gait.step();
 
-                imp_cmd_modules[0]->theta = 100/180.0*M_PI;
-                imp_cmd_modules[1]->theta = 100/180.0*M_PI;
-                imp_cmd_modules[2]->theta = 100/180.0*M_PI;
-                imp_cmd_modules[3]->theta = 100/180.0*M_PI;
-
+                for (int i=0; i<4; i++) {
+                    imp_cmd_modules[i]->theta = eta_list[0][i];
+                    imp_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
+                    if (walk_gait.swing_phase[i] == 1 && touched[i]) {
+                        selection_matrix[i] = false;
+                        touched[i] = false;
+                    }
+                    else if (walk_gait.swing_phase[i] == 0 && !touched[i]) {
+                        selection_matrix[i] = true;
+                        touched[i] = true;
+                    }
+                }
+                    
                 // const double robot_pos[3] = {odom_pos.x, odom_pos.y, odom_pos.z};
                 // const double robot_vel[3] = {odom_vel.x, odom_vel.y, odom_vel.z};
                 robot_vel[0] = (sim_data.position.x-robot_pos[0])/dt;
@@ -321,12 +374,10 @@ int main(int argc, char **argv) {
                      roll,         pitch,        yaw,
                      robot_ang_vel[0], robot_ang_vel[1], robot_ang_vel[2];
 
-                legmodel.contact_map(100/180.0*M_PI, 0);
                 Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(N * n_x);
                 for (int i = 0; i < N; ++i) {
-                    x_ref.segment(i * n_x, n_x) << 0, 0, -legmodel.contact_p[1], 0, 0, 0, 0, 0, 0, 0, 0, 0;
+                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, stand_height, 0, 0, 0, 0, 0, 0, 0, 0, 0;
                 }
-
 
                 legmodel.contact_map(motor_state_modules[0]->theta, motor_state_modules[0]->beta);
                 double ra[3] = {-legmodel.contact_p[0]+0.222, 0.2, legmodel.contact_p[1]};
@@ -338,7 +389,7 @@ int main(int argc, char **argv) {
                 double rd[3] = {-legmodel.contact_p[0]-0.222, 0.2, legmodel.contact_p[1]};
 
                 init_matrices(ra, rb, rc, rd);
-                std::cout << "-";
+                
                 Eigen::VectorXd force = model_predictive_control(x, x_ref, selection_matrix);
 
                 double force_A[3] = {force(0), force(1), force(2)};
