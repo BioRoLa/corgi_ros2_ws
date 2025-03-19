@@ -76,7 +76,7 @@ void WalkGait::initialize(double init_eta[8]) {
     next_hip = hip;
     // Initial leg configuration
     for (int i=0; i<4; i++) {
-        foothold[i] = {next_hip[i][0] + relative_foothold[i][0] + CoM_bias, next_hip[i][1] + relative_foothold[i][1]};
+        foothold[i] = {next_hip[i][0] + relative_foothold[i][0], next_hip[i][1] + relative_foothold[i][1]};
     }//end for
     // Initial theta/beta
     for (int i=0; i<4; i++) {
@@ -107,7 +107,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 double rest_time = (1.0 - 4*swing_time) / 2;    // time during swing of front leg and next hind leg 
                 total_step_length = step_length + sign_diff[i]*diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + swing_hip_move_d + (rest_time*(step_length - new_step_length)), 0};    // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length.
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + swing_hip_move_d + (rest_time*(step_length - new_step_length)) + CoM_bias, 0};    // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length + CoM_bias.
                 diff_step_length = new_diff_step_length;
             } else {    // hind leg swing
                 int last_leg = (i+2) % 4;   // Contralateral front leg
@@ -115,7 +115,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 next_step_length[i] = step_length;    // apply hind step length corresponding to the front leg's.
                 total_step_length = step_length + sign_diff[i]*diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*total_step_length + swing_hip_move_d, 0};
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*total_step_length + swing_hip_move_d + CoM_bias, 0};
                 incre_duty = dS / step_length;  // change incre_duty corresponding to new step length when hind leg start to swing.
             }//end if else
             /* Bezier curve setup */
