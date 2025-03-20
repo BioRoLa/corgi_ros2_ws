@@ -82,7 +82,7 @@ void init_matrices(const double *ra, const double *rb, const double *rc, const d
          -300/13/m*ra[1]*dt, 300/13/m*ra[0]*dt, 0, -300/13/m*rb[1]*dt, 300/13/m*rb[0]*dt, 0, -300/13/m*rc[1]*dt, 300/13/m*rc[0]*dt, 0, -300/13/m*rd[1]*dt, 300/13/m*rd[0]*dt, 0;
 
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 2e9, 0, 1e9, 1e7, 0, 1e7, 1e9, 1e9, 1e9, 1e6, 1e6, 1e6;
+    Q.diagonal() << 1e9, 0, 1e9, 1e7, 0, 1e7, 1e9, 1e9, 1e9, 1e6, 1e6, 1e6;
     // Q.diagonal() << 1e9, 1e9, 1e9, 1e7, 1e7, 1e7, 0, 0, 0, 0, 0, 0;
     R = Eigen::MatrixXd::Identity(n_u, n_u);
 }
@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
 
 
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
+    double init_eta[8] = {1.9427780616992942,0.4926850881734512,1.6666945447888537,0.133413303886169,1.6666945447888537,-0.133413303886169,1.9427780616992942,-0.4926850881734512};
     WalkGait walk_gait(true, 0, 100);
     walk_gait.initialize(init_eta);
     std::array<std::array<double, 4>, 2> eta_list;
@@ -308,7 +308,7 @@ int main(int argc, char **argv) {
 
     for (int i=0; i<200; i++) {
         for (int j=0; j<4; j++) {
-            imp_cmd_modules[j]->theta += init_eta[2*j]/200.0;
+            imp_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/200.0;
             imp_cmd_modules[j]->beta += init_eta[2*j+1]/200.0;
         }
         imp_cmd.header.seq = -1;
@@ -328,7 +328,7 @@ int main(int argc, char **argv) {
         ros::spinOnce();
 
         for (auto& cmd : imp_cmd_modules){
-            cmd->Kx = 1000;
+            cmd->Kx = 2500;
             cmd->Ky = 1000;
         }
 
@@ -351,9 +351,15 @@ int main(int argc, char **argv) {
                         touched[i] = true;
                     }
                 }
-                    
-                // const double robot_pos[3] = {odom_pos.x, odom_pos.y, odom_pos.z};
-                // const double robot_vel[3] = {odom_vel.x, odom_vel.y, odom_vel.z};
+                
+                // robot_vel[0] = odom_pos.x;
+                // robot_vel[1] = odom_pos.y;
+                // robot_vel[2] = odom_pos.z;
+                
+                // robot_pos[0] = odom_vel.x;
+                // robot_pos[1] = odom_vel.y;
+                // robot_pos[2] = odom_vel.z;
+
                 robot_vel[0] = (sim_data.position.x-robot_pos[0])/dt;
                 robot_vel[1] = (sim_data.position.y-robot_pos[1])/dt;
                 robot_vel[2] = (sim_data.position.z-robot_pos[2])/dt;
@@ -376,7 +382,8 @@ int main(int argc, char **argv) {
 
                 Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(N * n_x);
                 for (int i = 0; i < N; ++i) {
-                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, stand_height, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, stand_height, velocity, 0, 0,
+                                                   0, 0, 0, 0, 0, 0;
                 }
 
                 legmodel.contact_map(motor_state_modules[0]->theta, motor_state_modules[0]->beta);
