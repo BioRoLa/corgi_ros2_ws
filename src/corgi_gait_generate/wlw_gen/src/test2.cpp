@@ -285,6 +285,8 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 int randomDeg = dist(rng); 
                 next_eta[i][0] = 17.0 * PI / 180.0;
                 next_eta[i][1] = randomDeg * PI / 180.0;
+                // next_eta[i][1] = -50 * PI / 180.0;
+                // cout<<i<<": "<<next_eta[i][1]*180/PI<<endl;
             }
 
             // transfer to random wheel pose
@@ -308,6 +310,9 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
             check_beta[0] = closer_beta(-45*PI/180, 0);
             check_beta[1] = closer_beta( 45*PI/180, 1);  
+            
+            cout<<"0: "<<check_beta[0]*180/PI<<endl;
+            cout<<"1: "<<check_beta[1]*180/PI<<endl;
             if(check_beta[0]<= check_beta[1]){
                 state = false;
             }
@@ -319,10 +324,11 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             for (int i =0;i<delta_time_step;i++){
                 for (int j=0;j<4;j++){
                     current_eta[j][0] = 17 * PI/180;
-                    current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                    current_eta[j][1] = current_eta[j][1] +  wheel_delta_beta;
                 }
                 Send(1);
             }
+
             // Front Transform
             body_angle = asin((stand_height - leg_model.radius) / BL);
             if(state ==0){
@@ -333,8 +339,8 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             }        
             pos = {0, -stand_height+leg_model.r};
             // (double height, float shift, float steplength, double slope)
-            cout<< (step_length/2) - (0.5/(1-swing_time)) * step_length << endl;
-            cout<< body_angle * 180/PI << endl;
+            // cout<< (step_length/2) - (0.5/(1-swing_time)) * step_length << endl;
+            // cout<< body_angle * 180/PI << endl;
             temp = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
             // temp = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
             target_theta = temp[0];
@@ -369,19 +375,19 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 for (int j=0;j<4;j++){
                     if (j == state){
                         current_eta[j][0] += target_theta;
-                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                        current_eta[j][1] = current_eta[j][1] +  wheel_delta_beta;
                     }
                     else if(j == !state && i>=(delta_time_step*1/3)){
                         current_eta[j][0] += delta_theta;
-                        current_eta[j][1] = abs(current_eta[j][1]) +  delta_beta;
+                        current_eta[j][1] = current_eta[j][1] +  delta_beta;
                     }  
                     else if(j == !state){
                         current_eta[j][0] = 17 * PI/180;
-                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                        current_eta[j][1] = current_eta[j][1] +  wheel_delta_beta;
                     }
                     else{
                         current_eta[j][0] = 17 * PI/180;
-                        current_eta[j][1] = abs(current_eta[j][1]) +  wheel_delta_beta;
+                        current_eta[j][1] = current_eta[j][1] +  wheel_delta_beta;
                     }
                 }
                 Send(1);
@@ -396,11 +402,11 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 duty_temp = {0, 0.5 ,0.5+(0.5-swing_time)*2/3, (0.5-swing_time)*2/3};
             }
             // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
-            
+            cout << "still walking!" << endl;
             swing_phase_temp = {0,0,0,0};
             state = 0;
-            // cout << "still walking!" << endl;
             while(state == false){
+                
                 for (int i=0; i<4; i++) {
                     duty_temp[i] += incre_duty;     
                 }        
@@ -482,6 +488,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 Send(1);
             }
             
+
             // cout<< "hear_transform" <<endl;
             // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
             // find the one that is going to change -> decide the #step
@@ -494,30 +501,57 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             else{
                 state = true;
             }
-            // the hear closer leg
+            // the hear closer leg [state+2]
             body_move_dist = (leg_model.radius * check_beta[state+2]);
             delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
             target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
-            // the hear further leg  (swing backward)
-            if ((duty[(!state)+2]+incre_duty*delta_time_step)>0.8) {
-                swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
-                Swing(current_eta, swing_pose, swing_variation, (!state)+2);
+            // the hear further leg  [!state+2]
+            // 最終要到達的位置
+            // double mod1 = fmod(next_eta[(!state) + 2][1], 2 * PI);
+            // double mod2 = fmod(current_eta[(!state) + 2][1], 2 * PI);
+            // 使用 (value - PI) 的乘積來判斷兩者是否在 PI 的同一側
+            swing_dir = (((fmod(next_eta[(!state) + 2][1], 2 * PI)) - PI) * (fmod(current_eta[(!state) + 2][1], 2 * PI) - PI) >= 0);
+            cout<<(!state) + 2<<endl;
+            cout<<"ideal beta = "<<fmod(next_eta[(!state) + 2][1], 2 * PI) *180/PI<<endl;
+            cout<<"current beta = "<<fmod(current_eta[(!state) + 2][1], 2 * PI) *180/PI<<endl;
+            cout<<"Compare result: "<<swing_dir<<endl;
 
-                double ratio_temp = ((duty[(!state)+2]+incre_duty*delta_time_step)-(1-swing_time))/swing_time;
-                double currentX_temp = swing_pose[0] + swing_variation[0] * ratio_temp;
-                double currentY_temp = swing_pose[1] + swing_variation[1] * ratio_temp;
-                if((!state)+2 ==3){
-                    check_beta[(!state)+2] = closer_beta(-currentY_temp, (!state)+2);
-                }
-                else{
-                    check_beta[(!state)+2] = closer_beta( currentY_temp, (!state)+2);
-                }
-                
+            // if ((duty[(!state)+2]+incre_duty*delta_time_step)>0.8) {
+            //     swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
+            //     Swing(current_eta, swing_pose, swing_variation, (!state)+2);
+            //     cout << "Get in" <<endl;
+            //     double ratio_temp = ((duty[(!state)+2]+incre_duty*delta_time_step)-(1-swing_time))/swing_time;
+            //     double currentX_temp = swing_pose[0] + swing_variation[0] * ratio_temp;
+            //     double currentY_temp = swing_pose[1] + swing_variation[1] * ratio_temp;                
+            //     if((!state)+2 ==3){
+            //         check_beta[(!state)+2] = closer_beta(-currentY_temp, (!state)+2);
+            //     }
+            //     else{
+            //         check_beta[(!state)+2] = closer_beta( currentY_temp, (!state)+2);
+            //     }                
+            //     // choose the swing (swing backward/swing forward)
+            //     // swing backward
+              
+            //     double mod1 = fmod(currentY_temp, 2 * PI);
+            //     double mod2 = fmod(current_eta[(!state) + 2][1], 2 * PI);
+            //     cout<<(!state) + 2<<endl;
+            //     cout<<currentY_temp<<endl;
+            //     cout<<mod1<<endl;
+            //     cout<<current_eta[(!state) + 2][1]<<endl;
+            //     cout<<mod2<<endl;
+
+            //     // 使用 (value - PI) 的乘積來判斷兩者是否在 PI 的同一側
+            //     swing_dir = ((mod1 - PI) * (mod2 - PI) >= 0);
+            // }
+            if (swing_dir){
+                delta_beta = (check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
+                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
             }
-            delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-            delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
-            
-             
+            else{
+                delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
+                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
+            }          
+           
             for (int j =0;j<delta_time_step;j++){
                 // cout << "duty: "<< duty_temp[0] << " , " << duty_temp[1] << " , " << duty_temp[2] << " , " << duty_temp[3] << endl; 
                 for (int i=0; i<4; i++) {
@@ -549,17 +583,29 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                     else if(i == (state+2)){
                         // closer one
                         current_eta[i][0] += target_theta;
-                        current_eta[i][1] = abs(current_eta[i][1]) +  wheel_delta_beta;
+                        current_eta[i][1] = current_eta[i][1] +  wheel_delta_beta;
                     }
                     else{
-                        if(j>=(delta_time_step*1/3)){
-                            current_eta[i][0] += delta_theta;
-                            current_eta[i][1] = abs(current_eta[i][1]) -  delta_beta;
+                        if (swing_dir){
+                            if(j>=(delta_time_step*1/3)){
+                                current_eta[i][0] += delta_theta;
+                                current_eta[i][1] = current_eta[i][1] +  delta_beta;
+                            }
+                            else{
+                                current_eta[i][0] = 17 * PI/180;
+                                current_eta[i][1] = current_eta[i][1] + wheel_delta_beta;
+                            }
                         }
                         else{
-                            current_eta[i][0] = 17 * PI/180;
-                            current_eta[i][1] = abs(current_eta[i][1]) - wheel_delta_beta;
-                        }
+                            if(j>=(delta_time_step*1/3)){
+                                current_eta[i][0] += delta_theta;
+                                current_eta[i][1] = current_eta[i][1] -  delta_beta;
+                            }
+                            else{
+                                current_eta[i][0] = 17 * PI/180;
+                                current_eta[i][1] = current_eta[i][1] - wheel_delta_beta;
+                            }
+                        }                        
                     }
                 
                 }
@@ -607,7 +653,7 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 }
                
             }
-            for(int i=0;i<10000;i++){
+            for(int i=0;i<5000;i++){
                 wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
                 for(int i = 0; i < 4; i++){
                     current_eta[i][0] = 17.0 * PI / 180.0;
@@ -877,11 +923,12 @@ int main(int argc, char** argv) {
 
     /*  wlw initial pose  */
     // wlw_gait.Initialize(2, 300, 0, 0, 5, 2, 0);
-    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.05);
+    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.02);
     
     /*  wheel to wlw transform  */
     cout<< "-----transform to wlw------"<<endl;
-    wlw_gait.Transform(0, 1, 1, 3, 5, -0.05);
+    // wlw_gait.Transform(0, 1, 1, 5, 10, 0);
+    wlw_gait.Transform(0, 1, 0, 5, 10, -0.02);
 
     /*  wlw real-time   */
     cout<< "-----wlw------"<<endl;
@@ -889,23 +936,23 @@ int main(int argc, char** argv) {
     for (int step = 0;step<1000;step++) {
         wlw_gait.motor_cmd.header.seq = step;
         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-        wlw_gait.Step(1, 1, -0.05);
+        wlw_gait.Step(1, 1, -0.02);
     }
 
     cout<< "----wlw-variation----"<<endl;
-    cout<< "Height from 0.129 to 0.165"<<endl;
+    cout<< "Height from 0.14 to 0.165"<<endl;
     for (int step = 0;step<10000;step++) {
         // Test change_Height
         if(step <= 8000){
-            wlw_gait.change_Height(0.129 + 0.036*(step)/8000);
+            wlw_gait.change_Height(0.14 + 0.025*(step)/8000);
         }
        
        
         // Test change_Step_length
         if (step >= 5000){
             if(step == 5000){
-                cout<< "SL from 0.2 to 0.3"<<endl;
-                cout<< "V from 0.025 to 0.05"<<endl;
+                cout<< "SL from 0.4 to 0.3"<<endl;
+                cout<< "V from 0.1 to 0.05"<<endl;
             }
             wlw_gait.change_Step_length(0.3);
             wlw_gait.change_Velocity(0.05);
@@ -916,7 +963,7 @@ int main(int argc, char** argv) {
         else{
             wlw_gait.motor_cmd.header.seq = step;
             wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-            wlw_gait.Step(1, 1, -0.05);
+            wlw_gait.Step(1, 1, -0.02);
         }
         
         
@@ -1028,7 +1075,7 @@ int main(int argc, char** argv) {
 
 
     cout<< "-----wlw walking-----"<<endl;
-    for (int step = 0;step<10000;step++) {
+    for (int step = 0;step<5000;step++) {
         wlw_gait.motor_cmd.header.seq = step;
         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
         wlw_gait.Step(1, 1, -0.05);

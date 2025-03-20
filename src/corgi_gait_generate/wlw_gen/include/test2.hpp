@@ -76,9 +76,9 @@ public:
     std::array<double, 4> duty;
     std::array<int, 4> swing_phase = {0, 0, 0, 0};
     double incre_duty;
-    double velocity     = 0.025; // m/s
-    double stand_height = 0.129; //0.149
-    double step_length  = 0.2; //0.4
+    double velocity     = 0.1; // m/s
+    double stand_height = 0.149; //0.149
+    double step_length  = 0.4; //0.4
     
     double current_eta[4][2];
     double next_eta[4][2];
@@ -121,6 +121,7 @@ private:
     int delta_time_step;
     double target_theta;
     bool state;
+    bool swing_dir = 0;
     double body_angle ;
     std::array<double, 2> temp;
     std::array<double, 2> pos;
@@ -133,5 +134,7 @@ private:
     double new_step_length = step_length;
     
 };
-
 #endif
+
+
+
