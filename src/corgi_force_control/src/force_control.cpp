@@ -269,6 +269,16 @@ int main(int argc, char **argv) {
             phi_vel_prev_modules[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
         }
 
+        // static friction　compensation
+        motor_cmd_modules[0]->torque_r += 0.568 * Eigen::numext::sign(motor_cmd_modules[0]->torque_r);
+        motor_cmd_modules[0]->torque_l += 0.334 * Eigen::numext::sign(motor_cmd_modules[0]->torque_l);
+        motor_cmd_modules[1]->torque_r += 0.370 * Eigen::numext::sign(motor_cmd_modules[1]->torque_r);
+        motor_cmd_modules[1]->torque_l += 0.330 * Eigen::numext::sign(motor_cmd_modules[1]->torque_l);
+        motor_cmd_modules[2]->torque_r += 0.440 * Eigen::numext::sign(motor_cmd_modules[2]->torque_r);
+        motor_cmd_modules[2]->torque_l += 0.356 * Eigen::numext::sign(motor_cmd_modules[2]->torque_l);
+        motor_cmd_modules[3]->torque_r += 0.330 * Eigen::numext::sign(motor_cmd_modules[3]->torque_r);
+        motor_cmd_modules[3]->torque_l += 0.359 * Eigen::numext::sign(motor_cmd_modules[3]->torque_l);
+
         // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
 
         motor_cmd.header.seq = loop_count;
