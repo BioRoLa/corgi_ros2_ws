@@ -270,6 +270,8 @@ int main(int argc, char **argv) {
         }
 
         // static friction　compensation
+        // avg: 0.429, 0.272, 0.326, 0.267, 0.353, 0.288, 0.306, 0.236
+        // 95 percentile: 0.568, 0.334, 0.370, 0.330, 0.440, 0.356, 0.330, 0.359
         motor_cmd_modules[0]->torque_r += 0.568 * Eigen::numext::sign(motor_cmd_modules[0]->torque_r);
         motor_cmd_modules[0]->torque_l += 0.334 * Eigen::numext::sign(motor_cmd_modules[0]->torque_l);
         motor_cmd_modules[1]->torque_r += 0.370 * Eigen::numext::sign(motor_cmd_modules[1]->torque_r);
