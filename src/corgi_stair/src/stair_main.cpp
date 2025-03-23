@@ -81,6 +81,7 @@ int main(int argc, char** argv) {
                 break;
             case WAIT:
                 walk_gait.initialize(init_eta);
+                trigger = true;
                 break;
             case WALK:
                 eta_list = walk_gait.step();
