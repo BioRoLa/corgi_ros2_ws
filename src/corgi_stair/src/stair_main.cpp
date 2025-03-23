@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     const int sampling_rate = 1000;
     const int transform_count = 5000; // 5s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    double init_eta[8] = {1.7695243267183387, -0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, 0.727701687609334};   // normal
+    double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
     
     
     /* Initial variable */
@@ -80,6 +80,7 @@ int main(int argc, char** argv) {
                 for (int i=0; i<4; i++) {
                     eta_list[0][i] = INIT_THETA + transform_ratio * (init_eta[i*2]   - INIT_THETA);
                     eta_list[1][i] = INIT_BETA  + transform_ratio * (init_eta[i*2+1] - INIT_BETA);
+                    eta_list[1][i] = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
                 }//end for
                 break;
             case WAIT:
