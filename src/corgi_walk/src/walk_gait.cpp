@@ -256,3 +256,7 @@ void WalkGait::set_curvature(double new_value){
 std::array<int, 4> WalkGait::get_step_count() {
     return this->step_count;
 }//end get_step_count
+
+std::array<int, 4> WalkGait::get_swing_phase() {
+    return this->swing_phase;
+}//end get_step_count

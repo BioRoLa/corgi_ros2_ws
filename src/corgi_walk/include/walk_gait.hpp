@@ -23,6 +23,7 @@ class WalkGait {
         void set_step_height(double new_value);
         void set_curvature(double new_value);
         std::array<int, 4> get_step_count();
+        std::array<int, 4> get_swing_phase();
 
     private:
         LegModel leg_model;
