@@ -3,9 +3,15 @@
 
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::ForceStateStamped force_state;
+sensor_msgs::Imu imu;
+
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
+}
+
+void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
+    imu = *msg;
 }
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
@@ -22,11 +28,11 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
         U_r_coef(0, i) = -U_x_coef[i];
         U_r_coef(1, i) = U_y_coef[i];
         
-        L_l_coef(0, i) = U_x_coef[i];
-        L_l_coef(1, i) = U_y_coef[i];
+        L_l_coef(0, i) = L_x_coef[i];
+        L_l_coef(1, i) = L_y_coef[i];
         
-        L_r_coef(0, i) = -U_x_coef[i];
-        L_r_coef(1, i) = U_y_coef[i];
+        L_r_coef(0, i) = -L_x_coef[i];
+        L_r_coef(1, i) = L_y_coef[i];
         
         F_l_coef(0, i) = F_x_coef[i];
         F_l_coef(1, i) = F_y_coef[i];
@@ -44,7 +50,7 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
 
     if      (rim == 1) P_poly = rot_alpha * (H_l_coef-U_l_coef) * scaled_radius + U_l_coef;
     else if (rim == 2) P_poly = rot_alpha * (F_l_coef-L_l_coef) * scaled_radius + L_l_coef;
-    else if (rim == 3) P_poly = G_coef * scaled_radius;
+    else if (rim == 3) P_poly = G_coef; // * scaled_radius;
     else if (rim == 4) P_poly = rot_alpha * (G_coef-L_r_coef) * scaled_radius + L_r_coef;
     else if (rim == 5) P_poly = rot_alpha * (F_r_coef-U_r_coef) * scaled_radius + U_r_coef;
     else P_poly = Eigen::MatrixXd::Zero(2, 8);
@@ -102,6 +108,23 @@ Eigen::MatrixXd estimate_force(double theta, double beta, double torque_r, doubl
     return force_est;
 }
 
+// Function to compute Euler angles from a quaternion using ZYX order.
+void quaternionToEuler(const Eigen::Quaterniond &q, double &roll, double &pitch, double &yaw) {
+    // Normalize the quaternion (if not already normalized)
+    Eigen::Quaterniond q_norm = q.normalized();
+
+    // Calculate roll (x-axis rotation)
+    roll = std::atan2(2.0 * (q_norm.w() * q_norm.x() + q_norm.y() * q_norm.z()),
+                      1.0 - 2.0 * (q_norm.x() * q_norm.x() + q_norm.y() * q_norm.y()));
+
+    // Calculate pitch (y-axis rotation)
+    pitch = std::asin(2.0 * (q_norm.w() * q_norm.y() - q_norm.z() * q_norm.x()));
+
+    // Calculate yaw (z-axis rotation)
+    yaw = std::atan2(2.0 * (q_norm.w() * q_norm.z() + q_norm.x() * q_norm.y()),
+                     1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
+}
+
 
 int main(int argc, char **argv) {
 
@@ -111,8 +134,14 @@ int main(int argc, char **argv) {
 
     ros::NodeHandle nh;
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
     ros::Publisher force_state_pub = nh.advertise<corgi_msgs::ForceStateStamped>("force/state", 1000);
     ros::Rate rate(1000);
+
+    Eigen::Quaterniond body_angle_quat;
+    double roll = 0;
+    double pitch = 0;
+    double yaw = 0;
 
     std::vector<corgi_msgs::MotorState*> motor_state_modules = {
         &motor_state.module_a,
@@ -131,12 +160,23 @@ int main(int argc, char **argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
-        for (int i=0; i<4; i++){
-            Eigen::MatrixXd force_est = estimate_force(motor_state_modules[i]->theta, motor_state_modules[i]->beta,
-                                                       motor_state_modules[i]->torque_r, motor_state_modules[i]->torque_l);
+        body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
+        quaternionToEuler(body_angle_quat, roll, pitch, yaw);
 
-            force_state_modules[i]->Fx =  force_est(0, 0);
-            force_state_modules[i]->Fy =  force_est(1, 0);
+        for (int i=0; i<4; i++){
+            Eigen::MatrixXd force_est;
+
+            if (i == 1 || i == 2) {
+                force_est = estimate_force(motor_state_modules[i]->theta, motor_state_modules[i]->beta-pitch,
+                                           motor_state_modules[i]->torque_r, motor_state_modules[i]->torque_l);
+            }
+            else {
+                force_est = estimate_force(motor_state_modules[i]->theta, motor_state_modules[i]->beta+pitch,
+                                           motor_state_modules[i]->torque_r, motor_state_modules[i]->torque_l);
+            }
+
+            force_state_modules[i]->Fx = force_est(0, 0);
+            force_state_modules[i]->Fy = force_est(1, 0);
         }
 
         force_state.header.seq = motor_state.header.seq;
