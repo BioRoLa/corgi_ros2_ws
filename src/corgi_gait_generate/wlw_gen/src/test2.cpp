@@ -284,8 +284,8 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             for(int i = 0; i < 4; i++){
                 int randomDeg = dist(rng); 
                 next_eta[i][0] = 17.0 * PI / 180.0;
-                next_eta[i][1] = randomDeg * PI / 180.0;
-                // next_eta[i][1] = -50 * PI / 180.0;
+                // next_eta[i][1] = randomDeg * PI / 180.0;
+                next_eta[i][1] = 0* PI / 180.0;
                 // cout<<i<<": "<<next_eta[i][1]*180/PI<<endl;
             }
 
@@ -502,6 +502,8 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                 state = true;
             }
             // the hear closer leg [state+2]
+            cout << "body_move_dist!" <<body_move_dist<< endl;
+            cout << "delta_time_step!"<<delta_time_step << endl;
             body_move_dist = (leg_model.radius * check_beta[state+2]);
             delta_time_step = int(check_beta[state+2]/wheel_delta_beta);
             target_theta = (next_eta[(state)+2][0] - current_eta[state+2][0])/delta_time_step;
@@ -510,7 +512,13 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             // double mod1 = fmod(next_eta[(!state) + 2][1], 2 * PI);
             // double mod2 = fmod(current_eta[(!state) + 2][1], 2 * PI);
             // 使用 (value - PI) 的乘積來判斷兩者是否在 PI 的同一側
-            swing_dir = (((fmod(next_eta[(!state) + 2][1], 2 * PI)) - PI) * (fmod(current_eta[(!state) + 2][1], 2 * PI) - PI) >= 0);
+            if(check_beta[(!state)+2] >= 2*PI - check_beta[(!state)+2]){
+                swing_dir = 0;
+            }
+            else{
+                swing_dir = 1;
+            }
+            // swing_dir = (((fmod(next_eta[(!state) + 2][1], 2 * PI)) - PI) * (fmod(current_eta[(!state) + 2][1], 2 * PI) - PI) >= 0);
             cout<<(!state) + 2<<endl;
             cout<<"ideal beta = "<<fmod(next_eta[(!state) + 2][1], 2 * PI) *180/PI<<endl;
             cout<<"current beta = "<<fmod(current_eta[(!state) + 2][1], 2 * PI) *180/PI<<endl;
@@ -545,11 +553,11 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
             // }
             if (swing_dir){
                 delta_beta = (check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
+                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*1/3);
             }
             else{
                 delta_beta = (2*PI - check_beta[(!state)+2] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*2/3);
+                delta_theta = (next_eta[(!state)+2][0]-current_eta[(!state)+2][0])/(delta_time_step*1/3);
             }          
            
             for (int j =0;j<delta_time_step;j++){
@@ -586,8 +594,14 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                         current_eta[i][1] = current_eta[i][1] +  wheel_delta_beta;
                     }
                     else{
+                        // current_eta[i][0] = current_eta[i][0];
+                        // current_eta[i][1] = current_eta[i][1] +  delta_beta;
                         if (swing_dir){
-                            if(j>=(delta_time_step*1/3)){
+                            if(j>=(delta_time_step*1/3) && j<=(delta_time_step*2/3)){
+                                current_eta[i][0] = 17 * PI/180;
+                                current_eta[i][1] = current_eta[i][1] +  delta_beta;
+                            }
+                            else if(j>(delta_time_step*2/3)){
                                 current_eta[i][0] += delta_theta;
                                 current_eta[i][1] = current_eta[i][1] +  delta_beta;
                             }
@@ -597,7 +611,11 @@ void WLWGait::Transform(int type, int do_pub, int transfer_state, int transfer_s
                             }
                         }
                         else{
-                            if(j>=(delta_time_step*1/3)){
+                            if(j>=(delta_time_step*1/3) && j<=(delta_time_step*2/3)){
+                                current_eta[i][0] = 17 * PI/180;
+                                current_eta[i][1] = current_eta[i][1] -  delta_beta;
+                            }
+                            else if(j>(delta_time_step*2/3)){
                                 current_eta[i][0] += delta_theta;
                                 current_eta[i][1] = current_eta[i][1] -  delta_beta;
                             }
@@ -923,12 +941,12 @@ int main(int argc, char** argv) {
 
     /*  wlw initial pose  */
     // wlw_gait.Initialize(2, 300, 0, 0, 5, 2, 0);
-    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.02);
+    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.05);
     
     /*  wheel to wlw transform  */
     cout<< "-----transform to wlw------"<<endl;
     // wlw_gait.Transform(0, 1, 1, 5, 10, 0);
-    wlw_gait.Transform(0, 1, 1, 5, 2, -0.02);
+    wlw_gait.Transform(0, 1, 1, 5, 20, -0.05);
 
     /*  wlw real-time   */
     cout<< "-----wlw------"<<endl;
@@ -936,7 +954,7 @@ int main(int argc, char** argv) {
     for (int step = 0;step<1000;step++) {
         wlw_gait.motor_cmd.header.seq = step;
         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-        wlw_gait.Step(1, 1, -0.02);
+        wlw_gait.Step(1, 1, -0.05);
     }
 
     cout<< "----wlw-variation----"<<endl;
@@ -958,12 +976,12 @@ int main(int argc, char** argv) {
             wlw_gait.change_Velocity(0.05);
             wlw_gait.motor_cmd.header.seq = step;
             wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-            wlw_gait.Step(1, 1, -0.05);
+            wlw_gait.Step(1, 1, -0.06);
         }
         else{
             wlw_gait.motor_cmd.header.seq = step;
             wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-            wlw_gait.Step(1, 1, -0.02);
+            wlw_gait.Step(1, 1, -0.05);
         }
         
         
@@ -974,7 +992,7 @@ int main(int argc, char** argv) {
            
     /*  wlw to walk transform   */
     cout<< "-----transform to leg------"<<endl;
-    wlw_gait.Transform(3, 1, 0, 3, 0, -0.05);
+    wlw_gait.Transform(3, 1, 0, 3, 0, -0.06);
     
     /*  try walk real-time   */
     cout<< "-----leg------"<<endl;
@@ -1009,12 +1027,12 @@ int main(int argc, char** argv) {
 
     cout<< "start walk"<<endl;
     int check_walk = 0;
-    for (int step = 0;step<6000;step++) {
-        walk_gait.set_stand_height(0.165-0.005*(step+1)/6000);
+    for (int step = 0;step<8000;step++) {
+        walk_gait.set_stand_height(0.165-0.005*(step+1)/8000);
         if (check_walk!=4){
             check_walk = 0;
             for(int phase=0;phase<4;phase++){
-                if(walk_gait.swing_phase[phase]==0 && step>4000){
+                if(walk_gait.swing_phase[phase]==0 && step>6000){
                     check_walk++;
                 }
             }
@@ -1058,7 +1076,7 @@ int main(int argc, char** argv) {
     wlw_gait.velocity     = 0.05;
     wlw_gait.stand_height = 0.160;
     wlw_gait.step_length  = 0.3;
-    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.05);
+    wlw_gait.Initialize(2, 10, 0, 0, 2, 2, -0.06);
     for (int i=0; i<4; i++){
         wlw_gait.foothold[i][0] = walk_gait.foothold[i][0];
         wlw_gait.foothold[i][0] = walk_gait.foothold[i][1];
@@ -1077,18 +1095,18 @@ int main(int argc, char** argv) {
     }        
     
     cout<< "-----transform to wlw------"<<endl;
-    wlw_gait.Transform(2, 1, 0, 3, 0, -0.05);
+    wlw_gait.Transform(2, 1, 0, 3, 0, -0.06);
 
 
     cout<< "-----wlw walking-----"<<endl;
     for (int step = 0;step<5000;step++) {
         wlw_gait.motor_cmd.header.seq = step;
         wlw_gait.motor_cmd.header.stamp = ros::Time::now();
-        wlw_gait.Step(1, 1, -0.05);
+        wlw_gait.Step(1, 1, -0.03);
     }
 
     cout<< "-----transform to wheel-----"<<endl;
-    wlw_gait.Transform(1, 1, 0, 3, 0, -0.05);
+    wlw_gait.Transform(1, 1, 0, 3, 0, -0.06);
     // for (int step = 0;step<7500;step++) {
     //     wlw_gait.change_Height(0.165 - (0.165-0.1125)*(step)/7500);
     //     wlw_gait.change_Step_length(0.3+0.1*(step)/7500);
