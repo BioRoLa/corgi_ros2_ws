@@ -4,13 +4,7 @@ float64 Fx
 float64 Fy
 float64 Mx
 float64 My
+float64 Bx
+float64 By
 float64 Kx
 float64 Ky
-float64 Dx
-float64 Dy
-float64 adaptive_kp_x
-float64 adaptive_kp_y
-float64 adaptive_ki_x
-float64 adaptive_ki_y
-float64 adaptive_kd_x
-float64 adaptive_kd_y

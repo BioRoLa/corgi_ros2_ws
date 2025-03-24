@@ -25,6 +25,7 @@ corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::TriggerStamped trigger;
 corgi_msgs::SimDataStamped sim_data;
 sensor_msgs::Imu imu;
+sensor_msgs::Imu imu_filtered;
 
 double AR_phi = 0.0;
 double AL_phi = 0.0;
@@ -89,8 +90,10 @@ void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
 
 void tb2phi(corgi_msgs::MotorCmd motor_cmd, double &trq_r, double &trq_l, double phi_r_fb, double phi_l_fb, double phi_r_dot_fb, double phi_l_dot_fb){
     if (motor_cmd.theta == 0) {
-        motor_cmd.kp = 90;
-        motor_cmd.kd = 1.75;
+        motor_cmd.kp_r = 90;
+        motor_cmd.kp_l = 90;
+        motor_cmd.kd_r = 1.75;
+        motor_cmd.kd_l = 1.75;
     }
     
     double theta_0 = 17 / 180.0 * M_PI;
@@ -99,8 +102,8 @@ void tb2phi(corgi_msgs::MotorCmd motor_cmd, double &trq_r, double &trq_l, double
     double phi_r = find_closest_phi(motor_cmd.beta - motor_cmd.theta + theta_0, phi_r_fb);
     double phi_l = find_closest_phi(motor_cmd.beta + motor_cmd.theta - theta_0, phi_l_fb);
 
-    trq_r = motor_cmd.kp*(phi_r-phi_r_fb) + motor_cmd.kd*(-phi_r_dot_fb) + motor_cmd.torque_r;
-    trq_l = motor_cmd.kp*(phi_l-phi_l_fb) + motor_cmd.kd*(-phi_l_dot_fb) + motor_cmd.torque_l;
+    trq_r = motor_cmd.kp_r*(phi_r-phi_r_fb) + motor_cmd.kd_r*(-phi_r_dot_fb) + motor_cmd.torque_r;
+    trq_l = motor_cmd.kp_l*(phi_l-phi_l_fb) + motor_cmd.kd_l*(-phi_l_dot_fb) + motor_cmd.torque_l;
 }
 
 std::string get_lastest_input() {
@@ -237,13 +240,22 @@ int main(int argc, char **argv) {
         Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
 
         linear_acceleration -= gravity_body;
-        imu.linear_acceleration.x = linear_acceleration(0);
-        imu.linear_acceleration.y = linear_acceleration(1);
-        imu.linear_acceleration.z = linear_acceleration(2);
+        
+        imu_filtered.header.seq = loop_counter;
+        imu_filtered.orientation.w = imu.orientation.w;
+        imu_filtered.orientation.x = imu.orientation.x;
+        imu_filtered.orientation.y = imu.orientation.y;
+        imu_filtered.orientation.z = imu.orientation.z;
+        imu_filtered.angular_velocity.x = imu.angular_velocity.x;
+        imu_filtered.angular_velocity.y = imu.angular_velocity.y;
+        imu_filtered.angular_velocity.z = imu.angular_velocity.z; 
+        imu_filtered.linear_acceleration.x = linear_acceleration(0);
+        imu_filtered.linear_acceleration.y = linear_acceleration(1);
+        imu_filtered.linear_acceleration.z = linear_acceleration(2);
 
         motor_state_pub.publish(motor_state);
         trigger_pub.publish(trigger);
-        imu_pub.publish(imu);
+        imu_pub.publish(imu_filtered);
         sim_data_pub.publish(sim_data);
 
         double clock = loop_counter*0.001;

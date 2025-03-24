@@ -1,3 +1,4 @@
 <launch>
     <node name="imu_node" pkg="corgi_imu" type="imu_node.sh" output="screen"/> 
+    <node name="imu_node" pkg="corgi_imu" type="imu_node" output="screen"/> 
 </launch>

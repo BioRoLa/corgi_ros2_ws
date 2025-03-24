@@ -28,6 +28,8 @@ add_message_files(
   WheelCmd.msg
   SimDataStamped.msg
   IMUStamped.msg
+  FsmCmdStamped.msg
+  FsmStateStamped.msg
 )
 
 add_service_files(

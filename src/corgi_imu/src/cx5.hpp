@@ -1,5 +1,6 @@
 #ifndef IMU_HPP
 #define IMU_HPP
+
 #ifndef SIMULATION
 #ifndef DEBUG
 #define DEBUG
@@ -13,15 +14,18 @@
 #include <chrono>
 #include <thread>
 #include <stdexcept>
-#include <stdarg.h>
+// #include <stdarg.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
+#include <memory>
+#include <iostream>
+#include <mutex>
 #include "math.h"
 
 using namespace mip;  
+using namespace std::chrono;
 
 Timestamp getCurrentTimestamp(){
-    using namespace std::chrono;
     return duration_cast<milliseconds>( steady_clock::now().time_since_epoch() ).count();
 }
 
@@ -34,9 +38,12 @@ struct Utils{
 std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
     // auto utils = std::unique_ptr<Utils>(new Utils());
     auto utils = std::make_unique<Utils>();
+// connect the device by serial port
+std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
     if( baud == 0 )
         throw std::runtime_error("Serial baud rate must be a decimal integer greater than 0.");
-
+    
+    auto utils = std::unique_ptr<Utils>(new Utils());
     using SerialConnection = mip::platform::SerialConnection;
     utils->connection = std::unique_ptr<SerialConnection>(new SerialConnection(port, baud));
     utils->device = std::unique_ptr<mip::DeviceInterface>(new mip::DeviceInterface(utils->connection.get(), utils->buffer, sizeof(utils->buffer), mip::C::mip_timeout_from_baudrate(baud), 500));
@@ -72,6 +79,7 @@ class CX5_AHRS {
 
             sensor_sample_rate = _sensor_sample_rate;
             filter_sample_rate = _filter_sample_rate;
+
             // if(commands_base::setIdle(*utils->device) != CmdResult::ACK_OK) {
 
             //     // auto utils = std::unique_ptr<Utils>(new Utils());
@@ -92,11 +100,13 @@ class CX5_AHRS {
             //     disconnect_utils(utils);
             //     utils = assign_serial(port, baud);
             // }
+
             twist_bias = Eigen::Vector3f(0,0,0);
         }
 
         void start() {
             std::unique_ptr<DeviceInterface>& device = utils->device;
+
             // // while (commands_base::ping(*device) != CmdResult::ACK_OK){
             // //     sleep(0.5);
             // //     std::cout << "while loop\n";
@@ -108,6 +118,12 @@ class CX5_AHRS {
             // if(commands_3dm::defaultDeviceSettings(*device) != CmdResult::ACK_OK)
             //     throw std::runtime_error("ERROR: Could not load default device settings!");
 
+            
+            while (commands_base::ping(*device) != CmdResult::ACK_OK){
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                std::cout << "Waiting for connection ...\n";
+            }
+
             uint16_t sensor_base_rate;
             if(commands_3dm::imuGetBaseRate(*device, &sensor_base_rate) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not get sensor base rate format!");
@@ -116,7 +132,7 @@ class CX5_AHRS {
             std::array<DescriptorRate, 1> sensor_descriptors = {{
                 { data_sensor::DATA_COMP_QUATERNION, sensor_decimation },
             }};
-            
+
             if(commands_3dm::writeImuMessageFormat(*device, sensor_descriptors.size(), sensor_descriptors.data()) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set sensor message format!");
 
@@ -146,9 +162,11 @@ class CX5_AHRS {
 
             if(commands_filter::writeAutoInitControl(*device, 1) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set filter autoinit control!");
-                
+
             if(commands_filter::reset(*device) != CmdResult::ACK_OK)
-                throw std::runtime_error("ERROR: Could not reset the filter!");
+
+            // if(commands_filter::reset(*device) != CmdResult::ACK_OK)
+            //     throw std::runtime_error("ERROR: Could not reset the filter!");
 
             DispatchHandler sensor_data_handlers[4];
             device->registerExtractor(sensor_data_handlers[0], &raw_attitude);
@@ -158,10 +176,12 @@ class CX5_AHRS {
 
             if(commands_base::resume(*device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not resume the device!");
+
             // bool filter_state_ahrs = false;
             Eigen::Matrix3f rot;
             rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
-            while(1) {
+            
+            while(true) {
                 device->update();
                 // if((!filter_state_ahrs)){
                 //     if (filter_status.filter_state == data_filter::FilterMode::AHRS) filter_state_ahrs = true;
@@ -182,7 +202,7 @@ class CX5_AHRS {
             Eigen::Vector3f t_sum(0, 0, 0);
             for (int i = 0; i < 1000; i++) {
                 this->get(acceleration_, twist_, attitude_);
-                usleep(900);
+                std::this_thread::sleep_for(std::chrono::microseconds(900));
                 t_sum += twist_;
             }
             twist_bias = t_sum / 1000.0;
@@ -209,6 +229,7 @@ class CX5_AHRS {
         Eigen::Quaternionf attitude;
         Eigen::Vector3f twist_bias;
         std::mutex _imu_mutex;
+
         // std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
         //     auto utils = std::unique_ptr<Utils>(new Utils());
         //     if( baud == 0 )
@@ -223,6 +244,8 @@ class CX5_AHRS {
 
         //     return utils;
         // }
+
 };
+
 #endif
 #endif

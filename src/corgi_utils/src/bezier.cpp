@@ -57,14 +57,15 @@ std::vector<double> Bezier::bzt_coeff(const std::vector<std::array<double, 2>>& 
 /* class SwingProfile */
 // p_l: position of G when lift leg
 // p_t: position of G when touch ground
-SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height) :
+SwingProfile::SwingProfile(std::array<double, 2> p_l, std::array<double, 2> p_t, double step_height, int direction) :
     /* Initializer List */
     L(p_t[0] - p_l[0]), 
     h(step_height), 
     offset_x(p_l[0]), 
     offset_y(p_l[1]), 
     diff_h(p_t[1] - p_l[1]),
-    dh(0), dL1(0), dL2(0), dL3(0), dL4(0)
+    dh(0), dL1(0), dL2(0), dL3(0), dL4(0),
+    direction(direction)
 {
     getControlPoints();
     bezier = Bezier(control_points);
@@ -74,6 +75,10 @@ std::array<double, 2> SwingProfile::getFootendPoint(double t_duty) {
     return bezier.getBzPoint(t_duty, offset_x, offset_y);
 }//end getFootendPoint
 
+int SwingProfile::getDirection() {
+    return direction;
+}//end getDirection
+
 void SwingProfile::getControlPoints() {
     std::array<double, 2> c0 = {0, 0};
     std::array<double, 2> c1 = {c0[0] - dL1, c0[1]};
@@ -82,8 +87,10 @@ void SwingProfile::getControlPoints() {
     std::array<double, 2> c4 = c2;
     std::array<double, 2> c5 = {c4[0] + 0.5 * L + dL1 + dL2, c4[1]};
     std::array<double, 2> c6 = c5;
-    std::array<double, 2> c7 = {c5[0], c5[1] + dh};
-    std::array<double, 2> c8 = {c7[0] + 0.5 * L + dL3 + dL4, c7[1]};
+    // std::array<double, 2> c7 = {c5[0], c5[1] + dh};
+    // std::array<double, 2> c8 = {c7[0] + 0.5 * L + dL3 + dL4, c7[1]};
+    std::array<double, 2> c7 = {c5[0] + 0.5 * L + dL3 + dL4, c5[1] + dh};
+    std::array<double, 2> c8 = c7;
     std::array<double, 2> c9 = c8;
     std::array<double, 2> c10 = {c8[0] - dL4, c8[1] - h - dh + diff_h};
     std::array<double, 2> c11 = {c10[0] - dL3, c10[1]};
