@@ -55,7 +55,8 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     
     printf("Starting IMU node\n");
-    imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 115200, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate (origin port: ttyTHS0)
+    // imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 921600, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate (origin port: ttyTHS0)
+    imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS0", 921600, 1000, 500);
     ros::Rate rate(1000);
 
     ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu", 1000); // "imu" is the topic name

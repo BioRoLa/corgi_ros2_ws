@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
             "w.x" << "," << "w.y" << "," << "w.z" << "," << 
             "q.x" << "," << "q.y" << "," << "q.z" << "," << "q.w" << 
             "\n";
-    while(1) { 
+    while(ros::ok) { 
         ros::spinOnce();
         mutex_.lock();
         // std::cout << imu_info.orientation().x() << "\t" << imu_info.orientation().y() << "\t" << imu_info.orientation().z() << "\t" << imu_info.orientation().w() << "\n";
