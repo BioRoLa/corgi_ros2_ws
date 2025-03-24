@@ -18,14 +18,14 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <memory>
-#include <iostream>
+// #include <iostream>
 #include <mutex>
 #include "math.h"
 
 using namespace mip;  
-using namespace std::chrono;
 
 Timestamp getCurrentTimestamp(){
+    using namespace std::chrono;
     return duration_cast<milliseconds>( steady_clock::now().time_since_epoch() ).count();
 }
 
@@ -37,9 +37,7 @@ struct Utils{
 
 std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
     // auto utils = std::unique_ptr<Utils>(new Utils());
-    auto utils = std::make_unique<Utils>();
-// connect the device by serial port
-std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
+    // connect the device by serial port
     if( baud == 0 )
         throw std::runtime_error("Serial baud rate must be a decimal integer greater than 0.");
     
@@ -162,8 +160,6 @@ class CX5_AHRS {
 
             if(commands_filter::writeAutoInitControl(*device, 1) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set filter autoinit control!");
-
-            if(commands_filter::reset(*device) != CmdResult::ACK_OK)
 
             // if(commands_filter::reset(*device) != CmdResult::ACK_OK)
             //     throw std::runtime_error("ERROR: Could not reset the filter!");
