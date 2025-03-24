@@ -14,11 +14,10 @@
 #include <chrono>
 #include <thread>
 #include <stdexcept>
-// #include <stdarg.h>
+#include <stdarg.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <memory>
-// #include <iostream>
 #include <mutex>
 #include "math.h"
 
@@ -36,12 +35,11 @@ struct Utils{
 };
 
 std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
-    // auto utils = std::unique_ptr<Utils>(new Utils());
+    auto utils = std::unique_ptr<Utils>(new Utils());
     // connect the device by serial port
     if( baud == 0 )
         throw std::runtime_error("Serial baud rate must be a decimal integer greater than 0.");
-    
-    auto utils = std::unique_ptr<Utils>(new Utils());
+
     using SerialConnection = mip::platform::SerialConnection;
     utils->connection = std::unique_ptr<SerialConnection>(new SerialConnection(port, baud));
     utils->device = std::unique_ptr<mip::DeviceInterface>(new mip::DeviceInterface(utils->connection.get(), utils->buffer, sizeof(utils->buffer), mip::C::mip_timeout_from_baudrate(baud), 500));
@@ -52,13 +50,13 @@ std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
     return utils;
 }
 
-// void disconnect_utils(std::unique_ptr<Utils>& utils){
-//     if(utils){
-//         utils->device.reset();
-//         utils->connection.reset();
-//         utils.reset();
-//     }
-// }
+void disconnect_utils(std::unique_ptr<Utils>& utils){
+    if(utils){
+        utils->device.reset();
+        utils->connection.reset();
+        utils.reset();
+    }
+}
 
 // void exit_gracefully(const char *message){
 //     if(message)
@@ -69,14 +67,25 @@ std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
 class CX5_AHRS {
     public:
         CX5_AHRS(std::string port, uint32_t baud, uint16_t _sensor_sample_rate, uint16_t _filter_sample_rate) {
-            // uint32_t default_baud_rate = 921600;
-            utils = assign_serial(port, baud);
+            uint32_t default_baud_rate = 921600;
+            utils = assign_serial(port, default_baud_rate);
             
-            // if(commands_base::ping(*utils->device) != CmdResult::ACK_OK)
-            //     throw std::runtime_error("ERROR: Could not ping the device!");
+            if(commands_base::ping(*utils->device) != CmdResult::ACK_OK)
+                throw std::runtime_error("ERROR: Could not ping the device!");
 
             sensor_sample_rate = _sensor_sample_rate;
             filter_sample_rate = _filter_sample_rate;
+            
+            // if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
+            //     throw std::runtime_error("ERROR: Could not set the device baudrate!");
+            // }
+            // sleep(0.3);
+            // disconnect_utils(utils);
+            // utils = assign_serial(port, baud);
+            // if(commands_3dm::saveUartBaudrate(*utils->device) != CmdResult::ACK_OK) {
+            //     throw std::runtime_error("ERROR: Could not save the device baudrate!");
+            // }
+            
 
             // if(commands_base::setIdle(*utils->device) != CmdResult::ACK_OK) {
 
@@ -116,11 +125,12 @@ class CX5_AHRS {
             // if(commands_3dm::defaultDeviceSettings(*device) != CmdResult::ACK_OK)
             //     throw std::runtime_error("ERROR: Could not load default device settings!");
 
-            
-            while (commands_base::ping(*device) != CmdResult::ACK_OK){
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                std::cout << "Waiting for connection ...\n";
-            }
+            if(commands_base::ping(*device) != CmdResult::ACK_OK)
+                throw std::runtime_error("ERROR: Could not ping the device!");
+            // while (commands_base::ping(*device) != CmdResult::ACK_OK){
+            //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            //     std::cout << "Waiting for connection ...\n";
+            // }
 
             uint16_t sensor_base_rate;
             if(commands_3dm::imuGetBaseRate(*device, &sensor_base_rate) != CmdResult::ACK_OK)
@@ -161,8 +171,8 @@ class CX5_AHRS {
             if(commands_filter::writeAutoInitControl(*device, 1) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set filter autoinit control!");
 
-            // if(commands_filter::reset(*device) != CmdResult::ACK_OK)
-            //     throw std::runtime_error("ERROR: Could not reset the filter!");
+            if(commands_filter::reset(*device) != CmdResult::ACK_OK)
+                throw std::runtime_error("ERROR: Could not reset the filter!");
 
             DispatchHandler sensor_data_handlers[4];
             device->registerExtractor(sensor_data_handlers[0], &raw_attitude);
