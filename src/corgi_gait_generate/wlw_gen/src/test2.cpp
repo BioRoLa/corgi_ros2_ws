@@ -928,7 +928,7 @@ int main(int argc, char** argv) {
     /*  wheel to wlw transform  */
     cout<< "-----transform to wlw------"<<endl;
     // wlw_gait.Transform(0, 1, 1, 5, 10, 0);
-    wlw_gait.Transform(0, 1, 1, 5, 10, -0.02);
+    wlw_gait.Transform(0, 1, 1, 5, 2, -0.02);
 
     /*  wlw real-time   */
     cout<< "-----wlw------"<<endl;
@@ -952,7 +952,7 @@ int main(int argc, char** argv) {
         if (step >= 5000){
             if(step == 5000){
                 cout<< "SL from 0.4 to 0.3"<<endl;
-                cout<< "V from 0.1 to 0.05"<<endl;
+                cout<< "V from 0.08 to 0.05"<<endl;
             }
             wlw_gait.change_Step_length(0.3);
             wlw_gait.change_Velocity(0.05);
@@ -979,7 +979,7 @@ int main(int argc, char** argv) {
     /*  try walk real-time   */
     cout<< "-----leg------"<<endl;
     WalkGait walk_gait(true, 0.0, 1000);
-    cout<< "transport eta"<<endl;
+    cout<< "transport eta "<<endl;
     std::array<std::array<double, 4>, 2> eta_list;
     double init_eta[8];
     for (int i=0; i<4; i++){
@@ -999,7 +999,13 @@ int main(int argc, char** argv) {
     //     , 1.052012758141898  , 0.5300286393524838 
     //     , 0.9164608588034946 , 0.3283090821356041};
     cout<< "initialize"<<endl;
-    walk_gait.initialize(init_eta);    
+    walk_gait.initialize(init_eta);   
+    
+    cout<< "transport duty "<<endl;
+    for (int i=0; i<4; i++){
+        walk_gait.duty[i]=wlw_gait.duty[i];
+        walk_gait.swing_phase[i]=wlw_gait.swing_phase[i];
+    }
 
     cout<< "start walk"<<endl;
     int check_walk = 0;
@@ -1008,7 +1014,7 @@ int main(int argc, char** argv) {
         if (check_walk!=4){
             check_walk = 0;
             for(int phase=0;phase<4;phase++){
-                if(walk_gait.swing_phase[phase]==0 && step>5000){
+                if(walk_gait.swing_phase[phase]==0 && step>4000){
                     check_walk++;
                 }
             }

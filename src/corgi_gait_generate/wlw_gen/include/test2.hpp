@@ -76,8 +76,8 @@ public:
     std::array<double, 4> duty;
     std::array<int, 4> swing_phase = {0, 0, 0, 0};
     double incre_duty;
-    double velocity     = 0.1; // m/s
-    double stand_height = 0.149; //0.149
+    double velocity     = 0.08; // m/s
+    double stand_height = 0.14; //0.14
     double step_length  = 0.4; //0.4
     
     double current_eta[4][2];
