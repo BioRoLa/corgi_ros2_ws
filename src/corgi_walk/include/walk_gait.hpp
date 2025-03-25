@@ -22,8 +22,11 @@ class WalkGait {
         void set_step_length(double new_value);
         void set_step_height(double new_value);
         void set_curvature(double new_value);
+        void set_eta(std::array<std::array<double, 4>, 2> eta_);
+        void set_duty(std::array<double, 4> duty_);
         std::array<int, 4> get_step_count();
         std::array<int, 4> get_swing_phase();
+        std::array<double, 4> get_duty();
         bool if_touchdown();
 
     private:

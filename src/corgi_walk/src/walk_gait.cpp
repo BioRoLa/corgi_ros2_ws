@@ -256,6 +256,20 @@ void WalkGait::set_curvature(double new_value){
     }// end if else
 }//end set_curvature
 
+void WalkGait::set_eta(std::array<std::array<double, 4>, 2> eta_) {
+    this->theta = eta_[0];
+    this->beta  = eta_[1];
+}//end set_eta
+
+void WalkGait::set_duty(std::array<double, 4> duty_) {
+    for (int i=0; i<4; i++) {
+        if (duty_[i] < 0 || duty_[i] > 1) {
+            throw std::runtime_error("Duty should be in the range [0, 1].");
+        }//end if
+    }//end for
+    this->duty = duty_;
+}//end set_duty
+
 std::array<int, 4> WalkGait::get_step_count() {
     return this->step_count;
 }//end get_step_count
@@ -263,6 +277,10 @@ std::array<int, 4> WalkGait::get_step_count() {
 std::array<int, 4> WalkGait::get_swing_phase() {
     return this->swing_phase;
 }//end get_step_count
+
+std::array<double, 4> WalkGait::get_duty() {
+    return this->duty;
+}//end get_duty
 
 bool WalkGait::if_touchdown() {
     return this->touchdown;
