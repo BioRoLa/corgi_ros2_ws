@@ -147,7 +147,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_r[0], foothold[i][1] + leg_model.G[1]-leg_model.U_r[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
-        } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
+        } else if ((direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
             touchdown = true;
             swing_phase[i] = 0;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
@@ -155,7 +155,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 step_count[i] += 1;
                 current_step_length[i] = next_step_length[i];  
             }//end if
-        } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
+        } else if ((direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
             touchdown = true;
             swing_phase[i] = 0;
             if (sp[i].getDirection() == direction){ // if the leg swing a whole swing phase, instead of swing back.
