@@ -9,6 +9,6 @@
     <node name="corgi_sim_trq" pkg="corgi_sim" type="corgi_sim_trq" respawn="true" output="screen"/>
     <node name="force_estimation" pkg="corgi_force_estimation" type="force_estimation" output="log"/>
     <node name="force_control" pkg="corgi_force_control" type="force_control" output="log"/>
-    <node name="corgi_odometry" pkg="corgi_odometry" type="corgi_odometry" args="TEST" output="log"/>
+    <!-- <node name="corgi_odometry" pkg="corgi_odometry" type="corgi_odometry" args="TEST" output="log"/> -->
     <node name="corgi_mpc_test" pkg="corgi_mpc" type="corgi_mpc_test" output="screen"/>
 </launch>

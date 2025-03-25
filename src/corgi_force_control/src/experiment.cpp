@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
     double sb = 0;
     double sc = 0;
     double sd = 0;
-    double mg = -22*9.81;
+    double mg = -19*9.81;
 
     // robot weight ~= 220 N
     for (auto& cmd : imp_cmd_modules){

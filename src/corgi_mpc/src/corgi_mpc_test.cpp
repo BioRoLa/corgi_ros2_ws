@@ -81,10 +81,14 @@ void init_matrices(const double *ra, const double *rb, const double *rc, const d
          30/m*ra[2]*dt, 0, -30/m*ra[0]*dt, 30/m*rb[2]*dt, 0, -30/m*rb[0]*dt, 30/m*rc[2]*dt, 0, -30/m*rc[0]*dt, 30/m*rd[2]*dt, 0, -30/m*rd[0]*dt,
          -300/13/m*ra[1]*dt, 300/13/m*ra[0]*dt, 0, -300/13/m*rb[1]*dt, 300/13/m*rb[0]*dt, 0, -300/13/m*rc[1]*dt, 300/13/m*rc[0]*dt, 0, -300/13/m*rd[1]*dt, 300/13/m*rd[0]*dt, 0;
 
+    // Q penalizes state errors. A suggestion is to lower the weights by about three orders of magnitude:
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 1e9, 0, 1e9, 1e7, 0, 1e7, 1e9, 1e9, 1e9, 1e6, 1e6, 1e6;
-    // Q.diagonal() << 1e9, 1e9, 1e9, 1e7, 1e7, 1e7, 0, 0, 0, 0, 0, 0;
-    R = Eigen::MatrixXd::Identity(n_u, n_u);
+    Q.diagonal() << 1e6, 1e6, 1e6,   // x, y, z positions
+                    1e4, 1e4, 1e4,   // x, y, z velocities
+                    1e6, 1e6, 1e6,   // roll, pitch, yaw (angles)
+                    1e3, 1e3, 1e3;   // angular velocities
+
+    R = 1e-2 * Eigen::MatrixXd::Identity(n_u, n_u);
 }
 
 Eigen::VectorXd model_predictive_control(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref, const bool *selection_matrix) {
@@ -352,21 +356,21 @@ int main(int argc, char **argv) {
                     }
                 }
                 
-                // robot_vel[0] = odom_pos.x;
-                // robot_vel[1] = odom_pos.y;
-                // robot_vel[2] = odom_pos.z;
+                robot_vel[0] = odom_vel.x;
+                robot_vel[1] = odom_vel.y;
+                robot_vel[2] = odom_vel.z;
                 
-                // robot_pos[0] = odom_vel.x;
-                // robot_pos[1] = odom_vel.y;
-                // robot_pos[2] = odom_vel.z;
+                robot_pos[0] = odom_pos.x;
+                robot_pos[1] = odom_pos.y;
+                robot_pos[2] = odom_pos.z;
 
-                robot_vel[0] = (sim_data.position.x-robot_pos[0])/dt;
-                robot_vel[1] = (sim_data.position.y-robot_pos[1])/dt;
-                robot_vel[2] = (sim_data.position.z-robot_pos[2])/dt;
+                // robot_vel[0] = (sim_data.position.x-robot_pos[0])/dt;
+                // robot_vel[1] = (sim_data.position.y-robot_pos[1])/dt;
+                // robot_vel[2] = (sim_data.position.z-robot_pos[2])/dt;
 
-                robot_pos[0] = sim_data.position.x;
-                robot_pos[1] = sim_data.position.y;
-                robot_pos[2] = sim_data.position.z;
+                // robot_pos[0] = sim_data.position.x;
+                // robot_pos[1] = sim_data.position.y;
+                // robot_pos[2] = sim_data.position.z;
 
                 Eigen::Quaterniond robot_ang;
                 robot_ang = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
@@ -382,7 +386,7 @@ int main(int argc, char **argv) {
 
                 Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(N * n_x);
                 for (int i = 0; i < N; ++i) {
-                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, stand_height, velocity, 0, 0,
+                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, 0, velocity, 0, 0,
                                                    0, 0, 0, 0, 0, 0;
                 }
 
