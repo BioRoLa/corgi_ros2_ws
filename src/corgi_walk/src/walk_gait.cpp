@@ -86,6 +86,7 @@ void WalkGait::initialize(double init_eta[8]) {
 }//end initialize
 
 std::array<std::array<double, 4>, 2> WalkGait::step() {
+    touchdown = false;
     for (int i=0; i<4; i++) {
         next_hip[i][0] += dS + sign_diff[i]*diff_dS;
         duty[i] += incre_duty;
@@ -147,15 +148,17 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
         } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
+            touchdown = true;
             swing_phase[i] = 0;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
-            if (sp[i].getDirection() == direction){
+            if (sp[i].getDirection() == direction){ // if the leg swing a whole swing phase, instead of swing back.
                 step_count[i] += 1;
                 current_step_length[i] = next_step_length[i];  
             }//end if
         } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
+            touchdown = true;
             swing_phase[i] = 0;
-            if (sp[i].getDirection() == direction){
+            if (sp[i].getDirection() == direction){ // if the leg swing a whole swing phase, instead of swing back.
                 step_count[i] -= 1;
                 current_step_length[i] = next_step_length[i];   
             }//end if
@@ -195,8 +198,8 @@ void WalkGait::set_velocity(double new_value){
 }//end set_velocity
 
 void WalkGait::set_stand_height(double new_value){
-    if (new_value > 0.34 || new_value < 0.16) {
-        throw std::runtime_error("Stand height should be between 0.16 and 0.34.");
+    if (new_value > 0.34 || new_value < 0.12+step_height) {
+        throw std::runtime_error("Stand height should be between 0.12+\"step_height\" and 0.34.");
     }//end if
     stand_height = new_value;
     for (int i=0; i<4; i++) {
@@ -260,3 +263,7 @@ std::array<int, 4> WalkGait::get_step_count() {
 std::array<int, 4> WalkGait::get_swing_phase() {
     return this->swing_phase;
 }//end get_step_count
+
+bool WalkGait::if_touchdown() {
+    return this->touchdown;
+}//end if_touchdown
