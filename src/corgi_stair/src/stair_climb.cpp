@@ -70,8 +70,41 @@ void StairClimb::initialize(double init_eta[8]) {
 }//end initialize
 
 std::array<std::array<double, 4>, 2> StairClimb::step() {
+    // state machine
+    switch (this->state) {
+        case MOVE_STABLE:
+            if (!move_CoM_stable()) {
+                this->state = SWING_SAME;
+            }//end if
+            break;
+        case SWING_SAME:
+            swing_same_step(leg_info, swing_leg, CoM, pitch, stairs_edge[swing_leg][1], stairs_edge[swing_leg][0]);
+            this->state = SWING_NEXT;
+            break;
+        case SWING_NEXT:
+            if (determine_next_foothold(leg_info, swing_leg, stairs_edge.size(), stairs_edge, step_length, step_length_up_stair, keep_edge_distance, keep_stair_distance_front, keep_stair_distance_hind, keep_stair_distance_all, CoM, pitch)) {
+                swing_next_step(leg_info, swing_leg, CoM, pitch, stairs_edge[swing_leg][1], stairs_edge[swing_leg][0]);
+            } else {
+                swing_same_step(leg_info, swing_leg, CoM, pitch, stairs_edge[swing_leg][1], stairs_edge[swing_leg][0]);
+            }//end if else
+            break;
+        default:
+            break;
+    }//end switch
 
+    // next state
+    switch (this->state) {
+        case MOVE_STABLE:
+            break;
+        case SWING_SAME:
+            break;
+        case SWING_NEXT:
+            break;
+        default:
+            break;
+    }//end switch
 
+    return {theta, beta};
 }//end step
 
 
@@ -113,7 +146,7 @@ void StairClimb::move_CoM_stable_smooth_fixed_leg_length(std::vector<LegInfo>& l
     while (move_dir * (CoM[0] + CoM_offset[0]) < move_dir * ((leg_info[(swing_leg + 1) % 4].foothold[0] + leg_info[(swing_leg - 1) % 4].foothold[0]) / 2) + stability_margin) {
         if (move_dir * velocity[0] < max_velocity) {
             velocity[0] += move_dir * acc / sampling;
-        }
+        }//end if
         CoM += velocity / sampling;
         
         double hip_x = CoM[0];
@@ -123,11 +156,11 @@ void StairClimb::move_CoM_stable_smooth_fixed_leg_length(std::vector<LegInfo>& l
             hip_y = CoM[1];
         } else {
             hip_y = CoM[1] + leg_model.G[1] + std::sqrt(leg_length * leg_length - std::pow(hip_x - (CoM[0] + leg_model.G[0]), 2));
-        }
+        }//end if else
         
         Eigen::Vector2d hip = Eigen::Vector2d(hip_x, hip_y);
         std::cout << "Hip position for swing leg " << swing_leg << ": " << hip.transpose() << std::endl;
-    }
+    }//end while
     CoM = Eigen::Vector2d(CoM[0], CoM[1]);
     pitch = std::asin((CoM[1] - CoM[1]) / BL);
 }//end move_CoM_stable_fixed_leg_length
@@ -384,3 +417,11 @@ std::array<double, 2> StairClimb::get_foothold(double theta, double beta, int co
     std::complex<double> center_exp = center_beta0 * std::exp(std::complex<double>(0, beta));
     return {center_exp.real(), center_exp.imag() - radius};
 }//end get_foothold
+
+
+void StairClimb::add_stair_edge(double x, double y) {
+    stair_edge[0].push_back({x, y});
+    stair_edge[1].push_back({x, y});
+    stair_edge[2].push_back({x, y});
+    stair_edge[3].push_back({x, y});
+}//end add_stair_edge
