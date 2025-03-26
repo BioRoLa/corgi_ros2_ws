@@ -19,7 +19,7 @@
 #define INIT_BETA (0.0)
 
 corgi_msgs::SimDataStamped sim_data;
-robot_cb(const corgi_msgs::SimDataStamped msg) {
+void robot_cb(const corgi_msgs::SimDataStamped msg) {
     sim_data = msg;
 }//end robot_cb
 
