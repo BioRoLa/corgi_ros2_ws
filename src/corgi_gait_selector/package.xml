@@ -21,6 +21,7 @@
   <build_depend>wheeled_control</build_depend>
   <build_depend>corgi_transform</build_depend>
   <build_depend>sensor_msgs</build_depend>
+  <!-- <build_depend>corgi_gait_selector</build_depend> -->
 
   <build_export_depend>joy</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
@@ -34,6 +35,7 @@
   <build_export_depend>corgi_transform</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>wheeled_control</build_export_depend>
+  <!-- <build_export_depend>corgi_gait_selector</build_export_depend> -->
 
   <exec_depend>joy</exec_depend>
   <exec_depend>corgi_msgs</exec_depend>
@@ -49,6 +51,7 @@
   <exec_depend>corgi_transform</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>wheeled_control</exec_depend>
+  <!-- <exec_depend>corgi_gait_selector</exec_depend> -->
 
   <export>
 
