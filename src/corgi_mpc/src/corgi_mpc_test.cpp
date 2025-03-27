@@ -88,7 +88,7 @@ void init_matrices(const double *ra, const double *rb, const double *rc, const d
                     1e6, 1e6, 1e6,   // roll, pitch, yaw (angles)
                     1e3, 1e3, 1e3;   // angular velocities
 
-    R = 1e-2 * Eigen::MatrixXd::Identity(n_u, n_u);
+    R = 1e-1 * Eigen::MatrixXd::Identity(n_u, n_u);
 }
 
 Eigen::VectorXd model_predictive_control(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref, const bool *selection_matrix) {
@@ -164,7 +164,7 @@ Eigen::VectorXd model_predictive_control(const Eigen::VectorXd &x, const Eigen::
         }
         else {
             lower_bound(i) = -80;
-            upper_bound(i) = 200;
+            upper_bound(i) = 150;
         }
     }
     
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
     WalkGait walk_gait(true, 0, 100);
     walk_gait.initialize(init_eta);
     std::array<std::array<double, 4>, 2> eta_list;
-    double velocity     = 0.1;
+    double velocity     = 0;
     double stand_height = 0.25;
     double step_length  = 0.3;
     double step_height  = 0.1;
@@ -339,6 +339,10 @@ int main(int argc, char **argv) {
         if (trigger){
             int seq = 0;
             while (ros::ok()) {
+                if (seq < 300) {
+                    velocity += 0.1/300.0;
+                    walk_gait.set_velocity(velocity);
+                }
                 ros::spinOnce();
 
                 eta_list = walk_gait.step();
@@ -346,11 +350,11 @@ int main(int argc, char **argv) {
                 for (int i=0; i<4; i++) {
                     imp_cmd_modules[i]->theta = eta_list[0][i];
                     imp_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
-                    if (walk_gait.swing_phase[i] == 1 && touched[i]) {
+                    if (walk_gait.get_swing_phase()[i] == 1 && touched[i]) {
                         selection_matrix[i] = false;
                         touched[i] = false;
                     }
-                    else if (walk_gait.swing_phase[i] == 0 && !touched[i]) {
+                    else if (walk_gait.get_swing_phase()[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
                         touched[i] = true;
                     }
@@ -386,7 +390,7 @@ int main(int argc, char **argv) {
 
                 Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(N * n_x);
                 for (int i = 0; i < N; ++i) {
-                    x_ref.segment(i * n_x, n_x) << loop_count*velocity*dt, 0, 0, velocity, 0, 0,
+                    x_ref.segment(i * n_x, n_x) << seq*velocity*dt, 0, 0, velocity, 0, 0,
                                                    0, 0, 0, 0, 0, 0;
                 }
 

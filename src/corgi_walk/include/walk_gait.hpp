@@ -57,6 +57,7 @@ class WalkGait {
         std::array<std::array<double, 2>, 4> next_hip;
 
         std::array<double, 4> duty;
+        std::array<int, 4> swing_phase = {0, 0, 0, 0};
         std::array<int, 4> step_count  = {0, 0, 0, 0};
         std::array<double, 4> current_step_length = {step_length, step_length, step_length, step_length};
         std::array<double, 4> next_step_length    = {step_length, step_length, step_length, step_length};
