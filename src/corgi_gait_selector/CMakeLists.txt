@@ -29,6 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
   joy 
   sensor_msgs
   wheeled_control
+  # corgi_gait_selector
 )
 
 catkin_package(
@@ -45,6 +46,7 @@ catkin_package(
     joy 
     sensor_msgs
     wheeled_control
+    # corgi_gait_selector
 )
 
 include_directories(
@@ -58,6 +60,7 @@ find_library(CORGI_UTILS corgi_utils)
 find_library(CORGI_WALK corgi_walk)
 find_library(CORGI_TRANSFORM corgi_transform)
 find_library(WHEEL_CONTROL wheeled_control)
+find_library(CORGI_FSM corgi_gait_selector)
 
 add_subdirectory(src)
 

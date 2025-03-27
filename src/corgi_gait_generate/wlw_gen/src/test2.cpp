@@ -1133,8 +1133,10 @@ int main(int argc, char** argv) {
 // slope
 // print (draw)
 // how to swing
+// multi-loop
 // variaty
+// add reading initial pose (find the leg that should be the front)
+// add transfer(like csv)
 // transform
 // turn
-
 
