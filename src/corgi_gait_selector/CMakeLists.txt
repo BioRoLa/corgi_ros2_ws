@@ -60,10 +60,11 @@ find_library(CORGI_UTILS corgi_utils)
 find_library(CORGI_WALK corgi_walk)
 find_library(CORGI_TRANSFORM corgi_transform)
 find_library(WHEEL_CONTROL wheeled_control)
-find_library(CORGI_FSM corgi_gait_selector)
+# find_library(CORGI_FSM corgi_gait_selector)
 
 add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
   src/Simple_fsm.cpp
+  src/test_main.cpp
 )
