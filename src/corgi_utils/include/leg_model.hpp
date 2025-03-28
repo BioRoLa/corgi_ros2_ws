@@ -16,13 +16,16 @@ class LegModel {
         std::array<double, 2> inverse(const double pos[2], const std::string &joint = "G");
 
         // Contact map
-        void contact_map(double theta_in, double beta_in, double slope = 0.0);
+        void contact_map(double theta_in, double beta_in, double slope=0.0, bool contact_upper=true, bool contact_lower=true);
 
         // Move
-        std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper=true, double tol = 1e-14, size_t max_iter = 100);
+        std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope=0.0, bool contact_upper=true, bool contact_lower=true, double tol = 1e-14, size_t max_iter = 100);
 
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
+        
+        // Joint Positions in complex
+        std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
 
         // Constants
         const double R; // Wheel radius
@@ -39,8 +42,6 @@ class LegModel {
         double alpha;
         std::array<double, 2> contact_p;
     private:
-        // Joint Positions in complex
-        std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
 
         // Constants
         const double max_theta;
@@ -50,12 +51,11 @@ class LegModel {
         const double arc_HF;
         const double arc_BC;
         const double l1, l2, l3, l4, l5, l6, l7, l8;
-        const double l_AE, l_BF, l_BH, ang_UBC, ang_LFG;
+        const double l_AE, l_BF, l_BH, ang_UBC, ang_LFG, ang_BCF;
 
         // Intermediate variables
         double l_BD;
         double ang_OEA;
-        double ang_BCF;
         double ang_DBC;
         double ang_OGF;
 
