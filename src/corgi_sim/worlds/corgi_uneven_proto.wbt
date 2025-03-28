@@ -2303,7 +2303,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RF_rmotorbar Solid {
         translation 0.22200000000000011 2.276038597072371e-16 0.2000000000000002
-        rotation -4.3939879524167825e-10 0.9999999999965025 2.644892592266446e-06 3.141546915557386
+        rotation -4.393987952416782e-10 0.9999999999965025 2.644892592266446e-06 3.141546915557386
         children [
           USE group_rmotorbar
           DEF RF_Rl5l6 HingeJoint {
@@ -2439,7 +2439,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RF_lmotorbar Solid {
         translation 0.222 0 0.2
-        rotation 3.589318287904312e-10 0.9999999999387917 -1.1064205190401272e-05 3.141636699015246
+        rotation 3.589318287904312e-10 0.9999999999387919 -1.1064205190401274e-05 3.141636699015246
         children [
           USE group_lmotorbar
           DEF RF_Ll5l6 HingeJoint {
@@ -2704,7 +2704,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RH_lmotorbar Solid {
         translation -0.222 0 0.2
-        rotation 4.4447223679746995e-12 -0.9999999999996939 -7.82450482372638e-07 3.14160104444671
+        rotation 4.4447223679747e-12 -0.999999999999694 -7.82450482372638e-07 3.14160104444671
         children [
           USE group_lmotorbar
           DEF RH_Ll5l6 HingeJoint {
@@ -2819,7 +2819,7 @@ DEF CORGI Robot {
   boundingObject USE BASE
   physics Physics {
     density -1
-    mass 22
+    mass 19
     centerOfMass [
       0 0 0
     ]
