@@ -272,15 +272,15 @@ int main(int argc, char **argv) {
         // static friction　compensation
         // avg: 0.429, 0.272, 0.326, 0.267, 0.353, 0.288, 0.306, 0.236
         // kt: 2.359, 2.499, 2.227, 2.309, 2.137, 2.531, 2.224, 2.612
-        motor_cmd_modules[0]->torque_r += 0.429 * Eigen::numext::sign(motor_cmd_modules[0]->torque_r) * 2.359;
-        motor_cmd_modules[0]->torque_l += 0.272 * Eigen::numext::sign(motor_cmd_modules[0]->torque_l) * 2.499;
-        motor_cmd_modules[1]->torque_r += 0.326 * Eigen::numext::sign(motor_cmd_modules[1]->torque_r) * 2.227;
-        motor_cmd_modules[1]->torque_l += 0.267 * Eigen::numext::sign(motor_cmd_modules[1]->torque_l) * 2.309;
-        motor_cmd_modules[2]->torque_r += 0.353 * Eigen::numext::sign(motor_cmd_modules[2]->torque_r) * 2.137;
-        motor_cmd_modules[2]->torque_l += 0.288 * Eigen::numext::sign(motor_cmd_modules[2]->torque_l) * 2.531;
-        motor_cmd_modules[3]->torque_r += 0.306 * Eigen::numext::sign(motor_cmd_modules[3]->torque_r) * 2.224;
-        motor_cmd_modules[3]->torque_l += 0.236 * Eigen::numext::sign(motor_cmd_modules[3]->torque_l) * 2.612;
-        
+        // motor_cmd_modules[0]->torque_r += 0.429 * motor_cmd_modules[0]->torque_r/std::abs(motor_cmd_modules[0]->torque_r) * 2.359;
+        // motor_cmd_modules[0]->torque_l += 0.272 * motor_cmd_modules[0]->torque_l/std::abs(motor_cmd_modules[0]->torque_l) * 2.499;
+        // motor_cmd_modules[1]->torque_r += 0.326 * motor_cmd_modules[1]->torque_r/std::abs(motor_cmd_modules[1]->torque_r) * 2.227;
+        // motor_cmd_modules[1]->torque_l += 0.267 * motor_cmd_modules[1]->torque_l/std::abs(motor_cmd_modules[1]->torque_l) * 2.309;
+        // motor_cmd_modules[2]->torque_r += 0.353 * motor_cmd_modules[2]->torque_r/std::abs(motor_cmd_modules[2]->torque_r) * 2.137;
+        // motor_cmd_modules[2]->torque_l += 0.288 * motor_cmd_modules[2]->torque_l/std::abs(motor_cmd_modules[2]->torque_l) * 2.531;
+        // motor_cmd_modules[3]->torque_r += 0.306 * motor_cmd_modules[3]->torque_r/std::abs(motor_cmd_modules[3]->torque_r) * 2.224;
+        // motor_cmd_modules[3]->torque_l += 0.236 * motor_cmd_modules[3]->torque_l/std::abs(motor_cmd_modules[3]->torque_l) * 2.612;
+
         // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
 
         motor_cmd.header.seq = loop_count;
