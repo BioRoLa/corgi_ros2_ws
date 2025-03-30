@@ -41,19 +41,23 @@ int main(int argc, char **argv) {
     }
 
     for (int i=0; i<2000; i++){
-        motor_cmd_modules[0]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[1]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[2]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[3]->theta += 83/2000.0/180.0*M_PI;
-        // motor_cmd_modules[0]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[1]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[2]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[3]->beta += 20/2000.0/180.0*M_PI;
+        motor_cmd_modules[0]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[1]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[2]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[3]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[0]->beta -= 90/2000.0/180.0*M_PI;
+        motor_cmd_modules[1]->beta += 90/2000.0/180.0*M_PI;
+        motor_cmd_modules[2]->beta += 90/2000.0/180.0*M_PI;
+        motor_cmd_modules[3]->beta -= 90/2000.0/180.0*M_PI;
 
         motor_cmd.header.seq = -1;
 
         motor_cmd_pub.publish(motor_cmd);
 
+        rate.sleep();
+    }
+
+    for (int i=0; i<1000; i++){
         rate.sleep();
     }
 
@@ -68,23 +72,49 @@ int main(int argc, char **argv) {
             int seq = 0;
             double loop_count = 0.0;
             while (ros::ok()) {
-                if ((int(loop_count) / 500) % 2 == 0) {
-                    motor_cmd_modules[0]->theta = (70 + 30*cos(int(loop_count)%500/250.0*M_PI))/180.0*M_PI;
-                    motor_cmd_modules[2]->theta = (70 + 30*cos(int(loop_count)%500/250.0*M_PI))/180.0*M_PI;
+                if (loop_count < 1000) {
+                    // motor_cmd_modules[0]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[1]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[2]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[3]->theta -= 43/5000.0/180.0*M_PI;
+                    motor_cmd_modules[0]->beta  += 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[1]->beta  -= 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[2]->beta  -= 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[3]->beta  += 180/1000.0/180.0*M_PI;
                 }
-                else {
-                    motor_cmd_modules[1]->theta = (70 + 30*cos(int(loop_count)%500/250.0*M_PI))/180.0*M_PI;
-                    motor_cmd_modules[3]->theta = (70 + 30*cos(int(loop_count)%500/250.0*M_PI))/180.0*M_PI;
+                else if (loop_count < 2000) {
+                    // motor_cmd_modules[0]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[1]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[2]->theta -= 43/5000.0/180.0*M_PI;
+                    // motor_cmd_modules[3]->theta -= 43/5000.0/180.0*M_PI;
+                    motor_cmd_modules[0]->beta  -= 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[1]->beta  += 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[2]->beta  += 180/1000.0/180.0*M_PI;
+                    motor_cmd_modules[3]->beta  -= 180/1000.0/180.0*M_PI;
                 }
-
-                for (auto& cmd : motor_cmd_modules) {
-                    cmd->kp_r = 90;
-                    cmd->kp_l = 90;
-                    cmd->ki_r = 0;
-                    cmd->ki_l = 0;
-                    cmd->kd_r = 1.75;
-                    cmd->kd_l = 1.75;
-                }
+                // else if (loop_count < 15000) {
+                    
+                // }
+                // else if (loop_count < 20000) {
+                //     motor_cmd_modules[0]->theta -= 63/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[1]->theta -= 63/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[2]->theta -= 63/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[3]->theta -= 63/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[0]->beta  -= 50/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[1]->beta  += 50/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[2]->beta  += 50/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[3]->beta  -= 50/5000.0/180.0*M_PI;
+                // }
+                // else if (loop_count < 25000) {
+                //     motor_cmd_modules[0]->theta += 43/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[1]->theta += 43/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[2]->theta += 43/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[3]->theta += 43/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[0]->beta  -= 40/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[1]->beta  += 40/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[2]->beta  += 40/5000.0/180.0*M_PI;
+                //     motor_cmd_modules[3]->beta  -= 40/5000.0/180.0*M_PI;
+                // }
 
                 motor_cmd.header.seq = seq;
 
