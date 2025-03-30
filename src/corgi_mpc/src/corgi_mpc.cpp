@@ -309,7 +309,7 @@ int main(int argc, char **argv) {
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
-        cmd->Fy = -55;
+        cmd->Fy = -m*gravity/4.0;
 
         cmd->Mx = Mx;
         cmd->My = My;
