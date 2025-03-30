@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>corgi_gait_selector</name>
+  <name>corgi_algo</name>
   <version>0.0.0</version>
-  <description>Simple fsm control</description>
+  <description>Simple algo</description>
   <maintainer email="r12522806@ntu.edu.tw">Yatinghsu000627</maintainer>
   <license>TODO</license>
 
@@ -20,7 +20,8 @@
   <!-- <build_depend>corgi_walk</build_depend>
   <build_depend>corgi_transform</build_depend> -->
   <build_depend>sensor_msgs</build_depend>
-  <!-- <build_depend>corgi_wheeled</build_depend> -->
+  <build_depend>corgi_wheeled</build_depend>
+  <build_depend>corgi_gait_selector</build_depend>
 
   <build_export_depend>joy</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
@@ -33,7 +34,8 @@
   <!-- <build_export_depend>corgi_walk</build_export_depend>
   <build_export_depend>corgi_transform</build_export_depend> -->
   <build_export_depend>sensor_msgs</build_export_depend>
-  <!-- <build_export_depend>corgi_wheeled</build_export_depend> -->
+  <build_export_depend>corgi_wheeled</build_export_depend>
+  <build_export_depend>corgi_gait_selector</build_export_depend>
 
   <exec_depend>joy</exec_depend>
   <exec_depend>corgi_msgs</exec_depend>
@@ -48,7 +50,8 @@
   <!-- <exec_depend>corgi_walk</exec_depend>
   <exec_depend>corgi_transform</exec_depend> -->
   <exec_depend>sensor_msgs</exec_depend>
-  <!-- <exec_depend>corgi_wheeled</exec_depend> -->
+  <exec_depend>corgi_wheeled</exec_depend>
+  <exec_depend>corgi_gait_selector</exec_depend>
 
   <export>
 

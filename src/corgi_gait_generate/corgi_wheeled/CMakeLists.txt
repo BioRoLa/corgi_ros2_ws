@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 set(CMAKE_C_COMPILER "/usr/bin/gcc")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 
-project(corgi_gait_selector LANGUAGES C CXX)
+project(corgi_wheeled LANGUAGES C CXX)
 
 set (CMAKE_EXE_LINKER_FLAGS)
 set (CMAKE_CXX_STANDARD 17)
@@ -18,18 +18,17 @@ set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS 
-  roscpp 
-  std_msgs 
-  rosgraph_msgs 
-  geometry_msgs 
-  corgi_msgs 
-  joy 
-  sensor_msgs
-  corgi_utils 
-)
-# corgi_walk 
-# corgi_transform
-# corgi_wheeled
+    roscpp 
+    std_msgs 
+    rosgraph_msgs 
+    geometry_msgs 
+    corgi_msgs 
+    joy 
+    sensor_msgs
+    corgi_utils
+    corgi_gait_selector
+  )
+
 
 catkin_package(
   INCLUDE_DIRS include
@@ -41,12 +40,9 @@ catkin_package(
     corgi_msgs 
     joy 
     sensor_msgs
-    corgi_utils 
+    corgi_utils
+    corgi_gait_selector
 )
-# corgi_walk 
-# corgi_transform
-# corgi_wheeled
-    
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
@@ -56,12 +52,12 @@ include_directories(
 )
 
 find_library(CORGI_UTILS corgi_utils)
-# find_library(CORGI_WHEELED corgi_wheeled)
-# find_library(CORGI_WALK corgi_walk)
-# find_library(CORGI_TRANSFORM corgi_transform)
+find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
+
 
 add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
-  src/Simple_fsm.cpp
+  src/wheeled_gen.cpp
+  src/wheeled_cmd.cpp
 )

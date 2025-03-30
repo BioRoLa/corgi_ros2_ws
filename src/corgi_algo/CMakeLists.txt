@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 set(CMAKE_C_COMPILER "/usr/bin/gcc")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 
-project(corgi_gait_selector LANGUAGES C CXX)
+project(corgi_algo LANGUAGES C CXX)
 
 set (CMAKE_EXE_LINKER_FLAGS)
 set (CMAKE_CXX_STANDARD 17)
@@ -26,6 +26,8 @@ find_package(catkin REQUIRED COMPONENTS
   joy 
   sensor_msgs
   corgi_utils 
+  corgi_wheeled
+  corgi_gait_selector
 )
 # corgi_walk 
 # corgi_transform
@@ -42,6 +44,8 @@ catkin_package(
     joy 
     sensor_msgs
     corgi_utils 
+    corgi_wheeled
+    corgi_gait_selector
 )
 # corgi_walk 
 # corgi_transform
@@ -56,12 +60,13 @@ include_directories(
 )
 
 find_library(CORGI_UTILS corgi_utils)
-# find_library(CORGI_WHEELED corgi_wheeled)
+find_library(CORGI_WHEELED corgi_wheeled)
+find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
 # find_library(CORGI_WALK corgi_walk)
 # find_library(CORGI_TRANSFORM corgi_transform)
 
 add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
-  src/Simple_fsm.cpp
+  src/algo.cpp
 )

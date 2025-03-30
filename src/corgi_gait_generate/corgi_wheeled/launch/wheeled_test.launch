@@ -1,0 +1,22 @@
+<launch>
+  <!-- Declare an argument with default value -->
+  <arg name="control_mode" default="joystick" />
+
+  <!-- Common nodes -->
+  <!-- <node pkg="corgi_wheeled" type="display" name="display" output="screen" /> -->
+  <node pkg="corgi_wheeled" type="publisher" name="publisher" output="screen" />
+  <node pkg="corgi_wheeled" type="wheeled_test" name="wheeled_test" output="screen">
+      <!-- Set control_mode parameter based on the argument -->
+      <param name="control_mode" value="$(arg control_mode)" />
+  </node>
+
+  <!-- Conditionally include the teleop node if control_mode is teleop -->
+  <group if="$(eval arg('control_mode') == 'teleop')">
+    <node pkg="corgi_wheeled" type="teleop" name="teleop" output="screen" />
+  </group>
+
+  <!-- Otherwise, launch the joy node -->
+  <group unless="$(eval arg('control_mode') == 'teleop')">
+    <node pkg="joy" type="joy_node" name="joy_node" output="screen" />
+  </group>
+</launch>
