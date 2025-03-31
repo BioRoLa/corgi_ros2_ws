@@ -198,16 +198,17 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
         double bias_alpha = 0.0;
 
         if (rim == "left upper") {
-            // bias_alpha = -M_PI;
+            bias_alpha = -M_PI;
         } else if (rim == "left lower") {
-            // bias_alpha = -M_PI / 3.6; // -50 degrees
+            bias_alpha = -M_PI / 3.6; // -50 degrees
         } else if (rim == "G") {
             // std::complex<double> direction_G = p1 + p2;
-            bias_alpha = std::arg((p1 - O) / (p2 - O));
+            // bias_alpha = std::arg((p1 - O) / (p2 - O));
+            bias_alpha = 0.0;
         } else if (rim == "right lower") {
-            // bias_alpha = 0.0;
+            bias_alpha = 0.0;
         } else if (rim == "right upper") {
-            // bias_alpha = M_PI / 3.6; // 50 degrees
+            bias_alpha = M_PI / 3.6; // 50 degrees
         }//end if else
 
         double cal_err = 1e-9;
