@@ -242,8 +242,9 @@ int main(int argc, char **argv) {
         Eigen::MatrixXd::Zero(2, 1)
     };
 
-    std::vector<double> kt = {1, 1, 1, 1, 1, 1, 1, 1};
-    std::vector<double> friction = {1, 1, 1, 1, 1, 1, 1, 1};
+    // AR, AL, BR, BL, CR, CL, DR, DL
+    // std::vector<double> kt = {2.018, 2.126, 2.141, 2.176, 1.927, 2.072, 2.098, 2.143};
+    std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
 
     int loop_count = 0;
     while (ros::ok()) {
@@ -273,8 +274,8 @@ int main(int argc, char **argv) {
         // dynamic friction compensation
         if (!sim){
             for (int i=0; i<4; i++) {
-                motor_cmd_modules[i]->torque_r += friction[2*i]   * kt[2*i]   * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
-                motor_cmd_modules[i]->torque_l += friction[2*i+1] * kt[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
+                motor_cmd_modules[i]->torque_r += friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
+                motor_cmd_modules[i]->torque_l += friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
             }
         }
 

@@ -76,12 +76,20 @@ int main(int argc, char **argv) {
                     imp_cmd_modules[1]->theta += 80/10000.0/180.0*M_PI;
                     imp_cmd_modules[2]->theta += 80/10000.0/180.0*M_PI;
                     imp_cmd_modules[3]->theta += 80/10000.0/180.0*M_PI;
+                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
                 }
                 else if (loop_count < 20000) {
                     imp_cmd_modules[0]->theta -= 80/10000.0/180.0*M_PI;
                     imp_cmd_modules[1]->theta -= 80/10000.0/180.0*M_PI;
                     imp_cmd_modules[2]->theta -= 80/10000.0/180.0*M_PI;
                     imp_cmd_modules[3]->theta -= 80/10000.0/180.0*M_PI;
+                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
+                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
                 }
 
                 imp_cmd.header.seq = loop_count;
