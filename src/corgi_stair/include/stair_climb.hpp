@@ -61,7 +61,7 @@ class StairClimb {
         const double keep_stair_distance_hind = 0.22;
         const double keep_stair_distance_front = 0.05;
         const double step_length_up_stair = 0.3;
-        
+
         // Variable
         int rate;
         double dS;
@@ -118,6 +118,7 @@ class StairClimb {
         double coeff_a_x, coeff_b_x, coeff_a_y, coeff_b_y;
         bool first_in, second_in, third_in;
         std::array<double, 2> final_hip;
+        double final_theta, final_beta;
 };//end class StairClimb
 
 #endif // STAIRCLIMB_HPP
