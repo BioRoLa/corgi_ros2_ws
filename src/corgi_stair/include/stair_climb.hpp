@@ -24,6 +24,7 @@ class StairClimb {
         void add_stair_edge(double x, double y);
 
     private:
+        /* Private function */
         void init_move_CoM_stable(int swing_leg);
         bool move_CoM_stable();
         // void move_CoM_stable_fixed_leg_length();
@@ -31,7 +32,6 @@ class StairClimb {
         bool swing_same_step();
         void init_swing_next_step(int swing_leg, double front_height, double hind_height); 
         bool swing_next_step();
-
         std::array<double, 2> move_consider_edge(int leg_ID, std::array<double, 2> move_vec);
         std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-14, size_t max_iter = 100);
         double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
@@ -39,20 +39,22 @@ class StairClimb {
         std::array<double, 2> get_foothold(double theta, double beta, int contact_rim = -1);
         void update_hip();
 
-        // Constant value
+        /* Constant value */
+        LegModel leg_model;
+        LegInfo leg_info[4] = {LegInfo(0), LegInfo(1), LegInfo(2), LegInfo(3)};
+        const std::array<std::array<int, 2>, 4> other_side_leg = {{{3, 1},    // front-hind, left-right
+                                                             {2, 0}, 
+                                                             {1, 3}, 
+                                                             {0, 2}}};
         const double BL;  // body length
         const double BW;  // body width
         const double BH;  // body height
         const std::array<double, 2> CoM_bias;
-        const double swing_time = 0.2;
-        std::array<std::array<int, 2>, 4> other_side_leg = {{{3, 1},    // front-hind, left-right
-                                                             {2, 0}, 
-                                                             {1, 3}, 
-                                                             {0, 2}}};
-        LegModel leg_model;
-        LegInfo leg_info[4] = {LegInfo(0), LegInfo(1), LegInfo(2), LegInfo(3)};
+        const double swing_time = 0.2;                                                
         const double min_margin = 0.01;
         const double max_velocity = 0.1; // m/s, max velocity of CoM
+        const double acc = max_velocity / 0.5;
+        const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
         const double keep_edge_distance = 0.03;
         const double stand_height_on_stair_front = 0.3;
@@ -61,8 +63,11 @@ class StairClimb {
         const double keep_stair_distance_hind = 0.22;
         const double keep_stair_distance_front = 0.05;
         const double step_length_up_stair = 0.3;
+        const double min_swing_time_cw   = 1.5, 
+                     min_swing_time_ccw  = 1.5, 
+                     min_swing_time_step = 0.5;
 
-        // Variable
+        /* Variable */
         int rate;
         double dS;
         double incre_duty;
@@ -72,10 +77,6 @@ class StairClimb {
         double step_height  = 0.04; // step height for swing on same step
         double max_theta = 2.7348759382405214;  // rad, corresponding to leg length 0.34
         double max_length = 0.34;  // rad, corresponding to leg length 0.34
-        
-        double stability_margin;
-        double acc;
-        double min_swing_time_cw, min_swing_time_ccw, min_swing_time_step;
         std::array<SwingProfile, 4> sp;
         int swing_count;
 
