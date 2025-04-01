@@ -175,6 +175,8 @@ int main(int argc, char** argv) {
             motor_cmd_modules[i]->beta = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
         }//end for
         motor_pub.publish(motor_cmd);
+        std::cout << "state: " << state << std::endl;
+
         rate.sleep();
     }//end while
     auto end = std::chrono::high_resolution_clock::now();
