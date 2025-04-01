@@ -228,7 +228,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         achieve_max_length = true;
     }//end if
     /* return if stable (entering support triangle) */
-    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 > move_dir * CoM_offset[0] - stability_margin) {
+    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 <= move_dir * CoM_offset[0] - stability_margin) {
         return true;
     } else {
         return false;
