@@ -234,7 +234,7 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
 
 // Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
 // For a complete implementation, you would need to use numerical libraries like Eigen, Ceres Solver, or write custom solvers.
-std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &joint) {
+std::array<double, 2> LegModel::inverse(std::array<double, 2> pos, const std::string &joint) {
     using namespace std::complex_literals;
     double abs_pos = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
     if (joint == "G"){
