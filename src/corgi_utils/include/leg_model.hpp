@@ -14,7 +14,7 @@ class LegModel {
 
         // Inverse kinematics
         std::array<double, 2> inverse(const std::array<double, 2> &pos, const std::string &joint = "G");
-        template <typename T> std::array<double, 2> inverse(const T& pos, const std::string &joint = "G") {
+        std::array<double, 2> inverse(const double pos[2], const std::string &joint = "G") {
             return inverse(std::array<double, 2>{pos[0], pos[1]}, joint);
         }
         
