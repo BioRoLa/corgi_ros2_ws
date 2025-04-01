@@ -17,7 +17,7 @@ class LegInfo {
         bool one_step;
         bool contact_edge;
         double contact_alpha;
-        int stair;
+        std::array<double, 2>* stair;
 
 };//end class LegInfo
 

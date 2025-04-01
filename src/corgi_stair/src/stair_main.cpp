@@ -112,13 +112,13 @@ int main(int argc, char** argv) {
                 break;
             case WALK:
                 eta_list = walk_gait.step();
-                count ++;
                 break;
             case STAIR:
+                count ++;
                 // if (last_state != state) {
                 //     stair_climb.initialize({eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]});
                 //     for (int i=0; i<stair_num; i++) {
-                //         stair_climb.add_stair_edge(-D/2.0 + i*D, (i+1)*H);
+                //         stair_climb.add_stair_edge(sim_data.position.x -D/2.0 + i*D, (i+1)*H);
                 //     }//end for
                 // }//end if
                 // eta_list = stair_climb.step();
