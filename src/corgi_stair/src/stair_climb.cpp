@@ -541,9 +541,9 @@ bool StairClimb::determine_next_foothold() {
             double deepest_x = current_stair_edge[0] - keep_stair_d;
             double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length / 2;
             if (next_max_foothold_x >= deepest_x) {
-                leg_info[swing_leg].next_foothold = {deepest_x, current_stair_edge[1]};
+                leg_info[swing_leg].next_foothold = {deepest_x, leg_info[swing_leg].foothold[1]};
             } else {
-                leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
+                leg_info[swing_leg].next_foothold = {next_max_foothold_x, leg_info[swing_leg].foothold[1]};
             }//end if else
         }//end if
         // determine if next swing leg will swing up to next stair step
