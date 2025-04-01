@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
-    const int transform_count = 5000; // 5s
+    const int transform_count = 2*sampling_rate; // 2s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
     double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3
@@ -175,8 +175,6 @@ int main(int argc, char** argv) {
             motor_cmd_modules[i]->beta = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
         }//end for
         motor_pub.publish(motor_cmd);
-        std::cout << "state: " << state << std::endl;
-
         rate.sleep();
     }//end while
     auto end = std::chrono::high_resolution_clock::now();

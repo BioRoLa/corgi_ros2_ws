@@ -49,13 +49,19 @@ void StairClimb::initialize(double init_eta[8]) {
         relative_foothold[i][1] = -stand_height;
     }//end for
     // Get first swing leg  
-    int first_swing_leg;
-    if (relative_foothold[0][0] < relative_foothold[1][0]) {
-        first_swing_leg = 0;
-    } else {
-        first_swing_leg = 1;
-    }//end if else
-    swing_count = 0;
+    int first_swing_leg = 0;
+    for (int i=1; i<4; i++) {
+        if (relative_foothold[i][0] < relative_foothold[first_swing_leg][0]) {
+            first_swing_leg = i;
+        }//end if
+    }//end for 
+    switch (first_swing_leg) {
+        case 0: swing_count = 0; break;    
+        case 1: swing_count = 2; break;
+        case 2: swing_count = 1; break;
+        case 3: swing_count = 3; break;
+        default: std::cout << "Error in determining first swing leg." << std::endl; break;
+    }//end switch
     // Get foothold in world coordinate
     CoM = {0, stand_height};
     hip = {{{BL/2, stand_height} ,
