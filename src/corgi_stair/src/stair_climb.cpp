@@ -159,8 +159,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 state = MOVE_STABLE;
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
+                swing_count ++;
             }//end if
-            swing_count ++;
             break;
         case SWING_NEXT:
             if (finish_move) {
@@ -168,8 +168,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 stair_edge[swing_leg].erase(stair_edge[swing_leg].begin());
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
+                swing_count ++;
             }//end if
-            swing_count ++;
             break;
         case END:
             std::cout << "End of stair climbing." << std::endl;
