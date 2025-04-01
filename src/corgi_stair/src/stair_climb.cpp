@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <stdexcept>
+#include <array>
 #include <vector>
 #include <algorithm>
 
