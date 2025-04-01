@@ -116,7 +116,8 @@ int main(int argc, char** argv) {
             case STAIR:
                 count ++;
                 if (last_state != state) {
-                    stair_climb.initialize({eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]});
+                    double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
+                    stair_climb.initialize(current_eta);
                     for (int i=0; i<stair_num; i++) {
                         stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
                     }//end for
