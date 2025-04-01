@@ -78,6 +78,7 @@ void StairClimb::initialize(double init_eta[8]) {
 std::array<std::array<double, 4>, 2> StairClimb::step() {
     // state machine
     bool if_finish_move = false;
+    std::cout << "State:" << this->state << std::endl;
     switch (this->state) {
         case MOVE_STABLE:
             if (last_state != state) {
