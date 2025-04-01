@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -20,6 +21,7 @@ bool sim = true;
 LegModel legmodel(sim);
 
 Eigen::MatrixXd H_l_coef(2, 8);
+Eigen::MatrixXd H_r_coef(2, 8);
 Eigen::MatrixXd F_l_coef(2, 8);
 Eigen::MatrixXd F_r_coef(2, 8);
 Eigen::MatrixXd U_l_coef(2, 8);

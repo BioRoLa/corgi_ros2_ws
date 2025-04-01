@@ -235,13 +235,16 @@ int main(int argc, char **argv) {
         &motor_cmd.module_d
     };
 
-    std::vector<Eigen::MatrixXd>phi_vel_prev_modules = {
+    std::vector<Eigen::MatrixXd> phi_vel_prev_modules = {
         Eigen::MatrixXd::Zero(2, 1),
         Eigen::MatrixXd::Zero(2, 1),
         Eigen::MatrixXd::Zero(2, 1),
         Eigen::MatrixXd::Zero(2, 1)
     };
 
+    // AR, AL, BR, BL, CR, CL, DR, DL
+    // std::vector<double> kt = {2.018, 2.126, 2.141, 2.176, 1.927, 2.072, 2.098, 2.143};
+    std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
 
     int loop_count = 0;
     while (ros::ok()) {
@@ -265,21 +268,16 @@ int main(int argc, char **argv) {
                 }
                 
             }
-
             phi_vel_prev_modules[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
         }
 
-        // static friction　compensation
-        // avg: 0.429, 0.272, 0.326, 0.267, 0.353, 0.288, 0.306, 0.236
-        // kt: 2.359, 2.499, 2.227, 2.309, 2.137, 2.531, 2.224, 2.612
-        // motor_cmd_modules[0]->torque_r += 0.429 * motor_cmd_modules[0]->torque_r/std::abs(motor_cmd_modules[0]->torque_r) * 2.359;
-        // motor_cmd_modules[0]->torque_l += 0.272 * motor_cmd_modules[0]->torque_l/std::abs(motor_cmd_modules[0]->torque_l) * 2.499;
-        // motor_cmd_modules[1]->torque_r += 0.326 * motor_cmd_modules[1]->torque_r/std::abs(motor_cmd_modules[1]->torque_r) * 2.227;
-        // motor_cmd_modules[1]->torque_l += 0.267 * motor_cmd_modules[1]->torque_l/std::abs(motor_cmd_modules[1]->torque_l) * 2.309;
-        // motor_cmd_modules[2]->torque_r += 0.353 * motor_cmd_modules[2]->torque_r/std::abs(motor_cmd_modules[2]->torque_r) * 2.137;
-        // motor_cmd_modules[2]->torque_l += 0.288 * motor_cmd_modules[2]->torque_l/std::abs(motor_cmd_modules[2]->torque_l) * 2.531;
-        // motor_cmd_modules[3]->torque_r += 0.306 * motor_cmd_modules[3]->torque_r/std::abs(motor_cmd_modules[3]->torque_r) * 2.224;
-        // motor_cmd_modules[3]->torque_l += 0.236 * motor_cmd_modules[3]->torque_l/std::abs(motor_cmd_modules[3]->torque_l) * 2.612;
+        // dynamic friction compensation
+        if (!sim){
+            for (int i=0; i<4; i++) {
+                motor_cmd_modules[i]->torque_r -= friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
+                motor_cmd_modules[i]->torque_l -= friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
+            }
+        }
 
         // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
 
