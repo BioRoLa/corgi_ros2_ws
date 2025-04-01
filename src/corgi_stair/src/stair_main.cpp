@@ -13,7 +13,7 @@
 #include "leg_model.hpp"
 #include "bezier.hpp"
 #include "walk_gait.hpp"
-// #include "stair_climb.hpp"
+#include "stair_climb.hpp"
 
 #define INIT_THETA (M_PI*17.0/180.0)
 #define INIT_BETA (0.0)
