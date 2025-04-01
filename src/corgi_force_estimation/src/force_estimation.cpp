@@ -15,12 +15,12 @@ void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
 }
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
-    Eigen::Rotation2D<double> rotation(alpha);
-    Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-
     for (int i=0; i<8; i++){
         H_l_coef(0, i) = H_x_coef[i];
         H_l_coef(1, i) = H_y_coef[i];
+
+        H_r_coef(0, i) = -H_x_coef[i];
+        H_r_coef(1, i) = H_y_coef[i];
 
         U_l_coef(0, i) = U_x_coef[i];
         U_l_coef(1, i) = U_y_coef[i];
@@ -48,12 +48,34 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
 
     double scaled_radius = legmodel.radius / legmodel.R;
 
-    if      (rim == 1) P_poly = rot_alpha * (H_l_coef-U_l_coef) * scaled_radius + U_l_coef;
-    else if (rim == 2) P_poly = rot_alpha * (F_l_coef-L_l_coef) * scaled_radius + L_l_coef;
-    else if (rim == 3) P_poly = rot_alpha * (G_coef-L_l_coef) * legmodel.r / legmodel.R + G_coef;
-    else if (rim == 4) P_poly = rot_alpha * (G_coef-L_r_coef) * scaled_radius + L_r_coef;
-    else if (rim == 5) P_poly = rot_alpha * (F_r_coef-U_r_coef) * scaled_radius + U_r_coef;
-    else P_poly = Eigen::MatrixXd::Zero(2, 8);
+    if (rim == 1) {
+        Eigen::Rotation2D<double> rotation(alpha+M_PI);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (H_l_coef-U_l_coef) * scaled_radius + U_l_coef;
+    }
+    else if (rim == 2) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef-L_l_coef) * scaled_radius + L_l_coef;
+    }
+    else if (rim == 3) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef-L_l_coef) * legmodel.r / legmodel.R + G_coef;
+    }
+    else if (rim == 4) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef-L_r_coef) * scaled_radius + L_r_coef;
+    }
+    else if (rim == 5) {
+        Eigen::Rotation2D<double> rotation(alpha-M_PI);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (H_r_coef-U_r_coef) * scaled_radius + U_r_coef;
+    }
+    else {
+        P_poly = Eigen::MatrixXd::Zero(2, 8);
+    }
     
     return P_poly;
 }
