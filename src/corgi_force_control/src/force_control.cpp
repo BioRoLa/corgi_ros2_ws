@@ -274,8 +274,8 @@ int main(int argc, char **argv) {
         // dynamic friction compensation
         if (!sim){
             for (int i=0; i<4; i++) {
-                motor_cmd_modules[i]->torque_r += friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
-                motor_cmd_modules[i]->torque_l += friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
+                motor_cmd_modules[i]->torque_r -= friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
+                motor_cmd_modules[i]->torque_l -= friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
             }
         }
 

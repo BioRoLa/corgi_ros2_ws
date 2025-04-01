@@ -45,10 +45,10 @@ int main(int argc, char **argv) {
         motor_cmd_modules[1]->theta += 13/2000.0/180.0*M_PI;
         motor_cmd_modules[2]->theta += 13/2000.0/180.0*M_PI;
         motor_cmd_modules[3]->theta += 13/2000.0/180.0*M_PI;
-        motor_cmd_modules[0]->beta -= 90/2000.0/180.0*M_PI;
-        motor_cmd_modules[1]->beta += 90/2000.0/180.0*M_PI;
-        motor_cmd_modules[2]->beta += 90/2000.0/180.0*M_PI;
-        motor_cmd_modules[3]->beta -= 90/2000.0/180.0*M_PI;
+        motor_cmd_modules[0]->beta += 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[1]->beta -= 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[2]->beta -= 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[3]->beta += 40/2000.0/180.0*M_PI;
 
         motor_cmd.header.seq = -1;
 
@@ -72,25 +72,25 @@ int main(int argc, char **argv) {
             int seq = 0;
             double loop_count = 0.0;
             while (ros::ok()) {
-                if (loop_count < 2000) {
-                    // motor_cmd_modules[0]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[1]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[2]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[3]->theta -= 43/5000.0/180.0*M_PI;
-                    motor_cmd_modules[0]->beta  += 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[1]->beta  -= 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[2]->beta  -= 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[3]->beta  += 180/2000.0/180.0*M_PI;
+                if (loop_count < 4000) {
+                    motor_cmd_modules[0]->theta += 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[1]->theta += 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[2]->theta += 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[3]->theta += 80/4000.0/180.0*M_PI;
+                    // motor_cmd_modules[0]->beta  += 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[1]->beta  -= 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[2]->beta  -= 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[3]->beta  += 180/2000.0/180.0*M_PI;
                 }
-                else if (loop_count < 4000) {
-                    // motor_cmd_modules[0]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[1]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[2]->theta -= 43/5000.0/180.0*M_PI;
-                    // motor_cmd_modules[3]->theta -= 43/5000.0/180.0*M_PI;
-                    motor_cmd_modules[0]->beta  -= 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[1]->beta  += 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[2]->beta  += 180/2000.0/180.0*M_PI;
-                    motor_cmd_modules[3]->beta  -= 180/2000.0/180.0*M_PI;
+                else if (loop_count < 8000) {
+                    motor_cmd_modules[0]->theta -= 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[1]->theta -= 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[2]->theta -= 80/4000.0/180.0*M_PI;
+                    motor_cmd_modules[3]->theta -= 80/4000.0/180.0*M_PI;
+                    // motor_cmd_modules[0]->beta  -= 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[1]->beta  += 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[2]->beta  += 180/2000.0/180.0*M_PI;
+                    // motor_cmd_modules[3]->beta  -= 180/2000.0/180.0*M_PI;
                 }
                 // else if (loop_count < 15000) {
                     

@@ -71,25 +71,25 @@ int main(int argc, char **argv) {
         if (trigger){
             int loop_count = 0;
             while (ros::ok()) {
-                if (loop_count < 10000) {
-                    imp_cmd_modules[0]->theta += 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[1]->theta += 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[2]->theta += 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[3]->theta += 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
+                if (loop_count < 4000) {
+                    imp_cmd_modules[0]->theta += 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[1]->theta += 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[2]->theta += 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[3]->theta += 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/1000.0*M_PI);
                 }
-                else if (loop_count < 20000) {
-                    imp_cmd_modules[0]->theta -= 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[1]->theta -= 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[2]->theta -= 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[3]->theta -= 80/10000.0/180.0*M_PI;
-                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/2500.0*M_PI);
-                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/2500.0*M_PI);
+                else if (loop_count < 4000) {
+                    imp_cmd_modules[0]->theta -= 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[1]->theta -= 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[2]->theta -= 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[3]->theta -= 80/4000.0/180.0*M_PI;
+                    imp_cmd_modules[0]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[1]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[2]->Fy = -19*9.81/4.0 + 20 * sin(loop_count/1000.0*M_PI);
+                    imp_cmd_modules[3]->Fy = -19*9.81/4.0 - 20 * sin(loop_count/1000.0*M_PI);
                 }
 
                 imp_cmd.header.seq = loop_count;
