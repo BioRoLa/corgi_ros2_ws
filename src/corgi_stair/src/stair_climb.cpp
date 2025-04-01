@@ -305,7 +305,7 @@ bool StairClimb::swing_same_step() {  // return true if finish swinging, false i
         if (i == swing_leg) {
             double swing_phase_ratio = (step_count+1.0) / total_steps;
             std::array<double, 2> curve_point = sp.getFootendPoint(swing_phase_ratio);
-            result_eta = leg_model.inverse(curve_point - hip[i], 'G');
+            result_eta = leg_model.inverse({curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]}, 'G');
         } else {
             result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
         }//end if else
@@ -394,7 +394,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 this->sp[i] = SwingProfile(current_G, final_G, step_height, 1);
             }//end if
             std::array<double, 2> curve_point = sp.getFootendPoint(swing_phase_ratio);
-            result_eta = leg_model.inverse(curve_point - hip[i], 'G');
+            result_eta = leg_model.inverse({curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]}, 'G');
         } else {
             result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
         }//end if else
