@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     double D=0.27, H=0.12;
     int stair_num = 3;
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
-    const double CoM_bias = 0.0;
+    const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 5000; // 5s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
@@ -67,8 +67,8 @@ int main(int argc, char** argv) {
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
-    WalkGait walk_gait(true, CoM_bias, sampling_rate);
-    // StairClimb stair_climb(true, CoM_bias, sampling_rate);
+    WalkGait walk_gait(true, CoM_bias[0], sampling_rate);
+    StairClimb stair_climb(true, CoM_bias, sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
                                                       {INIT_BETA , INIT_BETA , INIT_BETA , INIT_BETA }}};   // init eta (wheel mode)
     
