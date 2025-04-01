@@ -58,8 +58,8 @@ int main(int argc, char** argv) {
     double D=0.27, H=0.12;
     int stair_num = 3;
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
-    std::array<double, 2> CoM_bias = {0.0, 0.0};
-    int sampling_rate = 1000;
+    const std::array<double, 2> CoM_bias = {0.0, 0.0};
+    const int sampling_rate = 1000;
     const int transform_count = 5000; // 5s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
