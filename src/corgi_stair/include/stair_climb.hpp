@@ -60,6 +60,7 @@ class StairClimb {
         const double keep_stair_distance_all = 0.22;
         const double keep_stair_distance_hind = 0.22;
         const double keep_stair_distance_front = 0.05;
+        const double step_length_up_stair = 0.3;
         
         // Variable
         int rate;

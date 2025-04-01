@@ -504,16 +504,16 @@ bool StairClimb::determine_next_foothold() {
         current_stair_edge  = stair_edge[swing_leg].front().edge;
         current_stair_count = stair_edge[swing_leg].front().count;
         if ((leg_info[swing_leg].next_up || leg_info[ other_side_leg[swing_leg][1] ].next_up) &&
-        (current_stair_count + 1 < stair_edge[ other_side_leg[swing_leg][0] ].front().conut || leg_info[ other_side_leg[swing_leg][0] ].one_step || swing_leg < 2)) {
+        (current_stair_count + 1 < stair_edge[ other_side_leg[swing_leg][0] ].front().count || leg_info[ other_side_leg[swing_leg][0] ].one_step || swing_leg < 2)) {
             leg_info[swing_leg].next_up = false;
-            if (current_stair_count == stair_edge[ other_side_leg[swing_leg][1] ].front().conut) {    //first swing leg
+            if (current_stair_count == stair_edge[ other_side_leg[swing_leg][1] ].front().count) {    //first swing leg
                 leg_info[swing_leg].one_step = false;
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_distance, current_stair_edge[1]};
             } else {    //second swing leg
                 leg_info[swing_leg].one_step = true;
-                double deepest_x = stairs_edge[current_stair + 1][0] - keep_stair_d;
+                double deepest_x;
                 if (stair_edge[swing_leg].size() >= 2) {
-                    deepest_x = stairs_edge[1][0] - keep_stair_d;
+                    deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d;
                 } else {
                     deepest_x = INFINITY;
                 }//end if else
@@ -536,7 +536,7 @@ bool StairClimb::determine_next_foothold() {
             }//end if else
         }//end if
         // determine if next swing leg will swing up to next stair step
-        if (leg_info[swing_leg].next_foothold[0] >= stairs_edge[next_stair][0] - keep_stair_distance_all) {
+        if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][next_stair].edge[0] - keep_stair_distance_all) {
             leg_info[swing_leg].next_up = true;
         }//end if
     } else {    // move on the upper ground
