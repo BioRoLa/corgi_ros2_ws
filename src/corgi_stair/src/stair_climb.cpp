@@ -228,11 +228,17 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         achieve_max_length = true;
     }//end if
     /* return if stable (entering support triangle) */
-    if (move_dir * (CoM[0] + CoM_offset[0]) < move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg-1)%4].foothold[0]) / 2) + stability_margin) {
-        return false;
-    } else {
+    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 > move_dir * (CoM_offset[0] + stability_margin)) {
         return true;
+    } else {
+        return false;
     }//end if else
+
+    // if (move_dir * (CoM[0] + CoM_offset[0]) < move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg-1)%4].foothold[0]) / 2) + stability_margin) {
+    //     return false;
+    // } else {
+    //     return true;
+    // }//end if else
 }//end move_CoM_stable
 
 // void StairClimb::move_CoM_stable_smooth_fixed_leg_length(std::vector<LegInfo>& leg_info, int swing_leg, Eigen::Vector2d& CoM, double pitch) {
