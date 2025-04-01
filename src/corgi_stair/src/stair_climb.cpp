@@ -6,6 +6,7 @@
 
 #include "bezier.hpp"
 #include "leg_model.hpp"
+#include "fitted_coefficient.hpp"
 #include "stair_climb.hpp"
 
 StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, double BL, double BW, double BH) : 
