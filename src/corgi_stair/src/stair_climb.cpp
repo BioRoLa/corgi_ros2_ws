@@ -548,7 +548,7 @@ bool StairClimb::determine_next_foothold() {
     return up_stair;
 }//end determine_next_foothold
 
-std::array<double, 2> StairClimb::get_foothold(double theta, double beta, int contact_rim = -1) {
+std::array<double, 2> StairClimb::get_foothold(double theta, double beta, int contact_rim) {
     leg_model.contact_map(theta, beta);
     if (contact_rim == -1) {
         return leg_model.contact_p;
