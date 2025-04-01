@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     double transform_ratio;
     bool trigger;
     int count;
-
+    double pitch;
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
     walk_gait.set_velocity(0.1);
@@ -123,6 +123,7 @@ int main(int argc, char** argv) {
                     }//end for
                 }//end if
                 eta_list = stair_climb.step();
+                pitch = stair_climb.get_pitch();
                 break;
             default:
                 break;
@@ -172,7 +173,7 @@ int main(int argc, char** argv) {
                 eta_list[0][i] = M_PI*16.99/180.0;
             }//end if 
             motor_cmd_modules[i]->theta = eta_list[0][i];
-            motor_cmd_modules[i]->beta = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
+            motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]-pitch) : -(eta_list[1][i]-pitch);
         }//end for
         motor_pub.publish(motor_cmd);
         rate.sleep();

@@ -189,6 +189,10 @@ void StairClimb::add_stair_edge(double x, double y) {
     stair_edge[3].push_back({{x, y}, stair_count});
 }//end add_stair_edge
 
+double StairClimb::get_pitch() {
+    return this->pitch;
+}//end get_pitch
+
 
 /* Private function */
 void StairClimb::init_move_CoM_stable(int swing_leg) { 

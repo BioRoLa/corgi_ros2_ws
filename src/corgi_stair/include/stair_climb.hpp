@@ -22,6 +22,7 @@ class StairClimb {
         void initialize(double init_eta[8]);
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
+        double get_pitch();
 
     private:
         /* Private function */
