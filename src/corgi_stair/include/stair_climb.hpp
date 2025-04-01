@@ -95,7 +95,6 @@ class StairClimb {
         enum STATES {MOVE_STABLE, SWING_SAME, SWING_NEXT, END};
         STATES state;
         STATES last_state;
-        bool if_change_stair;
 
         // Intermediate variables
         std::array<double, 2> result_eta;
