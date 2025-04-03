@@ -94,7 +94,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 swing_leg = swing_sequence[swing_count % 4];
                 front_height = hip[0][1];
                 hind_height  = hip[3][1];
-                if (stair_edge[swing_leg].front().count == 0 && leg_info[swing_leg].next_up) {
+                if (stair_edge[swing_leg].front().count == 1 && leg_info[swing_leg].next_up) {
                     if (swing_leg == 0 || swing_leg == 1) {
                         front_height = stand_height_on_stair_front;
                     } else {
