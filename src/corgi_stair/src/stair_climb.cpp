@@ -406,15 +406,15 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
     for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
         if (i == swing_leg) {
-            double swing_phase_ratio = (step_count+1.0) / total_steps;
             if (first_in) {
                 first_in = false;
                 leg_model.forward(theta[i], beta[i]);
                 std::array<double, 2> current_G = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
                 leg_model.forward(final_theta, final_beta);
                 std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
-                this->sp[i] = SwingProfile(current_G, final_G, step_height, 1);
+                this->sp[i] = SwingProfile(current_G, final_G, final_G[1]-current_G[1]+step_height, 1);
             }//end if
+            double swing_phase_ratio = (step_count+1.0) / total_steps;
             std::array<double, 2> curve_point = sp[i].getFootendPoint(swing_phase_ratio);
             std::array<double, 2> pos = {curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]};
             result_eta = leg_model.inverse(pos, "G");
