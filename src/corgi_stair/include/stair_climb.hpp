@@ -119,8 +119,9 @@ class StairClimb {
         bool is_clockwise;
         double coeff_a_x, coeff_b_x, coeff_a_y, coeff_b_y;
         bool first_in, second_in, third_in;
-        std::array<double, 2> final_hip;
-        double final_theta, final_beta;
+        std::array<double, 2> init_CoM, final_CoM, final_hip;
+        double final_theta, final_beta, init_pitch, final_pitch;
+        double init_front_height, init_hind_height;
 };//end class StairClimb
 
 #endif // STAIRCLIMB_HPP
