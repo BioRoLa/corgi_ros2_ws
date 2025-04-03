@@ -71,6 +71,8 @@ void StairClimb::initialize(double init_eta[8]) {
             {BL/2, stand_height} ,
             {-BL/2, stand_height},
             {-BL/2, stand_height}}};
+    front_height = stand_height;
+    hind_height  = stand_height;
     // Initial theta/beta
     for (int i=0; i<4; i++) {
         theta[i] = init_theta[i];
@@ -91,8 +93,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         case SWING_SAME:
             if (last_state != state) {
                 swing_leg = swing_sequence[swing_count % 4];
-                front_height = hip[0][1];
-                hind_height  = hip[3][1];
+                // front_height = hip[0][1];
+                // hind_height  = hip[3][1];
                 if (stair_edge[swing_leg].front().count == 1 && leg_info[swing_leg].next_up) {
                     if (swing_leg == 0 || swing_leg == 1) {
                         front_height = stand_height_on_stair_front;
@@ -107,8 +109,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         case SWING_NEXT:
             if (last_state != state) {
                 swing_leg = swing_sequence[swing_count % 4];
-                front_height = hip[0][1];
-                hind_height  = hip[3][1];
+                // front_height = hip[0][1];
+                // hind_height  = hip[3][1];
                 if (swing_leg == 0 || swing_leg == 1) {
                     if (stair_edge[0].front().count != stair_edge[1].front().count) {
                         double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
