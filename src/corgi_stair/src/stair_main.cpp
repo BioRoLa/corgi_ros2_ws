@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
                     double hip_x = sim_data.position.x + 0.222;
-                    if (hip_x + 0.15 >= -D/2.0 - 0.05) {  
+                    if (hip_x + 0.15 >= -D/2.0 - 0.15) {  
                         state = STAIR;
                     }//end if
                 }//end if
