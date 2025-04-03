@@ -233,8 +233,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     }//end if
     /* return if stable (entering support triangle) */
     std::cout << "(swing_leg+1)%4:" << (swing_leg+1)%4 << std::endl;
-    std::cout << "(swing_leg-1)%4:" << (swing_leg-1)%4 << std::endl;
-    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
+    std::cout << "(swing_leg-1)%4:" << (swing_leg+3)%4 << std::endl;
+    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg+3)%4], beta[(swing_leg+3)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
         return true;
     } else {
         return false;
@@ -282,7 +282,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
 
 void StairClimb::init_swing_same_step(int swing_leg, double front_height, double hind_height) { 
     this->swing_leg = swing_leg;
-    this->margin_d = std::abs(CoM[0] - (leg_info[(swing_leg+1)%4].foothold[0]+leg_info[(swing_leg-1)%4].foothold[0])/2) - min_margin;
+    this->margin_d = std::abs(CoM[0] - (leg_info[(swing_leg+1)%4].foothold[0]+leg_info[(swing_leg+3)%4].foothold[0])/2) - min_margin;
     leg_model.forward(theta[swing_leg], beta[swing_leg]);
     std::array<double, 2> p_lo = {hip[swing_leg][0] + leg_model.G[0], hip[swing_leg][1] + leg_model.G[1]}; 
     std::array<double, 2> p_td = {leg_info[swing_leg].next_foothold[0], leg_info[swing_leg].next_foothold[1]+leg_model.r};
