@@ -455,6 +455,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         leg_info[leg_ID].foothold = {current_stair_edge[0], current_stair_edge[1]};
     } else {
         std::array<double, 2> relative_foothold;
+        std::cout << "leg_ID:" << leg_ID << std::endl;
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
@@ -497,7 +498,6 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         guess_dx += dx;
 
         if (iter == max_iter-1) {
-            std::cout << "leg_ID:" << leg_ID << std::endl;
             throw std::runtime_error("Move_edge: Newton solver did not converge.");
         }//end if
     }//end for
