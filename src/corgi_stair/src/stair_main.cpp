@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     }//end for 
 
     /* Setting variable */
-    double D=0.27, H=0.12;
+    double D=0.27, H=0.125;
     int stair_num = 3;
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     double pitch;
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
-    
+
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
     walk_gait.set_velocity(0.1);
@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
                     double hip_x = sim_data.position.x + 0.222;
-                    if (hip_x + 0.15 >= -D/2.0) {  
+                    if (hip_x + 0.15 >= -D/2.0 - 0.05) {  
                         state = STAIR;
                     }//end if
                 }//end if
@@ -192,10 +192,10 @@ int main(int argc, char** argv) {
         }//end for
         motor_pub.publish(motor_cmd);
         auto one_loop_end = std::chrono::high_resolution_clock::now();
-        auto one_loop_duration = std::chrono::duration_cast<std::chrono::milliseconds>(one_loop_end - one_loop_start);
+        auto one_loop_duration = std::chrono::duration_cast<std::chrono::microseconds>(one_loop_end - one_loop_start);
         if (one_loop_duration.count() > max_cal_time) {
             max_cal_time = one_loop_duration.count();
-            std::cout << "max time: " << max_cal_time << " ms" << std::endl;
+            std::cout << "max time: " << max_cal_time << " us" << std::endl;
         }//end if
         rate.sleep();
     }//end while
