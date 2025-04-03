@@ -345,7 +345,7 @@ bool StairClimb::swing_same_step() {  // return true if finish swinging, false i
 
 void StairClimb::init_swing_next_step(int swing_leg, double front_height, double hind_height) { 
     this->swing_leg = swing_leg;
-    this->is_clockwise = (swing_leg == 0 || swing_leg == 1)? (stair_edge[0].front().count == stair_edge[1].front().count) : (lstair_edge[2].front().count == stair_edge[3].front().count);
+    this->is_clockwise = (swing_leg == 0 || swing_leg == 1)? (stair_edge[0].front().count == stair_edge[1].front().count) : (stair_edge[2].front().count == stair_edge[3].front().count);
 
     double final_CoM_height = (front_height + hind_height) / 2;
     this->coeff_b = acc;
