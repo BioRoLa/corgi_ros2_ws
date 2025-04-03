@@ -237,7 +237,6 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     /* check if achieve max leg length */
     if (theta[swing_leg] >= max_theta) {
         achieve_max_length = true;
-        std::cout << "Achieve max leg length." << std::endl;
     }//end if
     /* return if stable (entering support triangle) */
     // if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg+3)%4], beta[(swing_leg+3)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
@@ -498,7 +497,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         guess_dx += dx;
 
         if (iter == max_iter-1) {
-            throw std::runtime_error("Newton solver did not converge.");
+            throw std::runtime_error("Move_edge: Newton solver did not converge.");
         }//end if
     }//end for
 
