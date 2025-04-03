@@ -450,7 +450,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
 }//end swing_next_step
 
 std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<double, 2> move_vec) {
-    std::array<double, 2> current_stair_edge = {-100, 0}; // [0] set very small to ensure execute correctly when the vector is empty.
+    std::array<double, 2> current_stair_edge = {INFINITY, 0}; // [0] set very large to ensure execute correctly when the vector is empty.
     if (!stair_edge[leg_ID].empty()) {
         current_stair_edge = stair_edge[leg_ID].front().edge;
         leg_model.forward(theta[leg_ID], beta[leg_ID]);
@@ -546,7 +546,7 @@ bool StairClimb::determine_next_foothold() {
     if (!stair_edge[swing_leg].empty()) {
         current_stair_edge  = stair_edge[swing_leg].front().edge;
         if ((leg_info[swing_leg].next_up || leg_info[ other_side_leg[swing_leg][1] ].next_up) &&
-        (swing_leg < 2 || leg_info[ other_side_leg[swing_leg][0] ].one_step  || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
+        (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step  || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
             leg_info[swing_leg].next_up = false;
             if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg
                 leg_info[swing_leg].one_step = false;
@@ -559,10 +559,11 @@ bool StairClimb::determine_next_foothold() {
                 } else {
                     deepest_x = INFINITY;
                 }//end if else
-                if (leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2 >= deepest_x) {
+                double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
+                if (next_max_foothold_x >= deepest_x) {
                     leg_info[swing_leg].next_foothold = {deepest_x, current_stair_edge[1]};
                 } else {
-                    leg_info[swing_leg].next_foothold = {leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2, current_stair_edge[1]};
+                    leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                 }//end if else
             }//end if else
             up_stair = true;
