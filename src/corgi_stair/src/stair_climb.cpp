@@ -455,10 +455,10 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
     } else {
         std::array<double, 2> relative_foothold;
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
-            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, true, false);
+            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
         } else {
-            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, false);
+            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
         }//end if else
         leg_info[leg_ID].foothold = {hip[leg_ID][0] + relative_foothold[0], hip[leg_ID][1] + relative_foothold[1]};
