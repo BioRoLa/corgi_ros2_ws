@@ -158,6 +158,7 @@ int main(int argc, char** argv) {
                 //         state = STAIR;
                 //     }//end if
                 // }//end if
+                std::array<int, 4> swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
                     double hip_x = sim_data.position.x + 0.222;
                     if (hip_x + 0.15 >= -D/2.0) {  
