@@ -112,15 +112,23 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 // front_height = hip[0][1];
                 // hind_height  = hip[3][1];
                 if (swing_leg == 0 || swing_leg == 1) {
-                    if (stair_edge[0].front().count != stair_edge[1].front().count) {
-                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
-                        front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
-                    }//end if
+                    if (!stair_edge[0].empty() && !stair_edge[1].empty()) {
+                        if (stair_edge[0].front().count != stair_edge[1].front().count) {
+                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
+                            front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
+                        }//end if
+                    } else {
+                        front_height = stair_edge[swing_leg].front().edge[1] + stand_height;
+                    }//end if else
                 } else {
-                    if (stair_edge[2].front().count != stair_edge[3].front().count) {
-                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                        hind_height  = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
-                    }//end if
+                    if (!stair_edge[2].empty() && !stair_edge[3].empty()) {
+                        if (stair_edge[2].front().count != stair_edge[3].front().count) {
+                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
+                            hind_height  = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
+                        }//end if
+                    } else {
+                        hind_height = stair_edge[swing_leg].front().edge[1] + stand_height;
+                    }//end if else  
                 }//end if else
                 init_swing_next_step(swing_sequence[swing_count % 4], front_height, hind_height);
             }//end if

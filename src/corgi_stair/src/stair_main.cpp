@@ -201,6 +201,7 @@ int main(int argc, char** argv) {
     }//end while
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "max time: " << max_cal_time << " us" << std::endl;
     std::cout << "time: " << duration.count() << " ms" << std::endl;
     
     ros::shutdown();
