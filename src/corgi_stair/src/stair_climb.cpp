@@ -233,17 +233,16 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     }//end if
     /* return if stable (entering support triangle) */
     std::cout << "next_foothold:" << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
-    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg+3)%4], beta[(swing_leg+3)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
+    // if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg+3)%4], beta[(swing_leg+3)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
+    //     return true;
+    // } else {
+    //     return false;
+    // }//end if else
+    if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
         return true;
     } else {
         return false;
     }//end if else
-
-    // if (move_dir * (CoM[0] + CoM_offset[0]) < move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg-1)%4].foothold[0]) / 2) + stability_margin) {
-    //     return false;
-    // } else {
-    //     return true;
-    // }//end if else
 }//end move_CoM_stable
 
 // void StairClimb::move_CoM_stable_smooth_fixed_leg_length(std::vector<LegInfo>& leg_info, int swing_leg, Eigen::Vector2d& CoM, double pitch) {
@@ -436,30 +435,30 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
     leg_model.forward(theta[leg_ID], beta[leg_ID]);
     double err = 0.01;
     
-    std::array<double, 2> edge_U_vec = {hip[swing_leg][0]+leg_model.U_r[0]-current_stair_edge[0], hip[swing_leg][1]+leg_model.U_r[1]-current_stair_edge[1]};
-    if (!leg_info[leg_ID].contact_edge && (hip[swing_leg][0]+leg_model.U_r[0] <= current_stair_edge[0]) && (std::hypot(edge_U_vec[0], edge_U_vec[1]) <= leg_model.radius)) {
+    std::array<double, 2> edge_U_vec = {hip[leg_ID][0]+leg_model.U_r[0]-current_stair_edge[0], hip[leg_ID][1]+leg_model.U_r[1]-current_stair_edge[1]};
+    if (!leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0] <= current_stair_edge[0]) && (std::hypot(edge_U_vec[0], edge_U_vec[1]) <= leg_model.radius)) {
         leg_info[leg_ID].contact_edge = true;
         leg_model.forward(theta[leg_ID], beta[leg_ID], false);
         std::complex<double> current_stair_edge_c(current_stair_edge[0], current_stair_edge[1]);
-        std::complex<double> hip_c(hip[swing_leg][0], hip[swing_leg][1]);
+        std::complex<double> hip_c(hip[leg_ID][0], hip[leg_ID][1]);
         leg_info[leg_ID].contact_alpha = std::arg((current_stair_edge_c - hip_c - leg_model.U_r_c) / (leg_model.F_r_c-leg_model.U_r_c));
-    } else if (leg_info[leg_ID].contact_edge && (hip[swing_leg][0]+leg_model.U_r[0]>current_stair_edge[0] || std::hypot(edge_U_vec[0], edge_U_vec[1]) > leg_model.radius + err)) {
+    } else if (leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0]>current_stair_edge[0] || std::hypot(edge_U_vec[0], edge_U_vec[1]) > leg_model.radius + err)) {
         leg_info[leg_ID].contact_edge = false;
     }//end if else
     
     if (leg_info[leg_ID].contact_edge) {
-        result_eta = move_edge(leg_ID, {current_stair_edge[0]-hip[swing_leg][0], current_stair_edge[1]-hip[swing_leg][1]}, leg_info[leg_ID].contact_alpha);
+        result_eta = move_edge(leg_ID, {current_stair_edge[0]-hip[leg_ID][0], current_stair_edge[1]-hip[leg_ID][1]}, leg_info[leg_ID].contact_alpha);
         leg_info[leg_ID].foothold = {current_stair_edge[0], current_stair_edge[1]};
     } else {
         std::array<double, 2> relative_foothold;
-        if (hip[swing_leg][0] + leg_model.U_r[0] > current_stair_edge[0]) {
+        if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, true, false);
-            relative_foothold = get_foothold(theta[swing_leg], beta[swing_leg], 5);
+            relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
         } else {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, false);
-            relative_foothold = get_foothold(theta[swing_leg], beta[swing_leg]);
+            relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
         }//end if else
-        leg_info[swing_leg].foothold = {hip[swing_leg][0] + relative_foothold[0], hip[swing_leg][1] + relative_foothold[1]};
+        leg_info[leg_ID].foothold = {hip[leg_ID][0] + relative_foothold[0], hip[leg_ID][1] + relative_foothold[1]};
     }//end if else
 
     return result_eta;
