@@ -118,7 +118,6 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 } else {
                     if (stair_edge[2].front().count != stair_edge[3].front().count) {
                         double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                        front_height = hip[0][1];
                         hind_height  = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if
                 }//end if else
@@ -230,8 +229,11 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     /* check if achieve max leg length */
     if (theta[swing_leg] >= max_theta) {
         achieve_max_length = true;
+        std::cout << "Achieve max leg length." << std::endl;
     }//end if
     /* return if stable (entering support triangle) */
+    std::cout << "(swing_leg+1)%4:" << (swing_leg+1)%4 << std::endl;
+    std::cout << "(swing_leg-1)%4:" << (swing_leg-1)%4 << std::endl;
     if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
         return true;
     } else {
@@ -431,7 +433,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
 }//end swing_next_step
 
 std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<double, 2> move_vec) {
-    std::array<double, 2> current_stair_edge = stair_edge[leg_ID].back().edge;
+    std::array<double, 2> current_stair_edge = stair_edge[leg_ID].front().edge;
     leg_model.forward(theta[leg_ID], beta[leg_ID]);
     double err = 0.01;
     
