@@ -78,6 +78,8 @@ int main(int argc, char** argv) {
     bool trigger;
     int count;
     double pitch;
+    double max_cal_time = 0.0;
+
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
     walk_gait.set_velocity(0.1);
@@ -85,6 +87,7 @@ int main(int argc, char** argv) {
     walk_gait.set_step_length(0.3);
     walk_gait.set_step_height(0.04);
     while (ros::ok()) {
+        auto one_loop_start = std::chrono::high_resolution_clock::now();
         ros::spinOnce();
         if (state == END) {
             break;
@@ -146,15 +149,25 @@ int main(int argc, char** argv) {
                 }//end if
                 break;
             case WALK:
-                if (sim_data.position.x > -0.8) {
-                    std::array<int, 4> swing_phase = walk_gait.get_swing_phase();
-                    if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
+                /* Position feedback in Webots */
+                // double hip_x = sim_data.position.x + 0.222;
+                // if ( -D/2.0 - 0.35 - hip_x <= 0.3 ) {   // first stair edge - keep_d - front hip pos < max step length
+                //     walk_gait.set_step_length((-D/2.0 - 0.35 - hip_x)/(0.2+0.4)); // step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                //     std::array<int, 4> swing_phase = walk_gait.get_swing_phase();
+                //     if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
+                //         state = STAIR;
+                //     }//end if
+                // }//end if
+                if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
+                    double hip_x = sim_data.position.x + 0.222;
+                    if (hip_x + 0.15 >= -D/2.0) {  
                         state = STAIR;
                     }//end if
                 }//end if
+
                 break;
             case STAIR:
-                if (count > 10000) {
+                if (!stair_climb.if_any_stair()) {
                     state = END;
                 }//end if  
                 break;
@@ -176,6 +189,12 @@ int main(int argc, char** argv) {
             motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]-pitch) : -(eta_list[1][i]-pitch);
         }//end for
         motor_pub.publish(motor_cmd);
+        auto one_loop_end = std::chrono::high_resolution_clock::now();
+        auto one_loop_duration = std::chrono::duration_cast<std::chrono::milliseconds>(one_loop_end - one_loop_start);
+        if (one_loop_duration.count() > max_cal_time) {
+            max_cal_time = one_loop_duration.count();
+            std::cout << "max time: " << max_cal_time << " ms" << std::endl;
+        }//end if
         rate.sleep();
     }//end while
     auto end = std::chrono::high_resolution_clock::now();

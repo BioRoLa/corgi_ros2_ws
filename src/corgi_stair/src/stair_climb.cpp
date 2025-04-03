@@ -193,6 +193,15 @@ double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch
 
+bool StairClimb::if_any_stair() {
+    for (int i=0; i<4; i++) {
+        if (!stair_edge[i].empty()) {
+            return true;
+        }//end if
+    }//end for
+    return false;
+}//end if_any_stair
+
 
 /* Private function */
 void StairClimb::init_move_CoM_stable(int swing_leg) { 
@@ -228,7 +237,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         achieve_max_length = true;
     }//end if
     /* return if stable (entering support triangle) */
-    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 <= move_dir * CoM_offset[0] - stability_margin) {
+    if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg-1)%4], beta[(swing_leg-1)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
         return true;
     } else {
         return false;

@@ -23,6 +23,7 @@ class StairClimb {
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
         double get_pitch();
+        bool if_any_stair();
 
     private:
         /* Private function */
