@@ -18,6 +18,7 @@
   <build_depend>message_generation</build_depend>
   <build_depend>corgi_utils</build_depend>
   <build_depend>corgi_walk</build_depend>
+  <build_depend>corgi_force_estimation</build_depend>
   <build_depend>sensor_msgs</build_depend>
 
   <build_export_depend>joy</build_export_depend>
@@ -29,6 +30,7 @@
   <build_export_depend>message_runtime</build_export_depend>
   <build_export_depend>corgi_utils</build_export_depend>
   <build_export_depend>corgi_walk</build_export_depend>
+  <build_export_depend>corgi_force_estimation</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
 
   <exec_depend>joy</exec_depend>
@@ -42,6 +44,7 @@
   <exec_depend>message_generation</exec_depend>
   <exec_depend>corgi_utils</exec_depend>
   <exec_depend>corgi_walk</exec_depend>
+  <exec_depend>corgi_force_estimation</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
 
   <export>

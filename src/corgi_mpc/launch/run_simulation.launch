@@ -1,7 +1,7 @@
 <launch>
     <param name="use_sim_time" value="true" />
     
-    <arg name="world" default="$(find corgi_sim)/worlds/corgi_uneven_proto.wbt"/>
+    <arg name="world" default="$(find corgi_sim)/worlds/corgi_old_proto.wbt"/>  <!--corgi_uneven_proto corgi_old_proto-->
     <arg name="mode" default="realtime"/>  <!--realtime pause fast-->
 
     <node name="webots_launcher" pkg="corgi_sim" type="webots_launcher.py" args="--world=$(arg world) --mode=$(arg mode)" required="true"/>
@@ -9,6 +9,6 @@
     <node name="corgi_sim_trq" pkg="corgi_sim" type="corgi_sim_trq" respawn="true" output="screen"/>
     <node name="force_estimation" pkg="corgi_force_estimation" type="force_estimation" output="log"/>
     <node name="force_control" pkg="corgi_force_control" type="force_control" output="log"/>
-    <!-- <node name="corgi_odometry" pkg="corgi_odometry" type="corgi_odometry" args="TEST" output="log"/> -->
-    <node name="corgi_mpc" pkg="corgi_mpc" type="corgi_mpc" output="screen"/>
+    <node name="corgi_mpc" pkg="corgi_mpc" type="walk_closed_loop" output="screen"/>
+    <!-- <node name="corgi_mpc" pkg="corgi_mpc" type="walk_open_loop" output="screen"/> -->
 </launch>

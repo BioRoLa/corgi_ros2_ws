@@ -250,8 +250,8 @@ int main(int argc, char **argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
-        body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
-        quaternionToEuler(body_angle_quat, roll, pitch, yaw);
+        // body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
+        // quaternionToEuler(body_angle_quat, roll, pitch, yaw);
 
         for (int i=0; i<4; i++){
             if (imp_cmd_modules[i]->Kx == 0 && imp_cmd_modules[i]->Ky == 0 && imp_cmd_modules[i]->Bx == 0 && imp_cmd_modules[i]->By == 0) {
@@ -276,6 +276,8 @@ int main(int argc, char **argv) {
             for (int i=0; i<4; i++) {
                 motor_cmd_modules[i]->torque_r -= friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
                 motor_cmd_modules[i]->torque_l -= friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
+                // motor_cmd_modules[i]->torque_r -= friction[2*i];
+                // motor_cmd_modules[i]->torque_l += friction[2*i+1];
             }
         }
 

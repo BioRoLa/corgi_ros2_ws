@@ -31,6 +31,7 @@ find_package(catkin REQUIRED COMPONENTS
   corgi_utils 
   corgi_walk 
   sensor_msgs
+  corgi_force_estimation
 )
 
 catkin_package(
@@ -44,6 +45,7 @@ catkin_package(
     corgi_utils 
     corgi_walk 
     sensor_msgs
+    corgi_force_estimation
 )
 
 include_directories(
@@ -57,5 +59,6 @@ include_directories(
 
 find_library(CORGI_UTILS corgi_utils)
 find_library(CORGI_WALK corgi_walk)
+find_library(CORGI_FORCE_EST corgi_force_estimation)
 
 add_subdirectory(src)

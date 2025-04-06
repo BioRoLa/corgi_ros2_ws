@@ -130,18 +130,14 @@ Eigen::MatrixXd estimate_force(double theta, double beta, double torque_r, doubl
     return force_est;
 }
 
-void quaternionToEuler(const Eigen::Quaterniond &q, double &roll, double &pitch, double &yaw) {
-    // Normalize the quaternion (if not already normalized)
+void quaternion_to_euler(const Eigen::Quaterniond &q, double &roll, double &pitch, double &yaw) {
     Eigen::Quaterniond q_norm = q.normalized();
 
-    // Calculate roll (x-axis rotation)
     roll = std::atan2(2.0 * (q_norm.w() * q_norm.x() + q_norm.y() * q_norm.z()),
                       1.0 - 2.0 * (q_norm.x() * q_norm.x() + q_norm.y() * q_norm.y()));
 
-    // Calculate pitch (y-axis rotation)
     pitch = std::asin(2.0 * (q_norm.w() * q_norm.y() - q_norm.z() * q_norm.x()));
 
-    // Calculate yaw (z-axis rotation)
     yaw = std::atan2(2.0 * (q_norm.w() * q_norm.z() + q_norm.x() * q_norm.y()),
                      1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
 }
@@ -178,11 +174,27 @@ int main(int argc, char **argv) {
         &force_state.module_d
     };
 
+    std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
+
     while (ros::ok()) {
         ros::spinOnce();
 
+        // dynamic friction compensation
+        if (!sim){
+            for (int i=0; i<4; i++) {
+                motor_state_modules[i]->torque_r += friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
+                motor_state_modules[i]->torque_l += friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
+                // motor_state_modules[i]->torque_r += friction[2*i];
+                // motor_state_modules[i]->torque_l -= friction[2*i+1];
+            }
+        }
+
         body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
-        quaternionToEuler(body_angle_quat, roll, pitch, yaw);
+        quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
+        if (!sim) {
+            pitch *= -1;
+            yaw *= -1;
+        }
 
         for (int i=0; i<4; i++){
             Eigen::MatrixXd force_est;
@@ -199,7 +211,7 @@ int main(int argc, char **argv) {
             if (i == 1 || i == 2) { force_state_modules[i]->Fx = -force_est(0, 0); }
             else { force_state_modules[i]->Fx = force_est(0, 0); }
             
-            force_state_modules[i]->Fy = -force_est(1, 0)+0.654*9.81;
+            force_state_modules[i]->Fy = -force_est(1, 0)+0.68*9.81;
         }
 
         force_state.header.seq = motor_state.header.seq;

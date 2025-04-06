@@ -33,5 +33,5 @@ Eigen::MatrixXd G_coef(2, 8);
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha);
 Eigen::MatrixXd calculate_jacobian(Eigen::MatrixXd P_theta, Eigen::MatrixXd P_theta_deriv, double beta);
 Eigen::MatrixXd estimate_force(double theta, double beta, double torque_r, double torque_l);
-void quaternionToEuler(const Eigen::Quaterniond &q, double &roll, double &pitch, double &yaw);
+void quaternion_to_euler(const Eigen::Quaterniond &q, double &roll, double &pitch, double &yaw);
 #endif
