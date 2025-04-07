@@ -462,9 +462,6 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double x_p = para_traj[0].get_point(swing_phase_ratio);
                     double y_p = para_traj[1].get_point(swing_phase_ratio);
                     std::array<double, 2> pos = {x_p-hip[i][0], y_p-hip[i][1]};
-                    std::cout << "swing_phase_ratio:" << swing_phase_ratio << std::endl;
-                    std::cout << "xy_p:" << x_p << ", " << y_p << std::endl;
-                    std::cout << "pos:" << pos[0] << ", " << pos[1] << std::endl;
                     result_eta = leg_model.inverse(pos, "G");
                 } else {
                     result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], 0});
@@ -497,6 +494,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
                 result_eta[0] = para_traj[0].get_point(swing_phase_ratio);
                 result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
+                std::cout << "beta:" << result_eta[1]*180.0/M_PI << std::endl;
                 for (int j=0; j<3; j++) {
                     last2_hip[j][0] = last_hip[j][0];
                     last2_hip[j][1] = last_hip[j][1];
@@ -519,7 +517,11 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 swing_phase_ratio = (swing_phase_ratio - second_ratio) / (1.0 - second_ratio);
                 double x_p = para_traj[0].get_point(swing_phase_ratio);
                 double y_p = para_traj[1].get_point(swing_phase_ratio);
+
                 std::array<double, 2> pos = {x_p-hip[i][0], y_p-hip[i][1]};
+                std::cout << "swing_phase_ratio:" << swing_phase_ratio << std::endl;
+                std::cout << "xy_p:" << x_p << ", " << y_p << std::endl;
+                std::cout << "pos:" << pos[0] << ", " << pos[1] << std::endl;
                 result_eta = leg_model.inverse(pos, "G");
             }//end if else
             #endif
