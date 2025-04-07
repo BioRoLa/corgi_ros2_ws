@@ -551,12 +551,14 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         
         std::array<double, 2> edge_U_vec = {hip[leg_ID][0]+leg_model.U_r[0]-current_stair_edge[0], hip[leg_ID][1]+leg_model.U_r[1]-current_stair_edge[1]};
         if (!leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0] <= current_stair_edge[0]) && (std::hypot(edge_U_vec[0], edge_U_vec[1]) <= leg_model.radius)) {
+            std::cout <<"start contact edge" << std::endl;
             leg_info[leg_ID].contact_edge = true;
             leg_model.forward(theta[leg_ID], beta[leg_ID], false);
             std::complex<double> current_stair_edge_c(current_stair_edge[0], current_stair_edge[1]);
             std::complex<double> hip_c(hip[leg_ID][0], hip[leg_ID][1]);
             leg_info[leg_ID].contact_alpha = std::arg((current_stair_edge_c - hip_c - leg_model.U_r_c) / (leg_model.F_r_c-leg_model.U_r_c));
         } else if (leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0]>current_stair_edge[0] || std::hypot(edge_U_vec[0], edge_U_vec[1]) > leg_model.radius + err)) {
+            std::cout <<"end contact edge" << std::endl;
             leg_info[leg_ID].contact_edge = false;
         }//end if else
     }//end if
