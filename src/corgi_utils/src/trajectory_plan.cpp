@@ -62,6 +62,10 @@ LinearParaBlend::LinearParaBlend(std::vector<double> p, std::vector<double> t, d
         time_interval[2*i+1] = time[i+1] - 0.5 * tp;
         time_interval[2*i+2] = time[i+1] + 0.5 * tp;
     }//end for
+
+    for (int i=0; i<function_coeff.size(); i++) {
+        std::cout << "function_coeff[" << i << "] = " << function_coeff[i][0] << ", " << function_coeff[i][1] << ", " << function_coeff[i][2] << std::endl;
+    }//end for
 }//end LinearParaBlend
 
 double LinearParaBlend::get_point(double t) {
