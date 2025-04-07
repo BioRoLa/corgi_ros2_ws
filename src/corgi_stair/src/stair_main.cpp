@@ -84,6 +84,9 @@ int main(int argc, char** argv) {
     double pitch;
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
+    double min_keep_stair_d;
+    double hip_x;
+    double max_step_length_last;
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -155,10 +158,10 @@ int main(int argc, char** argv) {
                 break;
             case WALK:
                 /* Position feedback in Webots */
-                double min_keep_stair_d = 0.15; // 15cm to the first stair edge
-                double hip_x = sim_data.position.x + 0.222; // front hip
+                min_keep_stair_d = 0.15; // 15cm to the first stair edge
+                hip_x = sim_data.position.x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
-                double max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 if ( step_length >= max_step_length_last ) {
                     walk_gait.set_step_length(max_step_length_last); 
                 }//end if
