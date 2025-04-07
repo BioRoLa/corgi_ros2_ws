@@ -221,7 +221,7 @@ bool StairClimb::if_any_stair() {
 /* Private function */
 void StairClimb::init_move_CoM_stable(int swing_leg) { 
     this->swing_leg = swing_leg;
-    this->move_dir = (leg_info[swing_leg].ID == 0 || leg_info[swing_leg].ID == 1) ? -1 : 1;
+    this->move_dir = (swing_leg == 0 || swing_leg == 1) ? -1 : 1;
     this->CoM_offset = { std::cos(pitch) * CoM_bias[0] - std::sin(pitch) * CoM_bias[1],
                          std::sin(pitch) * CoM_bias[0] + std::cos(pitch) * CoM_bias[1] };
     this->achieve_max_length = false;
@@ -545,9 +545,9 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
 
 std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<double, 2> move_vec) {
     std::array<double, 2> current_stair_edge = {INFINITY, 0}; // [0] set very large to ensure execute correctly when the vector is empty.
+    leg_model.forward(theta[leg_ID], beta[leg_ID]);
     if (!stair_edge[leg_ID].empty()) {
         current_stair_edge = stair_edge[leg_ID].front().edge;
-        leg_model.forward(theta[leg_ID], beta[leg_ID]);
         double err = 0.01;
         
         std::array<double, 2> edge_U_vec = {hip[leg_ID][0]+leg_model.U_r[0]-current_stair_edge[0], hip[leg_ID][1]+leg_model.U_r[1]-current_stair_edge[1]};
@@ -570,6 +570,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
+            std::cout << "edge" << std::endl;
         } else {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
