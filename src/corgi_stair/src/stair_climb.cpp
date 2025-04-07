@@ -262,6 +262,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
         return true;
     } else {
+        std::cout << "CoM: " << CoM[0] + CoM_offset[0] << ", foothold: " << (leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2 << std::endl;
         return false;
     }//end if else
 }//end move_CoM_stable
