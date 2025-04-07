@@ -513,6 +513,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
                     std::cout << "last_G:" << last_G[0] << ", " << last_G[1] << std::endl;
+                    std::cout << "last2_G:" << last2_G[0] << ", " << last2_G[1] << std::endl;
                     std::cout << "final_G:" << final_G[0] << ", " << final_G[1] << std::endl;
                     std::cout << "v:" << v_x << ", " << v_y << std::endl;
                     para_traj[0] = LinearParaBlend({last_G[0], final_G[0]            , final_G[0]}, {0.0, 0.5, 1.0}, 0.3, true, v_x, true, 0.0);
