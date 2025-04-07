@@ -589,7 +589,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
     double guess_dx = 0.0;    // initial guess = 0
     for (size_t iter = 0; iter < max_iter; ++iter) {
         double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
-        if (cost < tol) {                // 判断收敛
+        if (std::abs(cost) < tol) {                // 判断收敛
             // std::cout << "cost converged after " << iter << " iterations.\n";
             break;
         }//end if
@@ -628,7 +628,6 @@ double StairClimb::objective_edge(double d_x, std::array<double, 2> init_U, std:
 
     std::complex<double> contact_p_c(contact_p[0], contact_p[1]);
     double new_alpha = std::arg((contact_p_c - leg_model.U_r_c) / (leg_model.F_r_c - leg_model.U_r_c));
-    std::cout << "y" << d_y << ", new_alpha:" << new_alpha << ", contact_alpha:" << contact_alpha << std::endl;
     return new_alpha - contact_alpha;
 }//end objective_edge
 
