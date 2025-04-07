@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
                 break;
             case WALK:
                 /* Position feedback in Webots */
-                min_keep_stair_d = 0.20; // 15cm to the first stair edge
+                min_keep_stair_d = 0.30; // 15cm to the first stair edge
                 hip_x = sim_data.position.x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
@@ -188,9 +188,9 @@ int main(int argc, char** argv) {
                 std::cout << "Exceed upper bound." << std::endl;
                 eta_list[0][i] = M_PI*160.0/180.0;
             }//end if 
-            if (eta_list[0][i] < M_PI*16.99/180.0) {
+            if (eta_list[0][i] < M_PI*16.9/180.0) {
                 std::cout << "Exceed lower bound." << std::endl;
-                eta_list[0][i] = M_PI*16.99/180.0;
+                eta_list[0][i] = M_PI*16.9/180.0;
             }//end if 
             motor_cmd_modules[i]->theta = eta_list[0][i];
             motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]-pitch) : -(eta_list[1][i]-pitch);

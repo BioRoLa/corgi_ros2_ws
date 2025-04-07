@@ -481,7 +481,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
                     std::array<double, 2> C1 = hip[i];
                     std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
-                    std::array<double, 2> C1_P1 = {C1[0]-P1[0], C1[1]-P1[1]};
+                    std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                     double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                     double tan_line_angle;
                     if (C1_P1_d < leg_model.R) {
