@@ -232,7 +232,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     /* Change velocity */
     if (move_dir * velocity[0] < max_velocity) {
         velocity[0] += move_dir * vel_incre;
-    } else if (velocity[0] > max_velocity + vel_incre) {
+    } else if (move_dir * velocity[0] > max_velocity + vel_incre) {
         velocity[0] -= move_dir * vel_incre;
     }//end if else
     CoM[0] += velocity[0] / rate;

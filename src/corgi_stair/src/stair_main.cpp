@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
                 hip_x = sim_data.position.x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                max_step_length_last = (-D/2.0 - 0.05 - 0.15 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                max_step_length_last = (-D/2.0 - 0.1- hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
                     walk_gait.set_step_length(max_step_length_last); 
                 }//end if
@@ -171,6 +171,7 @@ int main(int argc, char** argv) {
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
                     if (hip_x + 0.15 >= -D/2.0 - 0.10) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
                         state = STAIR;
+                        std::cout << "Enter stair climbing phase." << std::endl;
                     }//end if
                 }//end if
                 break;
