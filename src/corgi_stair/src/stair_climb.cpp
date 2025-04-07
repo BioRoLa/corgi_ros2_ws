@@ -462,6 +462,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double x_p = para_traj[0].get_point(swing_phase_ratio);
                     double y_p = para_traj[1].get_point(swing_phase_ratio);
                     std::array<double, 2> pos = {x_p-hip[i][0], y_p-hip[i][1]};
+                    std::cout << "pos:" << pos[0] << ", " << pos[1] << std::endl;
                     result_eta = leg_model.inverse(pos, "G");
                 } else {
                     result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], 0});
