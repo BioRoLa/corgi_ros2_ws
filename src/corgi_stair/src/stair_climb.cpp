@@ -494,8 +494,9 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
                 result_eta[0] = para_traj[0].get_point(swing_phase_ratio);
                 result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
+                std::cout << "swing_phase_ratio:" << swing_phase_ratio << std::endl;
                 std::cout << "theta:" << result_eta[0]*180.0/M_PI << std::endl;
-                for (int j=0; j<3; j++) {
+                for (int j=0; j<4; j++) {
                     last2_hip[j][0] = last_hip[j][0];
                     last2_hip[j][1] = last_hip[j][1];
                 }//end for
@@ -513,6 +514,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
                     std::cout << "last_G:" << last_G[0] << ", " << last_G[1] << std::endl;
                     std::cout << "final_G:" << final_G[0] << ", " << final_G[1] << std::endl;
+                    std::cout << "v:" << v_x << ", " << v_y << std::endl;
                     para_traj[0] = LinearParaBlend({last_G[0], final_G[0]            , final_G[0]}, {0.0, 0.5, 1.0}, 0.3, true, v_x, true, 0.0);
                     para_traj[1] = LinearParaBlend({last_G[1], final_G[1]+step_height, final_G[1]}, {0.0, 0.5, 1.0}, 0.3, true, v_y, true, 0.0);
                 }//end if
