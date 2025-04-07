@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
                 hip_x = sim_data.position.x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                if ( step_length >= max_step_length_last ) {
+                if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
                     walk_gait.set_step_length(max_step_length_last); 
                 }//end if
                 eta_list = walk_gait.step();
