@@ -466,13 +466,13 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 } else {
                     result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], 0});
                 }//end if else
-                last_thata[i] = theta[i];
+                last_theta[i] = theta[i];
                 last_beta[i]  = beta[i];
             } else if (swing_phase_ratio < second_ratio) {  // second phase
                 if (second_in) {
                     second_in = false;
                     // last point & velocity of first phase
-                    double v_theta = (theta[i] - last_thata[i]) * rate * ((second_ratio-first_ratio)*total_steps/rate);
+                    double v_theta = (theta[i] - last_theta[i]) * rate * ((second_ratio-first_ratio)*total_steps/rate);
                     double v_beta  = (beta[i]  - last_beta[i])  * rate * ((second_ratio-first_ratio)*total_steps/rate);
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
