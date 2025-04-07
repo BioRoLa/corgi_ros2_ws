@@ -8,6 +8,7 @@
 #include "bezier.hpp"
 #include "leg_model.hpp"
 #include "leg_info.hpp"
+#include "trajectory_plan.hpp"
 
 struct StairEdge {
     std::array<double, 2> edge;
@@ -41,9 +42,12 @@ class StairClimb {
         std::array<double, 2> get_foothold(double theta, double beta, int contact_rim = -1);
         void update_hip();
 
-        /* Constant value */
+        /* Class*/
         LegModel leg_model;
         LegInfo leg_info[4] = {LegInfo(0), LegInfo(1), LegInfo(2), LegInfo(3)};
+        LinearParaBlend para_traj[2];
+
+        /* Constant value */
         const std::array<std::array<int, 2>, 4> other_side_leg = {{{3, 1},    // front-hind, left-right
                                                              {2, 0}, 
                                                              {1, 3}, 
@@ -58,12 +62,13 @@ class StairClimb {
         const double acc = max_velocity / 0.5;
         const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
-        const double keep_edge_distance = 0.03;
+        const double keep_edge_d = 0.03;
         const double stand_height_on_stair_front = 0.3;
         const double stand_height_on_stair_hind  = 0.3;
-        const double keep_stair_distance_all = 0.22;
-        const double keep_stair_distance_hind = 0.22;
-        const double keep_stair_distance_front = 0.05;
+        const double keep_stair_d_hind_max = 0.22;
+        const double keep_stair_d_hind_min = 0.22;
+        const double keep_stair_d_front_max = 0.10;
+        const double keep_stair_d_front_min = 0.05;
         const double step_length_up_stair = 0.3;
         const double min_swing_time_cw   = 1.5, 
                      min_swing_time_ccw  = 1.5, 
@@ -81,6 +86,7 @@ class StairClimb {
         double max_length = 0.34;  // rad, corresponding to leg length 0.34
         std::array<SwingProfile, 4> sp;
         int swing_count;
+        double vel_incre;
 
         // State
         std::array<double, 4> theta;
@@ -93,7 +99,7 @@ class StairClimb {
         bool achieve_max_length;
 
         std::vector<StairEdge> stair_edge[4];
-        int stair_count = 0;
+        int stair_count;
 
         enum STATES {MOVE_STABLE, SWING_SAME, SWING_NEXT, END};
         STATES state;
@@ -108,16 +114,19 @@ class StairClimb {
         std::array<double, 2> CoM_offset;
         int move_dir;
         /* Variable for swing_same_step */
+        double final_CoM_height;
         double front_height, hind_height;
         double t_f_x, t_f_y, t_f;
         double coeff_a, coeff_b;
         double local_max_velocity;
         double margin_d;
-        double vel_incre;
         int total_steps, step_count;
         /* Variable for swing_next_step */
+        std::array<double, 4> last_thata, last_beta;
+        std::array<std::array<double, 2>, 4> last2_hip;
         bool is_clockwise;
         double coeff_a_x, coeff_b_x, coeff_a_y, coeff_b_y;
+        double first_ratio, second_ratio;
         bool first_in, second_in, third_in;
         std::array<double, 2> init_CoM, final_CoM, final_hip;
         double final_theta, final_beta, init_pitch, final_pitch;

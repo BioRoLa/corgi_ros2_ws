@@ -64,6 +64,10 @@ int main(int argc, char** argv) {
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
     double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3
+    double velocity = 0.1; // velocity for walk gait
+    double stand_height = 0.25; // stand height for walk gait
+    double step_length = 0.3; // step length for walk gait
+    double step_height = 0.04; // step height for walk gait
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
@@ -83,10 +87,10 @@ int main(int argc, char** argv) {
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
-    walk_gait.set_velocity(0.1);
-    walk_gait.set_stand_height(0.25);
-    walk_gait.set_step_length(0.3);
-    walk_gait.set_step_height(0.04);
+    walk_gait.set_velocity(velocity);
+    walk_gait.set_stand_height(stand_height);
+    walk_gait.set_step_length(step_length);
+    walk_gait.set_step_height(step_height);
     while (ros::ok()) {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
         ros::spinOnce();
@@ -151,22 +155,20 @@ int main(int argc, char** argv) {
                 break;
             case WALK:
                 /* Position feedback in Webots */
-                // double hip_x = sim_data.position.x + 0.222;
-                // if ( -D/2.0 - 0.35 - hip_x <= 0.3 ) {   // first stair edge - keep_d - front hip pos < max step length
-                //     walk_gait.set_step_length((-D/2.0 - 0.35 - hip_x)/(0.2+0.4)); // step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                //     std::array<int, 4> swing_phase = walk_gait.get_swing_phase();
-                //     if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
-                //         state = STAIR;
-                //     }//end if
-                // }//end if
+                double min_keep_stair_d = 0.15; // 15cm to the first stair edge
+                double hip_x = sim_data.position.x + 0.222; // front hip
+                // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
+                double max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                if ( step_length >= max_step_length_last ) {
+                    walk_gait.set_step_length(max_step_length_last); 
+                }//end if
+                // Entering stair climbing phase
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
-                    double hip_x = sim_data.position.x + 0.222;
-                    if (hip_x + 0.15 >= -D/2.0 - 0.15) {  
+                    if (hip_x + 0.15 >= -D/2.0 - 0.10) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
                         state = STAIR;
                     }//end if
                 }//end if
-
                 break;
             case STAIR:
                 if (!stair_climb.if_any_stair()) {
