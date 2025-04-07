@@ -482,7 +482,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                     double tan_line_angle;
                     if (C1_P1_d < leg_model.R) {
-                        std::cout << "Error in StairClimb::swing_next_step: P1 is inside the wheel." << std::endl;
+                        std::cerr << "Error in StairClimb::swing_next_step: P1 is inside the wheel." << std::endl;
                     } else {
                         tan_line_angle = std::acos(leg_model.R / C1_P1_d);
                     }//end if else
@@ -590,7 +590,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
     for (size_t iter = 0; iter < max_iter; ++iter) {
         double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
         if (cost < tol) {                // 判断收敛
-            std::cout << "cost converged after " << iter << " iterations.\n";
+            // std::cout << "cost converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -602,7 +602,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
 
         double dx = -cost / cost_d;   // 解线性方程 cost_d * dx = -cost
         if (dx < tol) {             // 判断步长是否足够小
-            std::cout << "dx converged after " << iter << " iterations.\n";
+            // std::cout << "dx converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -628,6 +628,7 @@ double StairClimb::objective_edge(double d_x, std::array<double, 2> init_U, std:
 
     std::complex<double> contact_p_c(contact_p[0], contact_p[1]);
     double new_alpha = std::arg((contact_p_c - leg_model.U_r_c) / (leg_model.F_r_c - leg_model.U_r_c));
+    std::cout << "y" << d_y << ", new_alpha:" << new_alpha << ", contact_alpha:" << contact_alpha << std::endl;
     return new_alpha - contact_alpha;
 }//end objective_edge
 
