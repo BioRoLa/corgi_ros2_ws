@@ -122,7 +122,7 @@ class StairClimb {
         double margin_d;
         int total_steps, step_count;
         /* Variable for swing_next_step */
-        std::array<double, 4> last_thata, last_beta;
+        std::array<double, 4> last_theta, last_beta;
         std::array<std::array<double, 2>, 4> last2_hip;
         bool is_clockwise;
         double coeff_a_x, coeff_b_x, coeff_a_y, coeff_b_y;
