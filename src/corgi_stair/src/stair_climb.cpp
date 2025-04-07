@@ -496,6 +496,9 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
                 std::cout << "swing_phase_ratio:" << swing_phase_ratio << std::endl;
                 std::cout << "theta:" << result_eta[0]*180.0/M_PI << std::endl;
+                std::cout << "beta:" << result_eta[1]*180.0/M_PI << std::endl;
+                last_theta[i] = result_eta[0];
+                last_beta[i] = result_eta[1];
                 for (int j=0; j<4; j++) {
                     last2_hip[j][0] = last_hip[j][0];
                     last2_hip[j][1] = last_hip[j][1];
