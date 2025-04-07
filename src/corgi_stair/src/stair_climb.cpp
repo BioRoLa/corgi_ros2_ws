@@ -262,7 +262,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
         return true;
     } else {
-        std::cout << "CoM: " << CoM[0] + CoM_offset[0] << ", foothold: " << (leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2 << std::endl;
+        if (move_dir == -1)
+            std::cout << "CoM: " << CoM[0] + CoM_offset[0] << ", foothold: " << (leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2 << std::endl;
         return false;
     }//end if else
 }//end move_CoM_stable
@@ -337,7 +338,6 @@ bool StairClimb::swing_same_step() {  // return true if finish swinging, false i
     } else {
         pitch = std::asin((front_height-CoM[1]) / (BL/2));
     }//end if else
-    std::cout << "pitch: " << pitch << std::endl;
     /* Calculate leg command */
     for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
@@ -514,10 +514,6 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double v_y = (last_G[1] - last2_G[1]) * rate * ((1.0-second_ratio)*total_steps/rate);
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
-                    std::cout << "last_G:" << last_G[0] << ", " << last_G[1] << std::endl;
-                    std::cout << "last2_G:" << last2_G[0] << ", " << last2_G[1] << std::endl;
-                    std::cout << "final_G:" << final_G[0] << ", " << final_G[1] << std::endl;
-                    std::cout << "v:" << v_x << ", " << v_y << std::endl;
                     para_traj[0] = LinearParaBlend({last_G[0], final_G[0]            , final_G[0]}, {0.0, 0.5, 1.0}, 0.3, true, v_x, true, 0.0);
                     para_traj[1] = LinearParaBlend({last_G[1], final_G[1]+step_height, final_G[1]}, {0.0, 0.5, 1.0}, 0.3, true, v_y, true, 0.0);
                 }//end if
@@ -553,14 +549,12 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         
         std::array<double, 2> edge_U_vec = {hip[leg_ID][0]+leg_model.U_r[0]-current_stair_edge[0], hip[leg_ID][1]+leg_model.U_r[1]-current_stair_edge[1]};
         if (!leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0] <= current_stair_edge[0]) && (std::hypot(edge_U_vec[0], edge_U_vec[1]) <= leg_model.radius)) {
-            std::cout <<"start contact edge" << std::endl;
             leg_info[leg_ID].contact_edge = true;
             leg_model.forward(theta[leg_ID], beta[leg_ID], false);
             std::complex<double> current_stair_edge_c(current_stair_edge[0], current_stair_edge[1]);
             std::complex<double> hip_c(hip[leg_ID][0], hip[leg_ID][1]);
             leg_info[leg_ID].contact_alpha = std::arg((current_stair_edge_c - hip_c - leg_model.U_r_c) / (leg_model.F_r_c-leg_model.U_r_c));
         } else if (leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0]>current_stair_edge[0] || std::hypot(edge_U_vec[0], edge_U_vec[1]) > leg_model.radius + err)) {
-            std::cout <<"end contact edge" << std::endl;
             leg_info[leg_ID].contact_edge = false;
         }//end if else
     }//end if
