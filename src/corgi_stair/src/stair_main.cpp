@@ -122,6 +122,14 @@ int main(int argc, char** argv) {
                 }//end if
                 break;
             case WALK:
+                /* Position feedback in Webots */
+                min_keep_stair_d = 0.15; // 15cm to the first stair edge
+                hip_x = sim_data.position.x + 0.222; // front hip
+                // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
+                max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                if ( step_length >= max_step_length_last ) {
+                    walk_gait.set_step_length(max_step_length_last); 
+                }//end if
                 eta_list = walk_gait.step();
                 break;
             case STAIR:
@@ -157,14 +165,6 @@ int main(int argc, char** argv) {
                 }//end if
                 break;
             case WALK:
-                /* Position feedback in Webots */
-                min_keep_stair_d = 0.15; // 15cm to the first stair edge
-                hip_x = sim_data.position.x + 0.222; // front hip
-                // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
-                max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                if ( step_length >= max_step_length_last ) {
-                    walk_gait.set_step_length(max_step_length_last); 
-                }//end if
                 // Entering stair climbing phase
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)

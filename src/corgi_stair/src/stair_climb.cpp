@@ -122,22 +122,22 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 this->is_clockwise = true;
                 if (swing_leg == 0 || swing_leg == 1) {
                     if (!stair_edge[0].empty() && !stair_edge[1].empty()) { // at most only one will be empty
-                        if (stair_edge[0].front().count != stair_edge[1].front().count) {
+                        if (stair_edge[0].front().count != stair_edge[1].front().count) {   // second swing leg
                             double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
                             front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         }//end if
-                    } else {
+                    } else {    // first swing leg
                         front_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                     }//end if else
                 } else {
                     if (!stair_edge[2].empty() && !stair_edge[3].empty()) { // at most only one will be empty
-                        if (stair_edge[2].front().count != stair_edge[3].front().count) {
+                        if (stair_edge[2].front().count != stair_edge[3].front().count) {   // second swing leg
                             double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
                             hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         }//end if
-                    } else {
+                    } else {    // first swing leg
                         hind_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                     }//end if else  
                 }//end if else
@@ -461,7 +461,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     swing_phase_ratio = swing_phase_ratio / first_ratio;
                     double x_p = para_traj[0].get_point(swing_phase_ratio);
                     double y_p = para_traj[1].get_point(swing_phase_ratio);
-                    std::array<double, 2> pos = {x_p, y_p};
+                    std::array<double, 2> pos = {x_p-hip[i][0], y_p-hip[i][1]};
                     result_eta = leg_model.inverse(pos, "G");
                 } else {
                     result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], 0});
@@ -516,7 +516,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                 swing_phase_ratio = (swing_phase_ratio - second_ratio) / (1.0 - second_ratio);
                 double x_p = para_traj[0].get_point(swing_phase_ratio);
                 double y_p = para_traj[1].get_point(swing_phase_ratio);
-                std::array<double, 2> pos = {x_p, y_p};
+                std::array<double, 2> pos = {x_p-hip[i][0], y_p-hip[i][1]};
                 result_eta = leg_model.inverse(pos, "G");
             }//end if else
             #endif
