@@ -586,7 +586,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
     for (size_t iter = 0; iter < max_iter; ++iter) {
         double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
         if (std::abs(cost) < tol) {                // 判断收敛
-            // std::cout << "cost converged after " << iter << " iterations.\n";
+            std::cout << "cost converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -597,8 +597,8 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         double cost_d = (cost_eps - cost) / epsilon;  // 数值差分计算导数
 
         double dx = -cost / cost_d;   // 解线性方程 cost_d * dx = -cost
-        if (dx < tol) {             // 判断步长是否足够小
-            // std::cout << "dx converged after " << iter << " iterations.\n";
+        if (std::abs(dx) < tol) {             // 判断步长是否足够小
+            std::cout << "dx converged after " << iter << " iterations.\n";
             break;
         }//end if
 
