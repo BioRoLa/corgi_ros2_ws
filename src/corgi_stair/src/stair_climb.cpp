@@ -237,13 +237,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     }//end if else
     CoM[0] += velocity[0] / rate;
     /* Calculate leg command */
-    for (int i=0; i<4; i++) {
-        if (i==swing_leg && achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed
-            leg_model.forward(theta[i], beta[i]);
-            if (!leg_info[i].contact_edge) {
-                CoM[1] += leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2));    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
-            }//end if
+    if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed
+        leg_model.forward(theta[swing_leg], beta[swing_leg]);
+        if (!leg_info[swing_leg].contact_edge) {
+            CoM[1] += leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2));    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
         }//end if
+    }//end if
+    for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
         result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
         theta[i] = result_eta[0];
