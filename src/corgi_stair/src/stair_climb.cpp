@@ -337,6 +337,7 @@ bool StairClimb::swing_same_step() {  // return true if finish swinging, false i
     } else {
         pitch = std::asin((front_height-CoM[1]) / (BL/2));
     }//end if else
+    std::cout << "pitch: " << pitch << std::endl;
     /* Calculate leg command */
     for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
