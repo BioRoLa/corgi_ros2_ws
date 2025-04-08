@@ -61,7 +61,7 @@ class Encoder{
             beta_d = (beta - beta_prev) / dt;
             theta_d = (theta - theta_prev) / dt;
             //pitch angle is opposite to y axis
-            w_y = imu-> - angular_velocity.y;
+            w_y = -(imu->angular_velocity.y);
             state << theta, beta, beta_d, w_y, theta_d;
         }
 
