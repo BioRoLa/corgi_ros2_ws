@@ -125,7 +125,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             // calculate contact rim when touch ground
             for (int j=0; j<5; j++) {   // G, L_l, U_l
                 double contact_height = j==0? leg_model.r : leg_model.radius;
-                double contact_point[2] = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height+contact_height};
+                std::array<double, 2> contact_point = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height+contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                 leg_model.contact_map(result_eta[0], result_eta[1]);
                 if (leg_model.rim == touch_rim_idx[j]) {
@@ -173,7 +173,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 swing_phase_ratio = (1.0 - duty[i]) / swing_time;
             }//end if else
             curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-            double curve_point[2] = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
+            std::array<double, 2> curve_point = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
             result_eta = leg_model.inverse(curve_point, "G");
         }//end if else
         theta[i] = result_eta[0];
