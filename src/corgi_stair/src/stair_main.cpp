@@ -71,8 +71,8 @@ int main(int argc, char** argv) {
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
-    WalkGait walk_gait(true, CoM_bias[0], sampling_rate);
-    StairClimb stair_climb(true, CoM_bias, sampling_rate);
+    WalkGait walk_gait(false, CoM_bias[0], sampling_rate);
+    StairClimb stair_climb(false, CoM_bias, sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
                                                       {INIT_BETA , INIT_BETA , INIT_BETA , INIT_BETA }}};   // init eta (wheel mode)
     
