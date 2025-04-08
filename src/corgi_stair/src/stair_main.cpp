@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     walk_gait.set_step_height(step_height);
     while (ros::ok()) {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
-        // ros::spinOnce();
+        ros::spinOnce();
         if (state == END) {
             break;
         }//end if
