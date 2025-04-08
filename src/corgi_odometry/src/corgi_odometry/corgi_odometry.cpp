@@ -20,7 +20,8 @@ using namespace estimation_model;
 #define MOTOR_OFFSET_Y 0.193
 #define MOTOR_OFFSET_Z 0.0
 #define WHEEL_RADIUS 0.1
-#define WHEEL_WIDTH 0.012
+// #define WHEEL_WIDTH 0.012    //sim
+#define WHEEL_WIDTH 0.019       //real
 #define GRAVITY 9.80665
 
 // CSV file parameters
@@ -59,7 +60,8 @@ class Encoder{
             }
             beta_d = (beta - beta_prev) / dt;
             theta_d = (theta - theta_prev) / dt;
-            w_y = imu->angular_velocity.y;
+            //pitch angle is opposite to y axis
+            w_y = imu-> - angular_velocity.y;
             state << theta, beta, beta_d, w_y, theta_d;
         }
 
@@ -183,8 +185,8 @@ int main(int argc, char **argv) {
 
     //Rotate imu data to body frame
     rot <<  1,  0,  0, 
-            0,  1,  0,
-            0,  0,  1;
+            0,  -1,  0,
+            0,  0,  -1;
 
     v_init << 0, 0, 0;
 
@@ -242,8 +244,9 @@ int main(int argc, char **argv) {
                 initialized = true;
             }
             //Update encoder states
-            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
-            w = Eigen::Vector3f(imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z);
+            //FIXME: it should be fix in imu package, the imu module altitude is opposite to the body frame
+            a = Eigen::Vector3f(imu.linear_acceleration.x, -imu.linear_acceleration.y, -imu.linear_acceleration.z);
+            w = Eigen::Vector3f(imu.angular_velocity.x, -imu.angular_velocity.y, -imu.angular_velocity.z);
             q = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
 
             encoder_lf.UpdateState(dt);
