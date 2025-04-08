@@ -127,7 +127,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                             front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {
-                            front_height = stair_edge[swing_leg].front().edge[1] + stand_height;
+                            // front_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                         }//end if else
                     } else {    // first swing leg
                         this->is_clockwise = false;
@@ -140,7 +140,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                             hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {
-                            hind_height = stair_edge[swing_leg].front().edge[1] + stand_height;
+                            // hind_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                         }//end if else
                     } else {    // first swing leg
                         this->is_clockwise = false;
