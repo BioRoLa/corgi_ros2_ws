@@ -345,9 +345,6 @@ bool StairClimb::swing_same_step() {  // return true if finish swinging, false i
             double swing_phase_ratio = (step_count+1.0) / total_steps;
             std::array<double, 2> curve_point = sp[i].getFootendPoint(swing_phase_ratio);
             std::array<double, 2> pos = {curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]};
-            std::cout << "hip: " << hip[i][0] << ", " << hip[i][1] << std::endl;
-            std::cout << "curve_point: " << curve_point[0] << ", " << curve_point[1] << std::endl;
-            std::cout << "pos: " << pos[0] << ", " << pos[1] << std::endl;
             result_eta = leg_model.inverse(pos, "G");
         } else {
             result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
@@ -589,7 +586,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
     for (size_t iter = 0; iter < max_iter; ++iter) {
         double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
         if (std::abs(cost) < tol) {                // 判断收敛
-            std::cout << "cost converged after " << iter << " iterations.\n";
+            // std::cout << "cost converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -601,7 +598,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
 
         double dx = -cost / cost_d;   // 解线性方程 cost_d * dx = -cost
         if (std::abs(dx) < tol) {             // 判断步长是否足够小
-            std::cout << "dx converged after " << iter << " iterations.\n";
+            // std::cout << "dx converged after " << iter << " iterations.\n";
             break;
         }//end if
 
