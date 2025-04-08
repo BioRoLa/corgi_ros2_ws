@@ -50,12 +50,12 @@ int main(int argc, char **argv) {
     for (auto& cmd : motor_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
-        cmd->kp_r = 90;
-        cmd->kp_l = 90;
+        cmd->kp_r = 150;
+        cmd->kp_l = 150;
         cmd->ki_r = 0;
         cmd->ki_l = 0;
-        cmd->kd_r = 0.75;
-        cmd->kd_l = 0.75;
+        cmd->kd_r = 1.75;
+        cmd->kd_l = 1.75;
     }
 
     ROS_INFO("Wait ...\n");
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x += velocity/3000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                if (loop_count > mpc.target_loop-3000) {
+                if (loop_count > mpc.target_loop*10-3000) {
                     mpc.target_vel_x -= velocity/3000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
@@ -136,6 +136,7 @@ int main(int argc, char **argv) {
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;
+                std::cout << "Current Velocity X: " << mpc.target_vel_x << std::endl << std::endl;
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 
                 loop_count++;

@@ -115,8 +115,8 @@ int main(int argc, char **argv) {
 
         cmd->Mx = mpc.Mx;
         cmd->My = mpc.My;
-        cmd->Bx = mpc.Bx;
-        cmd->By = mpc.By;
+        cmd->Bx = mpc.Bx_swing;
+        cmd->By = mpc.By_swing;
         cmd->Kx = mpc.Kx_swing;
         cmd->Ky = mpc.Ky_swing;
     }
@@ -161,6 +161,8 @@ int main(int argc, char **argv) {
             }
             
             for (auto& cmd : imp_cmd_modules){
+                cmd->Bx = mpc.Bx_stance;
+                cmd->By = mpc.By_stance;
                 cmd->Kx = mpc.Kx_stance;
                 cmd->Ky = mpc.Ky_stance;
             }
@@ -176,7 +178,7 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x += velocity/300.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                if (loop_count > mpc.target_loop-300) {
+                else if (loop_count > mpc.target_loop-300 && loop_count < mpc.target_loop) {
                     mpc.target_vel_x -= velocity/300.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
@@ -195,11 +197,13 @@ int main(int argc, char **argv) {
                     if (walk_gait.get_swing_phase()[i] == 1 && touched[i]) {
                         selection_matrix[i] = false;
                         touched[i] = false;
+                        imp_cmd_modules[i]->By = mpc.By_swing;
                         imp_cmd_modules[i]->Ky = mpc.Ky_swing;
                     }
                     else if (walk_gait.get_swing_phase()[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
                         touched[i] = true;
+                        imp_cmd_modules[i]->By = mpc.By_stance;
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
                 }
@@ -301,7 +305,7 @@ int main(int argc, char **argv) {
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 
                 loop_count++;
-                if (loop_count == mpc.target_loop) break;
+                if (loop_count >= mpc.target_loop) std::cout << "Finished" << std::endl;
 
                 rate.sleep();
             }
