@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
     double min_keep_stair_d;
     double hip_x;
     double max_step_length_last;
-    double exp_robot_x = -1.0; // expected robot x position
+    double exp_robot_x = -1.0 - D/2.0; // expected robot x position
     
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
