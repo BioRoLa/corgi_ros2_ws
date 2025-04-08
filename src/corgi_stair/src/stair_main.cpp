@@ -87,7 +87,8 @@ int main(int argc, char** argv) {
     double min_keep_stair_d;
     double hip_x;
     double max_step_length_last;
-
+    double exp_robot_x = -0.5;
+    
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
     walk_gait.set_velocity(velocity);
@@ -96,7 +97,7 @@ int main(int argc, char** argv) {
     walk_gait.set_step_height(step_height);
     while (ros::ok()) {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
-        ros::spinOnce();
+        // ros::spinOnce();
         if (state == END) {
             break;
         }//end if
@@ -125,14 +126,27 @@ int main(int argc, char** argv) {
                 /* Position feedback in Webots */
                 min_keep_stair_d = 0.15; // 15cm to the first stair edge
                 hip_x = sim_data.position.x + 0.222; // front hip
+                // // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
+                // // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                // max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
+                // std::cout << "hip: " << hip_x << std::endl;
+                // if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
+                //     walk_gait.set_step_length(max_step_length_last); 
+                // }//end if
+
+                /* No feedback for real robot */
+                exp_robot_x += velocity / sampling_rate; // expected robot x position
+                hip_x = exp_robot_x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
-                std::cout << "hip: " << sim_data.position.x + 0.222 << std::endl;
+                std::cout << "hip: " << hip_x << std::endl;
                 if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
                     walk_gait.set_step_length(max_step_length_last); 
                 }//end if
+
                 eta_list = walk_gait.step();
                 break;
             case STAIR:
@@ -141,7 +155,8 @@ int main(int argc, char** argv) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
                     stair_climb.initialize(current_eta);
                     for (int i=0; i<stair_num; i++) {
-                        stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
+                        // stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
+                        stair_climb.add_stair_edge(-D/2.0 + i*D - exp_robot_x, (i+1)*H);
                     }//end for
                 }//end if
                 eta_list = stair_climb.step();

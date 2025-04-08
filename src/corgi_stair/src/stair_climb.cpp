@@ -262,8 +262,6 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
         return true;
     } else {
-        if (move_dir == -1)
-            std::cout << "CoM: " << CoM[0] + CoM_offset[0] << ", foothold: " << (leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2 << std::endl;
         return false;
     }//end if else
 }//end move_CoM_stable
@@ -492,10 +490,24 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double second_beta  = is_clockwise? std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI : final_beta;
                     para_traj[0] = LinearParaBlend({theta[i], second_theta             , second_theta}, {0.0, 0.5, 1.0}, 0.1, true, v_theta, false, 0.0);
                     para_traj[1] = LinearParaBlend({beta[i] , (beta[i]+second_beta)/2.0, second_beta }, {0.0, 0.5, 1.0}, 0.1, true, v_beta , false, 0.0);
+                    if (!is_clockwise) {
+                        leg_model.forward(theta[i], beta[i]);
+                        std::array<double, 2> current_G = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
+                        leg_model.forward(final_theta, final_beta);
+                        std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
+                        this->sp[i] = SwingProfile(current_G, final_G, final_G[1]-current_G[1]+2*step_height, 1);
+                    }//end if
                 }//end if
-                swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
-                result_eta[0] = para_traj[0].get_point(swing_phase_ratio);
-                result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
+                if (is_clockwise) {
+                    swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
+                    result_eta[0] = para_traj[0].get_point(swing_phase_ratio);
+                    result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
+                } else {
+                    swing_phase_ratio = (swing_phase_ratio - first_ratio) / (1.0 - first_ratio);
+                    std::array<double, 2> curve_point = sp[i].getFootendPoint(swing_phase_ratio);
+                    std::array<double, 2> pos = {curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]};
+                    result_eta = leg_model.inverse(pos, "G");
+                }//end if else
                 last_theta[i] = theta[i];
                 last_beta[i]  = beta[i];
                 for (int j=0; j<4; j++) {
