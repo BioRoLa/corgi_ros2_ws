@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     }//end for 
 
     /* Setting variable */
-    double D=0.27, H=0.125;
+    double D=0.27, H=0.120;
     int stair_num = 3;
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
