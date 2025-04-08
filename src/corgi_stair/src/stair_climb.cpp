@@ -69,7 +69,6 @@ void StairClimb::initialize(double init_eta[8]) {
         case 3: swing_count = 3; break;
         default: std::cout << "Error in determining first swing leg." << std::endl; break;
     }//end switch
-    init_move_CoM_stable(swing_sequence[swing_count % 4]);
     // Get foothold in world coordinate
     CoM = {0, stand_height};
     pitch = 0;
@@ -84,6 +83,7 @@ void StairClimb::initialize(double init_eta[8]) {
         theta[i] = init_theta[i];
         beta[i]  = init_beta[i];
     }//end for
+    init_move_CoM_stable(swing_sequence[swing_count % 4]);
 }//end initialize
 
 std::array<std::array<double, 4>, 2> StairClimb::step() {
