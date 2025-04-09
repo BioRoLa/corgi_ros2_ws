@@ -88,7 +88,8 @@ int main(int argc, char** argv) {
     double hip_x;
     double max_step_length_last;
     double exp_robot_x = -1.0 - D/2.0; // expected robot x position
-    
+    std::array<bool, 4> if_contact_edge, last_if_contact_edge;
+
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
     walk_gait.set_velocity(velocity);
@@ -148,9 +149,9 @@ int main(int argc, char** argv) {
                 }//end if
 
                 eta_list = walk_gait.step();
+                count ++;
                 break;
             case STAIR:
-                count ++;
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
                     stair_climb.initialize(current_eta);
@@ -161,6 +162,7 @@ int main(int argc, char** argv) {
                 }//end if
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
+                count ++;
                 break;
             default:
                 break;
@@ -200,6 +202,14 @@ int main(int argc, char** argv) {
             default:
                 break;
         }//end switch
+
+        if_contact_edge = stair_climb.get_contact_edge_leg();
+        for (int i=0; i<4; i++) {
+            if (if_contact_edge[i] && !last_if_contact_edge[i]) {
+                std::cout << "Leg " << i << " is contacting the stair edge." << std::endl;
+            }//end if
+        }//end for
+        last_if_contact_edge = if_contact_edge;
 
         /* Publish motor commands */
         for (int i=0; i<4; i++) {

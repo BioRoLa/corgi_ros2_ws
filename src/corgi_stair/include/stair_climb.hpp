@@ -25,7 +25,8 @@ class StairClimb {
         void add_stair_edge(double x, double y);
         double get_pitch();
         bool if_any_stair();
-
+        std::array<bool, 4> get_contact_edge_leg();
+        
     private:
         /* Private function */
         void init_move_CoM_stable(int swing_leg);

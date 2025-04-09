@@ -223,6 +223,16 @@ bool StairClimb::if_any_stair() {
     return false;
 }//end if_any_stair
 
+std::array<bool, 4> StairClimb::get_contact_edge_leg() {
+    std::array<bool, 4> if_contact_edge = {false, false, false, false};
+    for (int i=0; i<4; i++) {
+        if (leg_info[i].contact_edge) {
+            if_contact_edge[i] = true;
+        }//end if
+    }//end for
+    return if_contact_edge;
+}//end get_stair_count
+
 
 /* Private function */
 void StairClimb::init_move_CoM_stable(int swing_leg) { 
