@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
         if_contact_edge = stair_climb.get_contact_edge_leg();
         for (int i=0; i<4; i++) {
             if (if_contact_edge[i] && !last_if_contact_edge[i]) {
-                std::cout << "Leg " << i << " is contacting the stair edge." << std::endl;
+                std::cout << "Command: " << count << ". Leg " << i << " is contacting the stair edge." << std::endl;
             }//end if
         }//end for
         last_if_contact_edge = if_contact_edge;
@@ -237,6 +237,8 @@ int main(int argc, char** argv) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "max time: " << max_cal_time << " us" << std::endl;
     std::cout << "time: " << duration.count() << " ms" << std::endl;
+    std::cout << "total count: " << count << std::endl;
+
     
     ros::shutdown();
     return 0;
