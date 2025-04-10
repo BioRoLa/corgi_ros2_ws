@@ -61,7 +61,7 @@ class Encoder{
             beta_d = (beta - beta_prev) / dt;
             theta_d = (theta - theta_prev) / dt;
             //pitch angle is opposite to y axis
-            w_y = -(imu->angular_velocity.y);
+            w_y = (imu->angular_velocity.y);
             state << theta, beta, beta_d, w_y, theta_d;
         }
 
@@ -244,9 +244,8 @@ int main(int argc, char **argv) {
                 initialized = true;
             }
             //Update encoder states
-            //FIXME: it should be fix in imu package, the imu module altitude is opposite to the body frame
-            a = Eigen::Vector3f(imu.linear_acceleration.x, -imu.linear_acceleration.y, -imu.linear_acceleration.z);
-            w = Eigen::Vector3f(imu.angular_velocity.x, -imu.angular_velocity.y, -imu.angular_velocity.z);
+            a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
+            w = Eigen::Vector3f(imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z);
             q = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
 
             encoder_lf.UpdateState(dt);
