@@ -254,8 +254,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     CoM[0] += velocity[0] / rate;
     /* Calculate leg command */
     if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed
-        leg_model.forward(theta[swing_leg], beta[swing_leg]);
         if (!leg_info[swing_leg].contact_edge) {
+            leg_model.forward(theta[swing_leg], beta[swing_leg]);
             CoM[1] += leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2));    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
         }//end if
     }//end if
@@ -634,6 +634,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         guess_dx += dx;
 
         if (iter == max_iter-1) {
+            std::cout << "Last cost: " << cost << std::endl;
             throw std::runtime_error("Move_edge: Newton solver did not converge.");
         }//end if
     }//end for
@@ -650,8 +651,10 @@ double StairClimb::objective_edge(double d_x, std::array<double, 2> init_U, std:
     std::array<double, 2> new_result_eta = leg_model.inverse(new_U, "U_r");
     leg_model.forward(new_result_eta[0], new_result_eta[1], false);
 
+    std::complex<double> new_U_c(new_U[0], new_U[1]);
     std::complex<double> contact_p_c(contact_p[0], contact_p[1]);
     double new_alpha = std::arg((contact_p_c - leg_model.U_r_c) / (leg_model.F_r_c - leg_model.U_r_c));
+    // double new_alpha = std::arg((contact_p_c - new_U_c) / (leg_model.F_r_c - new_U_c));
     return new_alpha - contact_alpha;
 }//end objective_edge
 
