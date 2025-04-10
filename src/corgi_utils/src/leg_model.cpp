@@ -33,7 +33,8 @@ LegModel::LegModel(bool sim) :
     l_BF(2.0 * R * sin((arc_HF - theta0) / 2.0)),
     l_BH(2.0 * R * sin(theta0 / 2.0)),
     ang_UBC((M_PI - arc_BC) / 2.0),
-    ang_LFG((M_PI - (M_PI - arc_HF)) / 2.0) 
+    ang_LFG((M_PI - (M_PI - arc_HF)) / 2.0),
+    ang_BCF(std::acos((l3*l3 + l7*l7 - l_BF*l_BF) / (2.0*l3*l7)))
 {
     // Initialize positions
     this->forward(theta0, 0.0);
@@ -66,16 +67,15 @@ void LegModel::calculate() {
     // Forward kinematics calculations
     A_l_c = l1 * std::exp(1i * theta);
     B_l_c = R * std::exp(1i * theta);
-    ang_OEA = std::asin((l1 / l_AE) * sin(theta));
-    E_c = l1 * cos(theta) - l_AE * cos(ang_OEA);
+    ang_OEA = std::asin(std::abs(A_l_c.imag()) / l_AE);
+    E_c = A_l_c.real() - l_AE * cos(ang_OEA);
     D_l_c = E_c + l6 * std::exp(1i * ang_OEA);
     l_BD = std::abs(D_l_c - B_l_c);
     ang_DBC = std::acos((l_BD * l_BD + l3 * l3 - l4 * l4) / (2.0 * l_BD * l3));
     C_l_c = B_l_c + (D_l_c - B_l_c) * std::exp(-1i * ang_DBC) * (l3 / l_BD);
-    ang_BCF = std::acos((l3 * l3 + l7 * l7 - l_BF * l_BF) / (2.0 * l3 * l7));
     F_l_c = C_l_c + (B_l_c - C_l_c) * std::exp(-1i * ang_BCF) * (l7 / l3);
     ang_OGF = std::asin(std::abs(F_l_c.imag()) / l8);
-    G_c = F_l_c - l8 * std::exp(1i * ang_OGF);
+    G_c = F_l_c.real() - l8 * cos(ang_OGF);
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
@@ -139,28 +139,38 @@ void LegModel::to_vector() {
     L_r = {L_r_c.real(), L_r_c.imag()};
 }
 
-void LegModel::contact_map(double theta_in, double beta_in, double slope) {
+void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {
         using namespace std::complex_literals;
         double beta_adjusted = beta_in - slope;
 
         this->forward(theta_in, beta_adjusted, false);
 
-        std::complex<double> G_l_tmp = (G_c - L_l_c) / R * radius + L_l_c;
-        std::complex<double> G_r_tmp = (G_c - L_r_c) / R * radius + L_r_c;
-        std::complex<double> H_l_tmp = (H_l_c - U_l_c) / R * radius + U_l_c;
-        std::complex<double> H_r_tmp = (H_r_c - U_r_c) / R * radius + U_r_c;
-        std::complex<double> F_l_tmp = (F_l_c - U_l_c) / R * radius + U_l_c;
-        std::complex<double> F_r_tmp = (F_r_c - U_r_c) / R * radius + U_r_c;
+        std::complex<double> LG_l = (G_c - L_l_c) / R * radius + L_l_c;     // L_l -> G -> rim point
+        std::complex<double> LG_r = (G_c - L_r_c) / R * radius + L_r_c;     // L_r -> G -> rim point
+        std::complex<double> UH_l = (H_l_c - U_l_c) / R * radius + U_l_c;   // U_l -> H_l -> rim point
+        std::complex<double> UH_r = (H_r_c - U_r_c) / R * radius + U_r_c;   // U_r -> H_r -> rim point
+        std::complex<double> LF_l = (F_l_c - L_l_c) / R * radius + L_l_c;   // L_l -> F_l -> rim point
+        std::complex<double> LF_r = (F_r_c - L_r_c) / R * radius + L_r_c;   // L_r -> F_r -> rim point
+        std::complex<double> UF_l = (F_l_c - U_l_c) / R * radius + U_l_c;   // U_l -> F_l -> rim point
+        std::complex<double> UF_r = (F_r_c - U_r_c) / R * radius + U_r_c;   // U_r -> F_r -> rim point
 
         std::array<std::array<double, 3>, 6> arc_list = {
-            this->arc_min(H_l_tmp, F_l_tmp, U_l_c, "left upper"),
-            this->arc_min(F_l_tmp, G_l_tmp, L_l_c, "left lower"),
-            this->arc_min(G_l_tmp, G_r_tmp, G_c, "G"),
-            this->arc_min(G_r_tmp, F_r_tmp, L_r_c, "right lower"),
-            this->arc_min(F_r_tmp, H_r_tmp, U_r_c, "right upper"),
+            this->arc_min(UH_l, UF_l, U_l_c, "left upper"),
+            this->arc_min(LF_l, LG_l, L_l_c, "left lower"),
+            this->arc_min(LG_l, LG_r, G_c, "G"),
+            this->arc_min(LG_r, LF_r, L_r_c, "right lower"),
+            this->arc_min(UF_r, UH_r, U_r_c, "right upper"),
             {0.0, 0.0, 0.0}
         };
-
+        if (!contact_upper) {
+            arc_list[0][0] = 1.0;
+            arc_list[4][0] = 1.0;
+        }//end if
+        if (!contact_lower) {
+            arc_list[1][0] = 1.0;
+            arc_list[3][0] = 1.0;
+        }//end if 
+        
         double min_value = arc_list[0][0];
         int min_index = 0;
         for(int i=1; i<6; i++){
@@ -188,16 +198,17 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
         double bias_alpha = 0.0;
 
         if (rim == "left upper") {
-            // bias_alpha = -M_PI;
+            bias_alpha = -M_PI;
         } else if (rim == "left lower") {
-            // bias_alpha = -M_PI / 3.6; // -50 degrees
+            bias_alpha = -M_PI / 3.6; // -50 degrees
         } else if (rim == "G") {
-            std::complex<double> direction_G = p1 + p2;
-            bias_alpha = std::arg((p1 - O) / direction_G);
+            // std::complex<double> direction_G = p1 + p2;
+            // bias_alpha = std::arg((p1 - O) / (p2 - O));
+            bias_alpha = 0.0;
         } else if (rim == "right lower") {
-            // bias_alpha = 0.0;
+            bias_alpha = 0.0;
         } else if (rim == "right upper") {
-            // bias_alpha = M_PI / 3.6; // 50 degrees
+            bias_alpha = M_PI / 3.6; // 50 degrees
         }//end if else
 
         double cal_err = 1e-9;
@@ -223,7 +234,7 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
 
 // Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
 // For a complete implementation, you would need to use numerical libraries like Eigen, Ceres Solver, or write custom solvers.
-std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &joint) {
+std::array<double, 2> LegModel::inverse(const std::array<double, 2>& pos, const std::string &joint) {
     using namespace std::complex_literals;
     double abs_pos = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
     if (joint == "G"){
@@ -258,27 +269,27 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
     return {theta, beta};
 }//end inverse
 
-std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, double tol, size_t max_iter) {
-    this->contact_map(theta_in, beta_in, slope);
+std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, bool contact_lower, double tol, size_t max_iter) {
+    this->contact_map(theta_in, beta_in, slope=slope, contact_upper=contact_upper, contact_lower=contact_lower);
+    int contact_rim = rim;
     if (slope != 0.0) {
         double x_new = move_vec[0]*cos(-slope) - move_vec[1]*sin(-slope);
         double y_new = move_vec[0]*sin(-slope) + move_vec[1]*cos(-slope);
         move_vec = {x_new, y_new};
     }//end if
 
-    // Contact point logic
-    int contact_rim;
-    if (contact_upper) {
-        contact_rim = rim;
-    } else {
-        if (rim == 2 || rim == 3 || rim == 4) {
-            contact_rim = rim;
-        } else if (beta > 0) {
-            contact_rim = 2;
-        } else {
-            contact_rim = 4;
-        }//end if else
-    }//end if else
+    /* Contact point logic: solve in contact_map */
+    // if (contact_upper) {
+    //     contact_rim = rim;
+    // } else {
+    //     if (rim == 2 || rim == 3 || rim == 4) {
+    //         contact_rim = rim;
+    //     } else if (beta > 0) {
+    //         contact_rim = 2;
+    //     } else {
+    //         contact_rim = 4;
+    //     }//end if else
+    // }//end if else
 
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
@@ -355,8 +366,11 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     } else if (contact_rim == 3) {
         // G
         current_G_exp = 1i*G_poly[1](current_q[0]) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_L_exp = ( L_r_poly[0](current_q[0])+1i*L_r_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
         guessed_G_exp = 1i*G_poly[1](guessed_q[0]) *std::exp( std::complex<double>(0, guessed_q[1]) );
-        double roll_d = -d_q[1] * r;
+        guessed_L_exp = ( L_r_poly[0](guessed_q[0])+1i*L_r_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_G_exp - guessed_L_exp) ) - std::arg( -1i/(current_G_exp - current_L_exp) );
+        double roll_d = d_alpha * r;
         std::array<double, 2> next_G = {current_G_exp.real() + roll_d, current_G_exp.imag()};
         guessed_hip = {next_G[0] - guessed_G_exp.real(), next_G[1] - guessed_G_exp.imag()}; // next_G - guessed_G
     } else if (contact_rim == 4) {
