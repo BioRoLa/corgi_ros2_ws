@@ -740,7 +740,7 @@ bool StairClimb::determine_next_foothold() {
 
     if (!stair_edge[swing_leg].empty()) {
         current_stair_edge  = stair_edge[swing_leg].front().edge;
-        if ((leg_info[swing_leg].next_up || leg_info[ other_side_leg[swing_leg][1] ].next_up) &&
+        if ((leg_info[swing_leg].next_up || leg_info[other_side_leg[swing_leg][1]].next_up) &&
         (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step  || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
             leg_info[swing_leg].next_up = false;
             #if CHANGE_SWING
@@ -756,6 +756,7 @@ bool StairClimb::determine_next_foothold() {
                 }//end if else
                 double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                 if (next_max_foothold_x >= min_deepest_x) {
+                    leg_info[swing_leg].one_step = true;
                     leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
                 } else {
                     leg_info[swing_leg].one_step = true;
