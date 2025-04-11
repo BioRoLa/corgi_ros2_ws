@@ -107,6 +107,7 @@ Eigen::Vector3f v_init;
 Eigen::Vector3f a;
 Eigen::Vector3f w;
 Eigen::Quaternionf q;
+geometry_msgs::Vector3 prev_v;
 int counter = 0;
 //calculate the angle by lidar, need to implement lidar sensor to get the value
 //set to -100 to disable lidar
@@ -130,6 +131,14 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
 
 void imu_cb(const sensor_msgs::Imu msg){
     imu = msg;
+}
+
+geometry_msgs::Vector3 low_pass_filter(const geometry_msgs::Vector3 &input, const geometry_msgs::Vector3 &prev_input, float alpha) {
+    geometry_msgs::Vector3 output;
+    output.x = alpha * input.x + (1 - alpha) * prev_input.x;
+    output.y = alpha * input.y + (1 - alpha) * prev_input.y;
+    output.z = alpha * input.z + (1 - alpha) * prev_input.z;
+    return output;
 }
 
 int main(int argc, char **argv) {
@@ -160,6 +169,11 @@ int main(int argc, char **argv) {
     ros::Rate rate(SAMPLE_RATE);
 
     /* Estimate model initialization */
+
+    //initial velocity for low pass filter
+    prev_v.x = 0.0;
+    prev_v.y = 0.0;
+    prev_v.z = 0.0;
 
     //IMU data (Observation)
     U u(J, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt);
@@ -210,8 +224,6 @@ int main(int argc, char **argv) {
     GKLD filter(J, dt, &u);
     filter.threshold = THRESHOLD;
     filter.init(x);
-
-    //Initialize csv file if needed
 
     while (ros::ok()){
         ros::spinOnce();
@@ -302,6 +314,11 @@ int main(int argc, char **argv) {
             position_msg.y = p(1);
             position_msg.z = p(2);
             position_pub.publish(position_msg);
+
+            geometry_msgs::Vector3 filtered_velocity_msg;
+            filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, 0.5);
+            prev_v = filtered_velocity_msg;
+            velocity_pub.publish(filtered_velocity_msg);
 
             counter ++;
         }
