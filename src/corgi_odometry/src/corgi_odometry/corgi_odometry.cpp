@@ -360,8 +360,8 @@ int main(int argc, char **argv) {
     }
 
     if(argc == 2){
-    logger.finalizeCSV();
-    ROS_INFO("Saved data to %s", filepath.c_str());
+        logger.finalizeCSV();
+        ROS_INFO("Saved data to %s", filepath.c_str());
     }
     ros::shutdown();
     
