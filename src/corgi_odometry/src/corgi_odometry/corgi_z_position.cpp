@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include <Eigen/Geometry>
+#include <algorithm>
 #include "ros/ros.h"
 
 #include "corgi_msgs/MotorStateStamped.h"
@@ -79,7 +80,7 @@ int main(int argc, char **argv) {
     double roll = 0;
     double pitch = 0;
     double yaw = 0;
-    
+
     prev_z_COM.data = 0.0;
 
     std::vector<corgi_msgs::MotorState*> motor_state_modules = {
@@ -116,23 +117,30 @@ int main(int argc, char **argv) {
                 }
             }
 
-            int contact_count;
-            double contact_sum = 0;
-            for (int i=0; i<4; i++){
-                if (contact_modules[i]->contact){
-                    contact_sum += z_leg[i];
-                    contact_count++;
+            std::vector<double> contact_heights;
+            for (int i = 0; i < 4; i++) {
+                if (contact_modules[i]->contact) {
+                    contact_heights.push_back(z_leg[i]);
                 }
             }
 
             std_msgs::Float64 z_COM;
-            if (contact_count == 0){
-                z_COM = prev_z_COM;
-            }
+            if (contact_heights.empty()) {
+                z_COM.data = prev_z_COM.data;
+            } 
             else {
-                z_COM.data = contact_sum / contact_count;
+                std::sort(contact_heights.begin(), contact_heights.end());
+                
+                double median;
+                size_t n = contact_heights.size();
+                if (n % 2 == 0) {
+                    median = (contact_heights[n / 2 - 1] + contact_heights[n / 2]) / 2.0;
+                } else {
+                    median = contact_heights[n / 2];
+                }
+                z_COM.data = median;
             }
-            prev_z_COM = z_COM;
+            prev_z_COM.data = z_COM.data;
 
             z_position_pub.publish(z_COM);
             ROS_INFO("z_COM: %f", z_COM);
