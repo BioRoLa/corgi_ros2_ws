@@ -28,8 +28,8 @@ class ModelPredictiveController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 120;
-        double By_swing = 120;
+        double Bx_swing = 90;
+        double By_swing = 90;
         double Bx_stance = 40;
         double By_stance = 30;
         double Kx_swing = 2000;
