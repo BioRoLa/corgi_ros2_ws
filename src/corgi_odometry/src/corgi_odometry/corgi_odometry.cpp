@@ -6,6 +6,7 @@
 
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/ContactStateStamped.h"
 #include "sensor_msgs/Imu.h"
 
 #include "KLD_estimation/InformationFilter.hpp"
@@ -164,6 +165,7 @@ int main(int argc, char **argv) {
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
     ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
+    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
@@ -314,6 +316,18 @@ int main(int argc, char **argv) {
             estimate_state.segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
             
             logger.logState(estimate_state);
+
+            // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
+            corgi_msgs::ContactStateStamped contact_msg;
+            contact_msg.module_a.contact = !filter.exclude[0];
+            contact_msg.module_b.contact = !filter.exclude[1];
+            contact_msg.module_c.contact = !filter.exclude[2];
+            contact_msg.module_d.contact = !filter.exclude[3];
+            contact_msg.module_a.score = filter.scores[0];
+            contact_msg.module_b.score = filter.scores[1];
+            contact_msg.module_c.score = filter.scores[2];
+            contact_msg.module_d.score = filter.scores[3];
+            contact_pub.publish(contact_msg);
 
             // Publish the estimated velocity and position
             geometry_msgs::Vector3 velocity_msg;
