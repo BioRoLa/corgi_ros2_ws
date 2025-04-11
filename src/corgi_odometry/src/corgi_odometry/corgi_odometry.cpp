@@ -95,7 +95,7 @@ class Encoder{
 
 // Variables
 bool trigger = false;
-float dt = 1. / (float)SAMPLE_RATE;
+float dt;
 bool initialized = false;
 Eigen::VectorXf x = Eigen::VectorXf::Zero(6 * J);
 Eigen::Vector3f p;
@@ -108,6 +108,8 @@ Eigen::Vector3f a;
 Eigen::Vector3f w;
 Eigen::Quaternionf q;
 geometry_msgs::Vector3 prev_v;
+double prev_time;
+
 int counter = 0;
 //calculate the angle by lidar, need to implement lidar sensor to get the value
 //set to -100 to disable lidar
@@ -170,6 +172,10 @@ int main(int argc, char **argv) {
 
     /* Estimate model initialization */
 
+    //initial time
+    dt = 1.0 / float(SAMPLE_RATE);
+    prev_time = ros::Time::now().toSec();
+
     //initial velocity for low pass filter
     prev_v.x = 0.0;
     prev_v.y = 0.0;
@@ -227,6 +233,11 @@ int main(int argc, char **argv) {
 
     while (ros::ok()){
         ros::spinOnce();
+
+        double current_time = ros::Time::now().toSec();
+        double dt = current_time - prev_time;
+        prev_time = current_time;
+
         if(trigger){
             if (!initialized) {
                 /*Initialization : input first data*/
