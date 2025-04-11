@@ -318,7 +318,7 @@ int main(int argc, char **argv) {
             estimate_state(36) = filter.threshold;
             estimate_state.segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
             
-            logger.logState(estimate_state);
+            if(argc == 2){logger.logState(estimate_state);}
 
             // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
             corgi_msgs::ContactStateStamped contact_msg;
@@ -359,9 +359,10 @@ int main(int argc, char **argv) {
         rate.sleep();
     }
 
+    if(argc == 2){
     logger.finalizeCSV();
     ROS_INFO("Saved data to %s", filepath.c_str());
-
+    }
     ros::shutdown();
     
     return 0;
