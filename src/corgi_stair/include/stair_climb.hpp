@@ -38,8 +38,8 @@ class StairClimb {
         bool swing_next_step();
         std::array<double, 2> move_consider_edge(int leg_ID, std::array<double, 2> move_vec);
         std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-14, size_t max_iter = 10);
-        // double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
-        double objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha);
+        double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
+        // std::array<double, 2> objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha);
         bool determine_next_foothold();
         std::array<double, 2> get_foothold(double theta, double beta, int contact_rim = -1);
         void update_hip();
@@ -84,10 +84,12 @@ class StairClimb {
         double stand_height = 0.25;
         double step_length  = 0.3;
         double step_height  = 0.04; // step height for swing on same step
-        double max_theta = 2.7348759382405214;  // rad, corresponding to leg length 0.34
-        double max_length = 0.34;  // rad, corresponding to leg length 0.34
-        // double max_theta = 2.4434609;  // rad, corresponding to leg length 0.34
-        // double max_length = 0.319535798;  // rad, corresponding to leg length 0.34
+        // double max_theta = 2.7348759382405214;  // rad, corresponding to leg length 0.34
+        // double max_length = 0.34;  // rad, corresponding to leg length 0.34
+        double max_theta = 2.5782087432372753;  // rad, corresponding to leg length 0.33
+        double max_length = 0.33;  // rad, corresponding to leg length 0.33
+        // double max_theta = 2.448091729331016;  // rad, corresponding to leg length 0.32
+        // double max_length = 0.32;  // rad, corresponding to leg length 0.32
         std::array<SwingProfile, 4> sp;
         int swing_count;
         double vel_incre;

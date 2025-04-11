@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     const int transform_count = 2*sampling_rate; // 2s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3
+    double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
     double velocity = 0.1; // velocity for walk gait
     double stand_height = 0.25; // stand height for walk gait
     double step_length = 0.3; // step length for walk gait
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
                 for (int i=0; i<4; i++) {
                     eta_list[0][i] = INIT_THETA + transform_ratio * (init_eta[i*2]   - INIT_THETA);
                     eta_list[1][i] = INIT_BETA  + transform_ratio * (init_eta[i*2+1] - INIT_BETA);
-                    eta_list[1][i] = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
+                    eta_list[1][i] = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];  
                 }//end for
                 break;
             case WAIT:
@@ -214,11 +214,11 @@ int main(int argc, char** argv) {
         /* Publish motor commands */
         for (int i=0; i<4; i++) {
             if (eta_list[0][i] > M_PI*160.0/180.0) {
-                std::cout << "Exceed upper bound." << std::endl;
+                std::cout << "Leg " << i << " exceed upper bound." << std::endl;
                 eta_list[0][i] = M_PI*160.0/180.0;
             }//end if 
             if (eta_list[0][i] < M_PI*16.9/180.0) {
-                std::cout << "Exceed lower bound." << std::endl;
+                std::cout << "Leg " << i << " exceed lower bound." << std::endl;
                 eta_list[0][i] = M_PI*16.9/180.0;
             }//end if 
             motor_cmd_modules[i]->theta = eta_list[0][i];

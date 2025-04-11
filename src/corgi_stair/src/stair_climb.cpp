@@ -257,8 +257,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed
         if (!leg_info[swing_leg].contact_edge) {
             leg_model.forward(theta[swing_leg], beta[swing_leg]);
-            CoM[1] += leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2));    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
-        }//end if
+            velocity[1] = leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2)) * rate;
+            CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
+        } else {
+            if (leg_info[swing_leg].get_hip_position(CoM, pitch)[1] > stair_edge[swing_leg].front().edge[1] + leg_model.radius + velocity[1] / rate) {
+                CoM[1] += velocity[1] / rate;
+            }//end if
+        }//end if else
     }//end if
     for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
@@ -277,6 +282,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     //     return false;
     // }//end if else
     if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
+        velocity[1] = 0.0;
         return true;
     } else {
         return false;
@@ -585,6 +591,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
             leg_info[leg_ID].contact_alpha = std::arg((current_stair_edge_c - hip_c - leg_model.U_r_c) / (leg_model.F_r_c-leg_model.U_r_c));
         } else if (leg_info[leg_ID].contact_edge && (hip[leg_ID][0]+leg_model.U_r[0]>current_stair_edge[0] || std::hypot(edge_U_vec[0], edge_U_vec[1]) > leg_model.radius + err)) {
             leg_info[leg_ID].contact_edge = false;
+            achieve_max_length = false;
         }//end if else
     }//end if
     
@@ -607,120 +614,119 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
 }//end move_consider_edge
 
 
-std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol, size_t max_iter) {
-    leg_model.forward(theta[leg_ID], beta[leg_ID]);
-    std::array<double, 2> init_U = leg_model.U_r;
-    
-    // Use optimization solver to find d_x and d_y of init_U (analogous to fsolve)
-    std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
-    for (size_t iter = 0; iter < max_iter; ++iter) {
-        std::array<double, 2> cost = this->objective_edge(guess_dq, {theta[leg_ID], beta[leg_ID]}, contact_p, contact_alpha);     // 计算当前函数值
-        Eigen::Vector2d cost_vec(cost[0], cost[1]);
-        
-        double norm_cost = cost_vec.norm();          // 计算残差范数
-        if (norm_cost < tol) {                // 判断收敛
-            // std::cout << "cost converged after " << iter << " iterations.\n";
-            break;
-        }//end if
-
-        // computeJacobian, 数值计算雅可比矩阵
-        double epsilon = 1e-6;
-        Eigen::Matrix2d Jac;
-        for (size_t i = 0; i < 2; ++i) {
-            std::array<double, 2> dq_eps = guess_dq;
-            dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
-            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta[leg_ID], beta[leg_ID]}, contact_p, contact_alpha);
-            Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
-            Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
-        }//end for
-
-        Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dq = -cost_vec
-        if (dq.norm() < tol) {             // 判断步长是否足够小
-            // std::cout << "dx converged after " << iter << " iterations.\n";
-            break;
-        }//end if
-
-        // 更新解
-        guess_dq[0] += dq[0];
-        guess_dq[1] += dq[1];
-
-        if (iter == max_iter-1) {
-            std::cout << "Last cost: " << cost << std::endl;
-            throw std::runtime_error("Move_edge: Newton solver did not converge.");
-        }//end if
-    }//end for
-
-    result_eta[0] = theta[leg_ID] + guess_dq[0];
-    result_eta[1] = beta[leg_ID]  + guess_dq[1];
-    return result_eta;
-}//end move_edge
-
-std::array<double, 2> StairClimb::objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha) {
-    std::array<double, 2> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1]};
-    leg_model.forward(guessed_q[0], guessed_q[1]);
-
-    std::complex<double> UF_complex(leg_model.F_r[0] - leg_model.U_r[0], leg_model.F_r[1] - leg_model.U_r[1]);
-    std::complex<double> UP_exp = (UF_complex * std::exp(std::complex<double>(0, contact_alpha))) / leg_model.R * leg_model.radius;  // P: contact point
-
-    std::array<double, 2> guessed_contact_p = {leg_model.U_r[0] + UP_exp.real(), leg_model.U_r[1] + UP_exp.imag()};
-
-    return {guessed_contact_p[0] - contact_p[0], guessed_contact_p[1] - contact_p[1]};
-}//end objective_edge
-
-
-
 // std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol, size_t max_iter) {
 //     leg_model.forward(theta[leg_ID], beta[leg_ID]);
 //     std::array<double, 2> init_U = leg_model.U_r;
     
 //     // Use optimization solver to find d_x and d_y of init_U (analogous to fsolve)
-//     double guess_dx = 0.0;    // initial guess = 0
+//     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
 //     for (size_t iter = 0; iter < max_iter; ++iter) {
-//         double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
-//         if (std::abs(cost) < tol) {                // 判断收敛
+//         std::array<double, 2> cost = this->objective_edge(guess_dq, {theta[leg_ID], beta[leg_ID]}, contact_p, contact_alpha);     // 计算当前函数值
+//         Eigen::Vector2d cost_vec(cost[0], cost[1]);
+        
+//         double norm_cost = cost_vec.norm();          // 计算残差范数
+//         if (norm_cost < tol) {                // 判断收敛
 //             // std::cout << "cost converged after " << iter << " iterations.\n";
 //             break;
 //         }//end if
 
 //         // computeJacobian, 数值计算雅可比矩阵
 //         double epsilon = 1e-6;
-//         double dx_eps = guess_dx + epsilon;
-//         double cost_eps = this->objective_edge(dx_eps, init_U, contact_p, contact_alpha);
-//         double cost_d = (cost_eps - cost) / epsilon;  // 数值差分计算导数
+//         Eigen::Matrix2d Jac;
+//         for (size_t i = 0; i < 2; ++i) {
+//             std::array<double, 2> dq_eps = guess_dq;
+//             dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
+//             std::array<double, 2> cost_eps = this->objective_edge(dq_eps, {theta[leg_ID], beta[leg_ID]}, contact_p, contact_alpha);
+//             Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
+//             Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
+//         }//end for
 
-//         double dx = -cost / cost_d;   // 解线性方程 cost_d * dx = -cost
-//         if (std::abs(dx) < tol) {             // 判断步长是否足够小
+//         Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dq = -cost_vec
+//         if (dq.norm() < tol) {             // 判断步长是否足够小
 //             // std::cout << "dx converged after " << iter << " iterations.\n";
 //             break;
 //         }//end if
 
 //         // 更新解
-//         guess_dx += dx;
+//         guess_dq[0] += dq[0];
+//         guess_dq[1] += dq[1];
 
 //         if (iter == max_iter-1) {
-//             std::cout << "Last cost: " << cost << std::endl;
+//             // std::cout << "Last cost: " << cost << std::endl;
 //             throw std::runtime_error("Move_edge: Newton solver did not converge.");
 //         }//end if
 //     }//end for
 
-//     double d_y = std::sqrt(std::pow(leg_model.radius, 2) - std::pow(contact_p[0]-(init_U[0]+guess_dx), 2)) - (init_U[1] - contact_p[1]);
-//     std::array<double, 2> new_U = {init_U[0]+guess_dx, init_U[1]+d_y};
-//     result_eta = leg_model.inverse(new_U, "U_r");
+//     result_eta[0] = theta[leg_ID] + guess_dq[0];
+//     result_eta[1] = beta[leg_ID]  + guess_dq[1];
 //     return result_eta;
 // }//end move_edge
 
-// double StairClimb::objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha) {
-//     double d_y = std::sqrt(std::pow(leg_model.radius, 2) - std::pow(contact_p[0]-(init_U[0]+d_x), 2)) - (init_U[1] - contact_p[1]);
-//     std::array<double, 2> new_U = {init_U[0]+d_x, init_U[1]+d_y};
-//     std::array<double, 2> new_result_eta = leg_model.inverse(new_U, "U_r");
-//     leg_model.forward(new_result_eta[0], new_result_eta[1], false);
+// std::array<double, 2> StairClimb::objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha) {
+//     std::array<double, 2> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1]};
+//     leg_model.forward(guessed_q[0], guessed_q[1]);
 
-//     std::complex<double> new_U_c(new_U[0], new_U[1]);
-//     std::complex<double> contact_p_c(contact_p[0], contact_p[1]);
-//     double new_alpha = std::arg((contact_p_c - leg_model.U_r_c) / (leg_model.F_r_c - leg_model.U_r_c));
-//     // double new_alpha = std::arg((contact_p_c - new_U_c) / (leg_model.F_r_c - new_U_c));
-//     return new_alpha - contact_alpha;
+//     std::complex<double> UF_complex(leg_model.F_r[0] - leg_model.U_r[0], leg_model.F_r[1] - leg_model.U_r[1]);
+//     std::complex<double> UP_exp = (UF_complex * std::exp(std::complex<double>(0, contact_alpha))) / leg_model.R * leg_model.radius;  // P: contact point
+
+//     std::array<double, 2> guessed_contact_p = {leg_model.U_r[0] + UP_exp.real(), leg_model.U_r[1] + UP_exp.imag()};
+
+//     return {guessed_contact_p[0] - contact_p[0], guessed_contact_p[1] - contact_p[1]};
 // }//end objective_edge
+
+
+
+std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol, size_t max_iter) {
+    leg_model.forward(theta[leg_ID], beta[leg_ID]);
+    std::array<double, 2> init_U = leg_model.U_r;
+    
+    // Use optimization solver to find d_x and d_y of init_U (analogous to fsolve)
+    double guess_ds = 0.0;    // initial guess = 0, ds is displacement on the circle (center: edge, radius: leg_model.radius)
+    for (size_t iter = 0; iter < max_iter; ++iter) {
+        double cost = this->objective_edge(guess_ds, init_U, contact_p, contact_alpha);     // 计算当前函数值
+        if (std::abs(cost) < tol) {                // 判断收敛
+            // std::cout << "cost converged after " << iter << " iterations.\n";
+            break;
+        }//end if
+
+        // computeJacobian, 数值计算雅可比矩阵
+        double epsilon = 1e-6;
+        double ds_eps = guess_ds + epsilon;
+        double cost_eps = this->objective_edge(ds_eps, init_U, contact_p, contact_alpha);
+        double cost_d = (cost_eps - cost) / epsilon;  // 数值差分计算导数
+
+        double ds = -cost / cost_d;   // 解线性方程 cost_d * dx = -cost
+        if (std::abs(ds) < tol) {             // 判断步长是否足够小
+            // std::cout << "dx converged after " << iter << " iterations.\n";
+            break;
+        }//end if
+
+        // 更新解
+        guess_ds += ds;
+
+        if (iter == max_iter-1) {
+            throw std::runtime_error("Move_edge: Newton solver did not converge.");
+        }//end if
+    }//end for
+
+    double d_x = - (init_U[1] - contact_p[1])/leg_model.radius * guess_ds;
+    double d_y =   (init_U[0] - contact_p[0])/leg_model.radius * guess_ds;
+    std::array<double, 2> new_U = {init_U[0]+d_x, init_U[1]+d_y};
+    result_eta = leg_model.inverse(new_U, "U_r");
+    return result_eta;
+}//end move_edge
+
+double StairClimb::objective_edge(double d_s, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha) {
+    double d_x = - (init_U[1] - contact_p[1])/leg_model.radius * d_s;
+    double d_y =   (init_U[0] - contact_p[0])/leg_model.radius * d_s;
+    std::array<double, 2> new_U = {init_U[0]+d_x, init_U[1]+d_y};
+    std::array<double, 2> new_result_eta = leg_model.inverse(new_U, "U_r");
+    leg_model.forward(new_result_eta[0], new_result_eta[1], false);
+
+    std::complex<double> contact_p_c(contact_p[0], contact_p[1]);
+    double new_alpha = std::arg((contact_p_c - leg_model.U_r_c) / (leg_model.F_r_c - leg_model.U_r_c));
+    return new_alpha - contact_alpha;
+}//end objective_edge
 
 bool StairClimb::determine_next_foothold() {
     bool up_stair = false;
