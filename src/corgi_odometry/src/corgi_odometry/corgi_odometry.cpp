@@ -238,9 +238,12 @@ int main(int argc, char **argv) {
     while (ros::ok()){
         ros::spinOnce();
 
-        double current_time = ros::Time::now().toSec();
-        double dt = current_time - prev_time;
-        prev_time = current_time;
+        // FIXME: dt calculation cannot work by calculate dynamically
+        // double current_time = ros::Time::now().toSec();
+        // dt = float(current_time - prev_time);
+        // prev_time = current_time;
+        // ROS_INFO("dt: %f", dt);
+        dt = 1.0 / float(SAMPLE_RATE);
 
         if(trigger){
             if (!initialized) {
