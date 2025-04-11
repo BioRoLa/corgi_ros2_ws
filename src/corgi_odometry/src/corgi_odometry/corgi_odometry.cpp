@@ -23,6 +23,7 @@ using namespace estimation_model;
 // #define WHEEL_WIDTH 0.012    //sim
 #define WHEEL_WIDTH 0.019       //real
 #define GRAVITY 9.80665
+#define lpf_alpha 0.5 //low pass filter alpha
 
 // CSV file parameters
 std::vector<std::string> headers = {
@@ -162,6 +163,7 @@ int main(int argc, char **argv) {
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
+    ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
@@ -327,9 +329,9 @@ int main(int argc, char **argv) {
             position_pub.publish(position_msg);
 
             geometry_msgs::Vector3 filtered_velocity_msg;
-            filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, 0.5);
+            filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, lpf_alpha);
             prev_v = filtered_velocity_msg;
-            velocity_pub.publish(filtered_velocity_msg);
+            filtered_velocity_pub.publish(filtered_velocity_msg);
 
             counter ++;
         }
