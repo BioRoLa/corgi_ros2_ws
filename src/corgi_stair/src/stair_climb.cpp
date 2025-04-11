@@ -12,8 +12,8 @@
 #include "trajectory_plan.hpp"
 #include "stair_climb.hpp"
 
-// #define BEZIER_CURVE
-#define CW_SWING
+// #define BEZIER_CURVE_SWING 1
+#define CHANGE_SWING 1
 
 StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */
@@ -457,7 +457,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
         if (i == swing_leg) {
             double swing_phase_ratio = (step_count+1.0) / total_steps;
             /* Bezier curve */
-            #ifdef BEZIER_CURVE
+            #if BEZIER_CURVE_SWING
             if (first_in) {
                 first_in = false;
                 leg_model.forward(theta[i], beta[i]);
@@ -469,9 +469,8 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
             std::array<double, 2> curve_point = sp[i].getFootendPoint(swing_phase_ratio);
             std::array<double, 2> pos = {curve_point[0] - hip[i][0], curve_point[1] - hip[i][1]};
             result_eta = leg_model.inverse(pos, "G");
-            #endif
             /* Clockwise swing (first swing leg) */
-            #ifdef CW_SWING
+            #else
             if (swing_phase_ratio < first_ratio) {  // first phase
                 if (first_in) {
                     first_in = false;
@@ -499,27 +498,26 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double v_beta  = (beta[i]  - last_beta[i])  * rate * ((second_ratio-first_ratio)*total_steps/rate);
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
-                    std::array<double, 2> C1 = hip[i];
-                    std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
-                    std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
-                    double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
-                    double tan_line_angle;
-                    if (C1_P1_d < leg_model.R) {
-                        std::cerr << "Error in StairClimb::swing_next_step: P1 is inside the wheel." << std::endl;
+                    if (is_clockwise) {
+                        std::array<double, 2> C1 = hip[i];
+                        std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
+                        std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
+                        double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
+                        double tan_line_angle;
+                        if (C1_P1_d < leg_model.R) {
+                            throw std::runtime_error("StairClimb::swing_next_step: P1 is inside the wheel.");
+                        } else {
+                            tan_line_angle = std::acos(leg_model.R / C1_P1_d);
+                        }//end if else
+                        double second_theta = is_clockwise? 17.0/180.0*M_PI : (final_theta + 17.0/180.0*M_PI) / 2.0;
+                        double second_beta  = is_clockwise? std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI : final_beta;
+                        para_traj[0] = LinearParaBlend({theta[i], second_theta             , second_theta}, {0.0, 0.5, 1.0}, 0.1, true, v_theta, false, 0.0);
+                        para_traj[1] = LinearParaBlend({beta[i] , (beta[i]+second_beta)/2.0, second_beta }, {0.0, 0.5, 1.0}, 0.1, true, v_beta , false, 0.0);
                     } else {
-                        tan_line_angle = std::acos(leg_model.R / C1_P1_d);
-                    }//end if else
-                    double second_theta = is_clockwise? 17.0/180.0*M_PI : (final_theta + 17.0/180.0*M_PI) / 2.0;
-                    double second_beta  = is_clockwise? std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI : final_beta;
-                    para_traj[0] = LinearParaBlend({theta[i], second_theta             , second_theta}, {0.0, 0.5, 1.0}, 0.1, true, v_theta, false, 0.0);
-                    para_traj[1] = LinearParaBlend({beta[i] , (beta[i]+second_beta)/2.0, second_beta }, {0.0, 0.5, 1.0}, 0.1, true, v_beta , false, 0.0);
-                    if (!is_clockwise) {
                         leg_model.forward(theta[i], beta[i]);
                         std::array<double, 2> current_G = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
-                        leg_model.forward(final_theta, final_beta);
-                        std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
                         this->sp[i] = SwingProfile(current_G, final_G, final_G[1]-current_G[1]+2*step_height, 1);
-                    }//end if
+                    }//end if else
                 }//end if
                 if (is_clockwise) {
                     swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
@@ -651,7 +649,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
-            throw std::runtime_error("Move_edge: Newton solver did not converge.");
+            throw std::runtime_error("StairClimb::Move_edge: Newton solver did not converge.");
         }//end if
     }//end for
 
@@ -702,7 +700,7 @@ std::array<double, 2> StairClimb::objective_edge(const std::array<double, 2>& d_
 //         guess_da += da;
 
 //         if (iter == max_iter-1) {
-//             throw std::runtime_error("Move_edge: Newton solver did not converge.");
+//             throw std::runtime_error("StairClimb::Move_edge: Newton solver did not converge.");
 //         }//end if
 //     }//end for
 
@@ -745,7 +743,27 @@ bool StairClimb::determine_next_foothold() {
         if ((leg_info[swing_leg].next_up || leg_info[ other_side_leg[swing_leg][1] ].next_up) &&
         (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step  || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
             leg_info[swing_leg].next_up = false;
-            if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg
+            #if CHANGE_SWING
+            if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
+                leg_info[swing_leg].one_step = false;
+                leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+            } else {    //second swing leg: need to swing as first swing leg unless the leg can not reach keep_stair_d_max (because change first swing leg at each stair)
+                double min_deepest_x;
+                if (stair_edge[swing_leg].size() >= 2) {
+                    min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_max;
+                } else {
+                    min_deepest_x = INFINITY;
+                }//end if else
+                double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
+                if (next_max_foothold_x >= min_deepest_x) {
+                    leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+                } else {
+                    leg_info[swing_leg].one_step = true;
+                    leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
+                }//end if else
+            }//end if else
+            #else
+            if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
                 leg_info[swing_leg].one_step = false;
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
             } else {    //second swing leg
@@ -763,6 +781,7 @@ bool StairClimb::determine_next_foothold() {
                     leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                 }//end if else
             }//end if else
+            #endif
             up_stair = true;
             next_stair = 1;
         } else {    // move on the same stair step
