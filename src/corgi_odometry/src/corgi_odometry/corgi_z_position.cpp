@@ -101,7 +101,8 @@ int main(int argc, char **argv) {
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
     ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
     
-    std::string filepath = "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/z_test.csv";
+    std::string filepath = std::getenv("HOME");
+    filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/z_test.csv";
     logger.initCSV(filepath, headers);
 
     ros::Rate rate(SAMPLE_RATE);
@@ -178,9 +179,10 @@ int main(int argc, char **argv) {
 
             rate.sleep();
         }
-    }
 
-    logger.finalizeCSV();
+        logger.finalizeCSV();
+
+    }
     
     ros::shutdown();
     
