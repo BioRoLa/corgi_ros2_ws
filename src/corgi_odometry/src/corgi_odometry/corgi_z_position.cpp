@@ -31,7 +31,7 @@ std_msgs::Float64 prev_z_COM;
 
 std::vector<std::string> headers = {
     "estimate_z_position",
-    "a.contact","b.contact","c.contact","d.contact"
+    "a.contact","b.contact","c.contact","d.contact",
     "a.score","b.score","c.score","d.score",
 };
 DataProcessor::CsvLogger logger;
