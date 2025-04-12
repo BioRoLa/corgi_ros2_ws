@@ -30,7 +30,6 @@ corgi_msgs::ContactStateStamped contact_state;
 std_msgs::Float64 prev_z_COM;
 
 std::vector<std::string> headers = {
-    "time",
     "estimate_z_position",
     "a.contact","b.contact","c.contact","d.contact"
     "a.score","b.score","c.score","d.score",
