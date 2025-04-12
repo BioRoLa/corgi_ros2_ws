@@ -87,6 +87,11 @@ double median(std::vector<double> &v) {
     }
 }
 
+double low_pass_filter(double value, double prev_value, double cutoff_freq, double sample_rate) {
+    double alpha = 1.0 / (1.0 + (cutoff_freq / sample_rate));
+    return alpha * value + (1.0 - alpha) * prev_value;
+}
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "corgi_z_positiony");
 
@@ -161,6 +166,7 @@ int main(int argc, char **argv) {
             else {
                 z_COM.data = median(contact_heights);
             }
+            z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, SAMPLE_RATE);
             prev_z_COM.data = z_COM.data;
 
             z_position_pub.publish(z_COM);
