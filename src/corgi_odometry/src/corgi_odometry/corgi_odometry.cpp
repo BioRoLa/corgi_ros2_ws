@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
             position_pub.publish(filtered_position_msg);
 
             // Store the estimated state to a csv file
-            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(52);
+            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(45);
             estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
             estimate_state.segment(3, 3) = p;                                                       //position
             estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
