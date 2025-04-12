@@ -21,11 +21,11 @@ using namespace estimation_model;
 #define MOTOR_OFFSET_Y 0.193
 #define MOTOR_OFFSET_Z 0.0
 #define WHEEL_RADIUS 0.1
-// #define WHEEL_WIDTH 0.012    //sim
-#define WHEEL_WIDTH 0.019       //real
 #define GRAVITY 9.80665
 #define lpf_alpha 0.5 //low pass filter alpha
-
+#define SIM True //simulation mode
+bool sim = true;
+const float WHEEL_WIDTH = sim ? 0.012 : 0.019;
 // CSV file parameters
 std::vector<std::string> headers = {
     "v_.x", "v_.y", "v_.z", 
@@ -210,11 +210,17 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
-    //Rotate imu data to body frame
-    rot <<  1,  0,  0, 
-            0,  -1,  0,
-            0,  0,  -1;
-
+    if(sim){
+        rot <<  1,  0,  0, 
+                0,  1,  0,
+                0,  0,  1;
+    }
+    else{
+        //Rotate imu data to body frame
+        rot <<  1,  0,  0, 
+                0,  -1,  0,
+                0,  0,  -1;
+    }
     v_init << 0, 0, 0;
 
     //initial state

@@ -140,6 +140,10 @@ int main(int argc, char **argv) {
 
         q = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
         quaternionToEuler(q, roll, pitch, yaw);
+        if(!sim){
+            pitch = -pitch;
+            roll = -roll;
+        }
 
         if(trigger){
             for (int i=0; i<4; i++){
