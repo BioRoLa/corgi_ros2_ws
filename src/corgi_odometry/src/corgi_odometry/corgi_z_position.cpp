@@ -21,8 +21,6 @@ LegModel legmodel(sim);
 // Constants
 #define SAMPLE_RATE 1000.0 //Hz
 
-ros::Rate rate(SAMPLE_RATE);
-
 // Variables
 bool trigger = false;
 corgi_msgs::MotorStateStamped motor_state;
@@ -83,6 +81,8 @@ int main(int argc, char **argv) {
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
     ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
 
+    ros::Rate rate(SAMPLE_RATE);
+
     Eigen::Quaterniond q;
     double roll = 0;
     double pitch = 0;
@@ -124,12 +124,15 @@ int main(int argc, char **argv) {
                 }
             }
 
+            ROS_INFO("Contact heights: %f %f %f %f", z_leg[0], z_leg[1], z_leg[2], z_leg[3]);
+
             std::vector<double> contact_heights;
             for (int i = 0; i < 4; i++) {
                 if (contact_modules[i]->contact) {
                     contact_heights.push_back(z_leg[i]);
                 }
             }
+            
 
             std_msgs::Float64 z_COM;
             if (contact_heights.empty()) {
