@@ -68,6 +68,16 @@ void quaternionToEuler(const Eigen::Quaterniond &q, double &roll, double &pitch,
                      1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
 }
 
+double median(std::vector<double> &v) {
+    std::sort(v.begin(), v.end());
+    size_t n = v.size();
+    if (n % 2 == 0) {
+        return (v[n / 2 - 1] + v[n / 2]) / 2.0;
+    } else {
+        return v[n / 2];
+    }
+}
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "corgi_z_positiony");
 
@@ -104,16 +114,6 @@ int main(int argc, char **argv) {
         &contact_state.module_d
     };
 
-    double median(std::vector<double> &v) {
-        std::sort(v.begin(), v.end());
-        size_t n = v.size();
-        if (n % 2 == 0) {
-            return (v[n / 2 - 1] + v[n / 2]) / 2.0;
-        } else {
-            return v[n / 2];
-        }
-    }
-
     double z_leg[4];
 
     while (ros::ok()){
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
                 z_COM.data = prev_z_COM.data;
             } 
             else {
-                z_COM.data = median(&contact_heights);
+                z_COM.data = median(contact_heights);
             }
             prev_z_COM.data = z_COM.data;
 
