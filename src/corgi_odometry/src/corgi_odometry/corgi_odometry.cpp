@@ -14,7 +14,7 @@
 using namespace estimation_model;
 
 // Constants
-#define SAMPLE_RATE 200.0 //Hz
+#define SAMPLE_RATE 500.0 //Hz
 #define THRESHOLD 0.08 //threshold of KLD
 #define J 10 //sample time (matrix size)
 #define MOTOR_OFFSET_X 0.222
