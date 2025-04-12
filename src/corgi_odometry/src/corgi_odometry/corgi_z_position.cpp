@@ -14,6 +14,7 @@
 
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
+#include "KLD_estimation/csv_reader.hpp"
 
 bool sim = true;
 LegModel legmodel(sim);
@@ -27,6 +28,15 @@ corgi_msgs::MotorStateStamped motor_state;
 sensor_msgs::Imu imu;
 corgi_msgs::ContactStateStamped contact_state;
 std_msgs::Float64 prev_z_COM;
+
+std::vector<std::string> headers = {
+    "time",
+    "estimate_z_position",
+    "a.contact","b.contact","c.contact","d.contact"
+    "a.score","b.score","c.score","d.score",
+};
+DataProcessor::CsvLogger logger;
+
 
 // Callbacks
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
@@ -90,6 +100,9 @@ int main(int argc, char **argv) {
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
     ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
+    
+    std::string filepath = "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/z_test.csv";
+    logger.initCSV(filepath, headers);
 
     ros::Rate rate(SAMPLE_RATE);
 
@@ -153,10 +166,22 @@ int main(int argc, char **argv) {
             z_position_pub.publish(z_COM);
             ROS_INFO("z_COM: %f", z_COM);
 
+            Eigen::VectorXf state = Eigen::VectorXf::Zero(9); //total 10 columns
+            state(0) = z_COM.data;
+            for (int i = 0; i < 4; i++) {
+                state(1 + i) = contact_modules[i]->contact;
+            }
+            for (int i = 0; i < 4; i++) {
+                state(5 + i) = contact_modules[i]->score;
+            }
+            logger.logState(state);
+
             rate.sleep();
         }
     }
 
+    logger.finalizeCSV();
+    
     ros::shutdown();
     
     return 0;
