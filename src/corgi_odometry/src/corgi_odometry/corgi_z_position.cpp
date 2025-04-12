@@ -12,6 +12,12 @@
 #include "sensor_msgs/Imu.h"
 #include <std_msgs/Float64.h>
 
+#include "leg_model.hpp"
+#include "fitted_coefficient.hpp"
+
+bool sim = true;
+LegModel legmodel(sim);
+
 // Constants
 #define SAMPLE_RATE 1000.0 //Hz
 
@@ -42,8 +48,9 @@ void contact_cb(const corgi_msgs::ContactStateStamped msg){
 }
 
 double estimate_z(double theta, double beta) {
-    // TODO: Implement the z_estimate function  
-    return 0.0; // Replace with actual calculation
+    legmodel.forward(theta, beta);
+    
+    return -legmodel.contact_p[1]; // Replace with actual calculation
 }
 
 // Function to compute Euler angles from a quaternion using ZYX order.
