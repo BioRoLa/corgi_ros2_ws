@@ -104,6 +104,16 @@ int main(int argc, char **argv) {
         &contact_state.module_d
     };
 
+    double median(std::vector<double> &v) {
+        std::sort(v.begin(), v.end());
+        size_t n = v.size();
+        if (n % 2 == 0) {
+            return (v[n / 2 - 1] + v[n / 2]) / 2.0;
+        } else {
+            return v[n / 2];
+        }
+    }
+
     double z_leg[4];
 
     while (ros::ok()){
@@ -124,31 +134,19 @@ int main(int argc, char **argv) {
                 }
             }
 
-            ROS_INFO("Contact heights: %f %f %f %f", z_leg[0], z_leg[1], z_leg[2], z_leg[3]);
-
             std::vector<double> contact_heights;
             for (int i = 0; i < 4; i++) {
                 if (contact_modules[i]->contact) {
                     contact_heights.push_back(z_leg[i]);
                 }
             }
-            
 
             std_msgs::Float64 z_COM;
             if (contact_heights.empty()) {
                 z_COM.data = prev_z_COM.data;
             } 
             else {
-                std::sort(contact_heights.begin(), contact_heights.end());
-                
-                double median;
-                size_t n = contact_heights.size();
-                if (n % 2 == 0) {
-                    median = (contact_heights[n / 2 - 1] + contact_heights[n / 2]) / 2.0;
-                } else {
-                    median = contact_heights[n / 2];
-                }
-                z_COM.data = median;
+                z_COM.data = median(&contact_heights);
             }
             prev_z_COM.data = z_COM.data;
 
