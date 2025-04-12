@@ -47,7 +47,7 @@ void contact_cb(const corgi_msgs::ContactStateStamped msg){
 
 double estimate_z(double theta, double beta) {
     legmodel.forward(theta, beta);
-    
+    legmodel.contact_map(theta, beta);
     return -legmodel.contact_p[1]; // Replace with actual calculation
 }
 
