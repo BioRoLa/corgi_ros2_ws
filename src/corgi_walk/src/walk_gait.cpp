@@ -76,7 +76,7 @@ void WalkGait::initialize(double init_eta[8]) {
     next_hip = hip;
     // Initial leg configuration
     for (int i=0; i<4; i++) {
-        foothold[i] = {next_hip[i][0] + relative_foothold[i][0] + CoM_bias, next_hip[i][1] + relative_foothold[i][1]};
+        foothold[i] = {next_hip[i][0] + relative_foothold[i][0], next_hip[i][1] + relative_foothold[i][1]};
     }//end for
     // Initial theta/beta
     for (int i=0; i<4; i++) {
@@ -86,6 +86,7 @@ void WalkGait::initialize(double init_eta[8]) {
 }//end initialize
 
 std::array<std::array<double, 4>, 2> WalkGait::step() {
+    touchdown = false;
     for (int i=0; i<4; i++) {
         next_hip[i][0] += dS + sign_diff[i]*diff_dS;
         duty[i] += incre_duty;
@@ -98,18 +99,24 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
         /* Calculate next foothold if entering swing phase */
         if ((duty[i] > (1 - swing_time)) && swing_phase[i] == 0) {
             swing_phase[i] = 1;
+            double total_step_length; // step length considering differential
+            double swing_hip_move_d; // hip moving distance during swing phase 
             // change to new step length when front leg start to swing
             if ( ((direction == 1) && (i==0 || i==1)) || ((direction == -1) && (i==2 || i==3)) ) {  // front leg swing
                 // apply new step length and differential
                 next_step_length[i] = new_step_length;   
                 double rest_time = (1.0 - 4*swing_time) / 2;    // time during swing of front leg and next hind leg 
-                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + direction*(swing_time)*(step_length + sign_diff[i]*diff_step_length) + (rest_time*(step_length - new_step_length)), 0};    // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length.
+                total_step_length = step_length + sign_diff[i]*diff_step_length;
+                swing_hip_move_d = direction * swing_time * total_step_length;
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*(new_step_length + sign_diff[i]*new_diff_step_length) + swing_hip_move_d + (rest_time*(step_length - new_step_length)) + CoM_bias, 0};    // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length + CoM_bias.
                 diff_step_length = new_diff_step_length;
             } else {    // hind leg swing
                 int last_leg = (i+2) % 4;   // Contralateral front leg
                 step_length = current_step_length[last_leg];
                 next_step_length[i] = step_length;    // apply hind step length corresponding to the front leg's.
-                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2+swing_time)*(step_length + sign_diff[i]*diff_step_length), 0};
+                total_step_length = step_length + sign_diff[i]*diff_step_length;
+                swing_hip_move_d = direction * swing_time * total_step_length;
+                foothold[i] = {next_hip[i][0] + direction*((1-swing_time)/2)*total_step_length + swing_hip_move_d + CoM_bias, 0};
                 incre_duty = dS / step_length;  // change incre_duty corresponding to new step length when hind leg start to swing.
             }//end if else
             /* Bezier curve setup */
@@ -118,7 +125,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
             // calculate contact rim when touch ground
             for (int j=0; j<5; j++) {   // G, L_l, U_l
                 double contact_height = j==0? leg_model.r : leg_model.radius;
-                double contact_point[2] = {direction*step_length/2*(1-swing_time), -stand_height+contact_height};
+                std::array<double, 2> contact_point = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height+contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                 leg_model.contact_map(result_eta[0], result_eta[1]);
                 if (leg_model.rim == touch_rim_idx[j]) {
@@ -140,16 +147,18 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 p_td = {foothold[i][0] + leg_model.G[0]-leg_model.U_r[0], foothold[i][1] + leg_model.G[1]-leg_model.U_r[1] + leg_model.radius};
             }//end if else
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
-        } else if ( (direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
+        } else if ((direction == 1) && (duty[i] > 1.0)) {                  // entering stance phase when velocirty > 0
+            touchdown = true;
             swing_phase[i] = 0;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
-            if (sp[i].getDirection() == direction){
+            if (sp[i].getDirection() == direction){ // if the leg swing a whole swing phase, instead of swing back.
                 step_count[i] += 1;
                 current_step_length[i] = next_step_length[i];  
             }//end if
-        } else if ( (direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
+        } else if ((direction == -1) && (duty[i] < (1.0-swing_time))) {    // entering stance phase when velocirty < 0
+            touchdown = true;
             swing_phase[i] = 0;
-            if (sp[i].getDirection() == direction){
+            if (sp[i].getDirection() == direction){ // if the leg swing a whole swing phase, instead of swing back.
                 step_count[i] -= 1;
                 current_step_length[i] = next_step_length[i];   
             }//end if
@@ -164,7 +173,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step() {
                 swing_phase_ratio = (1.0 - duty[i]) / swing_time;
             }//end if else
             curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-            double curve_point[2] = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
+            std::array<double, 2> curve_point = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
             result_eta = leg_model.inverse(curve_point, "G");
         }//end if else
         theta[i] = result_eta[0];
@@ -189,8 +198,8 @@ void WalkGait::set_velocity(double new_value){
 }//end set_velocity
 
 void WalkGait::set_stand_height(double new_value){
-    if (new_value > 0.34 || new_value < 0.16) {
-        throw std::runtime_error("Stand height should be between 0.16 and 0.34.");
+    if (new_value > 0.34 || new_value < 0.12+step_height) {
+        throw std::runtime_error("Stand height should be between 0.12+\"step_height\" and 0.34.");
     }//end if
     stand_height = new_value;
     for (int i=0; i<4; i++) {
@@ -247,6 +256,32 @@ void WalkGait::set_curvature(double new_value){
     }// end if else
 }//end set_curvature
 
+void WalkGait::set_eta(std::array<std::array<double, 4>, 2> eta_) {
+    this->theta = eta_[0];
+    this->beta  = eta_[1];
+}//end set_eta
+
+void WalkGait::set_duty(std::array<double, 4> duty_) {
+    for (int i=0; i<4; i++) {
+        if (duty_[i] < 0 || duty_[i] > 1) {
+            throw std::runtime_error("Duty should be in the range [0, 1].");
+        }//end if
+    }//end for
+    this->duty = duty_;
+}//end set_duty
+
 std::array<int, 4> WalkGait::get_step_count() {
     return this->step_count;
 }//end get_step_count
+
+std::array<int, 4> WalkGait::get_swing_phase() {
+    return this->swing_phase;
+}//end get_step_count
+
+std::array<double, 4> WalkGait::get_duty() {
+    return this->duty;
+}//end get_duty
+
+bool WalkGait::if_touchdown() {
+    return this->touchdown;
+}//end if_touchdown

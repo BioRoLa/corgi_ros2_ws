@@ -1,7 +1,7 @@
 #include "ros/ros.h"
 #include "sensor_msgs/Imu.h"
-#include "corgi_msgs/imu.h" // This is the service file
-#include "corgi_msgs/Headers.h" // This is the header file
+#include "corgi_msgs/imu.h"
+#include "corgi_msgs/Headers.h"
 #include "cx5.hpp" 
 #include <sys/time.h>
 #include <mutex>
@@ -55,7 +55,12 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     
     printf("Starting IMU node\n");
-    imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS0", 912600, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate (uart port: ttyTHS0/ usb port: ttyACM0)
+
+    // imu = std::make_shared<CX5_AHRS>("/dev/ttyACM0", 921600, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate (origin port: ttyTHS0)
+    // imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS0", 921600, 1000, 500);
+
+    imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS0", 921600, 1000, 500); //change the port, baudrate, sensor sample rate, filter sample rate
+
     ros::Rate rate(1000);
 
     ros::Publisher pub = nh.advertise<sensor_msgs::Imu>("imu", 1000); // "imu" is the topic name
