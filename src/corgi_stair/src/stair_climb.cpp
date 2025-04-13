@@ -13,7 +13,7 @@
 #include "stair_climb.hpp"
 
 // #define BEZIER_CURVE_SWING 1
-#define CHANGE_SWING 1
+#define CHANGE_FIRST_SWING_LEG 1
 
 StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */
@@ -743,7 +743,7 @@ bool StairClimb::determine_next_foothold() {
         if ((leg_info[swing_leg].next_up || leg_info[other_side_leg[swing_leg][1]].next_up) &&
         (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step  || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
             leg_info[swing_leg].next_up = false;
-            #if CHANGE_SWING
+            #if CHANGE_FIRST_SWING_LEG
             if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
                 leg_info[swing_leg].one_step = false;
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
@@ -757,7 +757,8 @@ bool StairClimb::determine_next_foothold() {
                 double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                 if (next_max_foothold_x >= min_deepest_x) {
                     leg_info[swing_leg].one_step = false;
-                    leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+                    // leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+                    leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
                 } else {
                     leg_info[swing_leg].one_step = true;
                     leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
