@@ -751,7 +751,7 @@ bool StairClimb::determine_next_foothold() {
             } else {    //second swing leg: need to swing as first swing leg unless the leg can not reach keep_stair_d_max (because change first swing leg at each stair)
                 double min_deepest_x;
                 if (stair_edge[swing_leg].size() >= 2) {
-                    min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_max;
+                    min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
                 } else {
                     min_deepest_x = INFINITY;
                 }//end if else
