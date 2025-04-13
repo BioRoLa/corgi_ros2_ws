@@ -393,7 +393,7 @@ void StairClimb::init_swing_next_step(int swing_leg, double front_height, double
     this->coeff_a = -std::sqrt(std::abs(std::pow(coeff_b, 3) / (6 * (final_CoM_height - CoM[1]))));
     this->t_f_x = velocity[0] / acc[0];
     this->t_f_y = - coeff_b / coeff_a;
-    this->t_f = is_clockwise? min_swing_time_cw : min_swing_time_ccw;
+    this->t_f = is_clockwise? std::max({min_swing_time_cw, t_f_x, t_f_y}) : std::max({min_swing_time_ccw, t_f_x, t_f_y});
     this->total_steps = static_cast<int>(t_f * rate); // total steps for swinging
 
     int sign_vel = velocity[0]>=0.0? 1 : -1;
