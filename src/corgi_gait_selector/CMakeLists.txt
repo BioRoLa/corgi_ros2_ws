@@ -26,10 +26,11 @@ find_package(catkin REQUIRED COMPONENTS
   joy 
   sensor_msgs
   corgi_utils 
+  # corgi_legged 
+  # corgi_wheeled
+  # corgi_hybrid
+  # corgi_transformation
 )
-# corgi_walk 
-# corgi_transform
-# corgi_wheeled
 
 catkin_package(
   INCLUDE_DIRS include
@@ -42,10 +43,12 @@ catkin_package(
     joy 
     sensor_msgs
     corgi_utils 
+    # corgi_legged 
+    # corgi_wheeled
+    # corgi_hybrid
+    # corgi_transformation
 )
-# corgi_walk 
-# corgi_transform
-# corgi_wheeled
+
     
 
 include_directories(
@@ -56,9 +59,10 @@ include_directories(
 )
 
 find_library(CORGI_UTILS corgi_utils)
+# find_library(CORGI_HYBRID corgi_hybrid)
 # find_library(CORGI_WHEELED corgi_wheeled)
-# find_library(CORGI_WALK corgi_walk)
-# find_library(CORGI_TRANSFORM corgi_transform)
+# find_library(CORGI_LEGGED corgi_legged)
+# find_library(CORGI_TRANSFORMATION corgi_transformation)
 
 add_subdirectory(src)
 

@@ -946,7 +946,7 @@ int main(int argc, char** argv) {
     /*  wheel to wlw transform  */
     cout<< "-----transform to wlw------"<<endl;
     // wlw_gait.Transform(0, 1, 1, 5, 10, 0);
-    wlw_gait.Transform(0, 1, 1, 5, 20, -0.05);
+    wlw_gait.Transform(0, 1, 1, 1, 0, -0.05);
 
     /*  wlw real-time   */
     cout<< "-----wlw------"<<endl;

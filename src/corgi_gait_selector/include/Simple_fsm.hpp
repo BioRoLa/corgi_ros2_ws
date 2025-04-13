@@ -12,7 +12,9 @@
 #include <iomanip>
 #include <thread>
 #include <mutex>
-
+#include <iomanip>
+#include <chrono>
+#include <algorithm>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -23,9 +25,9 @@
 #include "leg_model.hpp"
 
 enum class Gait {
-    WHEEL = 0,
-    LEG = 1,   
-    WLW = 2,   
+    WHEELED = 0,
+    LEGGED = 1,   
+    HYBRID = 2,   
     TRANSFORM = 3
 };
 class GaitSelector {
@@ -38,7 +40,10 @@ class GaitSelector {
                         double BW=0.4,
                         double BH=0.2);
         ~GaitSelector();
-
+        /*     Gait Selector     */ 
+        Gait currentGait;
+        Gait newGait; 
+        
         ros::Subscriber motor_state_sub_;
         ros::Publisher motor_cmd_pub_; 
         ros::Rate* rate_ptr;
@@ -47,19 +52,14 @@ class GaitSelector {
         std::uniform_int_distribution<int> dist;
         /*    State or cmd messages      */ 
         corgi_msgs::MotorCmdStamped motor_cmd;
-        corgi_msgs::MotorStateStamped motor_state;
+        static corgi_msgs::MotorStateStamped motor_state;
         std::vector<corgi_msgs::MotorCmd*> motor_cmd_modules = {
             &motor_cmd.module_a,
             &motor_cmd.module_b,
             &motor_cmd.module_c,
             &motor_cmd.module_d
         };
-        std::vector<corgi_msgs::MotorState*> motor_state_modules = {
-            &motor_state.module_a,
-            &motor_state.module_b,
-            &motor_state.module_c,
-            &motor_state.module_d
-        };
+        static std::vector<corgi_msgs::MotorState*> motor_state_modules;
         void motor_state_cb(const corgi_msgs::MotorStateStamped state);
         /*     Cooperate variables      */ 
         LegModel leg_model;
@@ -69,43 +69,60 @@ class GaitSelector {
         const double BW;
         const double BH;
 
-        std::array<double, 4> duty;
-        std::array<int, 4> swing_phase = {0, 0, 0, 0};
-        double swing_time;   // ratio
-        double velocity;     // m/s
-        double stand_height; // m
-        double step_length;  // m
-        double step_height;  // m
+        static std::array<double, 4> duty;
+        static std::array<int, 4> swing_phase;
+        static double swing_time;   // ratio
+        static double velocity;     // m/s //wheel 有吃到？？？
+        static double stand_height; // m
+        static double step_length;  // m
+        static double step_height;  // m
 
-        double eta[4][2];
-        double next_eta[4][2];
-        std::array<std::array<double, 2>, 4> foothold;
-        std::array<std::array<double, 2>, 4> next_foothold;
-        std::array<std::array<double, 2>, 4> body;
-        std::array<std::array<double, 2>, 4> next_body;
-        std::array<std::array<double, 2>, 4> hip;
-        std::array<std::array<double, 2>, 4> next_hip;
+        static std::array<double, 4> current_step_length;
+        static std::array<double, 4> next_step_length;
+        static double new_step_length ;
 
-        // This thread continuously reads keyboard input and updates shared variables.
-        void keyboardInputThread();
+        static double curvature;
+
+        double dS;
+        double incre_duty;
+
+        static double relative_foothold[4][2];
+        static double eta[4][2];
+        static double next_eta[4][2];
+        static std::array<std::array<double, 2>, 4> foothold;
+        static std::array<std::array<double, 2>, 4> next_foothold;
+        static std::array<std::array<double, 2>, 4> body;
+        static std::array<std::array<double, 2>, 4> next_body;
+        static std::array<std::array<double, 2>, 4> hip;
+        static std::array<std::array<double, 2>, 4> next_hip;
+
+        // For turning 
+        static double outer_radius;
+        static double inner_radius;
+        static double diff_step_length;  // Differential step length 
+        static double new_diff_step_length;  // New differential step length
+        static double diff_dS;   // Differential dS
+        static int sign_diff[4];   // Differential sign
+
+        
         /*     Cooperate functions      */ 
         void setCmd(std::array<double, 2> send, int index, bool dir);
         void publish(int freq);
         void Send(int freq);
-
+        void Transfer(int transfer_sec, int wait_sec);
+        void Receive();
+        // void changeGait(const std::string& command);
 
     private:
-        /*     Gait Selector     */ 
-        Gait currentGait;
-        Gait newGait;
-        // Global shared variables and a mutex for thread safety
-        std::mutex input_mutex;
-        void changeGait(const std::string& command);
-        void printCurrentGait() const;
-        void Transform();
-
+              
         
-        };
+        // void printCurrentGait() const;
+        // void GaitTransform();
+        std::vector<double> linspace(double start, double end, int num_steps);
+};
+
+
+
 #endif
 
 // gaitselector setup add nodehandler and all initialize

@@ -20,7 +20,7 @@ int main(int argc, char **argv){
    
     /*    Initialize of each mode   */ 
     // Wheeled mode
-    WheeledCmd WheeledCmd;
+    WheeledCmd WheeledCmd("joystick");
     Wheeled wheeled(nh);
 
     while (ros::ok()) {

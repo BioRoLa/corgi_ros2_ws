@@ -13,7 +13,8 @@
 class WheeledCmd
 {
   public:
-    WheeledCmd();
+    WheeledCmd(std::string control_mode);
+    WheeledCmd() : WheeledCmd("joystick") {}
     void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
     void teleopCallback(const std_msgs::String::ConstPtr& key_msg);
 
@@ -21,6 +22,9 @@ class WheeledCmd
     // Timers for continuous publishing when commands are active
     void wheelCmdTimerCallback(const ros::TimerEvent&);
     void steerCmdTimerCallback(const ros::TimerEvent&);
+    corgi_msgs::SteeringCmdStamped steering_cmd_;
+    // Current steering state feedback (from /steer/state)
+    corgi_msgs::SteeringStateStamped current_steering_state_;
 
   private:
     ros::NodeHandle nh_;
@@ -38,7 +42,7 @@ class WheeledCmd
     ros::Timer steer_cmd_timer_;
 
     corgi_msgs::WheelCmd last_wheel_cmd_;
-    corgi_msgs::SteeringCmdStamped steering_cmd_;
+    
 
     int axis_steer_;         
     int axis_move_;          
@@ -47,17 +51,14 @@ class WheeledCmd
     int button_reset_;
     int button_ground_;
 
-    // Control mode ("joystick" or "teleop")
+    // Control mode ("joystick" or "teleop" or "pure")
     std::string control_mode_;
 
     // Internal state variables
     bool hold_active_;
     bool was_hold_pressed_;
     bool was_reset_pressed_;
-    double current_velocity_;
-
-    // Current steering state feedback (from /steer/state)
-    corgi_msgs::SteeringStateStamped current_steering_state_;
+    double current_velocity_;    
 
     // Helper function: clamp a value between a minimum and maximum
     double clamp(double value, double min_val, double max_val);

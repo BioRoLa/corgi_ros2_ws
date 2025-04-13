@@ -1,14 +1,16 @@
 #include "wheeled_cmd.hpp"
 
-WheeledCmd::WheeledCmd()
+WheeledCmd::WheeledCmd(std::string control_mode)
   : pnh_("~"),
     hold_active_(false),
     was_hold_pressed_(false),
     was_reset_pressed_(false),
-    current_velocity_(0.0)
+    current_velocity_(0.0),
+    control_mode_(control_mode)
+    // Load control mode parameter ("joystick" or "teleop" or "pure"")
 {
-  // Load control mode parameter ("joystick" or "teleop")
-  pnh_.param("control_mode", control_mode_, std::string("joystick"));
+  
+  // pnh_.param("control_mode", control_mode_, std::string("pure"));
 
   // Load renamed parameters with defaults
   pnh_.param("axis_steer",         axis_steer_,         3);
@@ -35,6 +37,12 @@ WheeledCmd::WheeledCmd()
   {
     // Teleop mode: subscribe to keyboard key events (std_msgs::String) on "teleop_keys"
     teleop_sub_ = nh_.subscribe("teleop_keys", 1, &WheeledCmd::teleopCallback, this);
+  }
+  else if (control_mode_ == "pure")
+  {
+    // Pure code mode: no joystick or teleop input
+    // This mode is not implemented in this example
+    ROS_WARN("Pure code mode selected");
   }
   else  // default to joystick control
   {

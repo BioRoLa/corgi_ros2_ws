@@ -15,11 +15,26 @@ GaitSelector::GaitSelector( ros::NodeHandle& nh,
     pub_rate(pub_rate),
     rng(rd()), 
     dist(0, 359),
-    currentGait(Gait::WHEEL)
+    currentGait(Gait::WHEELED)
 {
     motor_state_sub_ = nh.subscribe("/motor/state", 1000, &GaitSelector::motor_state_cb, this);
     motor_cmd_pub_ = nh.advertise<corgi_msgs::MotorCmdStamped>("/motor/command", pub_rate);
     rate_ptr = new ros::Rate(pub_rate);
+
+    // Initialize dS & incre_duty
+    dS = velocity / pub_rate;
+    incre_duty = dS / step_length;  
+    
+    // Get foothold in world coordinate
+    // assume the body center  is in 0,0
+    hip = {{{BL/2, stand_height} ,
+            {BL/2, stand_height} ,
+            {-BL/2, stand_height},
+            {-BL/2, stand_height}}};
+    next_hip = hip;
+
+    
+
 }
 
 GaitSelector::~GaitSelector() {
@@ -27,44 +42,7 @@ GaitSelector::~GaitSelector() {
     rate_ptr = nullptr;
 }
 
-void GaitSelector::keyboardInputThread() {
-    while (ros::ok()) {
-        char input_char;
-        std::cout << "[l] Legged; [w] Wheeled; [h] Hybrid; [p] Pause; [r] Resume; [q] Quit: ";
-        std::cin >> input_char;
-        {
-            std::lock_guard<std::mutex> lock(input_mutex);
-            switch (input_char) {
-                case 'l':
-                    std::cout << "Legged" << std::endl;
-                    changeGait("2");
-                    break;
-                case 'w':
-                    std::cout << "Wheeled" << std::endl;
-                    changeGait("1");
-                    break;
-                case 'h':
-                    std::cout << "Hybrid" << std::endl;
-                    changeGait("3");
-                    break;
-                case 'p':
-                    std::cout << "Paused" << std::endl;
-                    break;
-                case 'r': {
-                    std::cout << "Resume" << std::endl;
-                    break;
-                }
-                case 'q':
-                    std::cout << "Quitting..." << std::endl;
-                    ros::shutdown();
-                    break;
-                default:
-                    std::cout << "Unrecognized input, keeping previous settings." << std::endl;
-                    break;
-            }
-        }
-    }
-}
+
 
 void GaitSelector::setCmd(std::array<double, 2> send, int index, bool dir) {
     if (dir==true){
@@ -106,115 +84,119 @@ void GaitSelector::motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
 }  
 
-void GaitSelector::changeGait(const std::string& command) {
-    newGait = currentGait;
 
-    if (command == "1") {
-        newGait = Gait::WHEEL;
-    } else if (command == "2") {
-        newGait = Gait::LEG;
-    } else if (command == "3") {
-        newGait = Gait::WLW;
-    } 
-    else if (command[0] == 'v') {
-        std::string velocity = command.substr(1);
-        std::cout << "Setting velocity to " << velocity << std::endl;
-        return;
-    } else if (command[0] == 'l') {
-        std::string stepLength = command.substr(1);
-        std::cout << "Setting step length to " << stepLength << std::endl;
-        return;
-    } else if (command[0] == 'h') {
-        std::string standHeight = command.substr(1);
-        std::cout << "Setting stand height to " << standHeight << std::endl;
-        return;
-    } else if (command[0] == 'j') {
-        std::string liftHeight = command.substr(1);
-        std::cout << "Setting lift height to " << liftHeight << std::endl;
-        return;
-    } 
-    else {
-        std::cerr << "Unknown command: " << command << std::endl;
-        return;
+
+
+
+
+void GaitSelector::Transfer(int transfer_sec, int wait_sec){
+    // next_eta = target and grep current_motor_pose -> devided to step until current_eta
+    // transfer
+    std::vector<std::vector<double>> theta_steps(4), beta_steps(4);
+    for (int i=0; i<4; i++){
+        theta_steps[i] = linspace(motor_state_modules[i]->theta, next_eta[i][0], transfer_sec*pub_rate);
+        beta_steps[i]  = linspace(motor_state_modules[i]->beta,  next_eta[i][1], transfer_sec*pub_rate);
+    }
+    for (int step_i = 0; step_i < transfer_sec*pub_rate; step_i++) {
+        for  (int i=0; i<4; i++){
+            eta[i][0] = theta_steps[i][step_i];
+            eta[i][1] = beta_steps[i][step_i];
+        }       
+        Send(1);
     }
 
-    if (newGait != currentGait) {
-        printCurrentGait();
-        Transform();  
-        currentGait = newGait; 
-        printCurrentGait();
-
-  }
-}
-
-void GaitSelector::printCurrentGait() const {
-    switch (currentGait) {
-    case Gait::WHEEL:
-        std::cout << "Current gait: WHEEL" << std::endl;
-        break;
-    case Gait::LEG:
-        std::cout << "Current gait: LEG" << std::endl;
-        break;
-    case Gait::WLW:
-        std::cout << "Current gait: WLW" << std::endl;
-        break;
-    case Gait::TRANSFORM:
-        std::cout << "Current gait: TRANSFORM" << std::endl;
-        break;
-    default:
-        std::cerr << "Unknown gait" << std::endl;
-        break;
+    // wait
+    for (int step_i = 0; step_i < wait_sec*pub_rate; step_i++) {
+        Send(1);
     }
+
 }
 
-void GaitSelector::Transform() {
-    switch (currentGait)
-    {
-    case Gait::WHEEL:
-        currentGait = Gait::TRANSFORM;
-        printCurrentGait();
-        if(newGait == Gait::LEG) {
-            std::cout << "Transforming from WHEEL to LEG" << std::endl;
-        } 
-        else if(newGait == Gait::WLW) {
-            std::cout << "Transforming from WHEEL to WLW" << std::endl;
+void GaitSelector::Receive(){
+    // eta store the current motor pose
+    for (int i=0; i<4; i++){
+        eta[i][0] = motor_state_modules[i]->theta;
+        eta[i][1]  = motor_state_modules[i]->beta;
+        if (i==1 || i==2) {
+            eta[i][1] = -eta[i][1];
         }
-        else{
-            std::cerr << "Unknown transform gait" << std::endl;
-        }
-    break;
-    case Gait::LEG:
-        currentGait = Gait::TRANSFORM;
-        printCurrentGait();
-        if(newGait == Gait::WHEEL) {
-            std::cout << "Transforming from LEG to WHEEL" << std::endl;
-        } 
-        else if(newGait == Gait::WLW) {
-            std::cout << "Transforming from LEG to WLW" << std::endl;
-        } 
-        else{
-            std::cerr << "Unknown transform gait" << std::endl;
-        }
-        break;
-    case Gait::WLW:
-        currentGait = Gait::TRANSFORM;
-        printCurrentGait();
-        if(newGait == Gait::WHEEL) {
-            std::cout << "Transforming from WLW to WHEEL" << std::endl;
-        } 
-        else if(newGait == Gait::LEG) {
-            std::cout << "Transforming from WLW to LEG" << std::endl;
-        } 
-        else{
-            std::cerr << "Unknown transform gait" << std::endl;
-        }
-        break;
+    }
+    // for (int i = 0; i < 4; i++){
+    //     std::cout << i << ": " 
+    //               << eta[i][0] * 180 / M_PI << ", " 
+    //               << eta[i][1] * 180 / M_PI << std::endl;
+    // }
+}
+
+std::vector<double> GaitSelector::linspace(double start, double end, int num_steps) {
+    std::vector<double> result;
+    if (num_steps < 1) return result; 
     
-    default:
-        break;
+    result.resize(num_steps);
+    if (num_steps == 1) {
+        // Only one step -> just start
+        result[0] = start;
+        return result;
     }
     
-    std::cout << "Transforming..." << std::endl;
+    double step = (end - start) / (num_steps - 1);
+    for (int i = 0; i < num_steps; ++i) {
+        result[i] = start + step * i;
+    }
+    return result;
 }
 
+// Initialize static variables
+std::array<double, 4> GaitSelector::duty = {0.0};
+std::array<int, 4> GaitSelector::swing_phase = {0};
 
+double GaitSelector::swing_time = 0.2;   
+double GaitSelector::velocity = 0.08;  
+double GaitSelector::stand_height = 0.14;
+double GaitSelector::step_length = 0.4; 
+double GaitSelector::step_height = 0.03; 
+
+double GaitSelector::curvature = 0.0; // +: turn left, -:turn right, 0: straight
+
+std::array<double, 4> GaitSelector::current_step_length = {step_length, step_length, step_length, step_length};
+std::array<double, 4> GaitSelector::next_step_length    = {step_length, step_length, step_length, step_length};
+double GaitSelector::new_step_length = step_length;
+
+double GaitSelector::relative_foothold[4][2] = {0.0};
+double GaitSelector::eta[4][2] = {0.0};
+double GaitSelector::next_eta[4][2]= {0.0};
+std::array<std::array<double, 2>, 4> GaitSelector::foothold= {0.0};
+std::array<std::array<double, 2>, 4> GaitSelector::next_foothold=foothold;
+std::array<std::array<double, 2>, 4> GaitSelector::body= {0.0};
+std::array<std::array<double, 2>, 4> GaitSelector::next_body=body;
+std::array<std::array<double, 2>, 4> GaitSelector::hip = {0.0};
+std::array<std::array<double, 2>, 4> GaitSelector::next_hip = hip;
+
+// For turning 
+double GaitSelector::outer_radius = 0.0;
+double GaitSelector::inner_radius = 0.0;
+double GaitSelector::diff_step_length = 0.0;  // Differential step length 
+double GaitSelector::new_diff_step_length = 0.0;  // New differential step length
+double GaitSelector::diff_dS = 0.0;   // Differential dS
+int GaitSelector::sign_diff[4] = {0.0};   // Differential sign
+
+corgi_msgs::MotorStateStamped GaitSelector::motor_state = corgi_msgs::MotorStateStamped();
+
+std::vector<corgi_msgs::MotorState*> GaitSelector::motor_state_modules = {
+    &GaitSelector::motor_state.module_a,
+    &GaitSelector::motor_state.module_b,
+    &GaitSelector::motor_state.module_c,
+    &GaitSelector::motor_state.module_d
+};
+
+// add statecallback
+//  bool sim=true,
+// double CoM_bias=0.0,
+// int pub_rate=1000,
+// double BL=0.444,
+// double BW=0.4,
+// double BH=0.2
+
+
+// wheel add pub rate
+// add Transfer
