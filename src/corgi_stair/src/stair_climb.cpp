@@ -27,13 +27,14 @@ StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, doubl
     // Initialize
     state = MOVE_STABLE;
     last_state = MOVE_STABLE;
-    vel_incre = acc / rate;
+    vel_incre = acc[0] / rate;
     stair_count = 0;
 }//end StairClimb
 
-void StairClimb::initialize(double init_eta[8]) {
+void StairClimb::initialize(double init_eta[8], double init_vel) {
     double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
     double init_beta[4]  = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
+    velocity[0] = init_vel; // x velocity of CoM
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
     int current_rim = 0;
@@ -331,7 +332,7 @@ void StairClimb::init_swing_same_step(int swing_leg, double front_height, double
     this->sp[swing_leg] = SwingProfile(p_lo, p_td, step_height, 1);
 
     this->final_CoM_height = (front_height + hind_height) / 2;
-    this->coeff_b = acc;
+    this->coeff_b = acc[1];
     this->coeff_a = -std::sqrt(std::abs(std::pow(coeff_b, 3) / (6 * (final_CoM_height - CoM[1]))));
     this->t_f_x = margin_d / max_velocity;
     this->t_f_y = - coeff_b / coeff_a;
@@ -388,16 +389,16 @@ void StairClimb::init_swing_next_step(int swing_leg, double front_height, double
     // this->is_clockwise = (swing_leg == 0 || swing_leg == 1)? (stair_edge[0].front().count == stair_edge[1].front().count) : (stair_edge[2].front().count == stair_edge[3].front().count);
 
     this->final_CoM_height = (front_height + hind_height) / 2;
-    this->coeff_b = acc;
+    this->coeff_b = acc[1];
     this->coeff_a = -std::sqrt(std::abs(std::pow(coeff_b, 3) / (6 * (final_CoM_height - CoM[1]))));
-    this->t_f_x = velocity[0] / acc;
+    this->t_f_x = velocity[0] / acc[0];
     this->t_f_y = - coeff_b / coeff_a;
     this->t_f = is_clockwise? min_swing_time_cw : min_swing_time_ccw;
     this->total_steps = static_cast<int>(t_f * rate); // total steps for swinging
 
     int sign_vel = velocity[0]>=0.0? 1 : -1;
     this->init_CoM = CoM;
-    this->final_CoM = {CoM[0] + velocity[0]*t_f_x - sign_vel*acc*(t_f_x*t_f_x)/2, final_CoM_height};
+    this->final_CoM = {CoM[0] + velocity[0]*t_f_x - sign_vel*acc[0]*(t_f_x*t_f_x)/2, final_CoM_height};
     this->init_pitch = pitch;
     this->final_pitch = std::asin((front_height-hind_height)/BL);
     this->init_front_height = hip[0][1];

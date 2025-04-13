@@ -20,7 +20,7 @@ class StairClimb {
         // Constructor
         StairClimb(bool sim=true, std::array<double, 2> CoM_bias={0.0, 0.0}, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
-        void initialize(double init_eta[8]);
+        void initialize(double init_eta[8], double init_vel=0.0);
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
         double get_pitch();
@@ -61,7 +61,7 @@ class StairClimb {
         const double swing_time = 0.2;                                                
         const double min_margin = 0.01;
         const double max_velocity = 0.1; // m/s, max velocity of CoM
-        const double acc = max_velocity / 0.5;
+        const std::array<double, 2> acc = {max_velocity / 0.1, max_velocity / 0.5}; // m/s^2, acceleration of CoM
         const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
         const double keep_edge_d = 0.03;
@@ -72,15 +72,15 @@ class StairClimb {
         const double keep_stair_d_front_max = 0.10;
         const double keep_stair_d_front_min = 0.05;
         const double step_length_up_stair = 0.3;
-        const double min_swing_time_cw   = 1.5, 
-                     min_swing_time_ccw  = 1.5, 
+        const double min_swing_time_cw   = 1.0, 
+                     min_swing_time_ccw  = 1.0, 
                      min_swing_time_step = 0.5;
 
         /* Variable */
         int rate;
         double dS;
         double incre_duty;
-        std::array<double, 2> velocity = {0.1, 0.0};    // v_x, v_y of CoM 
+        std::array<double, 2> velocity = {0.0, 0.0};    // v_x, v_y of CoM 
         double stand_height = 0.25;
         double step_length  = 0.3;
         double step_height  = 0.04; // step height for swing on same step
@@ -92,7 +92,7 @@ class StairClimb {
         double max_length = 0.32;  // rad, corresponding to leg length 0.32
         std::array<SwingProfile, 4> sp;
         int swing_count;
-        double vel_incre;
+        double vel_incre;   // velocity increment for x velocity of CoM
 
         // State
         std::array<double, 4> theta;
