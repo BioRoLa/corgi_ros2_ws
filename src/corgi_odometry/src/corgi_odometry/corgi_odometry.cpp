@@ -6,6 +6,7 @@
 
 #include "corgi_msgs/MotorStateStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/ContactStateStamped.h"
 #include "sensor_msgs/Imu.h"
 
 #include "KLD_estimation/InformationFilter.hpp"
@@ -20,10 +21,11 @@ using namespace estimation_model;
 #define MOTOR_OFFSET_Y 0.193
 #define MOTOR_OFFSET_Z 0.0
 #define WHEEL_RADIUS 0.1
-// #define WHEEL_WIDTH 0.012    //sim
-#define WHEEL_WIDTH 0.019       //real
 #define GRAVITY 9.80665
-
+#define lpf_alpha 0.5 //low pass filter alpha
+#define SIM True //simulation mode
+bool sim = true;
+const float WHEEL_WIDTH = sim ? 0.012 : 0.019;
 // CSV file parameters
 std::vector<std::string> headers = {
     "v_.x", "v_.y", "v_.z", 
@@ -32,13 +34,13 @@ std::vector<std::string> headers = {
     "zRF.x", "zRF.y", "zRF.z", 
     "zRH.x", "zRH.y", "zRH.z", 
     "zLH.x", "zLH.y", "zLH.z", 
-    "zP.x", "zP.y", "zP.z", //t265 
     "ba.x", "ba.y", "ba.z", 
     "lf.contact","rf.contact","rh.contact","lh.contact",
     "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
-    "lf.c","rf.c","rh.c","lh.c", //contact
     "threshold",
-    "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
+    "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz",
+    "filtered_v_.x", "filtered_v_.y", "filtered_v_.z",
+    "filtered_p.x", "filtered_p.y", "filtered_p.z"
 };
 DataProcessor::CsvLogger logger;
 std::string filepath;
@@ -95,7 +97,7 @@ class Encoder{
 
 // Variables
 bool trigger = false;
-float dt = 1. / (float)SAMPLE_RATE;
+float dt;
 bool initialized = false;
 Eigen::VectorXf x = Eigen::VectorXf::Zero(6 * J);
 Eigen::Vector3f p;
@@ -107,6 +109,10 @@ Eigen::Vector3f v_init;
 Eigen::Vector3f a;
 Eigen::Vector3f w;
 Eigen::Quaternionf q;
+geometry_msgs::Vector3 prev_v;
+double prev_time;
+Eigen::Vector3f filtered_position;
+
 int counter = 0;
 //calculate the angle by lidar, need to implement lidar sensor to get the value
 //set to -100 to disable lidar
@@ -132,6 +138,16 @@ void imu_cb(const sensor_msgs::Imu msg){
     imu = msg;
 }
 
+geometry_msgs::Vector3 low_pass_filter(const geometry_msgs::Vector3 &input, const geometry_msgs::Vector3 &prev_input, float cutoff_freq, float sample_rate) {
+    // Calculate the alpha value for the low-pass filter
+    double alpha = 1.0 / (1.0 + (cutoff_freq / sample_rate));
+    geometry_msgs::Vector3 output;
+    output.x = alpha * input.x + (1 - alpha) * prev_input.x;
+    output.y = alpha * input.y + (1 - alpha) * prev_input.y;
+    output.z = alpha * input.z + (1 - alpha) * prev_input.z;
+    return output;
+}
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "corgi_odometry");
 
@@ -151,6 +167,8 @@ int main(int argc, char **argv) {
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
+    ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
+    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
@@ -160,6 +178,15 @@ int main(int argc, char **argv) {
     ros::Rate rate(SAMPLE_RATE);
 
     /* Estimate model initialization */
+
+    //initial time
+    dt = 1.0 / float(SAMPLE_RATE);
+    prev_time = ros::Time::now().toSec();
+
+    //initial velocity for low pass filter
+    prev_v.x = 0.0;
+    prev_v.y = 0.0;
+    prev_v.z = 0.0;
 
     //IMU data (Observation)
     U u(J, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt);
@@ -183,11 +210,17 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
-    //Rotate imu data to body frame
-    rot <<  1,  0,  0, 
-            0,  -1,  0,
-            0,  0,  -1;
-
+    if(sim){
+        rot <<  1,  0,  0, 
+                0,  1,  0,
+                0,  0,  1;
+    }
+    else{
+        //Rotate imu data to body frame
+        rot <<  1,  0,  0, 
+                0,  -1,  0,
+                0,  0,  -1;
+    }
     v_init << 0, 0, 0;
 
     //initial state
@@ -211,10 +244,16 @@ int main(int argc, char **argv) {
     filter.threshold = THRESHOLD;
     filter.init(x);
 
-    //Initialize csv file if needed
-
     while (ros::ok()){
         ros::spinOnce();
+
+        // FIXME: dt calculation cannot work by calculate dynamically
+        // double current_time = ros::Time::now().toSec();
+        // dt = float(current_time - prev_time);
+        // prev_time = current_time;
+        // ROS_INFO("dt: %f", dt);
+        dt = 1.0 / float(SAMPLE_RATE);
+
         if(trigger){
             if (!initialized) {
                 /*Initialization : input first data*/
@@ -236,6 +275,7 @@ int main(int argc, char **argv) {
 
                 //
                 p << 0, 0, 0;
+                filtered_position << 0, 0, 0;
                 //quaternion
                 q_init = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
                 R_init = q_init.toRotationMatrix();
@@ -272,23 +312,17 @@ int main(int argc, char **argv) {
             ROS_INFO("Estimated Position: %f, %f, %f", p(0), p(1), p(2));
             ROS_INFO("Estimated Velocity: %f, %f, %f", x(3 * J - 3), x(3 * J - 2), x(3 * J - 1));
 
-            // Store the estimated state to a csv file
-            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(46);
-            estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);
-            estimate_state.segment(3, 3) = p;
-            estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);
-            estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);
-            estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);
-            estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);
-            // estimate_state.segment(18, 3) = 1. / dt / (float) J * t265.z(dt);
-            estimate_state.segment(21, 3) = x.segment(6 * J - 3, 3);
-            estimate_state.segment(24, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);
-            estimate_state.segment(28, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);
-            // estimate_state.segment(32, 4) = Eigen::Vector4f(df.iloc("lf.contact", i), df.iloc("rf.contact", i), df.iloc("rh.contact", i), df.iloc("lh.contact", i));
-            estimate_state(36) = filter.threshold;
-            estimate_state.segment(37, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
-            
-            logger.logState(estimate_state);
+            // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
+            corgi_msgs::ContactStateStamped contact_msg;
+            contact_msg.module_a.contact = !filter.exclude[0];
+            contact_msg.module_b.contact = !filter.exclude[1];
+            contact_msg.module_c.contact = !filter.exclude[2];
+            contact_msg.module_d.contact = !filter.exclude[3];
+            contact_msg.module_a.score = filter.scores[0];
+            contact_msg.module_b.score = filter.scores[1];
+            contact_msg.module_c.score = filter.scores[2];
+            contact_msg.module_d.score = filter.scores[3];
+            contact_pub.publish(contact_msg);
 
             // Publish the estimated velocity and position
             geometry_msgs::Vector3 velocity_msg;
@@ -303,6 +337,41 @@ int main(int argc, char **argv) {
             position_msg.z = p(2);
             position_pub.publish(position_msg);
 
+            geometry_msgs::Vector3 filtered_velocity_msg;
+            float cutoff_freq = 10.0; //Hz
+            filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, SAMPLE_RATE);
+            prev_v = filtered_velocity_msg;
+            filtered_velocity_pub.publish(filtered_velocity_msg);
+            
+            Eigen::Vector<float, 3> filtered_velocity;
+            filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
+            filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
+
+            geometry_msgs::Vector3 filtered_position_msg;
+            filtered_position_msg.x = filtered_position(0);
+            filtered_position_msg.y = filtered_position(1);
+            filtered_position_msg.z = filtered_position(2);
+            position_pub.publish(filtered_position_msg);
+
+            // Store the estimated state to a csv file
+            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(45);
+            estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
+            estimate_state.segment(3, 3) = p;                                                       //position
+            estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
+            estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);                          //rf leg velocity
+            estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
+            estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
+            estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
+            estimate_state.segment(21, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);            //contact
+            estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
+            estimate_state(29) = filter.threshold;                                                                                                  //threshold
+            estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());                                          //covariance
+            estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
+            estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position                                                                                       
+            
+            
+            if(argc == 2){logger.logState(estimate_state);}
+
             counter ++;
         }
         
@@ -312,9 +381,10 @@ int main(int argc, char **argv) {
         rate.sleep();
     }
 
-    logger.finalizeCSV();
-    ROS_INFO("Saved data to %s", filepath.c_str());
-
+    if(argc == 2){
+        logger.finalizeCSV();
+        ROS_INFO("Saved data to %s", filepath.c_str());
+    }
     ros::shutdown();
     
     return 0;
