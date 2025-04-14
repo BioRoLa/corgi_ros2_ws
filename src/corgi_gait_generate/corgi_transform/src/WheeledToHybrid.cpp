@@ -343,6 +343,7 @@ class WheeledToHybrid : public IGaitTransform, public Hybrid
                     Swing(eta, swing_pose, swing_variation, i);
                 }
             }
+            next_hip = hip;
             // std::cout << "duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << std::endl;
             // std::cout << "swing_phase: "<< swing_phase[0] << " , " << swing_phase[1] << " , " << swing_phase[2] << " , " << swing_phase[3] << std::endl;
             

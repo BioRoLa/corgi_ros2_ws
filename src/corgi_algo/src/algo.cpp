@@ -221,6 +221,39 @@ class KeybordControl : public Wheeled, public Hybrid, public Legged, public Tran
             
             std::cout << "Transforming..." << std::endl;
         }
+
+        void Keep() {
+            while (ros::ok()) {
+                {
+                    // Lock while reading the current gait.
+                    std::lock_guard<std::mutex> lock(input_mutex);
+                    switch (gaitSelector.currentGait) {
+                        case Gait::WHEELED:
+                            // For wheeled gait, call the Roll() method from Wheeled.
+                            // Roll(1, 1, 1, 0, 4095, 0);
+                            // use joystick to contol
+                            break;
+                        case Gait::LEGGED:
+                            // For legged gait, call the Step() method from Legged.
+                            next_Step();
+                            break;
+                        case Gait::HYBRID:
+                            // For hybrid gait, call the Step() method from Hybrid with parameters.
+                            Step(1, 1, -0.03);
+                            break;
+                        case Gait::TRANSFORM:
+                            // Optionally, you can define behavior for TRANSFORM gait.
+                            break;
+                        default:
+                            // Unknown gait – do nothing or log an error.
+                            break;
+                    }
+                }
+                // Pause briefly to allow continuous updates.
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+        }
+    
         
         bool joyShutdown = false; // Global flag to signal the joystick thread to exit.
         std::thread joyThread;
@@ -263,6 +296,13 @@ int main(int argc, char **argv){
     }
 
     return 0;
+
+    // add step to calculate the gait in fsm and all the gait call this parameter
+    // add that if no keyboard input maintain the currrent gait to move on like wheeled(wheeled.Roll(1, 1, 1, 0, 4095, 0);), Legged(legged.Step();), Hybrid(hybrid.Step(1, 1, -0.03);)
+    // see if ther is a label to prevent the motor commend to send the coreect mode cmd
+    // add the Initialize chosen for all gait? or just keep the one for the wheeled mode
+    // update the v, s, j, h function for all gait
+    // test all
 }
 
 

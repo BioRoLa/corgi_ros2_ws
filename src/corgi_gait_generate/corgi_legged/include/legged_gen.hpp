@@ -21,7 +21,7 @@ class Legged: public GaitSelector
         ~Legged()= default;
 
         void Initial();
-        void Step();
+        void next_Step();
         void set_velocity(double new_value);
         void set_stand_height(double new_value);
         void set_step_length(double new_value);

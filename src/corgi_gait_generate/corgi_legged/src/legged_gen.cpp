@@ -74,7 +74,7 @@ void Legged::Initial()
     // std::cout<< "sent the theta and beta" << std::endl;
 }
 
-void Legged::Step() {
+void Legged::next_Step() {
     touchdown = false;
     for (int i=0; i<4; i++) {
         next_hip[i][0] += dS + sign_diff[i]*diff_dS;
