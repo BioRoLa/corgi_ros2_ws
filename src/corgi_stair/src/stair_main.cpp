@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
                 // hip_x = sim_data.position.x + 0.222; // front hip
                 // // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                // max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 // if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
                 hip_x = exp_robot_x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {

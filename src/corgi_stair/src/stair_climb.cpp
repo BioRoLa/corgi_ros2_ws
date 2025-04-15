@@ -261,7 +261,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
             CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
         } else {
-            if (leg_info[swing_leg].get_hip_position(CoM, pitch)[1] > stair_edge[swing_leg].front().edge[1] + leg_model.radius + velocity[1] / rate) {
+            velocity[1] = -velocity[0];
+            if (leg_info[swing_leg].get_hip_position(CoM, pitch)[1] > stair_edge[swing_leg].front().edge[1] + leg_model.radius - velocity[1] / rate) {
                 CoM[1] += velocity[1] / rate;
             }//end if
         }//end if else
