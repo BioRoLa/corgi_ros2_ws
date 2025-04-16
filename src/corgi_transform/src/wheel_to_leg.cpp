@@ -101,7 +101,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
             delta_time_step = int(round_3(body_move_dist/body_vel)/dt);
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 0 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 0 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
         
@@ -117,9 +117,9 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
             G_p[1] = -stance_height+leg_model.r;
             RF_target_theta = leg_model.inverse(G_p, "G")[0];
 
-            std::cout << "Body Angle = " << round_3(body_angle) << std::endl;
-            std::cout << "RF Target Theta = " << round_3(RF_target_theta) << std::endl;
-            std::cout << "RF Target Beta = " << round_3(RF_target_beta) << std::endl;
+            // std::cout << "Body Angle = " << round_3(body_angle) << std::endl;
+            // std::cout << "RF Target Theta = " << round_3(RF_target_theta) << std::endl;
+            // std::cout << "RF Target Beta = " << round_3(RF_target_beta) << std::endl;
 
             body_move_dist = abs(leg_model.radius * (RF_target_beta-curr_beta[1]));
             delta_time_step = int(round_3(body_move_dist/body_vel)/dt);
@@ -144,7 +144,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 1 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 1 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
@@ -163,8 +163,8 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
             delta_time_step_each = int(round_3(step_length/body_vel)/dt);
             delta_time_step = delta_time_step_each * step_num;
 
-            std::cout << "Step Number = " << step_num << std::endl;
-            std::cout << "Step Length = " << round_3(step_length) << std::endl;
+            // std::cout << "Step Number = " << step_num << std::endl;
+            // std::cout << "Step Length = " << round_3(step_length) << std::endl;
 
             // swing phase trajectory
             p_lo = {0, -stance_height+leg_model.r};
@@ -173,7 +173,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 2 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 2 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
@@ -210,7 +210,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 3 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 3 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
@@ -267,7 +267,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 4 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 4 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
@@ -348,7 +348,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 5 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 5 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
@@ -363,7 +363,7 @@ std::array<std::array<double, 4>, 2> WheelToLegTransformer::step(){
 
             step_count = 0;
             stage++;
-            std::cout << std::endl << "Stage 6 Finished.\n= = = = =" << std::endl << std::endl;
+            // std::cout << std::endl << "Stage 6 Finished.\n= = = = =" << std::endl << std::endl;
         }
         break;
 
