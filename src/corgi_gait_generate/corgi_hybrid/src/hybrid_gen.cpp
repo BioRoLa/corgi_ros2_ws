@@ -71,7 +71,7 @@ void Hybrid::Initialize(int swing_index, int pub_time, int do_pub, int transfer_
     }  
 
     if (transfer_state){
-        Transfer(transfer_sec, wait_sec);
+        Transfer(do_pub, transfer_sec, wait_sec);
     }
     else{
         for (int i = 0; i < 4; i++) {
