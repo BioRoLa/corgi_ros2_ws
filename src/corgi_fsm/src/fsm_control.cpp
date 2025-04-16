@@ -1,0 +1,324 @@
+#include "fsm_control.hpp"
+
+#include "leg_model.hpp"
+#include "walk_gait.hpp"
+#include "wheel_to_leg.hpp"
+
+#include "joystick_control.hpp"
+// #include "wheeled.hpp"
+
+corgi_msgs::MotorCmdStamped motor_cmd;
+corgi_msgs::MotorStateStamped motor_state;
+corgi_msgs::FsmCmdStamped fsm_cmd;
+corgi_msgs::FsmStateStamped fsm_state;
+corgi_msgs::WheelCmd current_wheel_cmd_;
+corgi_msgs::SteeringCmdStamped current_steer_cmd_;
+
+void motor_state_cb(const corgi_msgs::MotorStateStamped state){
+    motor_state = state;
+}
+
+void fsm_cmd_cb(const corgi_msgs::FsmCmdStamped cmd){
+    fsm_cmd = cmd;
+}
+void wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
+{
+    current_wheel_cmd_ = *msg;
+}
+void steerStateCallback(const corgi_msgs::SteeringCmdStamped::ConstPtr& msg)
+{
+    current_steer_cmd_ = *msg;
+}
+int main(int argc, char **argv) {
+
+    ROS_INFO("FSM Starts\n");
+
+    ros::init(argc, argv, "corgi_fsm");
+
+    ros::NodeHandle nh;
+    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
+    ros::Subscriber fsm_cmd_sub = nh.subscribe<corgi_msgs::FsmCmdStamped>("fsm/command", 1000, fsm_cmd_cb);
+    ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
+    ros::Publisher fsm_state_pub = nh.advertise<corgi_msgs::FsmStateStamped>("fsm/state", 1000);
+    ros::Subscriber wheel_cmd_sub_ = nh.subscribe<corgi_msgs::WheelCmd>("/wheel_cmd", 1000, wheelCmdCallback);
+    ros::Subscriber steer_cmd_sub_ = nh.subscribe<corgi_msgs::SteeringCmdStamped>("/steer/command", 1000, steerStateCallback);
+
+
+    ros::Rate rate(1000);
+
+    std::vector<corgi_msgs::MotorState*> motor_state_modules = {
+        &motor_state.module_a,
+        &motor_state.module_b,
+        &motor_state.module_c,
+        &motor_state.module_d
+    };
+
+    std::vector<corgi_msgs::MotorCmd*> motor_cmd_modules = {
+        &motor_cmd.module_a,
+        &motor_cmd.module_b,
+        &motor_cmd.module_c,
+        &motor_cmd.module_d
+    };
+
+
+    for (auto& cmd : motor_cmd_modules){
+        cmd->theta = 17/180.0*M_PI;
+        cmd->beta = 0;
+        cmd->kp_r = 90;
+        cmd->kp_l = 90;
+        cmd->ki_r = 0;
+        cmd->ki_l = 0;
+        cmd->kd_r = 1.75;
+        cmd->kd_l = 1.75;
+    }
+
+    bool sim = true;
+    double body_vel = 0.1;
+
+    LegModel leg_model(sim);
+
+    int current_mode = REST_MODE;
+    int next_mode = REST_MODE;
+    bool switch_mode = false;
+    bool transform_finished = true;
+    bool paused = false;
+
+    std::array<std::array<double, 4>, 2> eta_list;
+
+    double init_eta[8] = {18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0, 18/180.0*M_PI, 0};
+    
+    WalkGait walk_gait(sim, 0.0, 1000);
+    walk_gait.initialize(init_eta);
+    
+    WheelToLegTransformer wheel_to_leg_transformer(sim);
+    wheel_to_leg_transformer.initialize(init_eta);
+
+
+    JoystickControl node;
+    
+    int loop_count = 0;
+    while (ros::ok()) {
+        ros::spinOnce();
+
+        if (fsm_cmd.next_mode != current_mode && transform_finished) {
+            next_mode = fsm_cmd.next_mode;
+            switch_mode = true;
+        }
+
+        if (fsm_cmd.pause) {
+            if (!paused) {
+                ROS_INFO("FSM: PAUSE!\n");
+                paused = true;
+            }
+            continue;
+        }
+        else {
+            if (paused) {
+                ROS_INFO("FSM: RESUME!\n");
+                paused = false;
+            }
+        }
+
+        if (fsm_cmd.stop) {
+            ROS_INFO("FSM: STOP!\n");
+            ros::shutdown();
+            return 0;
+        }
+
+        // switch mode
+        if (switch_mode){
+            switch (next_mode) {
+                case REST_MODE:
+                    ROS_INFO("FSM: Entering REST MODE\n");
+                    break;
+
+                case CSV_MODE:
+                    ROS_INFO("FSM: Entering CSV MODE\n");
+                    break;
+
+                case WHEEL_MODE:
+                    ROS_INFO("FSM: Entering WHEEL MODE\n");
+                    break;
+
+                case WALK_MODE:
+                    for (int i=0; i<4; i++){
+                        init_eta[2*i] = motor_state_modules[i]->theta;
+                        init_eta[2*i+1] = motor_state_modules[i]->beta;
+                    }
+                    if (current_mode == WHEEL_MODE) {
+                        transform_finished = false;
+                        wheel_to_leg_transformer.initialize(init_eta);
+                        ROS_INFO("FSM: Transforming From WHEEL To LEG\n");
+                    }
+                    else {
+                        walk_gait.initialize(init_eta);
+                        ROS_INFO("FSM: Entering WALK MODE\n");
+                    }
+                    break;
+
+                case WLW_MODE:
+                    ROS_INFO("FSM: Entering WLW MODE\n");
+                    break;
+
+                default:
+                    ROS_WARN("FSM: Unknown Command Received!\n");
+                    break;
+            }
+
+            current_mode = next_mode;
+            switch_mode = false;
+        }
+        
+        // update
+        switch (current_mode) {
+            case REST_MODE:
+                break;
+
+            case CSV_MODE:
+                break;
+
+            case WHEEL_MODE:
+                if (current_steer_cmd_.angle == 0.0){
+                    float beta_adjustment = (current_wheel_cmd_.velocity / 0.119) * (M_PI / 180.0); // Convert velocity to radians based on wheel radius
+                    if (current_wheel_cmd_.direction == false) {
+                        beta_adjustment = -beta_adjustment; // Reverse adjustment if direction is 0
+                    }
+                    if (current_wheel_cmd_.stop == true){
+                        beta_adjustment = 0;
+                    }
+                    // current_motor_cmd_.header.stamp = ros::Time::now();
+                    for (size_t i = 0; i < 4; ++i) {
+                        motor_cmd_modules[i]->theta = 17 * (M_PI / 180.0);
+                        if (i == 1 || i == 2) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta - beta_adjustment;
+                        } else if (i == 0 || i == 3) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta + beta_adjustment;
+                        }
+                        motor_cmd_modules[i]->kp_r = 90;
+                        motor_cmd_modules[i]->ki_r = 0;
+                        motor_cmd_modules[i]->kd_r = 1.75;
+                        motor_cmd_modules[i]->kp_l = 90;
+                        motor_cmd_modules[i]->ki_l = 0;
+                        motor_cmd_modules[i]->kd_l = 1.75;
+                    }
+                }
+                else if((current_steer_cmd_.angle > 0.0)){ 
+                    // right turn
+                    float beta_adjustment_l = (current_wheel_cmd_.velocity*1.5 / 0.119) * (M_PI / 180.0);
+                    float beta_adjustment_r = (current_wheel_cmd_.velocity*0.5 / 0.119) * (M_PI / 180.0);
+                    if (current_wheel_cmd_.stop == true){
+                        beta_adjustment_l = 0;
+                        beta_adjustment_r = 0;
+                    }
+                    if (current_wheel_cmd_.direction == false) {
+                        beta_adjustment_l = -beta_adjustment_l; // Reverse adjustment if direction is 0
+                        beta_adjustment_r = -beta_adjustment_r; // Reverse adjustment if direction is 0
+                    }
+                    // current_motor_cmd_.header.stamp = ros::Time::now();
+                    for (size_t i = 0; i < 4; ++i) {
+                        motor_cmd_modules[i]->theta = 17 * (M_PI / 180.0);
+                        if (i == 1 || i == 2) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta - beta_adjustment_r;
+                        } else if (i == 0 || i == 3) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta + beta_adjustment_l;
+                        }
+                        motor_cmd_modules[i]->kp_r = 90;
+                        motor_cmd_modules[i]->ki_r = 0;
+                        motor_cmd_modules[i]->kd_r = 1.75;
+                        motor_cmd_modules[i]->kp_l = 90;
+                        motor_cmd_modules[i]->ki_l = 0;
+                        motor_cmd_modules[i]->kd_l = 1.75;
+                    }
+                }
+                else { 
+                    // left turn
+                    float beta_adjustment_l = (current_wheel_cmd_.velocity*0.5 / 0.119) * (M_PI / 180.0);
+                    float beta_adjustment_r = (current_wheel_cmd_.velocity*1.5 / 0.119) * (M_PI / 180.0);
+                    if (current_wheel_cmd_.stop == true){
+                        beta_adjustment_l = 0;
+                        beta_adjustment_r = 0;
+                    }
+                    if (current_wheel_cmd_.direction == false) {
+                        beta_adjustment_l = -beta_adjustment_l; // Reverse adjustment if direction is 0
+                        beta_adjustment_r = -beta_adjustment_r; // Reverse adjustment if direction is 0
+                    }
+                    // current_motor_cmd_.header.stamp = ros::Time::now();
+                    for (size_t i = 0; i < 4; ++i) {
+                        motor_cmd_modules[i]->theta = 17 * (M_PI / 180.0);
+                        if (i == 1 || i == 2) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta - beta_adjustment_r;
+                        } else if (i == 0 || i == 3) {
+                            motor_cmd_modules[i]->beta = motor_state_modules[i]->beta + beta_adjustment_l;
+                        }
+                        motor_cmd_modules[i]->kp_r = 90;
+                        motor_cmd_modules[i]->ki_r = 0;
+                        motor_cmd_modules[i]->kd_r = 1.75;
+                        motor_cmd_modules[i]->kp_l = 90;
+                        motor_cmd_modules[i]->ki_l = 0;
+                        motor_cmd_modules[i]->kd_l = 1.75;
+                    }
+                }
+                
+                // current_motor_cmd_.header.seq = motor_state.header.seq;
+                // motor_cmd_pub_.publish(current_motor_cmd_);
+                break;
+
+            case WALK_MODE:
+                if (!transform_finished){
+                    eta_list = wheel_to_leg_transformer.step();
+
+                    if (wheel_to_leg_transformer.transform_finished) {
+                        for (int i=0; i<4; i++){
+                            init_eta[2*i] = motor_state_modules[i]->theta;
+                            init_eta[2*i+1] = motor_state_modules[i]->beta;
+                        }
+
+                        walk_gait.initialize(init_eta);
+                        transform_finished = true;
+                        
+                        ROS_INFO("FSM: Entering WALK MODE\n");
+                    }
+                }
+                else{
+                    eta_list = walk_gait.step();
+                }
+
+                for (int i=0; i<4; i++) {
+                    if (eta_list[0][i] > M_PI*159.9/180.0) {
+                        ROS_INFO("Exceed Upper Bound.\n");
+                        eta_list[0][i] = M_PI*159.9/180.0;
+                    }
+                    if (eta_list[0][i] < M_PI*16.9/180.0) {
+                        ROS_INFO("Exceed Lower Bound.\n");
+                        eta_list[0][i] = M_PI*16.9/180.0;
+                    }
+                    motor_cmd_modules[i]->theta = eta_list[0][i];
+                    motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
+                }
+                break;
+
+            case WLW_MODE:
+                break;
+
+            default:
+                break;
+        }
+
+        motor_cmd.header.seq = loop_count;
+        motor_cmd.header.stamp = ros::Time::now();
+
+        fsm_state.header.seq = loop_count;
+        fsm_state.header.stamp = ros::Time::now();
+
+        motor_cmd_pub.publish(motor_cmd);
+        fsm_state_pub.publish(fsm_state);
+
+        loop_count++;
+
+        rate.sleep();
+    }
+
+    ros::shutdown();
+
+    return 0;
+}
