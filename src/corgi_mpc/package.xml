@@ -20,6 +20,8 @@
   <build_depend>corgi_walk</build_depend>
   <build_depend>corgi_force_estimation</build_depend>
   <build_depend>sensor_msgs</build_depend>
+  <build_depend>corgi_gait_selector</build_depend>
+  <build_depend>corgi_hybrid</build_depend>
 
   <build_export_depend>joy</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
@@ -32,6 +34,8 @@
   <build_export_depend>corgi_walk</build_export_depend>
   <build_export_depend>corgi_force_estimation</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
+  <build_export_depend>corgi_gait_selector</build_export_depend>
+  <build_export_depend>corgi_hybrid</build_export_depend>
 
   <exec_depend>joy</exec_depend>
   <exec_depend>corgi_msgs</exec_depend>
@@ -46,6 +50,8 @@
   <exec_depend>corgi_walk</exec_depend>
   <exec_depend>corgi_force_estimation</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>corgi_gait_selector</exec_depend>
+  <exec_depend>corgi_hybrid</exec_depend>
 
   <export>
 

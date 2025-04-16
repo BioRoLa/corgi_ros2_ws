@@ -18,6 +18,7 @@
 #include "geometry_msgs/Vector3.h"
 
 #include "walk_gait.hpp"
+#include "hybrid_gen.hpp"
 
 #include <array>
 #include <vector>
