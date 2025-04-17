@@ -174,6 +174,16 @@ int main(int argc, char **argv) {
         &force_state.module_d
     };
 
+    std::vector<Eigen::MatrixXd> phi_prev_modules = {
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1)
+    };
+
+    double phi_r = 0;
+    double phi_l = 0;
+    
     std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
 
     while (ros::ok()) {
@@ -182,10 +192,23 @@ int main(int argc, char **argv) {
         // dynamic friction compensation
         if (!sim){
             for (int i=0; i<4; i++) {
-                motor_state_modules[i]->torque_r += friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
-                motor_state_modules[i]->torque_l += friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
-                // motor_state_modules[i]->torque_r += friction[2*i];
-                // motor_state_modules[i]->torque_l -= friction[2*i+1];
+                phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
+                phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
+
+                if (phi_r > phi_prev_modules[i](0, 0)){
+                    motor_state_modules[i]->torque_r += friction[2*i];
+                }
+                else {
+                    motor_state_modules[i]->torque_r -= friction[2*i];
+                }
+
+                if (phi_l > phi_prev_modules[i](1, 0)){
+                    motor_state_modules[i]->torque_l += friction[2*i];
+                }
+                else {
+                    motor_state_modules[i]->torque_l -= friction[2*i];
+                }
+                phi_prev_modules[i] << phi_r, phi_l;
             }
         }
 

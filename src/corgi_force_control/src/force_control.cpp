@@ -44,11 +44,11 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     Eigen::MatrixXd pos_fb(2, 1);
 
     legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
-    if      (target_rim == 1) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
+    if      (target_rim == 1 && (target_alpha > -M_PI/2.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
     else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
     else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
     else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
-    else if (target_rim == 5) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
+    else if (target_rim == 5 && (target_alpha < M_PI/2.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
@@ -242,6 +242,16 @@ int main(int argc, char **argv) {
         Eigen::MatrixXd::Zero(2, 1)
     };
 
+    std::vector<Eigen::MatrixXd> phi_prev_modules = {
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1),
+        Eigen::MatrixXd::Zero(2, 1)
+    };
+
+    double phi_r = 0;
+    double phi_l = 0;
+
     // AR, AL, BR, BL, CR, CL, DR, DL
     // std::vector<double> kt = {2.018, 2.126, 2.141, 2.176, 1.927, 2.072, 2.098, 2.143};
     std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
@@ -274,10 +284,23 @@ int main(int argc, char **argv) {
         // dynamic friction compensation
         if (!sim){
             for (int i=0; i<4; i++) {
-                motor_cmd_modules[i]->torque_r -= friction[2*i] * motor_state_modules[i]->velocity_r/std::abs(motor_state_modules[i]->velocity_r);
-                motor_cmd_modules[i]->torque_l -= friction[2*i+1] * motor_state_modules[i]->velocity_l/std::abs(motor_state_modules[i]->velocity_l);
-                // motor_cmd_modules[i]->torque_r -= friction[2*i];
-                // motor_cmd_modules[i]->torque_l += friction[2*i+1];
+                phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
+                phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
+
+                if (phi_r > phi_prev_modules[i](0, 0)){
+                    motor_cmd_modules[i]->torque_r -= friction[2*i];
+                }
+                else {
+                    motor_cmd_modules[i]->torque_r += friction[2*i];
+                }
+
+                if (phi_l > phi_prev_modules[i](1, 0)){
+                    motor_cmd_modules[i]->torque_l -= friction[2*i];
+                }
+                else {
+                    motor_cmd_modules[i]->torque_l += friction[2*i];
+                }
+                phi_prev_modules[i] << phi_r, phi_l;
             }
         }
 

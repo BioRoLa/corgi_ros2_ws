@@ -33,6 +33,10 @@ void ModelPredictiveController::init_matrices(const double *ra, const double *rb
                     1e5  , 0   , 5e3 ,   // x, y, z velocities
                     5e6  , 5e6 , 0   ,   // roll, pitch, yaw
                     1e3  , 1e3 , 0   ;   // angular velocities
+    // Q.diagonal() << 1e7  , 0   , 1e8 ,   // x, y, z positions
+    //                 1e5  , 0   , 1e4 ,   // x, y, z velocities
+    //                 1e7  , 5e7 , 0   ,   // roll, pitch, yaw
+    //                 1e4  , 1e4 , 0   ;   // angular velocities
 
     R = Eigen::MatrixXd::Identity(n_u, n_u);
 }

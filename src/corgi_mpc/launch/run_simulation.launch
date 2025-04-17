@@ -14,8 +14,8 @@
     
     <!-- <node name="corgi_mpc" pkg="corgi_mpc" type="walk_open_loop" output="screen"/> -->
     
-    <!-- <node name="force_control" pkg="corgi_force_control" type="force_control" output="log"/>
-    <node name="corgi_mpc" pkg="corgi_mpc" type="wlw_closed_loop" output="screen"/> -->
+    <node name="force_control" pkg="corgi_force_control" type="force_control" output="log"/>
+    <node name="corgi_mpc" pkg="corgi_mpc" type="wlw_closed_loop" output="screen"/>
     
-    <node name="corgi_mpc" pkg="corgi_mpc" type="wlw_open_loop" output="screen"/>
+    <!-- <node name="corgi_mpc" pkg="corgi_mpc" type="wlw_open_loop" output="screen"/> -->
 </launch>
