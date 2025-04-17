@@ -16,6 +16,8 @@ set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake
 
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(PCL REQUIRED)
+find_package(X11 REQUIRED)  
 find_package(catkin REQUIRED COMPONENTS 
     roscpp 
     rosconsole 
@@ -27,7 +29,9 @@ find_package(catkin REQUIRED COMPONENTS
     nav_msgs
     sensor_msgs
     cv_bridge
-    image_transport)
+    image_transport
+    pcl_ros
+    pcl_conversions)
 
 catkin_package(CATKIN_DEPENDS 
     roscpp 
@@ -40,12 +44,16 @@ catkin_package(CATKIN_DEPENDS
     nav_msgs
     sensor_msgs
     cv_bridge
-    image_transport)
+    image_transport
+    pcl_ros
+    pcl_conversions)
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${X11_INCLUDE_DIR} 
 )
 
 add_subdirectory(src)
