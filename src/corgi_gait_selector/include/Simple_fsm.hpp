@@ -109,7 +109,7 @@ class GaitSelector {
         void setCmd(std::array<double, 2> send, int index, bool dir);
         void publish(int freq);
         void Send(int freq);
-        void Transfer(int transfer_sec, int wait_sec);
+        void Transfer(int pub, int transfer_sec, int wait_sec);
         void Receive();
         // void changeGait(const std::string& command);
 

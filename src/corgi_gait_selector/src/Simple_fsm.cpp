@@ -89,7 +89,7 @@ void GaitSelector::motor_state_cb(const corgi_msgs::MotorStateStamped state){
 
 
 
-void GaitSelector::Transfer(int transfer_sec, int wait_sec){
+void GaitSelector::Transfer(int pub, int transfer_sec, int wait_sec){
     // next_eta = target and grep current_motor_pose -> devided to step until current_eta
     // transfer
     std::vector<std::vector<double>> theta_steps(4), beta_steps(4);
@@ -102,12 +102,16 @@ void GaitSelector::Transfer(int transfer_sec, int wait_sec){
             eta[i][0] = theta_steps[i][step_i];
             eta[i][1] = beta_steps[i][step_i];
         }       
-        Send(1);
+        if (pub){
+            Send(1);
+        }
     }
 
     // wait
     for (int step_i = 0; step_i < wait_sec*pub_rate; step_i++) {
-        Send(1);
+        if (pub){
+            Send(1);
+        }
     }
 
 }
