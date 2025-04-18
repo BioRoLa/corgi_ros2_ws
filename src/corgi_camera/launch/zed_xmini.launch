@@ -1,0 +1,12 @@
+<launch>
+  <!-- 使用 zedx（對應 ZED X Mini） -->
+  <arg name="camera_model" default="zedxm"/>
+  <arg name="gpu_id"       default="0"    doc="GPU ID"/>
+  <arg name="publish_tf"   default="true" doc="publish camera→odom TF"/>
+
+  <node pkg="zed_wrapper" type="zed_wrapper_node" name="zed_wrapper" output="screen">
+    <param name="camera_model"  value="$(arg camera_model)"/>
+    <param name="gpu_id"        value="$(arg gpu_id)"/>
+    <param name="publish_tf"    value="$(arg publish_tf)"/>
+  </node>
+</launch>
