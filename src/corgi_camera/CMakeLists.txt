@@ -31,7 +31,8 @@ find_package(catkin REQUIRED COMPONENTS
     cv_bridge
     image_transport
     pcl_ros
-    pcl_conversions)
+    pcl_conversions
+    )
 
 catkin_package(CATKIN_DEPENDS 
     roscpp 
@@ -46,7 +47,8 @@ catkin_package(CATKIN_DEPENDS
     cv_bridge
     image_transport
     pcl_ros
-    pcl_conversions)
+    pcl_conversions
+  )
 
 include_directories(
   ${catkin_INCLUDE_DIRS}

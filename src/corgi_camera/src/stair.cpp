@@ -1,108 +1,116 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
-#include <vector>
+#include <pcl/common/centroid.h>
 #include <cmath>
 
-class StairDetector {
+class StairDistance {
 public:
-  StairDetector() {
-    // 訂閱 ZED X Mini 已註冊的點雲
-    sub_ = nh_.subscribe("/zedxm/zed_node/point_cloud/cloud_registered",
-                         1, &StairDetector::cloudCb, this);
-    ROS_INFO("StairDetector initialized, waiting for point cloud...");
+  StairDistance() {
+    // 訂閱 ZED 點雲
+    sub_ = nh_.subscribe(
+      "/zedxm/zed_node/point_cloud/cloud_registered",
+      1, &StairDistance::cloudCb, this);
+
+    // 發佈第一階踏板平面 inliers
+    plane_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(
+      "first_step_plane", 1);
+
+    ROS_INFO("StairDistance node ready, will publish plane to /first_step_plane");
   }
 
 private:
   ros::NodeHandle nh_;
   ros::Subscriber sub_;
+  ros::Publisher plane_pub_;
 
   void cloudCb(const sensor_msgs::PointCloud2ConstPtr& msg) {
-    // 1) 轉成 PCL PointXYZRGB
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    // 1) 轉成 PCL
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(
+      new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::fromROSMsg(*msg, *cloud);
 
-    // 2) 下採樣 (可加速)
+    // 2) 下採樣
     pcl::VoxelGrid<pcl::PointXYZRGB> vg;
     vg.setInputCloud(cloud);
     vg.setLeafSize(0.02f, 0.02f, 0.02f);
     vg.filter(*cloud);
 
-    // 3) 移除地面平面
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr no_floor(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::ModelCoefficients floor_coeff;
-    bool floor_found = removePlane(cloud, no_floor,
-                                   Eigen::Vector3f(0,0,1),
-                                   0.02f,
-                                   floor_coeff);
-    if (!floor_found) {
-      ROS_WARN("Cannot find floor plane");
+    // 3) 去地面
+    pcl::PassThrough<pcl::PointXYZRGB> pass;
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(0.05, 5.0);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr no_ground(
+      new pcl::PointCloud<pcl::PointXYZRGB>);
+    pass.filter(*no_ground);
+    if (no_ground->empty()) {
+      ROS_WARN("No points after ground removal");
       return;
     }
 
-    // 4) 迭代偵測階梯平面
-    std::vector<pcl::ModelCoefficients> stair_planes;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr remaining = no_floor;
-    for (int i = 0; i < 10; ++i) {
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr next_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-      pcl::ModelCoefficients step_coeff;
-      bool found = removePlane(remaining, next_cloud,
-                               Eigen::Vector3f(0,0,1),
-                               0.05f,
-                               step_coeff);
-      if (!found) break;
-      stair_planes.push_back(step_coeff);
-      remaining.swap(next_cloud);
-    }
-
-    // 5) 印出每階梯的垂直高度
-    ROS_INFO("Detected %lu stair steps:", stair_planes.size());
-    for (size_t i = 0; i < stair_planes.size(); ++i) {
-      auto& c = stair_planes[i];
-      // 平面方程 ax + by + cz + d = 0, 法線是 (a,b,c)
-      float a = c.values[0], b = c.values[1], c_z = c.values[2], d = c.values[3];
-      float norm = std::sqrt(a*a + b*b + c_z*c_z);
-      float height = std::fabs(d) / norm;
-      ROS_INFO("  Step %zu → height: %.3f m", i+1, height);
-    }
-  }
-
-  // helper: RANSAC 平面偵測 + 提取以外的點
-  bool removePlane(
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr in,
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr out,
-      const Eigen::Vector3f& axis,
-      float dist_thresh,
-      pcl::ModelCoefficients& coeff_out)
-  {
+    // 4) RANSAC 偵測第一個水平面
     pcl::SACSegmentation<pcl::PointXYZRGB> seg;
     seg.setOptimizeCoefficients(true);
-    seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
-    seg.setAxis(axis);
-    seg.setEpsAngle(10.0f * M_PI / 180.0f);
-    seg.setDistanceThreshold(dist_thresh);
-    seg.setInputCloud(in);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setDistanceThreshold(0.02);
+    seg.setInputCloud(no_ground);
 
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    seg.segment(*inliers, coeff_out);
-    if (inliers->indices.empty()) return false;
+    pcl::ModelCoefficients coeff;
+    seg.segment(*inliers, coeff);
+    if (inliers->indices.empty()) {
+      ROS_WARN("No plane found");
+      return;
+    }
 
+    // 5) 確認是水平面
+    float a = coeff.values[0],
+          b = coeff.values[1],
+          c = coeff.values[2];
+    float norm = std::sqrt(a*a + b*b + c*c);
+    float nz = c / norm;
+    if (std::fabs(nz) < 0.9f) {
+      ROS_WARN("Plane not horizontal (nz=%.2f)", nz);
+      return;
+    }
+
+    // 6) 擷取這個平面 inliers
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane_cloud(
+      new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-    extract.setInputCloud(in);
+    extract.setInputCloud(no_ground);
     extract.setIndices(inliers);
-    extract.setNegative(true);
-    extract.filter(*out);
-    return true;
+    extract.setNegative(false);
+    extract.filter(*plane_cloud);
+
+    // 7) 發佈 plane_cloud 到 first_step_plane
+    sensor_msgs::PointCloud2 out_msg;
+    pcl::toROSMsg(*plane_cloud, out_msg);
+    out_msg.header = msg->header;
+    plane_pub_.publish(out_msg);
+
+    // 8) 計算 plane inliers 質心，算出水平距離
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*plane_cloud, centroid);
+    float cx = centroid[0], cy = centroid[1], cz = centroid[2];
+    float horizontal_dist = std::sqrt(cx*cx + cy*cy);
+
+    ROS_INFO("First step centroid (%.3f, %.3f, %.3f) → horizontal dist: %.3f m",
+             cx, cy, cz, horizontal_dist);
   }
 };
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "stair_detector");
-  StairDetector sd;
+  ros::init(argc, argv, "stair_distance");
+  StairDistance node;
   ros::spin();
   return 0;
 }
