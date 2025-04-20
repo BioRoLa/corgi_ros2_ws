@@ -8,6 +8,7 @@ class WheeledToLegged : public IGaitTransform, public Legged
         WheeledToLegged(ros::NodeHandle& nh) : Legged(nh){}
         
         void transform(double shift, int wait_step, bool transfer_state, double expect_height) override {
+            // std::cout << "Enter" << std::endl;
             for (int i=0; i<4; i++) {
                 curr_theta[i] = eta[i][0];
                 curr_beta[i] = -eta[i][1];

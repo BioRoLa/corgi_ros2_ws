@@ -11,18 +11,20 @@ class KeybordControl : public Wheeled, public Hybrid, public Legged, public Tran
         {
             gaitSelector.currentGait = defaultGait;
             gaitSelector.newGait     = defaultGait;
-            if (defaultGait == Gait::WHEELED) {
-                Roll(1,1,1,0,4095,0);
-            } else if (defaultGait == Gait::HYBRID) {
-                Initialize(2,1,1,1,5,2,-0.03);
+            // if not wheeled do the transfer
+            if (defaultGait != Gait::WHEELED) {
+                std::cout << "not Wheeling..." << std::endl;
+                if (defaultGait == Gait::HYBRID) Initialize(2, 1, 1, 1, 5, 2, -0.03);
             }
-
+            else{
+                std::cout << "Wheeling..." << std::endl;
+                Roll(1,1,1,0,4095,0);
+            }
+            // Initialize the keyboard input thread
             input_thread = std::thread(&KeybordControl::keyboardInputThread, this);
-            exec_thread  = std::thread(&KeybordControl::Keep, this);
         }
         ~KeybordControl() {
             if (input_thread.joinable()) input_thread.join();
-            if (exec_thread .joinable()) exec_thread .join();
         }
 
         void keyboardInputThread() {
@@ -65,49 +67,34 @@ class KeybordControl : public Wheeled, public Hybrid, public Legged, public Tran
             }
         }
         
+        
     private:
-        GaitSelector& gaitSelector; 
+        GaitSelector& gaitSelector;   // hold a reference
         std::mutex input_mutex;
         std::thread input_thread;
-        std::thread exec_thread;
-        std::atomic<bool> paused{false};
+        bool paused = false;
         Gait prevGait = Gait::WHEELED;
 
-        void Keep() {
-            ros::Rate rate(gaitSelector.pub_rate);
-            while (ros::ok()) {
-                bool is_paused = paused.load();
-                Gait current = gaitSelector.currentGait;
-    
-                if (!is_paused) {
-                    switch (current) {
-                        case Gait::WHEELED:   Roll(1,1,1,0,4095,0);   break;
-                        case Gait::LEGGED:    next_Step();             break;
-                        case Gait::HYBRID:    Step(1,1,-0.03);         break;
-                        case Gait::TRANSFORM:  break;
-                        default: break;
-                    }
-                } else {
-                    std::cout<<"Paused\n";
-                }
-                rate.sleep();
-            }
-        }
-
+        
         void changeGait(const std::string& command) {
             // Set the newGait to the current value by default.
             gaitSelector.newGait = gaitSelector.currentGait;
         
+            // Gait-change commands: you use exact string matches "1", "2", "3".
             if (command == "1") {
+                // Gait from = gaitSelector.currentGait;
                 gaitSelector.newGait = Gait::WHEELED;
             } else if (command == "2") {
+                // Gait from = gaitSelector.currentGait;
                 gaitSelector.newGait = Gait::LEGGED;
             } else if (command == "3") {
+                // Gait from = gaitSelector.currentGait;
                 gaitSelector.newGait = Gait::HYBRID;
             }
-
             // Parameter change commands:
             else if (command[0] == 'v') {
+                // Change velocity command: e.g., "v1.5"
+                // Extract the substring after the command letter.
                 std::string velocity_str = command.substr(1);
                 try {
                     // see the gait and use the function od the wheel mode just set
@@ -146,8 +133,7 @@ class KeybordControl : public Wheeled, public Hybrid, public Legged, public Tran
                 }
                 return;
             } else if (command[0] == 'j') {
-                
-                // Change lift height command:
+                // Change lift height command: e.g., "j0.2"
                 std::string stepHeight_str = command.substr(1);
                 try {
                     // see the gait and use the function od the wheel mode just set
@@ -265,8 +251,10 @@ int main(int argc, char **argv){
 
     std::string gait_str;
     nh.param<std::string>("default_gait", gait_str, "wheeled");
-    Gait defaultGait = (gait_str=="legged" ? Gait::LEGGED :
-        (gait_str=="hybrid"? Gait::HYBRID: Gait::WHEELED));
+    // nh.param<std::string>("default_gait", gait_str, "hybrid");
+    Gait defaultGait = Gait::WHEELED;
+    if (gait_str == "legged")  defaultGait = Gait::LEGGED;
+    else if (gait_str == "hybrid") defaultGait = Gait::HYBRID;
 
     bool sim = true;
     double CoM_bias = 0.0;
@@ -274,12 +262,32 @@ int main(int argc, char **argv){
     LegModel leg_model(sim);
     GaitSelector gaitSelector(nh, sim, CoM_bias, pub_rate);
     
+    
     // Start the keyboard input thread
-    KeybordControl keybordControl(nh, gaitSelector, defaultGait);   
+    KeybordControl keybordControl(nh, gaitSelector, defaultGait);
+    // Create a thread for keyboard input
+    std::thread input_thread(&KeybordControl::keyboardInputThread, &keybordControl);    
 
     ros::waitForShutdown();
+
     return 0;
 }
 
+// add that if no keyboard input maintain the currrent gait to move and at the sametime keeping reading the input
+// if (!paused) {
+//     std::cout << "Keep..." << std::endl;
+//     switch (gaitSelector.currentGait) {
+//         case Gait::WHEELED: Roll(1,1,1,0,4095,0); break;
+//         case Gait::LEGGED:  next_Step();       break;
+//         case Gait::HYBRID:  Step(1,1,-0.03);   break;
+//         case Gait::TRANSFORM: 
+//             std::cout << "TRANSFORM..." << std::endl;
+//             break;
+//         default: break;
+//     }
+// }
+// else {
+//     std::cout << "Pause..." << std::endl;
+// }
 
 
