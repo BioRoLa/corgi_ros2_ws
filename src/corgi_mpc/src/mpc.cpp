@@ -71,8 +71,13 @@ Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const 
     d(5) = -dt * gravity;
 
     Eigen::VectorXd d_qp = Eigen::VectorXd::Zero(N * n_x);
-    for (int i = 0; i < N; i++) {
-        d_qp.segment(i * n_x, n_x) = d;
+    Eigen::MatrixXd A_power = Eigen::MatrixXd::Identity(n_x, n_x);
+    Eigen::VectorXd cumulative_d = Eigen::VectorXd::Zero(n_x);
+
+    for (int i = 0; i < N; ++i) {
+        cumulative_d += A_power * d;
+        d_qp.segment(i * n_x, n_x) = cumulative_d;
+        A_power = A_power * A;
     }
 
     // Construct the block-diagonal cost matrices.

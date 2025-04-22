@@ -295,11 +295,12 @@ int main(int argc, char **argv) {
                 }
 
                 if (phi_l > phi_prev_modules[i](1, 0)){
-                    motor_cmd_modules[i]->torque_l -= friction[2*i];
+                    motor_cmd_modules[i]->torque_l -= friction[2*i+1];
                 }
                 else {
-                    motor_cmd_modules[i]->torque_l += friction[2*i];
+                    motor_cmd_modules[i]->torque_l += friction[2*i+1];
                 }
+
                 phi_prev_modules[i] << phi_r, phi_l;
             }
         }

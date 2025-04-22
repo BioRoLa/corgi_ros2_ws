@@ -184,13 +184,21 @@ int main(int argc, char **argv) {
     double phi_r = 0;
     double phi_l = 0;
     
+    // AR, AL, BR, BL, CR, CL, DR, DL
+    // std::vector<double> kt = {2.018, 2.126, 2.141, 2.176, 1.927, 2.072, 2.098, 2.143};
     std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
 
     while (ros::ok()) {
         ros::spinOnce();
 
-        // dynamic friction compensation
+        body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
+        quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
+
         if (!sim){
+            pitch *= -1;
+            yaw *= -1;
+
+            // dynamic friction compensation
             for (int i=0; i<4; i++) {
                 phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
                 phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
@@ -203,20 +211,14 @@ int main(int argc, char **argv) {
                 }
 
                 if (phi_l > phi_prev_modules[i](1, 0)){
-                    motor_state_modules[i]->torque_l += friction[2*i];
+                    motor_state_modules[i]->torque_l += friction[2*i+1];
                 }
                 else {
-                    motor_state_modules[i]->torque_l -= friction[2*i];
+                    motor_state_modules[i]->torque_l -= friction[2*i+1];
                 }
+
                 phi_prev_modules[i] << phi_r, phi_l;
             }
-        }
-
-        body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
-        quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
-        if (!sim) {
-            pitch *= -1;
-            yaw *= -1;
         }
 
         for (int i=0; i<4; i++){

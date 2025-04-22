@@ -46,10 +46,11 @@ int main(int argc, char **argv) {
     }
 
     std::array<double, 2> eta;
-    double ds = 0;
+    double ds = 0.0;
+    double mg = 195.0;
     
     for (int i=0; i<2000; i++){
-        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {-0.05/2000.0, 0.15/2000.0});
+        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {-0.08/2000.0, 0.15/2000.0});
         
         imp_cmd_modules[0]->theta = eta[0];
         imp_cmd_modules[1]->theta = eta[0];
@@ -63,9 +64,9 @@ int main(int argc, char **argv) {
         
         legmodel.contact_map(eta[0], eta[1]);
         double s_front = 0.222+legmodel.contact_p[0];
-        double f_hind = -190.0/2.0*(s_front/0.444);
-        imp_cmd_modules[0]->Fy = -190.0/2.0 - f_hind;
-        imp_cmd_modules[1]->Fy = -190.0/2.0 - f_hind;
+        double f_hind = -mg/2.0*(s_front/0.444);
+        imp_cmd_modules[0]->Fy = -mg/2.0 - f_hind;
+        imp_cmd_modules[1]->Fy = -mg/2.0 - f_hind;
         imp_cmd_modules[2]->Fy = f_hind;
         imp_cmd_modules[3]->Fy = f_hind;
 
@@ -86,7 +87,7 @@ int main(int argc, char **argv) {
 
                 }
                 else if (loop_count < 22000) {
-                    ds = 0.05*M_PI/2500.0*sin((loop_count-2000)*M_PI/2500.0);
+                    ds = 0.08*M_PI/2000.0*sin((loop_count-2000)*M_PI/2000.0);
                     eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {ds, 0.0});
 
                     imp_cmd_modules[0]->theta = eta[0];
@@ -101,17 +102,17 @@ int main(int argc, char **argv) {
 
                     legmodel.contact_map(eta[0], eta[1]);
                     double s_front = 0.222+legmodel.contact_p[0];
-                    double f_hind = -190.0/2.0*(s_front/0.444);
-                    imp_cmd_modules[0]->Fy = -190.0/2.0 - f_hind;
-                    imp_cmd_modules[1]->Fy = -190.0/2.0 - f_hind;
+                    double f_hind = -mg/2.0*(s_front/0.444);
+                    imp_cmd_modules[0]->Fy = -mg/2.0 - f_hind;
+                    imp_cmd_modules[1]->Fy = -mg/2.0 - f_hind;
                     imp_cmd_modules[2]->Fy = f_hind;
                     imp_cmd_modules[3]->Fy = f_hind;
 
                     if (loop_count > 12000) {
-                        imp_cmd_modules[0]->Fy += 10 * sin((loop_count-2000)/625.0*M_PI);
-                        imp_cmd_modules[1]->Fy -= 10 * sin((loop_count-2000)/625.0*M_PI);
-                        imp_cmd_modules[2]->Fy += 10 * sin((loop_count-2000)/625.0*M_PI);
-                        imp_cmd_modules[3]->Fy -= 10 * sin((loop_count-2000)/625.0*M_PI);
+                        imp_cmd_modules[0]->Fy += 10 * sin((loop_count-2000)/1000.0*M_PI);
+                        imp_cmd_modules[1]->Fy -= 10 * sin((loop_count-2000)/1000.0*M_PI);
+                        imp_cmd_modules[2]->Fy += 10 * sin((loop_count-2000)/1000.0*M_PI);
+                        imp_cmd_modules[3]->Fy -= 10 * sin((loop_count-2000)/1000.0*M_PI);
                     }
                 }
                 else {

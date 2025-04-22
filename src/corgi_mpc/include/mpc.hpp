@@ -50,7 +50,7 @@ class ModelPredictiveController {
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const int m = 19;
+        const int m = 19.5;
         const double gravity = 9.81;
 
         const int N = 10;
@@ -82,10 +82,10 @@ class ModelPredictiveController {
         Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(n_x, n_x);
         Eigen::MatrixXd R = Eigen::MatrixXd::Identity(n_u, n_u);
 
-        int fx_upper_bound = 20;
-        int fx_lower_bound = -20;
+        int fx_upper_bound = 30;
+        int fx_lower_bound = -30;
         int fz_upper_bound = 200;
-        int fz_lower_bound = -50;
+        int fz_lower_bound = -100;
 
         double friction_coef = 1;
 };
