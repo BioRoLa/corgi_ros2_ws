@@ -44,18 +44,18 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     Eigen::MatrixXd pos_fb(2, 1);
 
     legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
-    if      (target_rim == 1 && (target_alpha > -M_PI/2.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
+    if      (target_rim == 1 && (target_alpha > -M_PI*2/3.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
     else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
     else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
     else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
-    else if (target_rim == 5 && (target_alpha < M_PI/2.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
+    else if (target_rim == 5 && (target_alpha < M_PI*2/3.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
-        motor_cmd_->kp_r = 90;
-        motor_cmd_->kp_l = 90;
-        motor_cmd_->kd_r = 1.75;
-        motor_cmd_->kd_l = 1.75;
+        motor_cmd_->kp_r = 50;
+        motor_cmd_->kp_l = 50;
+        motor_cmd_->kd_r = 1;
+        motor_cmd_->kd_l = 1;
         motor_cmd_->torque_r = 0;
         motor_cmd_->torque_l = 0;
         return;
@@ -137,11 +137,11 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * K(0, 0) + J_fb(1, 0) * J_fb(1, 1) * K(1, 1)) * phi_err(0, 0);
 
     // kd compensate
-    kd_cmd << J_fb(0, 0) * J_fb(0, 0) * B(0, 0) + J_fb(0, 1) * J_fb(1, 0) * B(1, 1),
-              J_fb(0, 1) * J_fb(1, 0) * B(0, 0) + J_fb(1, 1) * J_fb(1, 1) * B(1, 1);
+    kd_cmd << J_fb(0, 0) * J_fb(0, 0) * B(0, 0) + J_fb(1, 0) * J_fb(1, 0) * B(1, 1),
+              J_fb(0, 1) * J_fb(0, 1) * B(0, 0) + J_fb(1, 1) * J_fb(1, 1) * B(1, 1);
 
-    trq_cmd(0, 0) += (J_fb(0, 0) * J_fb(1, 0) * B(0, 0) + J_fb(1, 0) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(1, 0));
-    trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * B(0, 0) + J_fb(0, 1) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(0, 0));
+    trq_cmd(0, 0) += (J_fb(0, 0) * J_fb(0, 1) * B(0, 0) + J_fb(1, 0) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(1, 0));
+    trq_cmd(1, 0) += (J_fb(0, 0) * J_fb(0, 1) * B(0, 0) + J_fb(1, 0) * J_fb(1, 1) * B(1, 1)) * (-phi_vel(0, 0));
     
     // torque version impedance control
     // trq_cmd << J_fb.transpose() * (force_des + M*(-acc_fb) + B*(-vel_fb) + K*pos_err);
