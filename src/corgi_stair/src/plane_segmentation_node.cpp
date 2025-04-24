@@ -49,7 +49,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     for (size_t i = 0; i < regions.size(); ++i)
     {
         const pcl::PlanarRegion<PointT>& region = regions[i];
-        pcl::PointCloud<PointT> contour = region.getContour();
+        pcl::PointCloud<PointT> contour;
+        contour.points = region.getContour();
+        contour.width = contour.points.size();
+        contour.height = 1;
+        contour.is_dense = true;
 
         *all_planes += contour; // 合併所有輪廓到一起
     }
