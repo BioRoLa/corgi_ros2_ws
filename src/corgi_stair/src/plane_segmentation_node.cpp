@@ -5,9 +5,10 @@
 #include <pcl/point_cloud.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/segmentation/organized_multi_plane_segmentation.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl/segmentation/planar_region.h>
-#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/common/common.h>
+#include <pcl/common/io.h>
 
 ros::Publisher pub;
 
@@ -33,7 +34,6 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ne.compute(*normals);
 
     // Step 3: 使用多平面分割演算法
-    std::vector<pcl::PlanarRegion<pcl::PointXYZRGB>> regions;
     pcl::OrganizedMultiPlaneSegmentation<pcl::PointXYZRGB, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(1000);
     mps.setAngularThreshold(0.017453 * 2.0); // 2 degrees
@@ -41,29 +41,35 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
 
-    std::vector<pcl::ModelCoefficients> model_coefficients;
-    std::vector<pcl::PointIndices> inlier_indices;
-    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> boundary_clouds;
+    std::vector<pcl::PlanarRegion<pcl::PointXYZRGB>> regions;
+    mps.segmentAndRefine(regions);
 
-    mps.segmentAndRefine(regions, model_coefficients, inlier_indices, boundary_clouds);
-
-    // 轉換 inliers 為彩色點雲集合
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-    for (const auto& indices : inlier_indices)
-    {
-        for (int idx : indices.indices)
-        {
-            output->points.push_back(cloud->points[idx]);
-        }
-    }
-
-
-    // Step 4: 將平面合併後輸出
+    // Step 4: 將平面合併後輸出，每個平面用不同顏色標記
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
     for (size_t i = 0; i < regions.size(); ++i)
     {
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr region_cloud = regions[i].getContour();
-        *output += *region_cloud;
+        pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+        inliers->indices = regions[i].getIndices();
+
+        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);
+        extract.setInputCloud(cloud);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+        extract.filter(*plane);
+
+        // 為每個平面指定不同的顏色
+        uint8_t r = static_cast<uint8_t>(rand() % 256);
+        uint8_t g = static_cast<uint8_t>(rand() % 256);
+        uint8_t b = static_cast<uint8_t>(rand() % 256);
+        for (auto& point : plane->points)
+        {
+            point.r = r;
+            point.g = g;
+            point.b = b;
+        }
+
+        *output += *plane;
     }
 
     sensor_msgs::PointCloud2 out_msg;
@@ -74,7 +80,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "multi_plane_segmentation_rgbd");
+    ros::init(argc, argv, "multi_plane_segmentation_node");
     ros::NodeHandle nh;
 
     pub = nh.advertise<sensor_msgs::PointCloud2>("segmented_planes", 1);
