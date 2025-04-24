@@ -54,7 +54,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     
     // 轉回 ROS 訊息
     sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*cloud_plane, output);
+    pcl::toROSMsg(*working_cloud, output);
     output.header = input->header;
 
     pub.publish(output);
