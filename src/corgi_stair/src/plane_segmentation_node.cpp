@@ -37,7 +37,7 @@ void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
   mps.setInputNormals(normals);
   mps.setInputCloud(cloud);
 
-  std::vector<pcl::PlanarRegion<pcl::PointXYZRGB>> regions;
+  std::vector<pcl::PlanarRegion<pcl::PointXYZRGB>, Eigen::aligned_allocator<pcl::PlanarRegion<pcl::PointXYZRGB>>> regions;
   mps.segment(regions);
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr all_planes(new pcl::PointCloud<pcl::PointXYZRGB>);
