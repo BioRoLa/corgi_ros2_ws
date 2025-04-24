@@ -2,73 +2,71 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
 #include <pcl/filters/extract_indices.h>
-#include <pcl/segmentation/organized_multi_plane_segmentation.h>
-#include <pcl/features/normal_3d.h>
 #include <pcl/features/integral_image_normal.h>
-#include <pcl/ModelCoefficients.h>
+#include <pcl/segmentation/organized_multi_plane_segmentation.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/passthrough.h>
 
-ros::Publisher plane_pub;
+typedef pcl::PointXYZRGB PointT;
 
-void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
+ros::Publisher pub;
+
+void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 {
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::fromROSMsg(*input, *cloud);
+    pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+    pcl::fromROSMsg(*input, *cloud);
 
-  if (!cloud->isOrganized()) {
-    ROS_WARN("Point cloud is not organized.");
-    return;
-  }
+    if (!cloud->isOrganized())
+    {
+        ROS_WARN("Point cloud is not organized. Skipping frame.");
+        return;
+    }
 
-  // 計算 normal
-  pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-  pcl::IntegralImageNormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
-  ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
-  ne.setMaxDepthChangeFactor(0.02f);
-  ne.setNormalSmoothingSize(10.0f);
-  ne.setInputCloud(cloud);
-  ne.compute(*normals);
+    // Estimate normals
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
+    ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    ne.setMaxDepthChangeFactor(0.02f);
+    ne.setNormalSmoothingSize(10.0f);
+    ne.setInputCloud(cloud);
+    ne.compute(*normals);
 
-  // 分割平面
-  pcl::OrganizedMultiPlaneSegmentation<pcl::PointXYZRGB, pcl::Normal, pcl::Label> mps;
-  mps.setMinInliers(500);
-  mps.setAngularThreshold(0.017453 * 2.0); // 2 degrees
-  mps.setDistanceThreshold(0.02); // 2cm
-  mps.setInputNormals(normals);
-  mps.setInputCloud(cloud);
+    // Plane segmentation
+    pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
+    mps.setMinInliers(1000);
+    mps.setAngularThreshold(0.017453 * 2.0); // 2 degrees in radians
+    mps.setDistanceThreshold(0.02);          // 2cm
+    mps.setInputCloud(cloud);
+    mps.setInputNormals(normals);
 
-  std::vector<pcl::PlanarRegion<pcl::PointXYZRGB>, Eigen::aligned_allocator<pcl::PlanarRegion<pcl::PointXYZRGB>>> regions;
-  mps.segment(regions);
+    std::vector<pcl::PlanarRegion<PointT>, Eigen::aligned_allocator<pcl::PlanarRegion<PointT>>> regions;
+    mps.segment(regions); // 原始版本僅需 regions，無需 refine
 
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr all_planes(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<PointT>::Ptr all_planes(new pcl::PointCloud<PointT>);
 
-  for (const auto& region : regions) {
-    // 获取该区域的轮廓点云
-    pcl::PointCloud<pcl::PointXYZRGB> contour = region.getContour();
-    
-    // 将轮廓点云合并到 all_planes 中
-    all_planes->points.insert(all_planes->points.end(), contour.points.begin(), contour.points.end());
-  }
-  
-  all_planes->width = all_planes->points.size();
-  all_planes->height = 1;
-  all_planes->is_dense = false;
-  
+    for (size_t i = 0; i < regions.size(); ++i)
+    {
+        const pcl::PlanarRegion<PointT>& region = regions[i];
+        pcl::PointCloud<PointT> contour = region.getContour();
 
-  sensor_msgs::PointCloud2 output;
-  pcl::toROSMsg(*all_planes, output);
-  output.header = input->header;
-  plane_pub.publish(output);
+        *all_planes += contour; // 合併所有輪廓到一起
+    }
+
+    // 發布結果
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*all_planes, output);
+    output.header = input->header;
+    pub.publish(output);
 }
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "plane_segmentation_node");
-  ros::NodeHandle nh;
-
-  ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered/PointCloud2", 1, pointCloudCallback);
-  plane_pub = nh.advertise<sensor_msgs::PointCloud2>("segmented_planes", 1);
-
-  ros::spin();
-  return 0;
+    ros::init(argc, argv, "multi_plane_segmentation_node");
+    ros::NodeHandle nh;
+    ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered/PointCloud2", 1, cloudCallback);
+    pub = nh.advertise<sensor_msgs::PointCloud2>("multi_plane_segmentation", 1);
+    ros::spin();
+    return 0;
 }
