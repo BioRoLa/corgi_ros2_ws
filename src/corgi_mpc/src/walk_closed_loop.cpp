@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    // initialize gait
+    // Initialize gait
     double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};
     WalkGait walk_gait(sim, 0, mpc.freq);
     walk_gait.initialize(init_eta);
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
     walk_gait.set_step_height(step_height);
 
 
-    // initialize impedance command
+    // Initialize impedance command
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
@@ -123,18 +123,18 @@ int main(int argc, char **argv) {
 
     ROS_INFO("Wait For Force Control Node ...\n");
     
-    // wait for force control node
-    for (int i=0; i<300; i++) {
-        rate.sleep();
+    if (!sim) {
+        for (int i=0; i<int(3*mpc.freq); i++) {
+            rate.sleep();
+        }
     }
 
     ROS_INFO("Transform Starts\n");
 
-    // transform
-    for (int i=0; i<300; i++) {
+    for (int i=0; i<int(3*mpc.freq); i++) {
         for (int j=0; j<4; j++) {
-            imp_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/300.0;
-            imp_cmd_modules[j]->beta += init_eta[2*j+1]/300.0;
+            imp_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/(3*mpc.freq);
+            imp_cmd_modules[j]->beta += init_eta[2*j+1]/(3*mpc.freq);
         }
         imp_cmd.header.seq = -1;
         imp_cmd_pub.publish(imp_cmd);
@@ -144,20 +144,22 @@ int main(int argc, char **argv) {
     ROS_INFO("Transform Finished\n");
 
     // stay
-    for (int i=0; i<100; i++) {
+    for (int i=0; i<int(2*mpc.freq); i++) {
         imp_cmd.header.seq = -1;
         imp_cmd_pub.publish(imp_cmd);
         rate.sleep();
     }
+    
 
     while (ros::ok()) {
         ros::spinOnce();
         if (trigger){
             ROS_INFO("Wait For Odometry Node Initializing ...\n");
 
-            // wait for odometry node
-            for (int i=0; i<500; i++) {
-                rate.sleep();
+            if (!sim) {
+                for (int i=0; i<int(3*mpc.freq); i++) {
+                    rate.sleep();
+                }
             }
             
             for (auto& cmd : imp_cmd_modules){
@@ -174,12 +176,12 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 // update target vel and pos
-                if (loop_count < 300) {
-                    mpc.target_vel_x += velocity/300.0;
+                if (loop_count < int(3*mpc.freq)) {
+                    mpc.target_vel_x += velocity/(3*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                else if (loop_count > mpc.target_loop-300 && loop_count < mpc.target_loop) {
-                    mpc.target_vel_x -= velocity/300.0;
+                else if (loop_count > mpc.target_loop-int(3*mpc.freq) && loop_count < mpc.target_loop) {
+                    mpc.target_vel_x -= velocity/(3*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
 
@@ -224,7 +226,7 @@ int main(int argc, char **argv) {
                 
                 mpc.robot_ang_vel[0] = imu.angular_velocity.x;
                 mpc.robot_ang_vel[1] = imu.angular_velocity.y;
-                mpc.robot_ang_vel[0] = imu.angular_velocity.z;
+                mpc.robot_ang_vel[2] = imu.angular_velocity.z;
 
                 quaternion_to_euler(mpc.robot_ang, mpc.roll, mpc.pitch, mpc.yaw);
                 if (!sim) {
@@ -233,17 +235,19 @@ int main(int argc, char **argv) {
                 }
 
                 Eigen::VectorXd x(mpc.n_x);
-                x << mpc.robot_pos[0],     mpc.robot_pos[1],     mpc.robot_pos[2],
+                x << mpc.roll,             mpc.pitch,            mpc.yaw,
+                     mpc.robot_pos[0],     mpc.robot_pos[1],     mpc.robot_pos[2],
+                     mpc.robot_ang_vel[0], mpc.robot_ang_vel[1], mpc.robot_ang_vel[2],
                      mpc.robot_vel[0],     mpc.robot_vel[1],     mpc.robot_vel[2],
-                     mpc.roll,             mpc.pitch,            mpc.yaw,
-                     mpc.robot_ang_vel[0], mpc.robot_ang_vel[1], mpc.robot_ang_vel[2];
+                     -mpc.gravity;
 
-                Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(mpc.N * mpc.n_x);
-                for (int i = 0; i < mpc.N; ++i) {
-                    x_ref.segment(i * mpc.n_x, mpc.n_x) << mpc.target_pos_x, 0, mpc.target_pos_z,
-                                                           mpc.target_vel_x, 0, mpc.target_vel_z,
+                Eigen::VectorXd x_ref = Eigen::VectorXd::Zero((mpc.N-1) * mpc.n_x);
+                for (int i = 0; i < mpc.N-1; ++i) {
+                    x_ref.segment(i * mpc.n_x, mpc.n_x) << 0,                0,                0,
+                                                           mpc.target_pos_x, 0, mpc.target_pos_z,
                                                            0,                0,                0,
-                                                           0,                0,                0;
+                                                           mpc.target_vel_x, 0, mpc.target_vel_z,
+                                                           -mpc.gravity;
                 }
 
                 // model predictive control
@@ -266,9 +270,11 @@ int main(int argc, char **argv) {
                 double force_D[3] = {force(9), force(10), force(11)};
 
                 Eigen::Matrix3d R_T = mpc.robot_ang.toRotationMatrix().transpose();
-                R_T(1, 2) *= -1;
-                R_T(2, 1) *= -1;
-
+                if (!sim) {
+                    R_T(1, 2) *= -1;
+                    R_T(2, 1) *= -1;
+                }
+                
                 convert_force_to_local(force_A, R_T);
                 convert_force_to_local(force_B, R_T);
                 convert_force_to_local(force_C, R_T);
@@ -288,18 +294,18 @@ int main(int argc, char **argv) {
                 imp_cmd_pub.publish(imp_cmd);
 
                 std::cout << std::fixed << std::setprecision(3);
-                std::cout << "Ref Pos = [" << x_ref[0] << ", " << x_ref[1] << ", " << x_ref[2] << "]" << std::endl << std::endl;
+                std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;
                 std::cout << "Odom Pos = [" << mpc.robot_pos[0] << ", " << mpc.robot_pos[1] << ", " << mpc.robot_pos[2] << "]" << std::endl;
                 std::cout << "Odom Vel = [" << mpc.robot_vel[0] << ", " << mpc.robot_vel[1] << ", " << mpc.robot_vel[2] << "]" << std::endl;
                 std::cout << "Odom Ang (deg) = [" << mpc.roll/M_PI*180 << ", " << mpc.pitch/M_PI*180 << ", " << mpc.yaw/M_PI*180 << "]" << std::endl << std::endl;
 
-                std::cout << "Force A: [" << -force_A[0] << ", " << force_A[2] << "]" << std::endl;
+                std::cout << "Force A: [" << force_A[0] << ", " << force_A[2] << "]" << std::endl;
                 std::cout << "State A: [" << force_state_modules[0]->Fx << ", " << force_state_modules[0]->Fy << "]" << std::endl << std::endl;
-                std::cout << "Force B: [" << -force_B[0] << ", " << force_B[2] << "]" << std::endl;
+                std::cout << "Force B: [" << force_B[0] << ", " << force_B[2] << "]" << std::endl;
                 std::cout << "State B: [" << force_state_modules[1]->Fx << ", " << force_state_modules[1]->Fy << "]" << std::endl << std::endl;
-                std::cout << "Force C: [" << -force_C[0] << ", " << force_C[2] << "]" << std::endl;
+                std::cout << "Force C: [" << force_C[0] << ", " << force_C[2] << "]" << std::endl;
                 std::cout << "State C: [" << force_state_modules[2]->Fx << ", " << force_state_modules[2]->Fy << "]" << std::endl << std::endl;
-                std::cout << "Force D: [" << -force_D[0] << ", " << force_D[2] << "]" << std::endl;
+                std::cout << "Force D: [" << force_D[0] << ", " << force_D[2] << "]" << std::endl;
                 std::cout << "State D: [" << force_state_modules[3]->Fx << ", " << force_state_modules[3]->Fy << "]" << std::endl << std::endl;
 
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
+#include <unsupported/Eigen/MatrixFunctions>
 #include "ros/ros.h"
 
 #include "corgi_msgs/SimDataStamped.h"
@@ -32,19 +33,11 @@ class ModelPredictiveController {
         double Bx_swing = 90;
         double By_swing = 90;
         double Bx_stance = 40;
-        double By_stance = 30;
+        double By_stance = 10;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 800;
         double Ky_stance = 200;
-        // double Bx_swing = 30;
-        // double By_swing = 30;
-        // double Bx_stance = 30;
-        // double By_stance = 30;
-        // double Kx_swing = 1000;
-        // double Ky_swing = 1000;
-        // double Kx_stance = 1000;
-        // double Ky_stance = 1000;
 
 
         const int freq = 100;
@@ -54,7 +47,7 @@ class ModelPredictiveController {
         const double gravity = 9.81;
 
         const int N = 10;
-        const int n_x = 12;
+        const int n_x = 13;
         const int n_u = 12;
 
         double roll = 0;
@@ -77,17 +70,23 @@ class ModelPredictiveController {
         Eigen::VectorXd step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref, const bool *selection_matrix, std::vector<corgi_msgs::ForceState*> force_state_modules);
 
     private:
-        Eigen::MatrixXd A = Eigen::MatrixXd::Zero(n_x, n_x);
-        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(n_x, n_u);
+        Eigen::MatrixXd Ac = Eigen::MatrixXd::Zero(n_x, n_x);
+        Eigen::MatrixXd Bc = Eigen::MatrixXd::Zero(n_x, n_u);
+        Eigen::MatrixXd Ad = Eigen::MatrixXd::Zero(n_x, n_x);
+        Eigen::MatrixXd Bd = Eigen::MatrixXd::Zero(n_x, n_u);
         Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(n_x, n_x);
         Eigen::MatrixXd R = Eigen::MatrixXd::Identity(n_u, n_u);
 
-        int fx_upper_bound = 30;
-        int fx_lower_bound = -30;
+        int fx_upper_bound = 0;
+        int fx_lower_bound = -0;
         int fz_upper_bound = 200;
         int fz_lower_bound = -100;
 
         double friction_coef = 1;
+
+        double l = 0.62;
+        double w = 0.33;
+        double h = 0.17;
 };
 
 #endif

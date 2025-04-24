@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     walk_gait.set_step_height(step_height);
 
 
-    // initialize impedance command
+    // initialize motor command
     for (auto& cmd : motor_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
@@ -60,8 +60,10 @@ int main(int argc, char **argv) {
 
     ROS_INFO("Wait ...\n");
     
-    for (int i=0; i<3000; i++) {
-        rate.sleep();
+    if (!sim) {
+        for (int i=0; i<3000; i++) {
+            rate.sleep();
+        }
     }
 
     ROS_INFO("Transform Starts\n");
@@ -80,7 +82,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Transform Finished\n");
 
     // stay
-    for (int i=0; i<1000; i++) {
+    for (int i=0; i<2000; i++) {
         motor_cmd.header.seq = -1;
         motor_cmd_pub.publish(motor_cmd);
         rate.sleep();
@@ -92,8 +94,10 @@ int main(int argc, char **argv) {
             ROS_INFO("Wait For Odometry Node Initializing ...\n");
 
             // wait for odometry node
-            for (int i=0; i<5000; i++) {
-                rate.sleep();
+            if (!sim) {
+                for (int i=0; i<3000; i++) {
+                    rate.sleep();
+                }
             }
 
             ROS_INFO("Controller Starts ...\n");
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x += velocity/3000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                if (loop_count > mpc.target_loop*10-3000) {
+                if (loop_count > mpc.target_loop*10-3000 && loop_count < mpc.target_loop*10) {
                     mpc.target_vel_x -= velocity/3000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
@@ -140,7 +144,7 @@ int main(int argc, char **argv) {
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 
                 loop_count++;
-                if (loop_count == mpc.target_loop*10) break;
+                if (loop_count >= mpc.target_loop*10) break;
 
                 rate.sleep();
             }

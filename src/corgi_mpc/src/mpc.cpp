@@ -2,207 +2,168 @@
 #include <stdexcept>
 
 void ModelPredictiveController::init_matrices(const double *ra, const double *rb, const double *rc, const double *rd) {
-    A << 1, 0, 0, dt, 0,  0, 0, 0, 0, 0, 0, 0,
-         0, 1, 0, 0, dt,  0, 0, 0, 0, 0, 0, 0,
-         0, 0, 1, 0, 0,  dt,0, 0, 0, 0, 0, 0,
-         0, 0, 0, 1, 0,  0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 1,  0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0,  1, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0,  0, 1, 0, 0, dt,0, 0,
-         0, 0, 0, 0, 0,  0, 0, 1, 0, 0, dt,0,
-         0, 0, 0, 0, 0,  0, 0, 0, 1, 0, 0, dt,
-         0, 0, 0, 0, 0,  0, 0, 0, 0, 1, 0, 0,
-         0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 1, 0,
-         0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 1;
+    // Dynamics matrices (Ac, Bc) initialization
+    Ac.setZero();
+    Ac(0, 6) = 1.0;
+    Ac(1, 7) = 1.0;
+    // Ac(2, 8) = 1.0;
+    Ac(3, 9) = 1.0;
+    // Ac(4, 10) = 1.0;
+    Ac(5, 11) = 1.0;
+    Ac(11, 12) = 1.0;  // gravity
 
-    B << 0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         dt/m, 0, 0, dt/m, 0, 0, dt/m, 0, 0, dt/m, 0, 0,
-         0, dt/m, 0, 0, dt/m, 0, 0, dt/m, 0, 0, dt/m, 0,
-         0, 0, dt/m, 0, 0, dt/m, 0, 0, dt/m, 0, 0, dt/m,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0, -60/m*ra[2]*dt, 60/m*ra[1]*dt, 0, -60/m*rb[2]*dt, 60/m*rb[1]*dt, 0, -60/m*rc[2]*dt, 60/m*rc[1]*dt, 0, -60/m*rd[2]*dt, 60/m*rd[1]*dt,
-         30/m*ra[2]*dt, 0, -30/m*ra[0]*dt, 30/m*rb[2]*dt, 0, -30/m*rb[0]*dt, 30/m*rc[2]*dt, 0, -30/m*rc[0]*dt, 30/m*rd[2]*dt, 0, -30/m*rd[0]*dt,
-         -300/13/m*ra[1]*dt, 300/13/m*ra[0]*dt, 0, -300/13/m*rb[1]*dt, 300/13/m*rb[0]*dt, 0, -300/13/m*rc[1]*dt, 300/13/m*rc[0]*dt, 0, -300/13/m*rd[1]*dt, 300/13/m*rd[0]*dt, 0;
+    // Compute the *actual* inertia
+    double Ixx = m*(l*l + h*h)/12.0;
+    double Iyy = m*(w*w + h*h)/12.0;
+    double Izz = m*(w*w + l*l)/12.0;
 
+    // Build body‐frame inertia and invert once
+    Eigen::Matrix3d BI_body;
+    BI_body << Ixx, 0,   0,
+               0,   Iyy, 0,
+               0,   0,   Izz;
+    Eigen::Matrix3d Iinv = BI_body.inverse();
+
+    // Fill Bc with I^{-1} [r]_x
+    Bc.setZero();
+    std::array<const double*,4> rs = {ra, rb, rc, rd};
+    for(int i = 0; i < 4; ++i) {
+        Eigen::Vector3d ri(rs[i][0], rs[i][1], rs[i][2]);
+        Eigen::Matrix3d r_skew;
+        r_skew << 0, -ri.z(), ri.y(),
+                  ri.z(), 0, -ri.x(),
+                  -ri.y(), ri.x(), 0;
+        Bc.block<3,3>(6,  3*i) = Iinv * r_skew;
+        Bc.block<3,3>(9,  3*i) = Eigen::Matrix3d::Identity() / m;
+    }
+
+    // Discretize the system using ZOH
+    Eigen::MatrixXd M(n_x + n_u, n_x + n_u);
+    M.setZero();
+    M.topLeftCorner(n_x, n_x) = Ac;
+    M.topRightCorner(n_x, n_u) = Bc;
+    Eigen::MatrixXd expM = (M * dt).exp();
+    Ad = expM.topLeftCorner(n_x, n_x);
+    Bd = expM.topRightCorner(n_x, n_u);
+
+    // Cost matrices
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 5e7  , 0   , 1e8 ,   // x, y, z positions
-                    1e5  , 0   , 5e3 ,   // x, y, z velocities
-                    5e6  , 5e6 , 0   ,   // roll, pitch, yaw
-                    1e3  , 1e3 , 0   ;   // angular velocities
-    // Q.diagonal() << 1e7  , 0   , 1e8 ,   // x, y, z positions
-    //                 1e5  , 0   , 1e4 ,   // x, y, z velocities
-    //                 1e7  , 5e7 , 0   ,   // roll, pitch, yaw
-    //                 1e4  , 1e4 , 0   ;   // angular velocities
+    Q.diagonal() << 10,   10,   0,       // roll, pitch, yaw
+                    5,    0,    50,      // x, y, z
+                    1e-1, 1e-1, 0,       // ω_x, ω_y, ω_z
+                    0,    0,    5e-1,    // v_x, v_y, v_z
+                    0;                   // additional state
 
-    R = Eigen::MatrixXd::Identity(n_u, n_u);
+    R = 1e-6 * Eigen::MatrixXd::Identity(n_u, n_u);
 }
-
 
 Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref,
                                                 const bool *selection_matrix, std::vector<corgi_msgs::ForceState*> force_state_modules) {
-    // System dynamics formulation.
-    Eigen::MatrixXd A_qp = Eigen::MatrixXd::Zero(N * n_x, n_x);
-    Eigen::MatrixXd B_qp = Eigen::MatrixXd::Zero(N * n_x, (N - 1) * n_u);
+    // Build prediction matrices
+    Eigen::MatrixXd A_qp = Eigen::MatrixXd::Zero((N - 1) * n_x, n_x);
+    Eigen::MatrixXd B_qp = Eigen::MatrixXd::Zero((N - 1) * n_x, (N - 1) * n_u);
 
-    for (int i = 0; i < N; ++i) {
-        Eigen::MatrixXd A_pow = Eigen::MatrixXd::Identity(n_x, n_x);
-        for (int k = 0; k < (i + 1); ++k){
-            A_pow *= A;
-        }
-        A_qp.block(i * n_x, 0, n_x, n_x) = A_pow;
+    std::vector<Eigen::MatrixXd> A_pow(N);
+    A_pow[0] = Eigen::MatrixXd::Identity(n_x, n_x);
+    for(int k = 1; k <= N-1; ++k) {
+        A_pow[k] = Ad * A_pow[k-1];
+    }
 
-        int max_j = (i < (N - 1)) ? (i + 1) : (N - 1);
-        for (int j = 0; j < max_j; ++j) {
-            Eigen::MatrixXd A_temp = Eigen::MatrixXd::Identity(n_x, n_x);
-            for (int k = 0; k < (i - j); ++k){
-                A_temp *= A;
-            }
-            B_qp.block(i * n_x, j * n_u, n_x, n_u) = A_temp * B;
+    for(int i = 0; i < N-1; ++i){
+        A_qp.block(i*n_x, 0, n_x, n_x) = A_pow[i+1];
+        for(int j = 0; j <= i; ++j){
+            B_qp.block(i*n_x, j*n_u, n_x, n_u) = A_pow[i-j] * Bd;
         }
     }
 
-    // Gravity compensation.
-    Eigen::VectorXd d = Eigen::VectorXd::Zero(n_x);
-    d(2) = -0.5 * dt * dt * gravity;
-    d(5) = -dt * gravity;
 
-    Eigen::VectorXd d_qp = Eigen::VectorXd::Zero(N * n_x);
-    Eigen::MatrixXd A_power = Eigen::MatrixXd::Identity(n_x, n_x);
-    Eigen::VectorXd cumulative_d = Eigen::VectorXd::Zero(n_x);
-
-    for (int i = 0; i < N; ++i) {
-        cumulative_d += A_power * d;
-        d_qp.segment(i * n_x, n_x) = cumulative_d;
-        A_power = A_power * A;
-    }
-
-    // Construct the block-diagonal cost matrices.
-    Eigen::MatrixXd Q_N = Eigen::MatrixXd::Zero(N * n_x, N * n_x);
-    for (int i = 0; i < N; ++i){
-        Q_N.block(i * n_x, i * n_x, n_x, n_x) = Q;
-    }
+    // Cost matrices
+    Eigen::MatrixXd Q_N = Eigen::MatrixXd::Zero((N - 1) * n_x, (N - 1) * n_x);
+    for (int i = 0; i < N - 1; ++i) Q_N.block(i * n_x, i * n_x, n_x, n_x) = Q;
 
     Eigen::MatrixXd R_N = Eigen::MatrixXd::Zero((N - 1) * n_u, (N - 1) * n_u);
-    for (int i = 0; i < (N - 1); ++i){
-        R_N.block(i * n_u, i * n_u, n_u, n_u) = R;
+    for (int i = 0; i < N - 1; ++i) R_N.block(i * n_u, i * n_u, n_u, n_u) = R;
+
+    if (Q_N.rows() != B_qp.rows() || Q_N.cols() != B_qp.rows()) {
+        throw std::runtime_error("Q_N and B_qp size mismatch!");
     }
-
-    // QP formulation.
+    if (R_N.rows() != B_qp.cols() || R_N.cols() != B_qp.cols()) {
+        throw std::runtime_error("R_N and B_qp size mismatch!");
+    }
+    
     Eigen::MatrixXd H = 2 * (B_qp.transpose() * Q_N * B_qp + R_N);
-    Eigen::VectorXd g = 2 * B_qp.transpose() * Q_N * (A_qp * x - x_ref + d_qp);
-
-    // Regularization for numerical stability.
+    Eigen::VectorXd g = 2 * B_qp.transpose() * Q_N * (A_qp * x - x_ref);
     H += 1e-6 * Eigen::MatrixXd::Identity(H.rows(), H.cols());
+    
 
-    // Set up the OSQP solver.
-    OsqpEigen::Solver solver;
-    const int n_vars = (N - 1) * n_u;
-    int total_constraints = 0;
-    total_constraints += n_vars;       // Output boundary.
-    total_constraints += n_vars;       // Output selection.
-    total_constraints += (N - 1) * 4;  // Friction cone constraints.
+    // Constraints
+    const int constraint_per_step = (3 + 3 + 0 + 1) * 4;  // bounds(3) + selection(3) + friction(1) + fy(1)
+    const int total_constraints = (N - 1) * constraint_per_step;
 
-    solver.data()->setNumberOfVariables(n_vars);
-    Eigen::SparseMatrix<double> H_sparse = H.sparseView();
-    solver.data()->setHessianMatrix(H_sparse);
-    solver.data()->setGradient(g);
-
-    // Construct the constraint matrix and bounds.
-    Eigen::SparseMatrix<double> constraints(total_constraints, n_vars);
+    Eigen::SparseMatrix<double> constraints(total_constraints, (N - 1) * n_u);
     Eigen::VectorXd lower_bound(total_constraints);
     Eigen::VectorXd upper_bound(total_constraints);
 
-    // Output limitation constraints.
-    for (int i = 0; i < n_vars; i++) {
-        constraints.insert(i, i) = 1.0;
-
-        if (i % 3 == 0) {
-            lower_bound(i) = fx_lower_bound;
-            upper_bound(i) = fx_upper_bound;
-        }
-        else if (i % 3 == 1) {
-            lower_bound(i) = 0;
-            upper_bound(i) = 0;
-        }
-        else {
-            lower_bound(i) = fz_lower_bound;
-            upper_bound(i) = fz_upper_bound;
-        }
-    }
-    
-    // Output selection constraints.
-    Eigen::VectorXd D = Eigen::VectorXd::Zero(n_vars);
+    int row = 0;
     for (int k = 0; k < (N - 1); ++k) {
-        for (int i = 0; i < 4; i++) {
-            if (selection_matrix[i]) {
-                D.segment(k * n_u + i * 3, 3) << 0, 1, 0;
+        for (int foot = 0; foot < 4; ++foot) {
+            int base_idx = k * n_u + foot * 3;
+
+            // 1. Force bounds
+            constraints.insert(row, base_idx) = 1.0;
+            lower_bound(row) = fx_lower_bound;
+            upper_bound(row) = fx_upper_bound; ++row;
+
+            constraints.insert(row, base_idx + 1) = 1.0;
+            lower_bound(row) = -1e-6; upper_bound(row) = 1e-6; ++row;
+
+            constraints.insert(row, base_idx + 2) = 1.0;
+            lower_bound(row) = fz_lower_bound;
+            upper_bound(row) = fz_upper_bound; ++row;
+
+            // 2. Stance selection
+            double s = selection_matrix[foot] ? 0.0 : 1.0;
+            for (int i = 0; i < 3; ++i) {
+                constraints.insert(row, base_idx + i) = s;
+                lower_bound(row) = 0.0;
+                upper_bound(row) = 0.0; ++row;
             }
-            else {
-                D.segment(k * n_u + i * 3, 3) << 1, 1, 1;
-            }
+
+            // 3. Friction cone
+            // constraints.insert(row, base_idx) = 1.0;
+            // lower_bound(row) = -friction_coef*abs(force_state_modules[foot]->Fy);
+            // upper_bound(row) = -friction_coef*abs(force_state_modules[foot]->Fy); ++row;
+
+            // 4. fy = 0
+            constraints.insert(row, base_idx + 1) = 1.0;
+            lower_bound(row) = 0.0; upper_bound(row) = 0.0; ++row;
         }
     }
-
-    for (int i = 0; i < n_vars; i++) {
-        constraints.insert(n_vars + i, i) = D(i);
-        lower_bound(n_vars + i) = 0.0;
-        upper_bound(n_vars + i) = 0.0;
-    }
-
-    // Friction cone constraints.
-    for (int k = 0; k < (N - 1); ++k) {
-        for (int i = 0; i < 4; ++i) {
-            int row_index = 2 * n_vars + k * 4 + i;
-            int col_index = k * n_u + i * 3;
-            constraints.insert(row_index, col_index) = 1.0;
-            lower_bound(row_index) = std::min(0.0, -friction_coef * force_state_modules[i]->Fy);
-            upper_bound(row_index) = std::max(0.0,  friction_coef * force_state_modules[i]->Fy);
-        }
-    }
-
     constraints.makeCompressed();
-    
+
+    // OSQP Solver Setup
+    OsqpEigen::Solver solver;
+    solver.data()->setNumberOfVariables((N - 1) * n_u);
     solver.data()->setNumberOfConstraints(total_constraints);
+
+    Eigen::SparseMatrix<double> H_sparse(H.rows(), H.cols());
+    H_sparse = H.sparseView();
+    H_sparse.makeCompressed();
+    solver.data()->setHessianMatrix(H_sparse);
+
+    solver.data()->setGradient(g);
     solver.data()->setLinearConstraintsMatrix(constraints);
     solver.data()->setLowerBound(lower_bound);
     solver.data()->setUpperBound(upper_bound);
 
-    // Set solver settings.
-    // ----------------------------------------------------------------
     solver.settings()->setVerbosity(false);
-    // solver.settings()->setAbsoluteTolerance(1.0e-3);
-    // solver.settings()->setRelativeTolerance(1.0e-3);
-    // solver.settings()->setPrimalInfeasibilityTolerance(1.0e-4);
-    // solver.settings()->setDualInfeasibilityTolerance(1.0e-4);
-    
-    // // ADMM parameters.
-    // solver.settings()->setRho(1.0e-1);        // ADMM penalty parameter (adaptive if available)
-    // solver.settings()->setSigma(1.0e-6);      // Regularization parameter
-    // solver.settings()->setAlpha(1.60);        // Over-relaxation parameter
-
-    // // Other settings.
-    // solver.settings()->setMaxIteration(4000);
-    // solver.settings()->setCheckTermination(25);
-    // solver.settings()->setScaling(true);
-    // solver.settings()->setScaledTerimination(false);
     // solver.settings()->setWarmStart(true);
     // solver.settings()->setPolish(false);
-    // ----------------------------------------------------------------
 
-    // Initialize and solve the QP.
-    if (!solver.initSolver()) {
-        throw std::runtime_error("OSQP initialization failed");
-    }
-    
-    if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
-        throw std::runtime_error("OSQP solver failed");
-    }
-    
-    // Return the first control input.
-    Eigen::VectorXd u_opt = solver.getSolution();
+    if (!solver.initSolver()) throw std::runtime_error("[OSQP] Initialization failed.");
+    if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError)
+        throw std::runtime_error("[OSQP] Solver failed to converge.");
+
+    const Eigen::VectorXd& u_opt = solver.getSolution();
     return u_opt.head(n_u);
 }
