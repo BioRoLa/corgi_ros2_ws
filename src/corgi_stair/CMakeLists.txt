@@ -25,10 +25,13 @@ catkin_package(
   CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk
 )
 
+find_package(PCL REQUIRED COMPONENTS common io segmentation features)
+
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
   ${EIGEN3_INCLUDE_DIR}
+  ${PCL_INCLUDE_DIRS}
   include
 )
 
