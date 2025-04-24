@@ -18,11 +18,13 @@ set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk 
-  sensor_msgs pcl_ros pcl_conversions)
+  sensor_msgs pcl_ros pcl_conversions
+)
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk
+  CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk sensor_msgs pcl_ros pcl_conversions
+  DEPENDS PCL
 )
 
 find_package(PCL REQUIRED COMPONENTS common io segmentation features)
@@ -34,6 +36,9 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   include
 )
+
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 find_library(CORGI_UTILS corgi_utils)
 find_library(CORGI_WALK corgi_walk)
