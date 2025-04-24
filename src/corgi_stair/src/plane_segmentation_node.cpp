@@ -44,9 +44,12 @@ void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
   for (const auto& region : regions) {
     const auto& contour = region.getContour();
-    *all_planes += contour;  // 多平面輪廓合併
+    all_planes->points.insert(all_planes->points.end(), contour.points.begin(), contour.points.end());
   }
-
+  all_planes->width = all_planes->points.size();
+  all_planes->height = 1;
+  all_planes->is_dense = false;
+  
   sensor_msgs::PointCloud2 output;
   pcl::toROSMsg(*all_planes, output);
   output.header = input->header;
