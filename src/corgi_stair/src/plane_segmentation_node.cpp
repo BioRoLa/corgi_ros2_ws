@@ -40,7 +40,23 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     mps.setDistanceThreshold(0.02);          // 2cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
-    mps.segmentAndRefine(regions);
+
+    std::vector<pcl::ModelCoefficients> model_coefficients;
+    std::vector<pcl::PointIndices> inlier_indices;
+    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> boundary_clouds;
+
+    mps.segmentAndRefine(regions, model_coefficients, inlier_indices, boundary_clouds);
+
+    // 轉換 inliers 為彩色點雲集合
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+    for (const auto& indices : inlier_indices)
+    {
+        for (int idx : indices.indices)
+        {
+            output->points.push_back(cloud->points[idx]);
+        }
+    }
+
 
     // Step 4: 將平面合併後輸出
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
