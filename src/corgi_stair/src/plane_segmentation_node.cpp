@@ -44,10 +44,10 @@ void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
   for (const auto& region : regions) {
     // 获取该区域的轮廓点云
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr contour = region.getContour();
+    pcl::PointCloud<pcl::PointXYZRGB> contour = region.getContour();
     
     // 将轮廓点云合并到 all_planes 中
-    all_planes->points.insert(all_planes->points.end(), contour->points.begin(), contour->points.end());
+    all_planes->points.insert(all_planes->points.end(), contour.points.begin(), contour.points.end());
   }
   
   all_planes->width = all_planes->points.size();
