@@ -28,14 +28,14 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
     ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
-    ne.setMaxDepthChangeFactor(0.02f);
-    ne.setNormalSmoothingSize(10.0f);
+    ne.setMaxDepthChangeFactor(0.05f);
+    ne.setNormalSmoothingSize(5.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
 
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
-    mps.setMinInliers(1000);
+    mps.setMinInliers(50);
     mps.setAngularThreshold(0.017453 * 2.0); // 2 degrees in radians
     mps.setDistanceThreshold(0.02);          // 2cm
     mps.setInputCloud(cloud);
