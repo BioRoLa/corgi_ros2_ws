@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "multi_plane_segmentation_node");
     ros::NodeHandle nh;
-    ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered/PointCloud2", 1, cloudCallback);
+    ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
     pub = nh.advertise<sensor_msgs::PointCloud2>("multi_plane_segmentation", 1);
     ros::spin();
     return 0;
