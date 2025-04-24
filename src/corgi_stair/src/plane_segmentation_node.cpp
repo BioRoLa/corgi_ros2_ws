@@ -44,7 +44,7 @@ void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
   for (const auto& region : regions) {
     const auto& contour = region.getContour();
-    all_planes->points.insert(all_planes->points.end(), contour->points.begin(), contour->points.end());
+    all_planes->points.insert(all_planes->points.end(), contour.getContour().points.begin(), contour.getContour().points.end());
 }
   all_planes->width = all_planes->points.size();
   all_planes->height = 1;
