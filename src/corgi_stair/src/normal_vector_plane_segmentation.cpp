@@ -88,7 +88,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         point.b = 0;
     }
     sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*cloud_rgb, output);
+    pcl::toROSMsg(*all_planes, output);
     output.header = input->header;
     pub.publish(output);
 }
