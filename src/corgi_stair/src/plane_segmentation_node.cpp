@@ -82,7 +82,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pcl::PointCloud<pcl::PointXYZ>::Ptr all_planes(new pcl::PointCloud<pcl::PointXYZ>);
 
     int max_planes = 5;
-    float distance_threshold = 0.01;  // 1cm
+    float distance_threshold = 0.02;  // 1cm
     int min_inliers = 100;
 
     for (int i = 0; i < max_planes; ++i)
@@ -92,9 +92,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
 
         seg.setOptimizeCoefficients(true);
-        seg.setModelType(pcl::SACMODEL_PLANE);
+        // seg.setModelType(pcl::SACMODEL_PLANE);
+        seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);    
         seg.setMethodType(pcl::SAC_RANSAC);
         seg.setDistanceThreshold(distance_threshold);
+        seg.setAxis(Eigen::Vector3f::UnitX());          // X 軸
+        seg.setEpsAngle(15.0 * M_PI / 180.0);           // ±15°
+        seg.setMaxIterations(200);
         seg.setInputCloud(working_cloud);
         seg.segment(*inliers, *coefficients);
 
