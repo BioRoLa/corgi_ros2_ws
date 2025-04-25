@@ -29,13 +29,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(0.0, 0.5);
+    pass.setFilterLimits(0.0, 3.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.2, 0.2);
+    pass.setFilterLimits(-1.0, 1.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(-0.1, 0.2);
+    pass.setFilterLimits(-0.5, 1.0);
     pass.filter(*cloud);
 
     // Estimate normals
