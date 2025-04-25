@@ -326,18 +326,18 @@ int main(int argc, char **argv) {
             contact_msg.module_d.score = filter.scores[3];
             contact_pub.publish(contact_msg);
 
-            // // Publish the estimated velocity and position
-            // geometry_msgs::Vector3 velocity_msg;
-            // velocity_msg.x = x(3 * J - 3);
-            // velocity_msg.y = x(3 * J - 2);
-            // velocity_msg.z = x(3 * J - 1);
-            // velocity_pub.publish(velocity_msg);
+            // Publish the estimated velocity and position
+            geometry_msgs::Vector3 velocity_msg;
+            velocity_msg.x = x(3 * J - 3);
+            velocity_msg.y = x(3 * J - 2);
+            velocity_msg.z = x(3 * J - 1);
+            velocity_pub.publish(velocity_msg);
 
-            // geometry_msgs::Vector3 position_msg;
-            // position_msg.x = p(0);
-            // position_msg.y = p(1);
-            // position_msg.z = p(2);
-            // position_pub.publish(position_msg);
+            geometry_msgs::Vector3 position_msg;
+            position_msg.x = p(0);
+            position_msg.y = p(1);
+            position_msg.z = p(2);
+            position_pub.publish(position_msg);
 
             // geometry_msgs::Vector3 filtered_velocity_msg;
             // float cutoff_freq = 10.0; //Hz
