@@ -318,6 +318,57 @@ namespace estimation_model {
             return;
         }
     }
+    void GKLD::valid(bool exclude_[4]) {
+        static float alpha = (2.f * M_PI * dt * 1.f) / (2.f * M_PI * dt * 1.f + 1.f);
+        y_set.resize(pool_size);
+        Y_set.resize(pool_size);
+        for (int i = 0; i < pool_size; i++) {
+            Eigen::VectorXf y__;
+            Eigen::MatrixXf Y__;
+            information_pools[i]->valid(y__, Y__);
+            y_set[i] = y__;
+            Y_set[i] = Y__;
+            exclude[i] = exclude_[i];
+        }
+        Eigen::VectorXf sum_y = y;
+        Eigen::MatrixXf sum_Y = Y;
+        for (int i = 0; i < pool_size; i++) {
+            sum_y += y_set[i];
+            sum_Y += Y_set[i];
+        }
+        score(sum_Y, sum_y, -1);
+
+        std::vector<Eigen::VectorXf> yj_set;
+        std::vector<Eigen::MatrixXf> Yj_set;
+        for (int i = 0; i < pool_size; i++) { 
+            yj_set.push_back(y+y_set[i]);
+            Yj_set.push_back(Y+Y_set[i]);
+        }
+        for (int i = 0; i < pool_size; i++) {
+            threads[i] = std::thread(&GKLD::score, this, std::ref(Yj_set[i]), std::ref(yj_set[i]), i);
+        }
+        double min = 1e300;
+        int min_index = 0;
+        int exclude_num = 0;
+        for (int i = 0; i < pool_size; i++) {
+            if (threads[i].joinable())
+                threads[i].join();
+            if (exclude[i]) {
+                exclude_num += 1;
+            }
+            else {
+                Y += Y_set[i];
+                y += y_set[i];
+            }
+        }
+        if (exclude_num == pool_size) {
+            Y += Y_set[min_index];
+            y += y_set[min_index];
+            exclude[min_index] = false;
+        }
+        x = Y.inverse() * y;
+        return;
+    }
     void GKLD::iterative_valid() {
     }
 }

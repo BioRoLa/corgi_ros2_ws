@@ -112,6 +112,7 @@ Eigen::Quaternionf q;
 geometry_msgs::Vector3 prev_v;
 double prev_time;
 Eigen::Vector3f filtered_position;
+bool exclude[4];
 
 int counter = 0;
 //calculate the angle by lidar, need to implement lidar sensor to get the value
@@ -137,6 +138,13 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
 void imu_cb(const sensor_msgs::Imu msg){
     imu = msg;
     imu.angular_velocity.x = 0.0;
+}
+
+void contact_cb(const corgi_msgs::ContactStateStamped msg){
+    exclude[0] = !msg.module_b.contact;
+    exclude[1] = !msg.module_c.contact;
+    exclude[2] = !msg.module_a.contact;
+    exclude[3] = !msg.module_d.contact;
 }
 
 geometry_msgs::Vector3 low_pass_filter(const geometry_msgs::Vector3 &input, const geometry_msgs::Vector3 &prev_input, float cutoff_freq, float sample_rate) {
@@ -170,11 +178,12 @@ int main(int argc, char **argv) {
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
     // ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
     // ros::Publisher filtered_position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_position", 10);
-    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 10);
+
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
+    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
 
     Eigen::initParallel();
     ros::Rate rate(SAMPLE_RATE);
@@ -303,7 +312,9 @@ int main(int argc, char **argv) {
             lh.push_data(encoder_lh.GetState(), w, dt, alpha_lh);
 
             filter.predict();
-            filter.valid();
+            // filter.valid();
+            // implement the valid function w/ known contact leg
+            filter.valid(exclude);
             x = filter.state();
             
             P_cov = filter.Y_inv.block<3, 3>(3*J-3, 3*J-3);
@@ -314,30 +325,30 @@ int main(int argc, char **argv) {
             ROS_INFO("Estimated Position: %f, %f, %f", p(0), p(1), p(2));
             ROS_INFO("Estimated Velocity: %f, %f, %f", x(3 * J - 3), x(3 * J - 2), x(3 * J - 1));
 
-            // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
-            corgi_msgs::ContactStateStamped contact_msg;
-            contact_msg.module_a.contact = !filter.exclude[0];
-            contact_msg.module_b.contact = !filter.exclude[1];
-            contact_msg.module_c.contact = !filter.exclude[2];
-            contact_msg.module_d.contact = !filter.exclude[3];
-            contact_msg.module_a.score = filter.scores[0];
-            contact_msg.module_b.score = filter.scores[1];
-            contact_msg.module_c.score = filter.scores[2];
-            contact_msg.module_d.score = filter.scores[3];
-            contact_pub.publish(contact_msg);
+            // // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
+            // corgi_msgs::ContactStateStamped contact_msg;
+            // contact_msg.module_a.contact = !filter.exclude[0];
+            // contact_msg.module_b.contact = !filter.exclude[1];
+            // contact_msg.module_c.contact = !filter.exclude[2];
+            // contact_msg.module_d.contact = !filter.exclude[3];
+            // contact_msg.module_a.score = filter.scores[0];
+            // contact_msg.module_b.score = filter.scores[1];
+            // contact_msg.module_c.score = filter.scores[2];
+            // contact_msg.module_d.score = filter.scores[3];
+            // contact_pub.publish(contact_msg);
 
-            // // Publish the estimated velocity and position
-            // geometry_msgs::Vector3 velocity_msg;
-            // velocity_msg.x = x(3 * J - 3);
-            // velocity_msg.y = x(3 * J - 2);
-            // velocity_msg.z = x(3 * J - 1);
-            // velocity_pub.publish(velocity_msg);
+            // Publish the estimated velocity and position
+            geometry_msgs::Vector3 velocity_msg;
+            velocity_msg.x = x(3 * J - 3);
+            velocity_msg.y = x(3 * J - 2);
+            velocity_msg.z = x(3 * J - 1);
+            velocity_pub.publish(velocity_msg);
 
-            // geometry_msgs::Vector3 position_msg;
-            // position_msg.x = p(0);
-            // position_msg.y = p(1);
-            // position_msg.z = p(2);
-            // position_pub.publish(position_msg);
+            geometry_msgs::Vector3 position_msg;
+            position_msg.x = p(0);
+            position_msg.y = p(1);
+            position_msg.z = p(2);
+            position_pub.publish(position_msg);
 
             // geometry_msgs::Vector3 filtered_velocity_msg;
             // float cutoff_freq = 10.0; //Hz
