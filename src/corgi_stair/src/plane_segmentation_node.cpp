@@ -76,6 +76,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     //     *all_planes += contour; // 合併所有輪廓到一起
     // }
 
+    pcl::VoxelGrid<pcl::PointXYZ> voxel;
+    voxel.setInputCloud(cloud);
+    voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
+    voxel.filter(*cloud);
+
     pcl::PointCloud<pcl::PointXYZ>::Ptr working_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     *working_cloud = *cloud;
 
