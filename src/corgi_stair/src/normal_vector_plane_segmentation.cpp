@@ -27,7 +27,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         return;
     }
 
-    pcl::VoxelGrid<pcl::PointXYZ> voxel;
+    pcl::VoxelGrid<PointT> voxel;
     voxel.setInputCloud(cloud);
     voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
     voxel.filter(*cloud);
