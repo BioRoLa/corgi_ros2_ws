@@ -50,7 +50,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(50);
-    mps.setAngularThreshold(0.017453 * 20.0); // 2 degrees in radians
+    mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
     mps.setDistanceThreshold(0.02);          // 2cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
