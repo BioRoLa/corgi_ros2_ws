@@ -136,6 +136,7 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
 
 void imu_cb(const sensor_msgs::Imu msg){
     imu = msg;
+    imu.angular_velocity.x = 0.0;
 }
 
 geometry_msgs::Vector3 low_pass_filter(const geometry_msgs::Vector3 &input, const geometry_msgs::Vector3 &prev_input, float cutoff_freq, float sample_rate) {
@@ -167,7 +168,8 @@ int main(int argc, char **argv) {
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
-    ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
+    // ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
+    // ros::Publisher filtered_position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_position", 10);
     ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 10);
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
@@ -324,37 +326,37 @@ int main(int argc, char **argv) {
             contact_msg.module_d.score = filter.scores[3];
             contact_pub.publish(contact_msg);
 
-            // Publish the estimated velocity and position
-            geometry_msgs::Vector3 velocity_msg;
-            velocity_msg.x = x(3 * J - 3);
-            velocity_msg.y = x(3 * J - 2);
-            velocity_msg.z = x(3 * J - 1);
-            velocity_pub.publish(velocity_msg);
+            // // Publish the estimated velocity and position
+            // geometry_msgs::Vector3 velocity_msg;
+            // velocity_msg.x = x(3 * J - 3);
+            // velocity_msg.y = x(3 * J - 2);
+            // velocity_msg.z = x(3 * J - 1);
+            // velocity_pub.publish(velocity_msg);
 
-            geometry_msgs::Vector3 position_msg;
-            position_msg.x = p(0);
-            position_msg.y = p(1);
-            position_msg.z = p(2);
-            position_pub.publish(position_msg);
+            // geometry_msgs::Vector3 position_msg;
+            // position_msg.x = p(0);
+            // position_msg.y = p(1);
+            // position_msg.z = p(2);
+            // position_pub.publish(position_msg);
 
-            geometry_msgs::Vector3 filtered_velocity_msg;
-            float cutoff_freq = 10.0; //Hz
-            filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, SAMPLE_RATE);
-            prev_v = filtered_velocity_msg;
-            filtered_velocity_pub.publish(filtered_velocity_msg);
+            // geometry_msgs::Vector3 filtered_velocity_msg;
+            // float cutoff_freq = 10.0; //Hz
+            // filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, SAMPLE_RATE);
+            // prev_v = filtered_velocity_msg;
+            // filtered_velocity_pub.publish(filtered_velocity_msg);
             
-            Eigen::Vector<float, 3> filtered_velocity;
-            filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
-            filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
+            // Eigen::Vector<float, 3> filtered_velocity;
+            // filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
+            // filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
 
-            geometry_msgs::Vector3 filtered_position_msg;
-            filtered_position_msg.x = filtered_position(0);
-            filtered_position_msg.y = filtered_position(1);
-            filtered_position_msg.z = filtered_position(2);
-            position_pub.publish(filtered_position_msg);
+            // geometry_msgs::Vector3 filtered_position_msg;
+            // filtered_position_msg.x = filtered_position(0);
+            // filtered_position_msg.y = filtered_position(1);
+            // filtered_position_msg.z = filtered_position(2);
+            // filtered_position_pub.publish(filtered_position_msg);
 
             // Store the estimated state to a csv file
-            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(45);
+            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(39);
             estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
             estimate_state.segment(3, 3) = p;                                                       //position
             estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
@@ -366,8 +368,8 @@ int main(int argc, char **argv) {
             estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
             estimate_state(29) = filter.threshold;                                                                                                  //threshold
             estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());                                          //covariance
-            estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
-            estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position                                                                                       
+            // estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
+            // estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position                                                                                       
             
             
             if(argc == 2){logger.logState(estimate_state);}
