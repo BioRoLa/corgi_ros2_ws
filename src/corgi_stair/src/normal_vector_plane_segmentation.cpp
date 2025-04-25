@@ -11,6 +11,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
+#include <visualization_msgs/MarkerArray.h>
 
 typedef pcl::PointXYZRGB PointT;
 
