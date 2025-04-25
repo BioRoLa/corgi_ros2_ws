@@ -104,6 +104,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     marker.ns = "normals";
     marker.type = visualization_msgs::Marker::ARROW;
     marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.0;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
     marker.scale.x = 0.01;  // shaft diameter
     marker.scale.y = 0.02;  // head diameter
     marker.scale.z = 0.02;  // head length
@@ -114,12 +118,17 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     marker.lifetime = ros::Duration(0.2);
 
     int id = 0;
-    for (size_t i = 0; i < cloud->points.size(); i+=50)
+    for (size_t i = 0; i < cloud->points.size(); i+=100)
     {
         const auto& pt = cloud->points[i];
         const auto& n = normals->points[i];
+        if (!pcl::isFinite(pt) || !pcl::isFinite(n))
+            continue;
 
         geometry_msgs::Point p1, p2;
+        if (!std::isfinite(p2.x) || !std::isfinite(p2.y) || !std::isfinite(p2.z))
+        continue;
+
         p1.x = pt.x;
         p1.y = pt.y;
         p1.z = pt.z;
@@ -127,6 +136,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         p2.x = pt.x + 0.05 * n.normal_x;
         p2.y = pt.y + 0.05 * n.normal_y;
         p2.z = pt.z + 0.05 * n.normal_z;
+
+        // orientation 要初始化（雖然箭頭用不到，但保險起見）
+        arrow.pose.orientation.w = 1.0;
 
         marker.id = id++;
         marker.points.clear();
