@@ -138,7 +138,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         p2.z = pt.z + 0.05 * n.normal_z;
 
         // orientation 要初始化（雖然箭頭用不到，但保險起見）
-        arrow.pose.orientation.w = 1.0;
+        marker.pose.orientation.w = 1.0;
 
         marker.id = id++;
         marker.points.clear();
