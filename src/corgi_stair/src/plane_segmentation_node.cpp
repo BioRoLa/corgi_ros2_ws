@@ -12,7 +12,8 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
 
-typedef pcl::PointXYZRGB PointT;
+// typedef pcl::PointXYZRGB PointT;
+typedef pcl::PointXYZ PointT;
 
 ros::Publisher pub;
 
@@ -28,7 +29,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     }
 
     // Set x,y,z range
-    pcl::PassThrough<pcl::PointXYZRGB> pass;
+    pcl::PassThrough<PointT> pass;
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
