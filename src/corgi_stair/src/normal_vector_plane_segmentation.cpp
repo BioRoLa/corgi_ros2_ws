@@ -29,10 +29,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         return;
     }
 
-    pcl::VoxelGrid<PointT> voxel;
-    voxel.setInputCloud(cloud);
-    voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
-    voxel.filter(*cloud);
+    // pcl::VoxelGrid<PointT> voxel;
+    // voxel.setInputCloud(cloud);
+    // voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
+    // voxel.filter(*cloud);
 
     // Set x,y,z range
     pcl::PassThrough<PointT> pass;
@@ -94,37 +94,49 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     output.header = input->header;
     pub.publish(output);
 
-    // 發布法線
-    visualization_msgs::MarkerArray marker_array;
-    for (size_t i = 0; i < cloud->points.size(); ++i)
-    {
-        visualization_msgs::Marker marker;
-        marker.header.frame_id = "base_link";
-        marker.header.stamp = ros::Time::now();
-        marker.ns = "normals";
-        marker.id = i;
-        marker.type = visualization_msgs::Marker::ARROW;
-        marker.action = visualization_msgs::Marker::ADD;
-        marker.pose.position.x = cloud->points[i].x;
-        marker.pose.position.y = cloud->points[i].y;
-        marker.pose.position.z = cloud->points[i].z;
-        marker.pose.orientation.x = 0;
-        marker.pose.orientation.y = 0;
-        marker.pose.orientation.z = normals->points[i].normal_z;
-        marker.pose.orientation.w = normals->points[i].normal_x;
 
-        marker.scale.x = 0.01;
-        marker.scale.y = 0.02;
-        marker.scale.z = 0.02;
-        marker.color.a = 1.0;
-        marker.color.r = 1.0;
-        marker.color.g = 0.0;
-        marker.color.b = 0.0;
+
+    // 發布法線
+    // 可視化 Marker
+    visualization_msgs::MarkerArray marker_array;
+    visualization_msgs::Marker marker;
+    marker.header = cloud_msg->header;
+    marker.ns = "normals";
+    marker.type = visualization_msgs::Marker::ARROW;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.scale.x = 0.01;  // shaft diameter
+    marker.scale.y = 0.02;  // head diameter
+    marker.scale.z = 0.02;  // head length
+    marker.color.r = 0.0;
+    marker.color.g = 0.5;
+    marker.color.b = 1.0;
+    marker.color.a = 1.0;
+    marker.lifetime = ros::Duration(0.2);
+
+    int id = 0;
+    for (size_t i = 0; i < cloud->points.size(); i+=50)
+    {
+        const auto& pt = cloud->points[i];
+        const auto& n = normals->points[i];
+
+        geometry_msgs::Point p1, p2;
+        p1.x = pt.x;
+        p1.y = pt.y;
+        p1.z = pt.z;
+
+        p2.x = pt.x + 0.05 * n.normal_x;
+        p2.y = pt.y + 0.05 * n.normal_y;
+        p2.z = pt.z + 0.05 * n.normal_z;
+
+        marker.id = id++;
+        marker.points.clear();
+        marker.points.push_back(p1);
+        marker.points.push_back(p2);
 
         marker_array.markers.push_back(marker);
     }
     normal_pub.publish(marker_array);
-    
+
 }
 
 int main(int argc, char** argv)
