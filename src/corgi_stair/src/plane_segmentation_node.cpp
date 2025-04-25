@@ -24,6 +24,19 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         return;
     }
 
+    // Set x,y,z range
+    pcl::PassThrough<pcl::PointXYZRGB> pass;
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(0.0, 0.5);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-0.2, 0.2);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-0.1, 0.2);
+    pass.filter(*cloud);
+
     // Estimate normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
@@ -36,7 +49,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(50);
-    mps.setAngularThreshold(0.017453 * 2.0); // 2 degrees in radians
+    mps.setAngularThreshold(0.017453 * 20.0); // 2 degrees in radians
     mps.setDistanceThreshold(0.02);          // 2cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
@@ -59,6 +72,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     }
 
     // 發布結果
+    for (auto& point : all_planes->points) {
+        point.r = 255;
+        point.g = 0;
+        point.b = 0;
+    }
     sensor_msgs::PointCloud2 output;
     pcl::toROSMsg(*all_planes, output);
     output.header = input->header;
