@@ -1,0 +1,104 @@
+#include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/features/integral_image_normal.h>
+#include <pcl/segmentation/organized_multi_plane_segmentation.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/passthrough.h>
+
+typedef pcl::PointXYZRGB PointT;
+
+ros::Publisher pub;
+
+void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
+{
+    pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+    pcl::fromROSMsg(*input, *cloud);
+
+    if (!cloud->isOrganized())
+    {
+        ROS_WARN("Point cloud is not organized. Skipping frame.");
+        return;
+    }
+
+    pcl::VoxelGrid<pcl::PointXYZ> voxel;
+    voxel.setInputCloud(cloud);
+    voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
+    voxel.filter(*cloud);
+
+    // Set x,y,z range
+    pcl::PassThrough<PointT> pass;
+    pass.setKeepOrganized(true);
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(0.0, 3.0);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-1.0, 1.0);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-0.5, 1.0);
+    pass.filter(*cloud);
+
+    // Estimate normals
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
+    ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    ne.setMaxDepthChangeFactor(0.05f);
+    ne.setNormalSmoothingSize(15.0f);
+    ne.setInputCloud(cloud);
+    ne.compute(*normals);
+
+    // Plane segmentation
+    pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
+    mps.setMinInliers(50);
+    mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
+    mps.setDistanceThreshold(0.02);          // 2cm
+    mps.setInputCloud(cloud);
+    mps.setInputNormals(normals);
+
+    std::vector<pcl::PlanarRegion<PointT>, Eigen::aligned_allocator<pcl::PlanarRegion<PointT>>> regions;
+    mps.segment(regions); // 原始版本僅需 regions，無需 refine
+
+    pcl::PointCloud<PointT>::Ptr all_planes(new pcl::PointCloud<PointT>);
+
+    for (size_t i = 0; i < regions.size(); ++i)
+    {
+        const pcl::PlanarRegion<PointT>& region = regions[i];
+        pcl::PointCloud<PointT> contour;
+        contour.points = region.getContour();
+        contour.width = contour.points.size();
+        contour.height = 1;
+        contour.is_dense = true;
+
+        *all_planes += contour; // 合併所有輪廓到一起
+    }
+
+
+    // 發布結果
+    for (auto& point : all_planes->points) {
+        point.r = 255;
+        point.g = 0;
+        point.b = 0;
+    }
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*cloud_rgb, output);
+    output.header = input->header;
+    pub.publish(output);
+}
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "plane_segmentation_node");
+    ros::NodeHandle nh;
+    ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
+    pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
+    ros::spin();
+    return 0;
+}
