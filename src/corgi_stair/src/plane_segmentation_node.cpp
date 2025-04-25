@@ -116,16 +116,31 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         extract.filter(*cloud_f);
         working_cloud = cloud_f;
     }
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_rgb(new pcl::PointCloud<pcl::PointXYZRGB>);
+    cloud_rgb->width = all_planes->width;
+    cloud_rgb->height = all_planes->height;
+    cloud_rgb->points.resize(cloud_rgb->width * cloud_rgb->height);
 
-    
-    // 發布結果
-    for (auto& point : all_planes->points) {
-        point.r = 255;
-        point.g = 0;
-        point.b = 0;
+    // 轉換：將 pcl::PointXYZ 轉換成 pcl::PointXYZRGB 並設定顏色為紅色
+    for (size_t i = 0; i < all_planes->points.size(); ++i) {
+        cloud_rgb->points[i].x = all_planes->points[i].x;
+        cloud_rgb->points[i].y = all_planes->points[i].y;
+        cloud_rgb->points[i].z = all_planes->points[i].z;
+
+        // 設置顏色為紅色 (r=255, g=0, b=0)
+        cloud_rgb->points[i].r = 255;  // Red
+        cloud_rgb->points[i].g = 0;    // Green
+        cloud_rgb->points[i].b = 0;    // Blue
     }
+
+    // 發布結果
+    // for (auto& point : all_planes->points) {
+    //     point.r = 255;
+    //     point.g = 0;
+    //     point.b = 0;
+    // }
     sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*all_planes, output);
+    pcl::toROSMsg(*cloud_rgb, output);
     output.header = input->header;
     pub.publish(output);
 }
