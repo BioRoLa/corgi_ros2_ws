@@ -167,3 +167,39 @@ Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const 
     const Eigen::VectorXd& u_opt = solver.getSolution();
     return u_opt.head(n_u);
 }
+
+void check_contact_state(int swing_leg, std::vector<corgi_msgs::ContactState*> contact_state_modules){
+    switch (swing_leg) {
+        case 0:
+            contact_state_modules[0]->contact = false;
+            contact_state_modules[1]->contact = true;
+            contact_state_modules[2]->contact = false;
+            contact_state_modules[3]->contact = true;
+            break;
+        case 1:
+            contact_state_modules[0]->contact = true;
+            contact_state_modules[1]->contact = false;
+            contact_state_modules[2]->contact = true;
+            contact_state_modules[3]->contact = false;
+            break;
+        case 2:
+            contact_state_modules[0]->contact = false;
+            contact_state_modules[1]->contact = true;
+            contact_state_modules[2]->contact = false;
+            contact_state_modules[3]->contact = true;
+            break;
+        case 3:
+            contact_state_modules[0]->contact = true;
+            contact_state_modules[1]->contact = false;
+            contact_state_modules[2]->contact = true;
+            contact_state_modules[3]->contact = false;
+            break;
+        default:
+            contact_state_modules[0]->contact = false;
+            contact_state_modules[1]->contact = false;
+            contact_state_modules[2]->contact = false;
+            contact_state_modules[3]->contact = false;
+            break;
+    }
+        
+}

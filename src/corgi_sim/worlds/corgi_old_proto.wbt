@@ -11,6 +11,7 @@ WorldInfo {
 Viewpoint {
   orientation -0.1491772068103509 0.26644897306534554 0.9522347954788695 1.0630511344464337
   position -1.040992782748965 -1.9878921609391342 0.9879418509665436
+  follow "robot"
 }
 TexturedBackground {
 }
@@ -202,7 +203,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LF_rmotorbar Solid {
         translation 0.222 0 -0.2
-        rotation 0.9697964005582006 0.2439158449685787 4.514003016704795e-05 6.283172776516791
+        rotation 0.9697964005582008 0.24391584496857877 4.5140030167047955e-05 6.283172776516791
         children [
           DEF group_rmotorbar Group {
             children [
@@ -340,7 +341,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LF_rl5l6 Solid {
               translation 2.7755575615628914e-17 -3.3306690738754696e-16 -1.942890293094024e-16
-              rotation 1.5282215094695383e-06 -0.0024567181542233937 0.9999969822622342 9.395317803550057e-18
               children [
                 DEF group_rl5l6 Group {
                   children [
@@ -478,7 +478,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LF_rl4 Solid {
                     translation 2.7755575615628914e-17 5.551115123125783e-17 1.3877787807814457e-16
-                    rotation 1.5282022757409234e-06 -4.978674670624851e-05 0.9999999987594722 1.2759916091504624e-17
                     children [
                       DEF group_rl4 Group {
                         children [
@@ -634,7 +633,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LF_rupframe Solid {
               translation 8.326672684688674e-17 2.7755575615628914e-16 -1.942890293094024e-16
-              rotation 1.5281699752111355e-06 -0.005692471501688003 0.9999837977516772 1.1197109948110474e-17
               children [
                 DEF group_rupframe Group {
                   children [
@@ -897,7 +895,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LF_rdownframe Solid {
                     translation 3.3306690738754696e-16 -3.3306690738754696e-16 -8.326672684688674e-17
-                    rotation -1.5282132092013825e-06 -0.00031686291394059557 -0.9999999497977778 6.328763684223747e-16
                     children [
                       DEF LF_force_sensor TouchSensor {
                         translation 0 -0.1 0
@@ -1295,7 +1292,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LF_ll5l6 Solid {
               translation -5.551115123125783e-17 5.551115123125783e-17 -2.220446049250313e-16
-              rotation -8.286473831346431e-06 -0.001621619489416084 0.9999986851399185 9.40207807693988e-18
               children [
                 DEF group_ll5l6 Group {
                   children [
@@ -1407,7 +1403,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LF_ll4 Solid {
                     translation 5.551115123125783e-17 0 0
-                    rotation 8.286047436127973e-06 -2.5067368544249774e-05 -0.9999999996514841 1.3516104744047447e-16
                     children [
                       DEF group_ll4 Group {
                         children [
@@ -1563,7 +1558,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LF_lupframe Solid {
               translation 2.7755575615628914e-17 2.7755575615628914e-16 -1.942890293094024e-16
-              rotation 8.286075403250563e-06 -0.00031885660146158904 -0.9999999491309031 1.806399495863377e-16
               children [
                 DEF group_lupframe Group {
                   children [
@@ -1826,7 +1820,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LF_ldownframe Solid {
                     translation -4.996003610813204e-16 -4.440892098500626e-16 -8.326672684688674e-17
-                    rotation -8.286023891114603e-06 -0.0002744058312481606 0.9999999623163901 7.284822434084292e-16
                     children [
                       DEF group_ldowframe Group {
                         children [
@@ -2041,7 +2034,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_rmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation -0.1118107580217798 0.993729517721115 5.960385482923935e-07 6.283175930808174
+        rotation -0.11181075802177978 0.9937295177211148 5.960385482923934e-07 6.283175930808174
         children [
           USE group_rmotorbar
           DEF LH_Rl5l6 HingeJoint {
@@ -2051,7 +2044,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LH_rl5l6 Solid {
               translation -2.7755575615628914e-17 -4.440892098500626e-16 -2.7755575615628914e-17
-              rotation 4.658645871614679e-06 -0.004357092026413434 0.9999905078186344 4.471275260826987e-17
               children [
                 USE group_rl5l6
                 DEF LH_Rl4 HingeJoint {
@@ -2061,7 +2053,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LH_rl4 Solid {
                     translation -8.326672684688674e-17 -5.551115123125783e-17 -2.7755575615628914e-16
-                    rotation -4.658796416658561e-06 -2.52665622232035e-05 -0.9999999996699482 4.693341799649345e-16
                     children [
                       USE group_rl4
                     ]
@@ -2089,7 +2080,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LH_rupframe Solid {
               translation 1.3877787807814457e-16 2.7755575615628914e-16 -2.220446049250313e-16
-              rotation -4.658800370704687e-06 -2.1897730294766643e-05 -0.9999999997493925 2.3208787463878856e-16
               children [
                 USE group_rupframe
                 DEF LF_REF_Rl4 HingeJoint {
@@ -2108,7 +2098,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LH_rdownframe Solid {
                     translation 2.220446049250313e-16 -3.3306690738754696e-16 -1.6653345369377348e-16
-                    rotation 4.658788461520701e-06 0.00011867131199146413 0.9999999929477077 7.851402553354673e-16
                     children [
                       DEF LH_force_sensor TouchSensor {
                         translation 0 -0.1 0
@@ -2181,7 +2170,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF LH_lmotorbar Solid {
         translation -0.222 0 -0.2
-        rotation 0.9995835214168743 -0.028857734097284222 -0.00012204348322334183 6.283183818256037
+        rotation 0.9995835214168741 -0.028857734097284215 -0.0001220434832233418 6.283183818256037
         children [
           USE group_lmotorbar
           DEF LH_Ll5l6 HingeJoint {
@@ -2191,7 +2180,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LH_ll5l6 Solid {
               translation 2.7755575615628914e-16 -4.996003610813204e-16 -3.608224830031759e-16
-              rotation -2.1483670955951034e-08 -0.004380554718312318 0.9999904053241508 4.470817125780779e-17
               children [
                 USE group_ll5l6
                 DEF LH_REF_Rl5l6 HingeJoint {
@@ -2210,7 +2198,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LH_ll4 Solid {
                     translation 0 1.6653345369377348e-16 0
-                    rotation 2.148341623191007e-08 -0.0006499993015275763 -0.9999997887504315 2.4469301398925953e-17
                     children [
                       USE group_ll4
                     ]
@@ -2238,7 +2225,6 @@ DEF CORGI Robot {
             }
             endPoint DEF LH_lupframe Solid {
               translation -1.3877787807814457e-16 -4.996003610813204e-16 -3.608224830031759e-16
-              rotation -2.1483502830275832e-08 -0.0002738421414253677 0.99999996250524 3.279215055482256e-17
               children [
                 USE group_lupframe
                 DEF LH_REF_Ll4 HingeJoint {
@@ -2257,7 +2243,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF LH_ldownframe Solid {
                     translation -1.6653345369377348e-16 -2.220446049250313e-16 -1.1102230246251565e-16
-                    rotation 2.1483492138783277e-08 0.00013626388470099515 -0.9999999907160766 6.660720537281553e-16
                     children [
                       USE group_ldowframe
                       DEF LH_REF_Rdownframe HingeJoint {
@@ -2324,7 +2309,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RF_rl5l6 Solid {
               translation -1.3877787807814457e-16 0 -5.551115123125783e-17
-              rotation 0 0.00296499981531445 -0.9999956043783869 1.7140634064379575e-17
               children [
                 USE group_rl5l6
                 DEF RF_Rl4 HingeJoint {
@@ -2334,7 +2318,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RF_rl4 Solid {
                     translation -5.551115123125783e-17 -5.551115123125783e-17 8.326672684688674e-17
-                    rotation 0 2.0641539028752908e-05 -0.9999999997869633 4.924242980570863e-16
                     children [
                       USE group_rl4
                     ]
@@ -2362,7 +2345,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RF_rupframe Solid {
               translation -6.661338147750939e-16 -8.881784197001252e-16 -1.6653345369377348e-16
-              rotation 0 -0.0031409247785122055 -0.999995067283602 1.3483814592585102e-16
               children [
                 USE group_rupframe
                 DEF RF_REF_Rl4 HingeJoint {
@@ -2381,7 +2363,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RF_rdownframe Solid {
                     translation 2.7755575615628914e-17 -1.9984014443252818e-15 2.220446049250313e-16
-                    rotation 0 -0.004661646469798312 0.9999891344670654 3.081674871422514e-16
                     children [
                       DEF RF_force_sensor TouchSensor {
                         translation 0 -0.1 0
@@ -2454,7 +2435,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RF_lmotorbar Solid {
         translation 0.222 0 0.2
-        rotation 3.589317177683407e-10 0.9999999999387919 -1.1064205190456566e-05 3.141636699015246
+        rotation 3.5893171776834067e-10 0.9999999999387917 -1.1064205190456566e-05 3.141636699015246
         children [
           USE group_lmotorbar
           DEF RF_Ll5l6 HingeJoint {
@@ -2464,7 +2445,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RF_ll5l6 Solid {
               translation 5.551115123125783e-17 6.106226635438361e-16 -1.6653345369377348e-16
-              rotation 0.6714825473842791 -0.7405457814944435 -0.026516675302589637 6.613562952305849e-16
               children [
                 USE group_ll5l6
                 DEF RF_REF_Rl5l6 HingeJoint {
@@ -2483,7 +2463,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RF_ll4 Solid {
                     translation -8.326672684688674e-17 -2.7755575615628914e-16 5.551115123125783e-17
-                    rotation 0.9998783570119453 0.0019834012819145643 0.015470529998933601 1.1103580919012657e-16
                     children [
                       USE group_ll4
                     ]
@@ -2511,7 +2490,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RF_lupframe Solid {
               translation -2.7755575615628914e-17 6.106226635438361e-16 -1.3877787807814457e-16
-              rotation 0.6711152522557794 -0.7409804226737947 -0.023501731932480067 6.617182493727749e-16
               children [
                 USE group_lupframe
                 DEF RF_REF_Ll4 HingeJoint {
@@ -2530,7 +2508,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RF_ldownframe Solid {
                     translation 7.216449660063518e-16 -7.771561172376096e-16 -2.220446049250313e-16
-                    rotation 0.07724155262845901 -0.0009711767481361424 -0.9970119354166572 1.4373390834923527e-15
                     children [
                       USE group_ldowframe
                       DEF RF_REF_Rdownframe HingeJoint {
@@ -2597,7 +2574,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RH_rl5l6 Solid {
               translation -2.7755575615628914e-17 1.6653345369377348e-16 -5.551115123125783e-17
-              rotation 0 -0.8226378336685193 -0.5685657346491836 5.953051862453951e-16
               children [
                 USE group_rl5l6
                 DEF RH_Rl4 HingeJoint {
@@ -2607,7 +2583,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RH_rl4 Solid {
                     translation -5.551115123125783e-17 1.6653345369377348e-16 0
-                    rotation 0 -5.247222907204087e-06 -0.9999999999862333 2.4213749698665757e-16
                     children [
                       USE group_rl4
                     ]
@@ -2635,7 +2610,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RH_rupframe Solid {
               translation -2.498001805406602e-16 -4.440892098500626e-16 -1.3877787807814457e-16
-              rotation 0 -0.9515690695059975 -0.30743504347990347 5.148954508337312e-16
               children [
                 USE group_rupframe
                 DEF RH_REF_Rl4 HingeJoint {
@@ -2654,7 +2628,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RH_rdownframe Solid {
                     translation -4.996003610813204e-16 -5.551115123125783e-17 8.326672684688674e-17
-                    rotation 0 -0.0008861515747517185 0.9999996073676161 5.094710360505021e-16
                     children [
                       DEF RH_force_sensor TouchSensor {
                         translation 0 -0.1 0
@@ -2727,7 +2700,7 @@ DEF CORGI Robot {
       ]
       endPoint DEF RH_lmotorbar Solid {
         translation -0.222 0 0.2
-        rotation 4.444736245550751e-12 -0.999999999999694 -7.824504824462813e-07 3.14160104444671
+        rotation 4.44473624555075e-12 -0.9999999999996939 -7.824504824462812e-07 3.14160104444671
         children [
           USE group_lmotorbar
           DEF RH_Ll5l6 HingeJoint {
@@ -2737,7 +2710,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RH_ll5l6 Solid {
               translation -2.498001805406602e-16 -2.7755575615628914e-16 -1.6653345369377348e-16
-              rotation -0.5734100601303336 -0.41128452530686205 -0.7085520038673495 9.680881988474423e-16
               children [
                 USE group_ll5l6
                 DEF RH_REF_Rl5l6 HingeJoint {
@@ -2756,7 +2728,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RH_ll4 Solid {
                     translation -1.1102230246251565e-16 -2.220446049250313e-16 2.7755575615628914e-17
-                    rotation 0.8221673516236241 0.0003299408164627276 0.5692457615681066 6.7518068093599e-16
                     children [
                       USE group_ll4
                     ]
@@ -2784,7 +2755,6 @@ DEF CORGI Robot {
             }
             endPoint DEF RH_lupframe Solid {
               translation 0 -8.326672684688674e-16 -2.498001805406602e-16
-              rotation -0.6910939167999529 -0.4961100187833744 -0.5256082642280843 8.032359984920301e-16
               children [
                 USE group_lupframe
                 DEF RH_REF_Ll4 HingeJoint {
@@ -2803,7 +2773,6 @@ DEF CORGI Robot {
                   }
                   endPoint DEF RH_ldownframe Solid {
                     translation 1.3877787807814457e-16 -1.6653345369377348e-16 2.7755575615628914e-17
-                    rotation 0.8127633423753738 -0.0006089276139927804 0.5825936649998624 6.829928016810095e-16
                     children [
                       USE group_ldowframe
                       DEF RH_REF_Rdownframe HingeJoint {

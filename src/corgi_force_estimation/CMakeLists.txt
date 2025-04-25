@@ -17,11 +17,32 @@ set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake
 set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils)
+find_package(catkin REQUIRED COMPONENTS 
+  roscpp 
+  std_msgs 
+  rosgraph_msgs 
+  geometry_msgs 
+  corgi_msgs 
+  corgi_utils 
+  corgi_walk 
+  sensor_msgs
+  corgi_gait_selector
+  corgi_hybrid
+)
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils
+  CATKIN_DEPENDS 
+    roscpp 
+    std_msgs 
+    rosgraph_msgs 
+    geometry_msgs 
+    corgi_msgs 
+    corgi_utils 
+    corgi_walk 
+    sensor_msgs
+    corgi_gait_selector
+    corgi_hybrid
 )
 
 include_directories(
@@ -32,6 +53,9 @@ include_directories(
 )
 
 find_library(CORGI_UTILS corgi_utils)
+find_library(CORGI_WALK corgi_walk)
+find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
+find_library(CORGI_HYBRID corgi_hybrid)
 
 add_subdirectory(src)
 

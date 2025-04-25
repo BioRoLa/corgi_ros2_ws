@@ -15,6 +15,7 @@
 #include "corgi_msgs/TriggerStamped.h"
 #include "corgi_msgs/ForceStateStamped.h"
 #include "corgi_msgs/MotorStateStamped.h"
+#include "corgi_msgs/ContactStateStamped.h"
 #include "sensor_msgs/Imu.h"
 #include "geometry_msgs/Vector3.h"
 
@@ -88,5 +89,7 @@ class ModelPredictiveController {
         double w = 0.33;
         double h = 0.17;
 };
+
+void check_contact_state(int swing_leg, std::vector<corgi_msgs::ContactState*> contact_state_modules);
 
 #endif

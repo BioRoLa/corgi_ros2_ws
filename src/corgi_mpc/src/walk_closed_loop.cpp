@@ -56,6 +56,7 @@ int main(int argc, char **argv) {
 
     ros::NodeHandle nh;
     ros::Publisher imp_cmd_pub = nh.advertise<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000);
+    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 1000);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
     ros::Subscriber sim_data_sub = nh.subscribe<corgi_msgs::SimDataStamped>("sim/data", 1000, sim_data_cb);
     ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
@@ -67,12 +68,20 @@ int main(int argc, char **argv) {
     ros::Rate rate(mpc.freq);
 
     corgi_msgs::ImpedanceCmdStamped imp_cmd;
+    corgi_msgs::ContactStateStamped contact_state;
 
     std::vector<corgi_msgs::ImpedanceCmd*> imp_cmd_modules = {
         &imp_cmd.module_a,
         &imp_cmd.module_b,
         &imp_cmd.module_c,
         &imp_cmd.module_d
+    };
+
+    std::vector<corgi_msgs::ContactState*> contact_state_modules = {
+        &contact_state.module_a,
+        &contact_state.module_b,
+        &contact_state.module_c,
+        &contact_state.module_d
     };
 
     std::vector<corgi_msgs::ForceState*> force_state_modules = {
@@ -158,6 +167,10 @@ int main(int argc, char **argv) {
 
             if (!sim) {
                 for (int i=0; i<int(3*mpc.freq); i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
                     rate.sleep();
                 }
             }
@@ -201,6 +214,8 @@ int main(int argc, char **argv) {
                         touched[i] = false;
                         imp_cmd_modules[i]->By = mpc.By_swing;
                         imp_cmd_modules[i]->Ky = mpc.Ky_swing;
+                        
+                        check_contact_state(i, contact_state_modules);
                     }
                     else if (walk_gait.get_swing_phase()[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
@@ -292,6 +307,9 @@ int main(int argc, char **argv) {
 
                 imp_cmd.header.seq = loop_count;
                 imp_cmd_pub.publish(imp_cmd);
+
+                contact_state.header.seq = loop_count;
+                contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;

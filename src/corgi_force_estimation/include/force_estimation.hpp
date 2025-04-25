@@ -15,6 +15,7 @@
 #include "corgi_msgs/ForceStateStamped.h"
 #include "corgi_msgs/ImpedanceCmdStamped.h"
 #include "corgi_msgs/MotorCmdStamped.h"
+#include "corgi_msgs/TriggerStamped.h"
 #include "sensor_msgs/Imu.h"
 
 bool sim = true;
