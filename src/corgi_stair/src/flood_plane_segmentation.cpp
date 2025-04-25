@@ -1,7 +1,6 @@
 //// Plane Segmentation in Organized Point Clouds using Flood Fill ////
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <pcl/ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/filters/passthrough.h>
@@ -12,6 +11,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/common/common.h>
 
+typedef pcl::PointXYZRGB PointT;
+
 ros::Publisher pub;
 
 // ROS訊息處理
@@ -19,6 +20,20 @@ void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud_msg) {
     // 將ROS點雲消息轉換為PCL點雲格式
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::fromROSMsg(*cloud_msg, *cloud);
+
+    // Set x,y,z range
+    pcl::PassThrough<PointT> pass;
+    pass.setKeepOrganized(true);
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(0.0, 3.0);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-1.0, 1.0);
+    pass.filter(*cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-0.5, 1.0);
+    pass.filter(*cloud);
 
     // 法線估計
     pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;

@@ -15,6 +15,7 @@
 typedef pcl::PointXYZRGB PointT;
 
 ros::Publisher pub;
+ros::Publisher normal_pub;
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 {
@@ -91,6 +92,37 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pcl::toROSMsg(*all_planes, output);
     output.header = input->header;
     pub.publish(output);
+
+    // 發布法線
+    visualization_msgs::MarkerArray marker_array;
+    for (size_t i = 0; i < cloud->points.size(); ++i)
+    {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "base_link";
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "normals";
+        marker.id = i;
+        marker.type = visualization_msgs::Marker::ARROW;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = cloud->points[i].x;
+        marker.pose.position.y = cloud->points[i].y;
+        marker.pose.position.z = cloud->points[i].z;
+        marker.pose.orientation.x = 0;
+        marker.pose.orientation.y = 0;
+        marker.pose.orientation.z = normals->points[i].normal_z;
+        marker.pose.orientation.w = normals->points[i].normal_x;
+
+        marker.scale.x = 0.01;
+        marker.scale.y = 0.02;
+        marker.scale.z = 0.02;
+        marker.color.a = 1.0;
+        marker.color.r = 1.0;
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+
+        marker_array.markers.push_back(marker);
+    }
+
 }
 
 int main(int argc, char** argv)
@@ -99,6 +131,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
+    normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
     ros::spin();
     return 0;
 }
