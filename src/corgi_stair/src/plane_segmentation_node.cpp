@@ -26,6 +26,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
     // Set x,y,z range
     pcl::PassThrough<pcl::PointXYZRGB> pass;
+    pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
     pass.setFilterLimits(0.0, 0.5);
