@@ -123,7 +123,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
         marker_array.markers.push_back(marker);
     }
-
+    normal_pub.publish(marker_array);
+    
 }
 
 int main(int argc, char** argv)
