@@ -2,6 +2,11 @@
 #include "mpc.hpp"
 
 bool trigger = false;
+corgi_msgs::ForceStateStamped force_state;
+
+void force_state_cb(const corgi_msgs::ForceStateStamped msg){
+    force_state = msg;
+}
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
     trigger = msg.enable;
@@ -19,6 +24,7 @@ int main(int argc, char **argv) {
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
     ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 1000);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
+    ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
     
     ros::Rate rate(1000);
 
@@ -37,6 +43,13 @@ int main(int argc, char **argv) {
         &contact_state.module_b,
         &contact_state.module_c,
         &contact_state.module_d
+    };
+
+    std::vector<corgi_msgs::ForceState*> force_state_modules = {
+        &force_state.module_a,
+        &force_state.module_b,
+        &force_state.module_c,
+        &force_state.module_d
     };
 
     // initialize gait

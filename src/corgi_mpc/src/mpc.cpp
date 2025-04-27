@@ -54,7 +54,7 @@ void ModelPredictiveController::init_matrices(const double *ra, const double *rb
                     0,    0,    5e-1,    // v_x, v_y, v_z
                     0;                   // additional state
 
-    R = 1e-6 * Eigen::MatrixXd::Identity(n_u, n_u);
+    R = 5e-7 * Eigen::MatrixXd::Identity(n_u, n_u);
 }
 
 Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref,
@@ -174,12 +174,14 @@ void check_contact_state(int swing_leg, std::vector<corgi_msgs::ContactState*> c
             contact_state_modules[0]->contact = false;
             contact_state_modules[1]->contact = true;
             contact_state_modules[2]->contact = false;
-            contact_state_modules[3]->contact = true;
+            contact_state_modules[3]->contact = false;
+            // contact_state_modules[3]->contact = true;
             break;
         case 1:
             contact_state_modules[0]->contact = true;
             contact_state_modules[1]->contact = false;
-            contact_state_modules[2]->contact = true;
+            contact_state_modules[2]->contact = false;
+            // contact_state_modules[2]->contact = true;
             contact_state_modules[3]->contact = false;
             break;
         case 2:

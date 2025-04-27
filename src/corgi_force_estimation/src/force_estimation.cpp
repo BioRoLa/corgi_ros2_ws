@@ -122,10 +122,15 @@ Eigen::MatrixXd estimate_force(double theta, double beta, double torque_r, doubl
     Eigen::MatrixXd jacobian(2, 2);
     jacobian = calculate_jacobian(P_theta, P_theta_deriv, beta);
     
-    Eigen::MatrixXd torque(2, 1);
-    torque << torque_r, torque_l;
+    Eigen::MatrixXd force_est(2, 1);
 
-    Eigen::MatrixXd force_est = jacobian.inverse().transpose() * torque;
+    if (jacobian.isZero(1e-6)) {
+        force_est.setZero();
+    } else {
+        Eigen::MatrixXd torque(2, 1);
+        torque << torque_r, torque_l;
+        force_est = jacobian.inverse().transpose() * torque;
+    }
 
     return force_est;
 }
