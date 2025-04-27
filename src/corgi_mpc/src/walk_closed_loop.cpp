@@ -215,13 +215,20 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->By = mpc.By_swing;
                         imp_cmd_modules[i]->Ky = mpc.Ky_swing;
                         
-                        check_contact_state(i, contact_state_modules);
+                        // check_contact_state(i, contact_state_modules);
                     }
                     else if (walk_gait.get_swing_phase()[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
                         touched[i] = true;
                         imp_cmd_modules[i]->By = mpc.By_stance;
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
+                    }
+
+                    if (force_state_modules[i]->Fy > 40) {
+                        contact_state_modules[i]->contact = true;
+                    }
+                    else {
+                        contact_state_modules[i]->contact = false;
                     }
                 }
 

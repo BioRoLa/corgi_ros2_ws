@@ -139,8 +139,14 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 for (int i=0; i<4; i++) {
-                    if (walk_gait.get_swing_phase()[i] == 1) {
-                        check_contact_state(i, contact_state_modules);
+                    // if (walk_gait.get_swing_phase()[i] == 1) {
+                    //     check_contact_state(i, contact_state_modules);
+                    // }
+                    if (force_state_modules[i]->Fy > 40) {
+                        contact_state_modules[i]->contact = true;
+                    }
+                    else {
+                        contact_state_modules[i]->contact = false;
                     }
                 }
 
