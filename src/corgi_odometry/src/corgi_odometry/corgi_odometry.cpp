@@ -141,9 +141,9 @@ void imu_cb(const sensor_msgs::Imu msg){
 }
 
 void contact_cb(const corgi_msgs::ContactStateStamped msg){
-    exclude[0] = !msg.module_b.contact;
-    exclude[1] = !msg.module_c.contact;
-    exclude[2] = !msg.module_a.contact;
+    exclude[0] = !msg.module_a.contact;
+    exclude[1] = !msg.module_b.contact;
+    exclude[2] = !msg.module_c.contact;
     exclude[3] = !msg.module_d.contact;
 }
 
@@ -375,7 +375,7 @@ int main(int argc, char **argv) {
             estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
             estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
             estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
-            estimate_state.segment(21, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);            //contact
+            estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);            //contact
             estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
             estimate_state(29) = filter.threshold;                                                                                                  //threshold
             estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());                                          //covariance

@@ -320,7 +320,6 @@ namespace estimation_model {
     }
 
     void GKLD::valid(bool exclude_[4]) {
-        static float alpha = (2.f * M_PI * dt * 1.f) / (2.f * M_PI * dt * 1.f + 1.f);
         y_set.resize(pool_size);
         Y_set.resize(pool_size);
         Eigen::VectorXf sum_y = y;
@@ -342,6 +341,7 @@ namespace estimation_model {
         x = Y.inverse() * y;
         return;
     }
+    
     void GKLD::iterative_valid() {
     }
 }
