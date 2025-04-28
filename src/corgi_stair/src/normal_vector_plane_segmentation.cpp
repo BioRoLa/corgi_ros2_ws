@@ -108,6 +108,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
     // ds.run();
+    pcl::VoxelGrid<pcl::PointXYZ> vg;
+    vg.setInputCloud(normal_clouds);
+    vg.setLeafSize(0.1f, 0.1f, 0.1f);  // 設定 voxel 的大小
+    vg.filter(*normal_clouds);
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
     tree->setInputCloud(normal_clouds);
     pcl::EuclideanClusterExtraction<PointT> ec;
