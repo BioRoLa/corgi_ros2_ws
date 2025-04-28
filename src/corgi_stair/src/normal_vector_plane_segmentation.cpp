@@ -108,9 +108,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
     // ds.run();
-    pcl::VoxelGrid<pcl::PointXYZ> vg;
+    pcl::VoxelGrid<PointT> vg;
     vg.setInputCloud(normal_clouds);
-    vg.setLeafSize(0.1f, 0.1f, 0.1f);  // 設定 voxel 的大小
+    vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
     vg.filter(*normal_clouds);
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
     tree->setInputCloud(normal_clouds);
@@ -122,7 +122,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ec.setInputCloud(normal_clouds);
     std::vector<pcl::PointIndices> cluster_indices;
     ec.extract(cluster_indices);
-
+    std::cout << "分出來的群數量 = " << cluster_indices.size() << std::endl;
+    for (size_t i = 0; i < cluster_indices.size(); ++i) {
+        std::cout << "第 " << i << " 群的點數量: " << cluster_indices[i].indices.size() << std::endl;
+    }
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
 
