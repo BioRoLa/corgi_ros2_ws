@@ -12,6 +12,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <pcl/features/normal_3d.h>
 #include <unordered_map>
 #include <random>
 
@@ -66,9 +67,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ne.setInputCloud(cloud);
     ne.compute(*normals);
     #else
+    pcl::PointCloud<PointT_no_color>::Ptr cloud_no_color(new pcl::PointCloud<PointT_no_color>);
+    pcl::fromROSMsg(*input, *cloud_no_color);
     pcl::NormalEstimation<PointT_no_color, pcl::Normal> ne;
     pcl::search::KdTree<PointT_no_color>::Ptr tree(new pcl::search::KdTree<PointT_no_color>);
-    ne.setInputCloud(cloud);
+    ne.setInputCloud(cloud_no_color);
     ne.setSearchMethod(tree);
     ne.setRadiusSearch(0.03); // 設置搜索半徑
     ne.compute(*normals);
