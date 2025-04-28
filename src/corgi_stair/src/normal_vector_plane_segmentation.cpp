@@ -15,10 +15,12 @@
 #include <unordered_map>
 #include <random>
 
+#define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
 typedef pcl::PointXYZRGB PointT;
 
 ros::Publisher pub;
 ros::Publisher normal_pub;
+
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 {
@@ -52,14 +54,22 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
     // Estimate normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-    pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
-    // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
-    // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
-    ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(0.05f);
-    ne.setNormalSmoothingSize(15.0f);
-    ne.setInputCloud(cloud);
-    ne.compute(*normals);
+    #if INTERGRAL_IMAGE_NORMAL_ESTIMATION
+        pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
+        // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+        // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
+        ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
+        ne.setMaxDepthChangeFactor(0.05f);
+        ne.setNormalSmoothingSize(15.0f);
+        ne.setInputCloud(cloud);
+        ne.compute(*normals);
+    #else
+        pcl::NormalEstimation<PointT, pcl::Normal> ne;
+        pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
+        ne.setInputCloud(cloud);
+        ne.setSearchMethod(tree);
+        ne.setRadiusSearch(0.03); // 設置搜索半徑
+        ne.compute(*normals);
 
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
@@ -80,7 +90,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels, label_indices, boundary_indices);
 
     // 隨機顏色產生器
-    bool random_color = true;
+    bool random_color = false;
     std::mt19937 rng;
     rng.seed(std::random_device()());
     std::uniform_int_distribution<int> color_dist(0, 255);
