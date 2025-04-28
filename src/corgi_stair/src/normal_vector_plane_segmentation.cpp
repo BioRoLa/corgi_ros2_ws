@@ -15,6 +15,8 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
+#include <pcl/segmentation/dbscan.h>
+
 #include <unordered_map>
 #include <random>
 
@@ -92,7 +94,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
             point.x = normals->points[i].normal_x;
             point.y = normals->points[i].normal_y;
             point.z = normals->points[i].normal_z;
-            cloud_with_normals->points.push_back(point);
+            normal_clouds->points.push_back(point);
         } else {
             // 法線無效，可以選擇跳過該點或給予默認值
             // 這裡選擇跳過無效法線的點
@@ -100,14 +102,16 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         }
     }
     std::vector<pcl::PointIndices> cluster_indices;
-    pcl::search::KdTree<PointT>::Ptr normal_tree(new pcl::search::KdTree<PointT>());
-    pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setInputCloud(normal_clouds);
-    ec.setSearchMethod(normal_tree);
-    ec.setClusterTolerance(0.1);  // Set clustering tolerance (tune as needed)
-    ec.setMinClusterSize(100);
-    // ec.setMaxClusterSize(10000);
-    ec.extract(cluster_indices);
+    // pcl::VoxelGrid<PointT> sor;
+    // sor.setInputCloud(normal_clouds);
+    // sor.setLeafSize(0.01f, 0.01f, 0.01f);
+    // sor.filter(*normal_clouds);
+    // DBSCAN 聚類
+    pcl::DBSCAN<PointT> dbscan;
+    dbscan.setInputCloud(PointT);
+    dbscan.setEps(0.02); // 半徑大小
+    dbscan.setMinPts(10); // 每個群集的最小點數
+    dbscan.extract(cluster_indices);
 
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
