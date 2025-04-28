@@ -113,6 +113,58 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100)
         if (!changed)
             break; // 收斂了
     }
+
+    // 1. 先計算每個群的平均 normal vector
+struct AvgNormal
+{
+    float x = 0;
+    float y = 0;
+    float z = 0;
+    int count = 0;
+};
+
+std::vector<AvgNormal> avg_normals(k);
+
+for (const auto& p : normal_points)
+{
+    avg_normals[p.clusterID].x += p.normal.x();
+    avg_normals[p.clusterID].y += p.normal.y();
+    avg_normals[p.clusterID].z += p.normal.z();
+    avg_normals[p.clusterID].count += 1;
+}
+
+for (int i = 0; i < k; ++i)
+{
+    if (avg_normals[i].count > 0)
+    {
+        avg_normals[i].x /= avg_normals[i].count;
+        avg_normals[i].y /= avg_normals[i].count;
+        avg_normals[i].z /= avg_normals[i].count;
+    }
+}
+
+// 2. 根據最大分量 (x/y/z) 給群指定顏色
+struct Color
+{
+    uint8_t r, g, b;
+};
+
+std::vector<Color> cluster_colors(k);
+
+for (int i = 0; i < k; ++i)
+{
+    float abs_x = std::abs(avg_normals[i].x);
+    float abs_y = std::abs(avg_normals[i].y);
+    float abs_z = std::abs(avg_normals[i].z);
+
+    if (abs_x >= abs_y && abs_x >= abs_z)
+        cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
+    else if (abs_y >= abs_x && abs_y >= abs_z)
+        cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
+    else
+        cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
+}
+
 }
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
@@ -236,12 +288,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
             int cluster_id = normal_points[idx].clusterID;
             if (cluster_id != UNCLASSIFIED) {
-                uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
-                uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
-                uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
-                colored_cloud->points[i].r = r;
-                colored_cloud->points[i].g = g;
-                colored_cloud->points[i].b = b;
+                auto color = cluster_colors[cluster_id];
+                // uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
+                // uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
+                // uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
+                colored_cloud->points[i].r = color.r;
+                colored_cloud->points[i].g = color.g;
+                colored_cloud->points[i].b = color.b;
             } else {
                 // 不是有效分類的點，塗成灰色
                 colored_cloud->points[i].r = 128;
