@@ -62,11 +62,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
     ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(0.05f);
-    ne.setNormalSmoothingSize(15.0f);
+    ne.setMaxDepthChangeFactor(0.10f);
+    ne.setNormalSmoothingSize(10.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
-    #else
+    #else // too slow
     pcl::PointCloud<PointT_no_color>::Ptr cloud_no_color(new pcl::PointCloud<PointT_no_color>);
     pcl::fromROSMsg(*input, *cloud_no_color);
     pcl::NormalEstimation<PointT_no_color, pcl::Normal> ne;
@@ -79,7 +79,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
-    mps.setMinInliers(50);
+    mps.setMinInliers(10);
     mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
     mps.setDistanceThreshold(0.05);          // 2cm
     mps.setInputCloud(cloud);
