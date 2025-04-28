@@ -189,12 +189,12 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 // update target vel and pos
-                if (loop_count < int(3*mpc.freq)) {
-                    mpc.target_vel_x += velocity/(3*mpc.freq);
+                if (loop_count < int(1*mpc.freq)) {
+                    mpc.target_vel_x += velocity/(1*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                else if (loop_count > mpc.target_loop-int(3*mpc.freq) && loop_count < mpc.target_loop) {
-                    mpc.target_vel_x -= velocity/(3*mpc.freq);
+                else if (loop_count > mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
+                    mpc.target_vel_x -= velocity/(1*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
 
@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    if (force_state_modules[i]->Fy > 40) {
+                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -240,6 +240,16 @@ int main(int argc, char **argv) {
                 mpc.robot_pos[0] = odom_pos.x;
                 mpc.robot_pos[1] = odom_pos.y;
                 mpc.robot_pos[2] = odom_pos.z;
+
+                // mpc.target_pos_z = 0.25;
+
+                // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
+                // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
+                // mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
+                
+                // mpc.robot_pos[0] = sim_data.position.x;
+                // mpc.robot_pos[1] = sim_data.position.y;
+                // mpc.robot_pos[2] = sim_data.position.z;
 
                 mpc.robot_ang.x() = imu.orientation.x;
                 mpc.robot_ang.y() = imu.orientation.y;

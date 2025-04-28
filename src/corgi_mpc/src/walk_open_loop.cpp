@@ -72,13 +72,13 @@ int main(int argc, char **argv) {
     for (auto& cmd : motor_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
-        cmd->kp_r = 150;
-        cmd->kp_l = 150;
+        cmd->kp_r = 90;
+        cmd->kp_l = 90;
         cmd->ki_r = 0;
         cmd->ki_l = 0;
         if (sim) {
-            cmd->kd_r = 0.75;
-            cmd->kd_l = 0.75;
+            cmd->kd_r = 1.5;
+            cmd->kd_l = 1.5;
         }
         else {
             cmd->kd_r = 1.75;
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
                     // if (walk_gait.get_swing_phase()[i] == 1) {
                     //     check_contact_state(i, contact_state_modules);
                     // }
-                    if (force_state_modules[i]->Fy > 40) {
+                    if (walk_gait.get_duty()[i] < 0.78 && walk_gait.get_duty()[i] > 0.02) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -151,11 +151,11 @@ int main(int argc, char **argv) {
                 }
 
                 // update target vel and pos
-                if (loop_count < 3000) {
-                    mpc.target_vel_x += velocity/3000.0;
+                if (loop_count < 1000) {
+                    mpc.target_vel_x += velocity/1000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                if (loop_count > mpc.target_loop*10-3000 && loop_count < mpc.target_loop*10) {
+                if (loop_count > mpc.target_loop*10-1000 && loop_count < mpc.target_loop*10) {
                     mpc.target_vel_x -= velocity/3000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }

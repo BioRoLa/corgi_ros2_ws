@@ -175,13 +175,11 @@ void check_contact_state(int swing_leg, std::vector<corgi_msgs::ContactState*> c
             contact_state_modules[1]->contact = true;
             contact_state_modules[2]->contact = false;
             contact_state_modules[3]->contact = false;
-            // contact_state_modules[3]->contact = true;
             break;
         case 1:
             contact_state_modules[0]->contact = true;
             contact_state_modules[1]->contact = false;
             contact_state_modules[2]->contact = false;
-            // contact_state_modules[2]->contact = true;
             contact_state_modules[3]->contact = false;
             break;
         case 2:

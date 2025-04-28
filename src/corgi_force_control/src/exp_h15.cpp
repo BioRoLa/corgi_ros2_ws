@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     double mg = 19.5*9.81;
     
     for (int i=0; i<2000; i++){
-        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {0/2000.0, 0.13/2000.0});
+        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {0/2000.0, 0.03/2000.0});
         
         imp_cmd_modules[0]->theta = eta[0];
         imp_cmd_modules[1]->theta = eta[0];
