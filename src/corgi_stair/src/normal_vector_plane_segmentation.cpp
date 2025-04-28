@@ -85,10 +85,18 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
 
     /* Step 4: Perform Mean Shift clustering */
+    pcl::PointCloud<pcl::PointXYZ>::Ptr normal_clouds(new pcl::PointCloud<pcl::PointXYZ>);
+    for (size_t i = 0; i < cloud->size(); ++i) {
+        PointT point;
+        point.x = normals->points[i].normal_x;
+        point.y = normals->points[i].normal_y;
+        point.z = normals->points[i].normal_z;
+        normal_clouds->points.push_back(point);
+    }
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::search::KdTree<PointT>::Ptr normal_tree(new pcl::search::KdTree<PointT>());
     pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setInputCloud(normals);
+    ec.setInputCloud(normal_clouds);
     ec.setSearchMethod(normal_tree);
     ec.setClusterTolerance(0.1);  // Set clustering tolerance (tune as needed)
     ec.setMinClusterSize(100);
