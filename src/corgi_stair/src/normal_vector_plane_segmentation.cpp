@@ -71,9 +71,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     std::vector<pcl::ModelCoefficients> model_coefficients;
     std::vector<pcl::PointIndices> inlier_indices;
     pcl::PointCloud<pcl::Label>::Ptr labels(new pcl::PointCloud<pcl::Label>);
+    std::vector<pcl::PointIndices> label_indices;
+    std::vector<pcl::PointIndices> boundary_indices;
     // mps.segment(regions); // 原始版本僅需 regions，無需 refine
     // mps.segmentAndRefine(regions); // refine
-    mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels);
+    mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels, label_indices, boundary_indices);
 
     // 隨機顏色產生器
     std::mt19937 rng;
