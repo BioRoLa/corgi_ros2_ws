@@ -27,15 +27,17 @@ ros::Publisher normal_pub;
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 {
+    /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
     pcl::fromROSMsg(*input, *cloud);
-
     if (!cloud->isOrganized())
     {
         ROS_WARN("Point cloud is not organized. Skipping frame.");
         return;
     }
 
+
+    /* Step 2: Set ROI */
     // pcl::VoxelGrid<PointT> voxel;
     // voxel.setInputCloud(cloud);
     // voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
@@ -55,6 +57,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.setFilterLimits(-0.5, 1.0);
     pass.filter(*cloud);
 
+
+    /* Step 3: Find normal vector for each point */
     // Estimate normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     #if INTERGRAL_IMAGE_NORMAL_ESTIMATION
@@ -77,11 +81,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ne.compute(*normals);
     #endif
 
-    // Plane segmentation
+
+    /* Step 4: Plane segmentation using normal vector */
+    // Setting
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(10);
     mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
-    mps.setDistanceThreshold(0.05);          // 2cm
+    mps.setDistanceThreshold(0.05);          // 5cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
 
@@ -95,28 +101,101 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // mps.segmentAndRefine(regions); // refine
     mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels, label_indices, boundary_indices);
 
-    // 隨機顏色產生器
-    bool random_color = false;
-    std::mt19937 rng;
-    rng.seed(std::random_device()());
-    std::uniform_int_distribution<int> color_dist(0, 255);
-    // 複製原始點雲（要修改顏色）
-    pcl::PointCloud<PointT>::Ptr color_cloud(new pcl::PointCloud<PointT>(*cloud));
-    // 把每個平面的 inliers 上色
-    for (size_t i = 0; i < inlier_indices.size(); ++i)
-    {
-        uint8_t r = color_dist(rng);
-        uint8_t g = color_dist(rng);
-        uint8_t b = color_dist(rng);
 
-        for (size_t j = 0; j < inlier_indices[i].indices.size(); ++j)
+    /* Step 5: Merge similar planes based on normal and distance */
+    const float normal_threshold = std::cos(10.0 * M_PI / 180.0); // 10度以内允許合併
+    const float distance_threshold = 0.05; // 平面到原點距離誤差5cm以内允許合併
+    
+    std::vector<bool> merged(model_coefficients.size(), false);
+    std::vector<int> plane_labels(cloud->size(), -1); // 記錄每個點屬於哪個合併後的平面
+    int plane_id = 0;
+    for (size_t i = 0; i < model_coefficients.size(); ++i)
+    {
+        if (merged[i])
+            continue;
+
+        // 這是 base 平面
+        const auto& coeff_base = model_coefficients[i];
+        Eigen::Vector3f normal_base(coeff_base.values[0], coeff_base.values[1], coeff_base.values[2]);
+        normal_base.normalize();
+        float d_base = coeff_base.values[3] / normal_base.norm();
+
+        // 對其他平面找可合併的
+        merged[i] = true;
+        for (size_t j = i + 1; j < model_coefficients.size(); ++j) {
+            if (merged[j])
+                continue;
+
+            const auto& coeff_other = model_coefficients[j];
+            Eigen::Vector3f normal_other(coeff_other.values[0], coeff_other.values[1], coeff_other.values[2]);
+            normal_other.normalize();
+            float d_other = coeff_other.values[3] / normal_other.norm();
+
+            float dot_product = std::abs(normal_base.dot(normal_other));
+            float distance_diff = std::abs(d_base - d_other);
+
+            if (dot_product > normal_threshold && distance_diff < distance_threshold)
+            {
+                merged[j] = true;
+
+                // 將 j 平面的 inlier 也歸類到 i 平面
+                for (int idx : inlier_indices[j].indices)
+                    plane_labels[idx] = plane_id;
+            }
+        }
+
+        // 把自己也標上 plane_id
+        for (int idx : inlier_indices[i].indices)
+            plane_labels[idx] = plane_id;
+
+        ++plane_id;
+    }
+
+    // 重新上色
+    pcl::PointCloud<PointT>::Ptr merged_color_cloud(new pcl::PointCloud<PointT>(*cloud));
+    for (size_t idx = 0; idx < plane_labels.size(); ++idx)
+    {
+        if (plane_labels[idx] >= 0)
         {
-            int idx = inlier_indices[i].indices[j];
-            color_cloud->points[idx].r = random_color? r: 255;
-            color_cloud->points[idx].g = random_color? g: 0;
-            color_cloud->points[idx].b = random_color? b: 0;
+            uint8_t r = static_cast<uint8_t>((plane_labels[idx] * 53) % 255);
+            uint8_t g = static_cast<uint8_t>((plane_labels[idx] * 97) % 255);
+            uint8_t b = static_cast<uint8_t>((plane_labels[idx] * 223) % 255);
+
+            merged_color_cloud->points[idx].r = r;
+            merged_color_cloud->points[idx].g = g;
+            merged_color_cloud->points[idx].b = b;
         }
     }
+
+    // 發布合併後結果
+    sensor_msgs::PointCloud2 merged_output;
+    pcl::toROSMsg(*merged_color_cloud, merged_output);
+    merged_output.header = input->header;
+    pub.publish(merged_output);
+
+
+    // 隨機顏色產生器
+    // bool random_color = false;
+    // std::mt19937 rng;
+    // rng.seed(std::random_device()());
+    // std::uniform_int_distribution<int> color_dist(0, 255);
+    // // 複製原始點雲（要修改顏色）
+    // pcl::PointCloud<PointT>::Ptr color_cloud(new pcl::PointCloud<PointT>(*cloud));
+    // // 把每個平面的 inliers 上色
+    // for (size_t i = 0; i < inlier_indices.size(); ++i)
+    // {
+    //     uint8_t r = color_dist(rng);
+    //     uint8_t g = color_dist(rng);
+    //     uint8_t b = color_dist(rng);
+
+    //     for (size_t j = 0; j < inlier_indices[i].indices.size(); ++j)
+    //     {
+    //         int idx = inlier_indices[i].indices[j];
+    //         color_cloud->points[idx].r = random_color? r: 255;
+    //         color_cloud->points[idx].g = random_color? g: 0;
+    //         color_cloud->points[idx].b = random_color? b: 0;
+    //     }
+    // }
 
 
     // pcl::PointCloud<PointT>::Ptr all_planes(new pcl::PointCloud<PointT>);
@@ -137,11 +216,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     //     point.b = 0;
     // }
 
-    // 發布結果
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*color_cloud, output);
-    output.header = input->header;
-    pub.publish(output);
+    // // 發布結果
+    // sensor_msgs::PointCloud2 output;
+    // pcl::toROSMsg(*color_cloud, output);
+    // output.header = input->header;
+    // pub.publish(output);
 
 
     // 發布法線
