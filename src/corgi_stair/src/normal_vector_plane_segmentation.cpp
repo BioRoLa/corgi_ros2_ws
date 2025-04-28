@@ -13,6 +13,7 @@
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <unordered_map>
+#include <random>
 
 typedef pcl::PointXYZRGB PointT;
 
@@ -62,26 +63,53 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(50);
     mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
-    mps.setDistanceThreshold(0.02);          // 2cm
+    mps.setDistanceThreshold(0.05);          // 2cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
 
     std::vector<pcl::PlanarRegion<PointT>, Eigen::aligned_allocator<pcl::PlanarRegion<PointT>>> regions;
-    mps.segment(regions); // 原始版本僅需 regions，無需 refine
+    std::vector<pcl::ModelCoefficients> model_coefficients;
+    std::vector<pcl::PointIndices> inlier_indices;
+    pcl::PointCloud<pcl::Label>::Ptr labels(new pcl::PointCloud<pcl::Label>);
+    // mps.segment(regions); // 原始版本僅需 regions，無需 refine
+    // mps.segmentAndRefine(regions); // refine
+    mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels);
 
-    pcl::PointCloud<PointT>::Ptr all_planes(new pcl::PointCloud<PointT>);
-
-    for (size_t i = 0; i < regions.size(); ++i)
+    // 隨機顏色產生器
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_int_distribution<int> color_dist(0, 255);
+    // 複製原始點雲（要修改顏色）
+    pcl::PointCloud<PointT>::Ptr color_cloud(new pcl::PointCloud<PointT>(*cloud));
+    // 把每個平面的 inliers 上色
+    for (size_t i = 0; i < inlier_indices.size(); ++i)
     {
-        const pcl::PlanarRegion<PointT>& region = regions[i];
-        pcl::PointCloud<PointT> contour;
-        contour.points = region.getContour();
-        contour.width = contour.points.size();
-        contour.height = 1;
-        contour.is_dense = true;
+        uint8_t r = color_dist(rng);
+        uint8_t g = color_dist(rng);
+        uint8_t b = color_dist(rng);
 
-        *all_planes += contour; // 合併所有輪廓到一起
+        for (size_t j = 0; j < inlier_indices[i].indices.size(); ++j)
+        {
+            int idx = inlier_indices[i].indices[j];
+            color_cloud->points[idx].r = r;
+            color_cloud->points[idx].g = g;
+            color_cloud->points[idx].b = b;
+        }
     }
+
+
+    // pcl::PointCloud<PointT>::Ptr all_planes(new pcl::PointCloud<PointT>);
+    // for (size_t i = 0; i < regions.size(); ++i)
+    // {
+    //     const pcl::PlanarRegion<PointT>& region = regions[i];
+    //     pcl::PointCloud<PointT> contour;
+    //     contour.points = region.getContour();
+    //     contour.width = contour.points.size();
+    //     contour.height = 1;
+    //     contour.is_dense = true;
+
+    //     *all_planes += contour; // 合併所有輪廓到一起
+    // }
 
 
     // 發布結果
