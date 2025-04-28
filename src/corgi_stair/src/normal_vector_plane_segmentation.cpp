@@ -110,19 +110,17 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
     //     *all_planes += contour; // 合併所有輪廓到一起
     // }
-
+    // for (auto& point : all_planes->points) {
+    //     point.r = 255;
+    //     point.g = 0;
+    //     point.b = 0;
+    // }
 
     // 發布結果
-    for (auto& point : all_planes->points) {
-        point.r = 255;
-        point.g = 0;
-        point.b = 0;
-    }
     sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*all_planes, output);
+    pcl::toROSMsg(*color_cloud, output);
     output.header = input->header;
     pub.publish(output);
-
 
 
     // 發布法線
