@@ -101,7 +101,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // 可視化 Marker
     visualization_msgs::MarkerArray marker_array;
     visualization_msgs::Marker marker_template;
-    marker_template.header.frame_id = msg->header.frame_id;
+    marker_template.header.frame_id = input->header.frame_id;
     marker_template.type = visualization_msgs::Marker::ARROW;
     marker_template.action = visualization_msgs::Marker::ADD;
     marker_template.scale.x = 0.01;
