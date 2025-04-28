@@ -66,7 +66,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
     ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(0.10f);
+    // ne.setMaxDepthChangeFactor(0.10f);
     ne.setNormalSmoothingSize(10.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
@@ -86,8 +86,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // Setting
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
     mps.setMinInliers(10);
-    mps.setAngularThreshold(0.017453 * 20.0); // 20 degrees in radians
-    mps.setDistanceThreshold(0.05);          // 5cm
+    mps.setAngularThreshold(0.017453 * 40.0); // 20 degrees in radians
+    mps.setDistanceThreshold(0.10);          // 5cm
     mps.setInputCloud(cloud);
     mps.setInputNormals(normals);
 
@@ -103,9 +103,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
 
     /* Step 5: Merge similar planes based on normal and distance */
-    const float normal_threshold = std::cos(10.0 * M_PI / 180.0); // 10度以内允許合併
-    const float distance_threshold = 0.05; // 平面到原點距離誤差5cm以内允許合併
-    
+    const float normal_threshold = std::cos(40.0 * M_PI / 180.0); // 10度以内允許合併
+    const float distance_threshold = 0.10; // 平面到原點距離誤差5cm以内允許合併
+
     std::vector<bool> merged(model_coefficients.size(), false);
     std::vector<int> plane_labels(cloud->size(), -1); // 記錄每個點屬於哪個合併後的平面
     int plane_id = 0;
@@ -155,7 +155,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pcl::PointCloud<PointT>::Ptr merged_color_cloud(new pcl::PointCloud<PointT>(*cloud));
     for (size_t idx = 0; idx < plane_labels.size(); ++idx)
     {
-        if (plane_labels[idx] >= 0)
+        if (plane_labels[idx] >= 0 && merged_color_cloud->points[idx].z > 0.05)
         {
             uint8_t r = static_cast<uint8_t>((plane_labels[idx] * 53) % 255);
             uint8_t g = static_cast<uint8_t>((plane_labels[idx] * 97) % 255);
