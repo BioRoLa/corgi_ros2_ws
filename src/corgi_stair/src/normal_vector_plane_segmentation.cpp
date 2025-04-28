@@ -12,6 +12,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <unordered_map>
 
 typedef pcl::PointXYZRGB PointT;
 
@@ -99,57 +100,61 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // 發布法線
     // 可視化 Marker
     visualization_msgs::MarkerArray marker_array;
-    visualization_msgs::Marker marker;
-    marker.header = input->header;
-    marker.ns = "normals";
-    marker.type = visualization_msgs::Marker::ARROW;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.pose.orientation.x = 0.0;
-    marker.pose.orientation.y = 0.0;
-    marker.pose.orientation.z = 0.0;
-    marker.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
-    marker.scale.x = 0.01;  // shaft diameter
-    marker.scale.y = 0.02;  // head diameter
-    marker.scale.z = 0.02;  // head length
-    marker.color.r = 0.0;
-    marker.color.g = 0.5;
-    marker.color.b = 1.0;
-    marker.color.a = 1.0;
-    marker.lifetime = ros::Duration(0.2);
+    visualization_msgs::Marker marker_template;
+    marker_template.header.frame_id = msg->header.frame_id;
+    marker_template.type = visualization_msgs::Marker::ARROW;
+    marker_template.action = visualization_msgs::Marker::ADD;
+    marker_template.scale.x = 0.01;
+    marker_template.scale.y = 0.002;
+    marker_template.scale.z = 0.002;
+    marker_template.color.r = 0.0;
+    marker_template.color.g = 1.0;
+    marker_template.color.b = 0.0;
+    marker_template.color.a = 1.0;
+
+    // 空間分格子平均
+    float grid_size = 0.2f;
+    std::unordered_map<std::tuple<int, int, int>, pcl::PointNormal, boost::hash<std::tuple<int, int, int>>> grid_map;
+    for (size_t i = 0; i < cloud->size(); ++i) {
+        const auto& pt = cloud->points[i];
+        const auto& nm = normals->points[i];
+        if (!pcl::isFinite(pt) || !pcl::isFinite(nm))
+            continue;
+        int gx = static_cast<int>(std::floor(pt.x / grid_size));
+        int gy = static_cast<int>(std::floor(pt.y / grid_size));
+        int gz = static_cast<int>(std::floor(pt.z / grid_size));
+        auto key = std::make_tuple(gx, gy, gz);
+        if (grid_map.find(key) == grid_map.end()) {
+            pcl::PointNormal ptn;
+            ptn.x = pt.x; ptn.y = pt.y; ptn.z = pt.z;
+            ptn.normal_x = nm.normal_x; ptn.normal_y = nm.normal_y; ptn.normal_z = nm.normal_z;
+            grid_map[key] = ptn;
+        }
+    }
 
     int id = 0;
-    for (size_t i = 0; i < cloud->points.size(); i+=100)
-    {
-        const auto& pt = cloud->points[i];
-        const auto& n = normals->points[i];
-        if (!pcl::isFinite(pt) || !pcl::isFinite(n))
-            continue;
+    for (const auto& kv : grid_map) {
+        const auto& pt = kv.second;
 
-        geometry_msgs::Point p1, p2;
-        if (!std::isfinite(p2.x) || !std::isfinite(p2.y) || !std::isfinite(p2.z))
-        continue;
+        visualization_msgs::Marker arrow = marker_template;
+        arrow.id = id++;
 
-        p1.x = pt.x;
-        p1.y = pt.y;
-        p1.z = pt.z;
+        geometry_msgs::Point start, end;
+        start.x = pt.x;
+        start.y = pt.y;
+        start.z = pt.z;
+        end.x = pt.x + 0.05 * pt.normal_x;
+        end.y = pt.y + 0.05 * pt.normal_y;
+        end.z = pt.z + 0.05 * pt.normal_z;
+        arrow.points.push_back(start);
+        arrow.points.push_back(end);
 
-        p2.x = pt.x + 0.05 * n.normal_x;
-        p2.y = pt.y + 0.05 * n.normal_y;
-        p2.z = pt.z + 0.05 * n.normal_z;
-
-        // orientation 要初始化（雖然箭頭用不到，但保險起見）
-        marker.pose.orientation.w = 1.0;
-
-        marker.id = id++;
-        marker.points.clear();
-        marker.points.push_back(p1);
-        marker.points.push_back(p2);
-
-        marker_array.markers.push_back(marker);
+        marker_array.markers.push_back(arrow);
     }
-    normal_pub.publish(marker_array);
 
+    normal_pub.publish(marker_array);
 }
+
 
 int main(int argc, char** argv)
 {
