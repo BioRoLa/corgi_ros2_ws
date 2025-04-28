@@ -2,7 +2,7 @@ add_executable(stair_main stair_main.cpp)
 target_link_libraries(stair_main ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
 
 add_executable(normal_vector_plane_segmentation normal_vector_plane_segmentation.cpp)
-target_link_libraries(normal_vector_plane_segmentation ${catkin_LIBRARIES})
+target_link_libraries(normal_vector_plane_segmentation ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
 
 add_executable(ransac_plane_segmentation ransac_plane_segmentation.cpp)
 target_link_libraries(ransac_plane_segmentation ${catkin_LIBRARIES})
