@@ -85,7 +85,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
 
     /* Step 4: Perform Mean Shift clustering */
-    pcl::PointCloud<pcl::PointXYZ>::Ptr normal_clouds(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<PointT>::Ptr normal_clouds(new pcl::PointCloud<PointT>);
     for (size_t i = 0; i < cloud->size(); ++i) {
         PointT point;
         point.x = normals->points[i].normal_x;
