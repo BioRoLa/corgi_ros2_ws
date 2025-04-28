@@ -87,11 +87,17 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     /* Step 4: Perform Mean Shift clustering */
     pcl::PointCloud<PointT>::Ptr normal_clouds(new pcl::PointCloud<PointT>);
     for (size_t i = 0; i < cloud->size(); ++i) {
-        PointT point;
-        point.x = normals->points[i].normal_x;
-        point.y = normals->points[i].normal_y;
-        point.z = normals->points[i].normal_z;
-        normal_clouds->points.push_back(point);
+        if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
+            PointT point;
+            point.x = normals->points[i].normal_x;
+            point.y = normals->points[i].normal_y;
+            point.z = normals->points[i].normal_z;
+            cloud_with_normals->points.push_back(point);
+        } else {
+            // 法線無效，可以選擇跳過該點或給予默認值
+            // 這裡選擇跳過無效法線的點
+            continue;
+        }
     }
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::search::KdTree<PointT>::Ptr normal_tree(new pcl::search::KdTree<PointT>());
