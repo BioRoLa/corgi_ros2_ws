@@ -53,7 +53,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // Estimate normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
-    ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
+    ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
     ne.setMaxDepthChangeFactor(0.05f);
     ne.setNormalSmoothingSize(15.0f);
     ne.setInputCloud(cloud);
@@ -78,6 +80,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     mps.segmentAndRefine(regions, model_coefficients, inlier_indices, labels, label_indices, boundary_indices);
 
     // 隨機顏色產生器
+    bool random_color = true;
     std::mt19937 rng;
     rng.seed(std::random_device()());
     std::uniform_int_distribution<int> color_dist(0, 255);
@@ -93,9 +96,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
         for (size_t j = 0; j < inlier_indices[i].indices.size(); ++j)
         {
             int idx = inlier_indices[i].indices[j];
-            color_cloud->points[idx].r = r;
-            color_cloud->points[idx].g = g;
-            color_cloud->points[idx].b = b;
+            color_cloud->points[idx].r = random_color? r: 255;
+            color_cloud->points[idx].g = random_color? g: 0;
+            color_cloud->points[idx].b = random_color? b: 0;
         }
     }
 
