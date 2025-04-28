@@ -86,7 +86,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
     /* Step 4: Perform Mean Shift clustering */
     std::vector<pcl::PointIndices> cluster_indices;
-    pcl::search::KdTree<pcl::Normal>::Ptr normal_tree(new pcl::search::KdTree<pcl::Normal>());
+    pcl::search::KdTree<PointT>::Ptr normal_tree(new pcl::search::KdTree<PointT>());
     pcl::EuclideanClusterExtraction<PointT> ec;
     ec.setInputCloud(normals);
     ec.setSearchMethod(normal_tree);
