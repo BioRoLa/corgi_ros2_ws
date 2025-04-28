@@ -15,7 +15,6 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
-#include <pcl/segmentation/dbscan.h>
 #include <unordered_map>
 #include <random>
 
@@ -114,14 +113,18 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     std::mt19937 rng;
     rng.seed(std::random_device()());
     std::uniform_int_distribution<int> dist(0, 255);
+
     // 現在給每個 colored_cloud 的點塗上對應顏色
     for (size_t i = 0; i < cloud->size(); ++i) {
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
             int cluster_id = normal_points[idx].clusterID;
-            if (cluster_id != UNCLASSIFIED && cluster_id < static_cast<int>(colors.size())) {
-                colored_cloud->points ;
-                colored_cloud->points ;
-                colored_cloud->points ;
+            if (cluster_id != UNCLASSIFIED) {
+                uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
+                uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
+                uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
+                colored_cloud->points[i].r = r;
+                colored_cloud->points[i].g = g;
+                colored_cloud->points[i].b = b;
             } else {
                 // 不是有效分類的點，塗成灰色
                 colored_cloud->points[i].r = 128;
