@@ -55,21 +55,22 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // Estimate normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     #if INTERGRAL_IMAGE_NORMAL_ESTIMATION
-        pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
-        // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
-        // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
-        ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-        ne.setMaxDepthChangeFactor(0.05f);
-        ne.setNormalSmoothingSize(15.0f);
-        ne.setInputCloud(cloud);
-        ne.compute(*normals);
+    pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
+    // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
+    ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
+    ne.setMaxDepthChangeFactor(0.05f);
+    ne.setNormalSmoothingSize(15.0f);
+    ne.setInputCloud(cloud);
+    ne.compute(*normals);
     #else
-        pcl::NormalEstimation<PointT, pcl::Normal> ne;
-        pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
-        ne.setInputCloud(cloud);
-        ne.setSearchMethod(tree);
-        ne.setRadiusSearch(0.03); // 設置搜索半徑
-        ne.compute(*normals);
+    pcl::NormalEstimation<PointT, pcl::Normal> ne;
+    pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
+    ne.setInputCloud(cloud);
+    ne.setSearchMethod(tree);
+    ne.setRadiusSearch(0.03); // 設置搜索半徑
+    ne.compute(*normals);
+    #endif
 
     // Plane segmentation
     pcl::OrganizedMultiPlaneSegmentation<PointT, pcl::Normal, pcl::Label> mps;
