@@ -42,3 +42,8 @@ add_library(${PROJECT_NAME}
   src/leg_info.cpp
   src/dbscan.cpp
 )
+
+target_link_libraries(${PROJECT_NAME}
+  ${CORGI_UTILS}
+  ${CORGI_WALK}
+)
