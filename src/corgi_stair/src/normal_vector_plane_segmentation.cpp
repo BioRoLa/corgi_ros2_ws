@@ -13,7 +13,9 @@
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/common/common.h>
 #include <unordered_map>
 #include <random>
 
