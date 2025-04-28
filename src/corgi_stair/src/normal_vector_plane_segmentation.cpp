@@ -15,6 +15,7 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <unordered_map>
 #include <random>
 
@@ -88,56 +89,85 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 
 
     /* Step 4: Implementing DBSCAN for clustering */
-    vector<Point> normal_points;
+    pcl::PointCloud<PointT>::Ptr normal_clouds(new pcl::PointCloud<PointT>);
+    // vector<Point> normal_points;
     for (size_t i = 0; i < cloud->size(); ++i) {
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
-            Point point;
+            PointT point;
             point.x = normals->points[i].normal_x;
             point.y = normals->points[i].normal_y;
             point.z = normals->points[i].normal_z;
-            point.clusterID = UNCLASSIFIED;
-            normal_points.push_back(point);
+            // point.clusterID = UNCLASSIFIED;
+            // normal_points.push_back(point);
+            normal_clouds->points.push_back(point);
         } else {
             // 法線無效，可以選擇跳過該點或給予默認值
             // 這裡選擇跳過無效法線的點
             continue;
         }
     }
-    DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
-    ds.run();
+    // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
+    // ds.run();
+    pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
+    tree->setInputCloud(normal_clouds);
+    pcl::EuclideanClusterExtraction<PointT> ec;
+    ec.setClusterTolerance(0.1);  // Set tolerance (e.g., 0.1 meters)
+    ec.setMinClusterSize(10);  // Minimum number of points to form a cluster
+    ec.setMaxClusterSize(10000);  // Maximum number of points in a cluster
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(normals);
+    std::vector<pcl::PointIndices> cluster_indices;
+    ec.extract(cluster_indices);
 
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
 
-    int idx = 0;
+    // int idx = 0;
+    int cluster_id = 0;
     std::mt19937 rng;
     rng.seed(std::random_device()());
     std::uniform_int_distribution<int> dist(0, 255);
 
-    // 現在給每個 colored_cloud 的點塗上對應顏色
-    for (size_t i = 0; i < cloud->size(); ++i) {
-        if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
-            int cluster_id = normal_points[idx].clusterID;
-            if (cluster_id != UNCLASSIFIED) {
-                uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
-                uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
-                uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
-                colored_cloud->points[i].r = r;
-                colored_cloud->points[i].g = g;
-                colored_cloud->points[i].b = b;
-            } else {
-                // 不是有效分類的點，塗成灰色
-                colored_cloud->points[i].r = 128;
-                colored_cloud->points[i].g = 128;
-                colored_cloud->points[i].b = 128;
-            }
-            idx ++;
-        } else {
-            // 沒有有效 normal 的點，塗成黑色
-            colored_cloud->points[i].r = 0;
-            colored_cloud->points[i].g = 0;
-            colored_cloud->points[i].b = 0;
+    // // 現在給每個 colored_cloud 的點塗上對應顏色
+    // for (size_t i = 0; i < cloud->size(); ++i) {
+    //     if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
+    //         int cluster_id = normal_points[idx].clusterID;
+    //         if (cluster_id != UNCLASSIFIED) {
+    //             uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
+    //             uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
+    //             uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
+    //             colored_cloud->points[i].r = r;
+    //             colored_cloud->points[i].g = g;
+    //             colored_cloud->points[i].b = b;
+    //         } else {
+    //             // 不是有效分類的點，塗成灰色
+    //             colored_cloud->points[i].r = 128;
+    //             colored_cloud->points[i].g = 128;
+    //             colored_cloud->points[i].b = 128;
+    //         }
+    //         idx ++;
+    //     } else {
+    //         // 沒有有效 normal 的點，塗成黑色
+    //         colored_cloud->points[i].r = 0;
+    //         colored_cloud->points[i].g = 0;
+    //         colored_cloud->points[i].b = 0;
+    //     }
+    // }
+
+
+    for (const auto& cluster : cluster_indices)
+    {
+        uint8_t r = dist(rng);
+        uint8_t g = dist(rng);
+        uint8_t b = dist(rng);
+
+        for (const auto& index : cluster.indices)
+        {
+            colored_cloud->points[index].r = r;
+            colored_cloud->points[index].g = g;
+            colored_cloud->points[index].b = b;
         }
+        ++cluster_id;
     }
 
     // Publish the result
