@@ -16,9 +16,11 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
 #include <pcl/segmentation/dbscan.h>
-
 #include <unordered_map>
 #include <random>
+
+#include <dbscan.hpp>
+
 
 #define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
 
@@ -86,54 +88,53 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     #endif
 
 
-    /* Step 4: Perform Mean Shift clustering */
-    pcl::PointCloud<PointT>::Ptr normal_clouds(new pcl::PointCloud<PointT>);
+    /* Step 4: Implementing DBSCAN for clustering */
+    vector<Point> normal_points;
     for (size_t i = 0; i < cloud->size(); ++i) {
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
-            PointT point;
+            Point point;
             point.x = normals->points[i].normal_x;
             point.y = normals->points[i].normal_y;
             point.z = normals->points[i].normal_z;
-            normal_clouds->points.push_back(point);
+            point.clusterID = UNCLASSIFIED;
+            normal_points.push_back(point);
         } else {
             // 法線無效，可以選擇跳過該點或給予默認值
             // 這裡選擇跳過無效法線的點
             continue;
         }
     }
-    std::vector<pcl::PointIndices> cluster_indices;
-    // pcl::VoxelGrid<PointT> sor;
-    // sor.setInputCloud(normal_clouds);
-    // sor.setLeafSize(0.01f, 0.01f, 0.01f);
-    // sor.filter(*normal_clouds);
-    // DBSCAN 聚類
-    pcl::DBSCAN<PointT> dbscan;
-    dbscan.setInputCloud(PointT);
-    dbscan.setEps(0.02); // 半徑大小
-    dbscan.setMinPts(10); // 每個群集的最小點數
-    dbscan.extract(cluster_indices);
+    DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
+    ds.run();
 
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
 
-    int cluster_id = 0;
+    int idx = 0;
     std::mt19937 rng;
     rng.seed(std::random_device()());
     std::uniform_int_distribution<int> dist(0, 255);
-
-    for (const auto& cluster : cluster_indices)
-    {
-        uint8_t r = dist(rng);
-        uint8_t g = dist(rng);
-        uint8_t b = dist(rng);
-
-        for (const auto& index : cluster.indices)
-        {
-            colored_cloud->points[index].r = r;
-            colored_cloud->points[index].g = g;
-            colored_cloud->points[index].b = b;
+    // 現在給每個 colored_cloud 的點塗上對應顏色
+    for (size_t i = 0; i < cloud->size(); ++i) {
+        if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
+            int cluster_id = normal_points[idx].clusterID;
+            if (cluster_id != UNCLASSIFIED && cluster_id < static_cast<int>(colors.size())) {
+                colored_cloud->points ;
+                colored_cloud->points ;
+                colored_cloud->points ;
+            } else {
+                // 不是有效分類的點，塗成灰色
+                colored_cloud->points[i].r = 128;
+                colored_cloud->points[i].g = 128;
+                colored_cloud->points[i].b = 128;
+            }
+            idx ++;
+        } else {
+            // 沒有有效 normal 的點，塗成黑色
+            colored_cloud->points[i].r = 0;
+            colored_cloud->points[i].g = 0;
+            colored_cloud->points[i].b = 0;
         }
-        ++cluster_id;
     }
 
     // Publish the result

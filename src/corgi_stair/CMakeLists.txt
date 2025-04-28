@@ -40,4 +40,5 @@ add_subdirectory(src)
 add_library(${PROJECT_NAME}
   src/stair_climb.cpp
   src/leg_info.cpp
+  src/dbscan.cpp
 )
