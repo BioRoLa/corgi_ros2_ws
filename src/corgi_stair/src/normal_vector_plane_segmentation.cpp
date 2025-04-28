@@ -16,7 +16,9 @@
 #include <random>
 
 #define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
+
 typedef pcl::PointXYZRGB PointT;
+typedef pcl::PointXYZ PointT_no_color;
 
 ros::Publisher pub;
 ros::Publisher normal_pub;
@@ -64,8 +66,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ne.setInputCloud(cloud);
     ne.compute(*normals);
     #else
-    pcl::NormalEstimation<PointT, pcl::Normal> ne;
-    pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
+    pcl::NormalEstimation<PointT_no_color, pcl::Normal> ne;
+    pcl::search::KdTree<PointT_no_color>::Ptr tree(new pcl::search::KdTree<PointT_no_color>);
     ne.setInputCloud(cloud);
     ne.setSearchMethod(tree);
     ne.setRadiusSearch(0.03); // 設置搜索半徑
