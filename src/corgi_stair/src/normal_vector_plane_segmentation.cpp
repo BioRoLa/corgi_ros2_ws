@@ -3,7 +3,6 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/segmentation/organized_multi_plane_segmentation.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -88,7 +87,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     /* Step 4: Perform Mean Shift clustering */
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::search::KdTree<pcl::Normal>::Ptr normal_tree(new pcl::search::KdTree<pcl::Normal>());
-    pcl::EuclideanClusterExtraction<pcl::Normal> ec;
+    pcl::EuclideanClusterExtraction<PointT> ec;
     ec.setInputCloud(normals);
     ec.setSearchMethod(normal_tree);
     ec.setClusterTolerance(0.1);  // Set clustering tolerance (tune as needed)
