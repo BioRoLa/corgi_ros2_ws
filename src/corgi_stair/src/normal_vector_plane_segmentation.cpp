@@ -115,7 +115,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ec.setMinClusterSize(10);  // Minimum number of points to form a cluster
     ec.setMaxClusterSize(10000);  // Maximum number of points in a cluster
     ec.setSearchMethod(tree);
-    ec.setInputCloud(normals);
+    ec.setInputCloud(normal_clouds);
     std::vector<pcl::PointIndices> cluster_indices;
     ec.extract(cluster_indices);
 
