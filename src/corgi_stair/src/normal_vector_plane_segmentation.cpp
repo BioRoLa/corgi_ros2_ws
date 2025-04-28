@@ -111,9 +111,16 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     marker_template.color.g = 1.0;
     marker_template.color.b = 0.0;
     marker_template.color.a = 1.0;
+    marker_template.pose.orientation.x = 0.0;
+    marker_template.pose.orientation.y = 0.0;
+    marker_template.pose.orientation.z = 0.0;
+    marker_template.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
+    marker_template.lifetime = ros::Duration(0.2);
+
+
 
     // 空間分格子平均
-    float grid_size = 0.2f;
+    float grid_size = 0.05f;
     std::unordered_map<std::tuple<int, int, int>, pcl::PointNormal, boost::hash<std::tuple<int, int, int>>> grid_map;
     for (size_t i = 0; i < cloud->size(); ++i) {
         const auto& pt = cloud->points[i];
