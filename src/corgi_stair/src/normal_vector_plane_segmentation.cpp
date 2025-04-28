@@ -112,6 +112,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     vg.setInputCloud(normal_clouds);
     vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
     vg.filter(*normal_clouds);
+    std::cout << "Input cloud size: " << normal_clouds->size() << std::endl;
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
     tree->setInputCloud(normal_clouds);
     pcl::EuclideanClusterExtraction<PointT> ec;
