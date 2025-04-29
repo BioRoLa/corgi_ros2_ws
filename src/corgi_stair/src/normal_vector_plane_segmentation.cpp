@@ -152,7 +152,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(0.20, 3.0);
+    pass.setFilterLimits(0.20, 2.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
     pass.setFilterLimits(-1.0, 1.0);
@@ -425,7 +425,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     marker_template.pose.orientation.y = 0.0;
     marker_template.pose.orientation.z = 0.0;
     marker_template.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
-    marker_template.lifetime = ros::Duration(0.2);
+    marker_template.lifetime = ros::Duration(0.1);
 
     // 空間分格子平均
     float grid_size = 0.10f;
