@@ -20,7 +20,7 @@
 #include <random>
 
 #include <dbscan.hpp>
-#include <omp.h>  // OpenMP 標頭檔
+
 
 #define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
 #define CLUSTER_NORMAL 1
@@ -37,6 +37,7 @@ struct Color
 {
     uint8_t r, g, b;
 };
+
 
 struct NormalPoint
 {
@@ -136,103 +137,6 @@ struct AvgNormal
 
 
 
-/* DBSCAN */
-// 餘弦相似度
-float cosine_similarity(const pcl::Normal& a, const pcl::Normal& b) {
-    float dot = a.normal_x * b.normal_x + a.normal_y * b.normal_y + a.normal_z * b.normal_z;
-    return dot; // 兩個都是單位向量，不需要除 norm
-}
-
-// 使用 OpenMP 加速的 Spherical DBSCAN clustering
-vector<int> sphericalDBSCANWithOpenMP(
-    pcl::PointCloud<pcl::Normal>::Ptr normals,
-    float eps_cosine, // ex: cos(angle) threshold = cos(θ)
-    int min_pts
-) {
-    int n = normals->size();
-    vector<bool> visited(n, false);
-    vector<int> cluster_ids(n, -1);
-    int cluster_id = 0;
-
-    #pragma omp parallel for
-    for (int i = 0; i < n; ++i) {
-        if (visited[i]) continue;
-        visited[i] = true;
-
-        // 找鄰居
-        vector<int> neighbors;
-        for (int j = 0; j < n; ++j) {
-            if (cosine_similarity(normals->points[i], normals->points[j]) > eps_cosine)
-                neighbors.push_back(j);
-        }
-
-        if (neighbors.size() < min_pts) {
-            cluster_ids[i] = -1; // noise
-        } else {
-            cluster_ids[i] = cluster_id;
-            for (size_t k = 0; k < neighbors.size(); ++k) {
-                int idx = neighbors[k];
-                if (!visited[idx]) {
-                    visited[idx] = true;
-
-                    vector<int> new_neighbors;
-                    for (int j = 0; j < n; ++j) {
-                        if (cosine_similarity(normals->points[idx], normals->points[j]) > eps_cosine)
-                            new_neighbors.push_back(j);
-                    }
-
-                    if (new_neighbors.size() >= min_pts) {
-                        neighbors.insert(neighbors.end(), new_neighbors.begin(), new_neighbors.end());
-                    }
-                }
-                if (cluster_ids[idx] == -1) {
-                    cluster_ids[idx] = cluster_id;
-                }
-            }
-            #pragma omp critical
-            {
-                ++cluster_id;
-            }
-        }
-    }
-
-    return cluster_ids;
-}
-
-// 整合完整流程：過濾 NaN → clustering → 還原對應
-vector<int> sphericalClusteringWithNaNFilterAndOpenMP(
-    pcl::PointCloud<pcl::Normal>::Ptr normals,
-    float angle_degree = 10.0f,
-    int min_pts = 5
-) {
-    pcl::PointCloud<pcl::Normal>::Ptr valid_normals(new pcl::PointCloud<pcl::Normal>);
-    vector<int> original_indices;
-
-    // 過濾 NaN 法向量
-    for (size_t i = 0; i < normals->size(); ++i) {
-        const auto& n = normals->points[i];
-        if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
-            valid_normals->push_back(n);
-            original_indices.push_back(i);
-        }
-    }
-
-    // 轉換角度到 cosine 相似度
-    float eps_cosine = cos(angle_degree * M_PI / 180.0f); // 角度轉 cosine 相似度
-
-    // 執行 spherical DBSCAN
-    vector<int> filtered_cluster_ids = sphericalDBSCANWithOpenMP(valid_normals, eps_cosine, min_pts);
-
-    // 映射回原始資料大小
-    vector<int> full_cluster_ids(normals->size(), -1);
-    for (size_t i = 0; i < filtered_cluster_ids.size(); ++i) {
-        full_cluster_ids[original_indices[i]] = filtered_cluster_ids[i];
-    }
-
-    return full_cluster_ids;
-}
-
-
 
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
@@ -311,7 +215,6 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     //     }
     // }
     // 把 normal 抓出來
-    // std::vector<NormalPoint> normal_points;
     std::vector<NormalPoint> normal_points;
     for (size_t i = 0; i < normals->size(); ++i)
     {
@@ -326,12 +229,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
     // ds.run();
     // 執行 KMeans (分成3群)
-    // int k = 3;
-    // kmeansNormals(normal_points, k);
-    std::vector<int> cluster_ids = sphericalClusteringWithNaNFilterAndOpenMP(normals, 10.0f /*角度*/, 5 /*最小群大小*/);
-
-    int num_clusters = *std::max_element(cluster_ids.begin(), cluster_ids.end()) + 1;
-    std::cout << "Number of clusters: " << num_clusters << std::endl;
+    int k = 3;
+    kmeansNormals(normal_points, k);
     // pcl::VoxelGrid<PointT> vg;
     // vg.setInputCloud(normal_clouds);
     // vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
@@ -348,44 +247,43 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // std::vector<pcl::PointIndices> cluster_indices;
     // ec.extract(cluster_indices);
 
-    // std::vector<AvgNormal> avg_normals(k);
+    std::vector<AvgNormal> avg_normals(k);
 
-    // for (const auto& p : normal_points)
-    // {
-    //     avg_normals[p.clusterID].x += p.normal.x();
-    //     avg_normals[p.clusterID].y += p.normal.y();
-    //     avg_normals[p.clusterID].z += p.normal.z();
-    //     avg_normals[p.clusterID].count += 1;
-    // }
+    for (const auto& p : normal_points)
+    {
+        avg_normals[p.clusterID].x += p.normal.x();
+        avg_normals[p.clusterID].y += p.normal.y();
+        avg_normals[p.clusterID].z += p.normal.z();
+        avg_normals[p.clusterID].count += 1;
+    }
     
-    // for (int i = 0; i < k; ++i)
-    // {
-    //     if (avg_normals[i].count > 0)
-    //     {
-    //         avg_normals[i].x /= avg_normals[i].count;
-    //         avg_normals[i].y /= avg_normals[i].count;
-    //         avg_normals[i].z /= avg_normals[i].count;
-    //     }
-    // }
+    for (int i = 0; i < k; ++i)
+    {
+        if (avg_normals[i].count > 0)
+        {
+            avg_normals[i].x /= avg_normals[i].count;
+            avg_normals[i].y /= avg_normals[i].count;
+            avg_normals[i].z /= avg_normals[i].count;
+        }
+    }
     
     // 2. 根據最大分量 (x/y/z) 給群指定顏色
 
+    std::vector<Color> cluster_colors(k);
     
-    // std::vector<Color> cluster_colors(k);
+    for (int i = 0; i < k; ++i)
+    {
+        float abs_x = std::abs(avg_normals[i].x);
+        float abs_y = std::abs(avg_normals[i].y);
+        float abs_z = std::abs(avg_normals[i].z);
     
-    // for (int i = 0; i < k; ++i)
-    // {
-    //     float abs_x = std::abs(avg_normals[i].x);
-    //     float abs_y = std::abs(avg_normals[i].y);
-    //     float abs_z = std::abs(avg_normals[i].z);
-    
-    //     if (abs_x >= abs_y && abs_x >= abs_z)
-    //         cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
-    //     else if (abs_y >= abs_x && abs_y >= abs_z)
-    //         cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
-    //     else
-    //         cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
-    // }
+        if (abs_x >= abs_y && abs_x >= abs_z)
+            cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
+        else if (abs_y >= abs_x && abs_y >= abs_z)
+            cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
+        else
+            cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
+    }
     
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
@@ -398,14 +296,12 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // 現在給每個 colored_cloud 的點塗上對應顏色
     for (size_t i = 0; i < cloud->size(); ++i) {
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
-            // int cluster_id = normal_points[idx].clusterID;
-            int cluster_id = cluster_ids[i];
+            int cluster_id = normal_points[idx].clusterID;
             if (cluster_id != UNCLASSIFIED) {
-                // auto color = cluster_colors[cluster_id];
-                Color color;
-                color.r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
-                color.g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
-                color.b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
+                auto color = cluster_colors[cluster_id];
+                // uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
+                // uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
+                // uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
                 colored_cloud->points[i].r = color.r;
                 colored_cloud->points[i].g = color.g;
                 colored_cloud->points[i].b = color.b;
