@@ -20,7 +20,7 @@
 #include <random>
 
 #include <dbscan.hpp>
-
+#include <omp.h>  // OpenMP 標頭檔
 
 #define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
 #define CLUSTER_NORMAL 1
@@ -137,16 +137,14 @@ struct AvgNormal
 
 
 /* DBSCAN */
-using namespace std;
-
 // 餘弦相似度
 float cosine_similarity(const pcl::Normal& a, const pcl::Normal& b) {
     float dot = a.normal_x * b.normal_x + a.normal_y * b.normal_y + a.normal_z * b.normal_z;
     return dot; // 兩個都是單位向量，不需要除 norm
 }
 
-// Spherical DBSCAN clustering
-vector<int> sphericalDBSCAN(
+// 使用 OpenMP 加速的 Spherical DBSCAN clustering
+vector<int> sphericalDBSCANWithOpenMP(
     pcl::PointCloud<pcl::Normal>::Ptr normals,
     float eps_cosine, // ex: cos(angle) threshold = cos(θ)
     int min_pts
@@ -156,6 +154,7 @@ vector<int> sphericalDBSCAN(
     vector<int> cluster_ids(n, -1);
     int cluster_id = 0;
 
+    #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
         if (visited[i]) continue;
         visited[i] = true;
@@ -190,15 +189,18 @@ vector<int> sphericalDBSCAN(
                     cluster_ids[idx] = cluster_id;
                 }
             }
-            ++cluster_id;
+            #pragma omp critical
+            {
+                ++cluster_id;
+            }
         }
     }
 
     return cluster_ids;
 }
 
-// 整合完整流程：從原始 normals 過濾 NaN → clustering → 還原對應
-vector<int> sphericalClusteringWithNaNFilter(
+// 整合完整流程：過濾 NaN → clustering → 還原對應
+vector<int> sphericalClusteringWithNaNFilterAndOpenMP(
     pcl::PointCloud<pcl::Normal>::Ptr normals,
     float angle_degree = 10.0f,
     int min_pts = 5
@@ -206,6 +208,7 @@ vector<int> sphericalClusteringWithNaNFilter(
     pcl::PointCloud<pcl::Normal>::Ptr valid_normals(new pcl::PointCloud<pcl::Normal>);
     vector<int> original_indices;
 
+    // 過濾 NaN 法向量
     for (size_t i = 0; i < normals->size(); ++i) {
         const auto& n = normals->points[i];
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
@@ -214,9 +217,11 @@ vector<int> sphericalClusteringWithNaNFilter(
         }
     }
 
+    // 轉換角度到 cosine 相似度
     float eps_cosine = cos(angle_degree * M_PI / 180.0f); // 角度轉 cosine 相似度
 
-    vector<int> filtered_cluster_ids = sphericalDBSCAN(valid_normals, eps_cosine, min_pts);
+    // 執行 spherical DBSCAN
+    vector<int> filtered_cluster_ids = sphericalDBSCANWithOpenMP(valid_normals, eps_cosine, min_pts);
 
     // 映射回原始資料大小
     vector<int> full_cluster_ids(normals->size(), -1);
@@ -226,7 +231,6 @@ vector<int> sphericalClusteringWithNaNFilter(
 
     return full_cluster_ids;
 }
-
 
 
 
@@ -324,8 +328,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // 執行 KMeans (分成3群)
     // int k = 3;
     // kmeansNormals(normal_points, k);
-
-    std::vector<int> cluster_ids = sphericalClusteringWithNaNFilter(normals, 10.0f /*度*/, 5);
+    std::vector<int> cluster_ids = sphericalClusteringWithNaNFilterAndOpenMP(normals, 10.0f /*角度*/, 5 /*最小群大小*/);
 
     int num_clusters = *std::max_element(cluster_ids.begin(), cluster_ids.end()) + 1;
     std::cout << "Number of clusters: " << num_clusters << std::endl;
