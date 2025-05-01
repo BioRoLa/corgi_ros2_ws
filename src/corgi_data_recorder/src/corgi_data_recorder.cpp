@@ -17,6 +17,7 @@
 #include "corgi_msgs/ForceStateStamped.h"
 #include "corgi_msgs/SimDataStamped.h"
 #include "geometry_msgs/Vector3.h"
+#include "std_msgs/Float64.h"
 
 
 bool trigger = false;
@@ -30,6 +31,7 @@ corgi_msgs::ForceStateStamped force_state;
 corgi_msgs::SimDataStamped sim_data;
 geometry_msgs::Vector3 odom_pos;
 geometry_msgs::Vector3 odom_vel;
+double odom_z;
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -199,6 +201,9 @@ void odom_vel_cb(const geometry_msgs::Vector3::ConstPtr &msg){
     odom_vel = *msg;
 }
 
+void odom_z_cb(const std_msgs::Float64::ConstPtr &msg){
+    odom_z = msg->data;
+}
 
 void write_data() {
     if (!output_file.is_open()){
@@ -256,7 +261,7 @@ void write_data() {
                 << sim_data.position.x << "," << sim_data.position.y << "," << sim_data.position.z << ","
                 << sim_data.orientation.x << "," << sim_data.orientation.y << "," << sim_data.orientation.z << "," << sim_data.orientation.w << ","
 
-                << odom_pos.x << "," << odom_pos.y << "," << odom_pos.z << ","
+                << odom_pos.x << "," << odom_pos.y << "," << odom_z << ","
                 << odom_vel.x << "," << odom_vel.y << "," << odom_vel.z << ","
 
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nsec << ","

@@ -8,6 +8,7 @@ corgi_msgs::ForceStateStamped force_state;
 corgi_msgs::MotorStateStamped motor_state;
 geometry_msgs::Vector3 odom_pos;
 geometry_msgs::Vector3 odom_vel;
+double odom_z;
 sensor_msgs::Imu imu;
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
@@ -32,6 +33,10 @@ void odom_pos_cb(const geometry_msgs::Vector3::ConstPtr &msg){
 
 void odom_vel_cb(const geometry_msgs::Vector3::ConstPtr &msg){
     odom_vel = *msg;
+}
+
+void odom_z_cb(const std_msgs::Float64::ConstPtr &msg){
+    odom_z = msg->data;
 }
 
 void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
@@ -63,6 +68,7 @@ int main(int argc, char **argv) {
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber odom_pos_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/position", 1000, odom_pos_cb);
     ros::Subscriber odom_vel_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/velocity", 1000, odom_vel_cb);
+    ros::Subscriber odom_z_sub = nh.subscribe<std_msgs::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
 
     ros::Rate rate(mpc.freq);
@@ -102,6 +108,8 @@ int main(int argc, char **argv) {
     double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};
     WalkGait walk_gait(sim, 0, mpc.freq);
     walk_gait.initialize(init_eta);
+
+    mpc.target_pos_z = 0.25;
 
     double velocity        = 0.1;
     double stand_height    = 0.25;
@@ -224,7 +232,7 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
+                    if (walk_gait.get_duty()[i] < 0.8 && walk_gait.get_duty()[i] > 0) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -239,9 +247,8 @@ int main(int argc, char **argv) {
                 
                 mpc.robot_pos[0] = odom_pos.x;
                 mpc.robot_pos[1] = odom_pos.y;
-                mpc.robot_pos[2] = odom_pos.z;
-
-                // mpc.target_pos_z = 0.25;
+                // mpc.robot_pos[2] = odom_pos.z;
+                mpc.robot_pos[2] = odom_z;
 
                 // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
                 // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;

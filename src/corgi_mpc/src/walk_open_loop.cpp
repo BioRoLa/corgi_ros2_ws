@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
                     // if (walk_gait.get_swing_phase()[i] == 1) {
                     //     check_contact_state(i, contact_state_modules);
                     // }
-                    if (walk_gait.get_duty()[i] < 0.78 && walk_gait.get_duty()[i] > 0.02) {
+                    if (walk_gait.get_duty()[i] < 0.8 && walk_gait.get_duty()[i] > 0) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {

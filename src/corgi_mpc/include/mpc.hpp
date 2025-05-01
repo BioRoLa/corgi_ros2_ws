@@ -18,6 +18,7 @@
 #include "corgi_msgs/ContactStateStamped.h"
 #include "sensor_msgs/Imu.h"
 #include "geometry_msgs/Vector3.h"
+#include "std_msgs/Float64.h"
 
 #include "walk_gait.hpp"
 #include "hybrid_gen.hpp"
@@ -31,13 +32,13 @@ class ModelPredictiveController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 90;
-        double By_swing = 90;
-        double Bx_stance = 40;
+        double Bx_swing = 60;
+        double By_swing = 60;
+        double Bx_stance = 30;
         double By_stance = 10;
-        double Kx_swing = 2000;
-        double Ky_swing = 2000;
-        double Kx_stance = 800;
+        double Kx_swing = 1500;
+        double Ky_swing = 1500;
+        double Kx_stance = 600;
         double Ky_stance = 200;
 
 
@@ -78,10 +79,10 @@ class ModelPredictiveController {
         Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(n_x, n_x);
         Eigen::MatrixXd R = Eigen::MatrixXd::Identity(n_u, n_u);
 
-        int fx_upper_bound = 0;
-        int fx_lower_bound = -0;
+        int fx_upper_bound = 30;
+        int fx_lower_bound = -30;
         int fz_upper_bound = 200;
-        int fz_lower_bound = -100;
+        int fz_lower_bound = -150;
 
         double friction_coef = 1;
 
