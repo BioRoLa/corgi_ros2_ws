@@ -171,8 +171,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pass.setFilterLimits(-0.5, 1.0);
     pass.filter(*cloud);
 
-    
+
     /* Step 2.5: transform from camera coord to world coord */
+    tf_buffer_.lookupTransform("map", cloud->header.frame_id, ros::Time(0), ros::Duration(1.0));
     pcl_ros::transformPointCloud("map", *cloud, *cloud, tf_buffer_);
 
 
