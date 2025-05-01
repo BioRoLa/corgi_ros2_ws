@@ -43,8 +43,11 @@ int main(int argc, char **argv) {
     double theta_err[4];
     double beta_err[4];
 
-    ros::spinOnce();
-
+    for (int i=0; i<1000; i++) {
+        ros::spinOnce();
+        rate.sleep();
+    }
+    
     for (int i=0; i<4; i++) {
         motor_cmd_modules[i]->theta = motor_state_modules[i]->theta;
         motor_cmd_modules[i]->beta = motor_state_modules[i]->beta;
