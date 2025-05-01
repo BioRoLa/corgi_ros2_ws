@@ -22,7 +22,7 @@ std::vector<std::string> odo_headers = {
 
 std::string output_file_path;
 std::string output_file_name = "";
-Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(DATA_SIZE);
+Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(ODOM_DATA_SIZE);
 
 // Variables
 int J = ODOM_ESTIMATION_TIME_RANGE;
@@ -57,10 +57,6 @@ Eigen::Matrix3f P_cov;
 corgi_msgs::MotorStateStamped motor_state;
 sensor_msgs::Imu imu;
 
-bool file_exists(const std::string &filename) {
-    struct stat buffer;
-    return (stat(filename.c_str(), &buffer) == 0);
-}
 
 // Callbacks
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
@@ -72,13 +68,13 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
         output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
 
         int index = 1;
-        std::string file_path_with_extension = output_file_path + "odom.csv";
-        while (file_exists(file_path_with_extension)) {
-            file_path_with_extension = output_file_path + "_" + std::to_string(index) + "odom.csv";
+        std::string file_path_with_extension = output_file_path + "_odom.csv";
+        while (logger.file_exists(file_path_with_extension)) {
+            file_path_with_extension = output_file_path + "_" + std::to_string(index) + "_odom.csv";
             index++;
         }
         if (index != 1) output_file_name += "_" + std::to_string(index-1);
-        output_file_name += "odom.csv";
+        output_file_name += "_odom.csv";
 
         output_file_path = file_path_with_extension;
 

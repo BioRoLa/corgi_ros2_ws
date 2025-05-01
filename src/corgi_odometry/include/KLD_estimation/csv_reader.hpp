@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <Eigen/Dense>
+#include <sys/stat.h>
 
 namespace DataProcessor
 {
@@ -179,6 +180,11 @@ namespace DataProcessor
                 outFile.flush();
                 outFile.close();
             }
+        }
+
+        bool file_exists(const std::string &filename) {
+            struct stat buffer;
+            return (stat(filename.c_str(), &buffer) == 0);
         }
         
     private:

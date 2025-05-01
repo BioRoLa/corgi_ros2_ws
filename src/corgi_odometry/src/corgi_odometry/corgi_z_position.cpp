@@ -19,10 +19,41 @@ std::vector<std::string> headers = {
 };
 DataProcessor::CsvLogger logger;
 
+std::string output_file_path;
+std::string output_file_name = "";
+Eigen::VectorXf state = Eigen::VectorXf::Zero(Z_POS_DATA_SIZE);
 
 // Callbacks
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
     trigger = msg.enable;
+
+    if (RECORD_DATA){output_file_name = msg.output_filename;}
+
+    if (trigger && msg.output_filename != "") {
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+
+        int index = 1;
+        std::string file_path_with_extension = output_file_path + "_pos_z.csv";
+        while (logger.file_exists(file_path_with_extension)) {
+            file_path_with_extension = output_file_path + "_" + std::to_string(index) + "_pos_z.csv";
+            index++;
+        }
+        if (index != 1) output_file_name += "_" + std::to_string(index-1);
+        output_file_name += "_pos_z.csv";
+
+        output_file_path = file_path_with_extension;
+
+        // Initialize the CSV file.
+        logger.initCSV(output_file_path, headers);
+
+        ROS_INFO("Saving data to %s\n", output_file_name.c_str());
+    }
+    else{
+        if(logger.outFile.is_open()){
+            logger.finalizeCSV();
+            ROS_INFO("Saved data to %s", output_file_name.c_str());
+        }
+    }
 }
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
@@ -159,15 +190,16 @@ int main(int argc, char **argv) {
             z_position_pub.publish(z_COM);
             ROS_INFO("z_COM: %f", z_COM);
 
-            Eigen::VectorXf state = Eigen::VectorXf::Zero(9); //total 10 columns
-            state(0) = z_COM.data;
-            for (int i = 0; i < 4; i++) {
-                state(1 + i) = contact_modules[i]->contact;
+            if (RECORD_DATA){
+                state(0) = z_COM.data;
+                for (int i = 0; i < 4; i++) {
+                    state(1 + i) = contact_modules[i]->contact;
+                }
+                for (int i = 0; i < 4; i++) {
+                    state(5 + i) = contact_modules[i]->score;
+                }
+                logger.logState(state);
             }
-            for (int i = 0; i < 4; i++) {
-                state(5 + i) = contact_modules[i]->score;
-            }
-            logger.logState(state);
 
             rate.sleep();
         }

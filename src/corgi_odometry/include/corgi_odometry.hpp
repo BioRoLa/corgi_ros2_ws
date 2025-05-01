@@ -30,7 +30,6 @@ inline constexpr float FILTE_VEL_CUT_OFF_FREQ = 10.0; //Hz
 #include <vector>
 #include <Eigen/Geometry>
 #include <algorithm>
-#include <sys/stat.h>
 #include "ros/ros.h"
 
 /******* ROS msg *******/
@@ -64,7 +63,10 @@ inline constexpr double GRAVITY        = 9.80665; // [m/s²]
 /******* odometry data logging *******/ 
 inline constexpr int DATA_SIZE_ORIGIN = 39;
 inline constexpr int DATA_SIZE_FILTER = 45;
-inline constexpr int DATA_SIZE = FILTE_VEL ? DATA_SIZE_FILTER : DATA_SIZE_ORIGIN; 
+inline constexpr int ODOM_DATA_SIZE = FILTE_VEL ? DATA_SIZE_FILTER : DATA_SIZE_ORIGIN; 
+
+/******* z_position data logging *******/ 
+inline constexpr int Z_POS_DATA_SIZE = 9; 
 
 class Encoder{
     public:
