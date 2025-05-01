@@ -38,3 +38,24 @@ inline constexpr double WHEEL_WIDTH_REAL = 0.019; // [m]
 inline constexpr double WHEEL_WIDTH = SimMode ? WHEEL_WIDTH_SIM : WHEEL_WIDTH_REAL;
 
 inline constexpr double GRAVITY        = 9.80665; // [m/s²]
+
+class Encoder{
+    public:
+        Encoder(corgi_msgs::MotorState* m, sensor_msgs::Imu* i, bool opposite): module(m), imu(i), opposite(opposite) {}
+        void UpdateState(float dt);
+        void init(float dt);
+        //const reference, prevent modified
+        const Eigen::Matrix<float, 5, 1>& GetState() const{return state;}
+    private:
+        corgi_msgs::MotorState* module;
+        sensor_msgs::Imu* imu;
+        bool opposite;
+        float theta;
+        float beta;
+        float theta_prev;
+        float beta_prev;
+        float theta_d;
+        float beta_d;
+        float w_y;
+        Eigen::Vector<float, 5> state;
+};

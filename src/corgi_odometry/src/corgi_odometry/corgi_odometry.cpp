@@ -28,55 +28,6 @@ DataProcessor::CsvLogger logger;
 std::string filepath;
 std::string filename;
 
-//Classes
-class Encoder{
-    public:
-        Encoder(corgi_msgs::MotorState* m, sensor_msgs::Imu* i, bool opposite): module(m), imu(i), opposite(opposite) {}
-        void UpdateState(float dt){
-            theta_prev = theta;
-            beta_prev  = beta;
-            theta = module->theta;
-            if(opposite){
-                beta  = -module->beta;
-            }
-            else{
-                beta  = module->beta;
-            }
-            beta_d = (beta - beta_prev) / dt;
-            theta_d = (theta - theta_prev) / dt;
-            //pitch angle is opposite to y axis
-            w_y = (imu->angular_velocity.y);
-            state << theta, beta, beta_d, w_y, theta_d;
-        }
-
-        void init(float dt){
-            theta = module->theta;
-            if(opposite){
-                beta  = -module->beta;
-            }
-            else{
-                beta  = module->beta;
-            }
-            UpdateState(dt);
-        }
-        //const reference, prevent modified
-        const Eigen::Matrix<float, 5, 1>& GetState() const{
-            return state;
-        }
-    private:
-        corgi_msgs::MotorState* module;
-        sensor_msgs::Imu* imu;
-        bool opposite;
-        float theta;
-        float beta;
-        float theta_prev;
-        float beta_prev;
-        float theta_d;
-        float beta_d;
-        float w_y;
-        Eigen::Vector<float, 5> state;
-};
-
 // Variables
 bool trigger = false;
 float dt;
@@ -137,6 +88,34 @@ geometry_msgs::Vector3 low_pass_filter(const geometry_msgs::Vector3 &input, cons
     output.y = alpha * input.y + (1 - alpha) * prev_input.y;
     output.z = alpha * input.z + (1 - alpha) * prev_input.z;
     return output;
+}
+
+void Encoder::UpdateState(float dt){
+    theta_prev = theta;
+    beta_prev  = beta;
+    theta = module->theta;
+    if(opposite){
+        beta  = -module->beta;
+    }
+    else{
+        beta  = module->beta;
+    }
+    beta_d = (beta - beta_prev) / dt;
+    theta_d = (theta - theta_prev) / dt;
+    //pitch angle is opposite to y axis
+    w_y = (imu->angular_velocity.y);
+    state << theta, beta, beta_d, w_y, theta_d;
+}
+
+void Encoder::init(float dt){
+    theta = module->theta;
+    if(opposite){
+        beta  = -module->beta;
+    }
+    else{
+        beta  = module->beta;
+    }
+    UpdateState(dt);
 }
 
 int main(int argc, char **argv) {
@@ -245,7 +224,7 @@ int main(int argc, char **argv) {
         // dt = float(current_time - prev_time);
         // prev_time = current_time;
         // ROS_INFO("dt: %f", dt);
-        dt = 1.0 / float(ODOM_ESTIMATOR_RATE);
+        dt = 1.0 / ODOM_ESTIMATOR_RATE;
 
         if(trigger){
             if (!initialized) {
