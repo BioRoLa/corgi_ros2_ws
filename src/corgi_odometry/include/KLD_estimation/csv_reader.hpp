@@ -110,6 +110,8 @@ namespace DataProcessor
     }
     class CsvLogger {
     public:
+        std::ofstream outFile;
+
         CsvLogger() = default;
         
         // Destructor makes sure the file is closed.
@@ -181,7 +183,6 @@ namespace DataProcessor
         
     private:
         std::string filename;
-        std::ofstream outFile;
     };
 } // namespace DataProcessor
 

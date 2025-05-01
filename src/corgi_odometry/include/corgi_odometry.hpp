@@ -13,6 +13,8 @@ inline constexpr bool PUB_CONTACT = false;
 inline constexpr bool BODY_FRAME = false; 
 inline constexpr bool WORLD_FRAME = true;
 inline constexpr bool ESTIMATE_POSITION_FRAME = BODY_FRAME; // BODY_FRAME or WORLD_FRAME
+//record data or not
+inline constexpr bool RECORD_DATA = true;
 
 /******* odometry *******/
 
@@ -28,6 +30,7 @@ inline constexpr float FILTE_VEL_CUT_OFF_FREQ = 10.0; //Hz
 #include <vector>
 #include <Eigen/Geometry>
 #include <algorithm>
+#include <sys/stat.h>
 #include "ros/ros.h"
 
 /******* ROS msg *******/

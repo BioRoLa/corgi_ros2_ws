@@ -20,8 +20,9 @@ std::vector<std::string> odo_headers = {
         "filtered_p.x", "filtered_p.y", "filtered_p.z"
 };
 
-std::string filepath;
-std::string filename;
+std::string output_file_path;
+std::string output_file_name = "";
+Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(DATA_SIZE);
 
 // Variables
 int J = ODOM_ESTIMATION_TIME_RANGE;
@@ -56,9 +57,42 @@ Eigen::Matrix3f P_cov;
 corgi_msgs::MotorStateStamped motor_state;
 sensor_msgs::Imu imu;
 
+bool file_exists(const std::string &filename) {
+    struct stat buffer;
+    return (stat(filename.c_str(), &buffer) == 0);
+}
+
 // Callbacks
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
     trigger = msg.enable;
+
+    if (RECORD_DATA){output_file_name = msg.output_filename;}
+
+    if (trigger && msg.output_filename != "") {
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+
+        int index = 1;
+        std::string file_path_with_extension = output_file_path + "odom.csv";
+        while (file_exists(file_path_with_extension)) {
+            file_path_with_extension = output_file_path + "_" + std::to_string(index) + "odom.csv";
+            index++;
+        }
+        if (index != 1) output_file_name += "_" + std::to_string(index-1);
+        output_file_name += "odom.csv";
+
+        output_file_path = file_path_with_extension;
+
+        // Initialize the CSV file.
+        logger.initCSV(output_file_path, odo_headers);
+
+        ROS_INFO("Saving data to %s\n", output_file_name.c_str());
+    }
+    else{
+        if(logger.outFile.is_open()){
+            logger.finalizeCSV();
+            ROS_INFO("Saved data to %s", output_file_name.c_str());
+        }
+    }
 }
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
@@ -119,18 +153,6 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "corgi_odometry");
 
     ros::NodeHandle nh;
-
-    if (argc == 2){
-        filepath = std::getenv("HOME");
-        filename = argv[1];
-        filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/";
-        filepath += filename+ ".csv";
-        ROS_INFO("Saving data to %s", filepath.c_str());
-        // Initialize the CSV file.
-        if (!logger.initCSV(filepath, odo_headers)) {
-            return -1;  // Exit if the CSV file could not be created.
-        }
-    }
 
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
@@ -224,6 +246,7 @@ int main(int argc, char **argv) {
 
         if(trigger){
             if (!initialized) {
+
                 /*Initialization : input first data*/
                 //Encoder states
                 encoder_lf.init(dt);
@@ -314,45 +337,45 @@ int main(int argc, char **argv) {
                 contact_pub.publish(contact_msg);
             }
 
-            // Store the estimated state to a csv file
-            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(DATA_SIZE);
-            estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
-            estimate_state.segment(3, 3) = p;                                                       //position
-            estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
-            estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);                          //rf leg velocity
-            estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
-            estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
-            estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
-            estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);            //contact
-            estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
-            estimate_state(29) = filter.threshold;                                                                                                  //threshold
-            estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
+            if (RECORD_DATA){
+                // Store the estimated state to a csv file
+                estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
+                estimate_state.segment(3, 3) = p;                                                       //position
+                estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
+                estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);                          //rf leg velocity
+                estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
+                estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
+                estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
+                estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);            //contact
+                estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
+                estimate_state(29) = filter.threshold;                                                                                                  //threshold
+                estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
 
 
-            if (FILTE_VEL){
+                if (FILTE_VEL){
 
-                geometry_msgs::Vector3 filtered_velocity_msg;
-                float cutoff_freq = FILTE_VEL_CUT_OFF_FREQ; //Hz
-                filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
-                prev_v = filtered_velocity_msg;
-                filtered_velocity_pub.publish(filtered_velocity_msg);
+                    geometry_msgs::Vector3 filtered_velocity_msg;
+                    float cutoff_freq = FILTE_VEL_CUT_OFF_FREQ; //Hz
+                    filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
+                    prev_v = filtered_velocity_msg;
+                    filtered_velocity_pub.publish(filtered_velocity_msg);
+                    
+                    Eigen::Vector<float, 3> filtered_velocity;
+                    filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
+                    filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
+
+                    geometry_msgs::Vector3 filtered_position_msg;
+                    filtered_position_msg.x = filtered_position(0);
+                    filtered_position_msg.y = filtered_position(1);
+                    filtered_position_msg.z = filtered_position(2);
+                    filtered_position_pub.publish(filtered_position_msg);
+
+                    estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
+                    estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position   
+                }
                 
-                Eigen::Vector<float, 3> filtered_velocity;
-                filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
-                filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
-
-                geometry_msgs::Vector3 filtered_position_msg;
-                filtered_position_msg.x = filtered_position(0);
-                filtered_position_msg.y = filtered_position(1);
-                filtered_position_msg.z = filtered_position(2);
-                filtered_position_pub.publish(filtered_position_msg);
-
-                estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
-                estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position   
+                logger.logState(estimate_state);
             }
-            
-            if(argc == 2){logger.logState(estimate_state);}
-
             counter ++;
         }
         
@@ -362,10 +385,6 @@ int main(int argc, char **argv) {
         rate.sleep();
     }
 
-    if(argc == 2){
-        logger.finalizeCSV();
-        ROS_INFO("Saved data to %s", filepath.c_str());
-    }
     ros::shutdown();
     
     return 0;
