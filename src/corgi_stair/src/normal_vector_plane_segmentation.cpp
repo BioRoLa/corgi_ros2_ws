@@ -141,14 +141,9 @@ tf2_ros::TransformListener* tf_listener_;
 
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
-    /* Step 0: transform from camera coord to world coord */
-    sensor_msgs::PointCloud2 transformed_cloud;
-    pcl_ros::transformPointCloud("map", *input, transformed_cloud, tf_buffer_);
-
-
     /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
-    pcl::fromROSMsg(transformed_cloud, *cloud);
+    pcl::fromROSMsg(*input, *cloud);
     if (!cloud->isOrganized())
     {
         ROS_WARN("Point cloud is not organized. Skipping frame.");
@@ -175,6 +170,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pass.setFilterFieldName("z");
     pass.setFilterLimits(-0.5, 1.0);
     pass.filter(*cloud);
+
+    
+    /* Step 2.5: transform from camera coord to world coord */
+    pcl_ros::transformPointCloud("map", *cloud, *cloud, tf_buffer_);
 
 
     /* Step 3: Find normal vector for each point */
