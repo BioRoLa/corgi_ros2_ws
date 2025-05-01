@@ -1,4 +1,21 @@
 #pragma once
+
+/*******  switch *******/ 
+// true → simulation, false → real robot
+inline constexpr bool SIM = true;
+// [Hz]
+inline constexpr bool FILTE_VEL = false;        
+// use KLD or not (if KLD is not used, need to input the contact state for EKF estimation)
+inline constexpr bool KLD = true;               
+// publish contact state (only if KLD is used)
+inline constexpr bool PUB_CONTACT = false;
+
+/******* odometry *******/
+
+inline constexpr float ODOM_ESTIMATOR_RATE = 500.0; //Hz
+inline constexpr float THRESHOLD = 0.08; //threshold of KLD
+inline constexpr float ODOM_ESTIMATION_TIME_RANGE = 10.0; // matrix size
+
 /******* std lib *******/
 #include <iostream>
 #include <fstream>
@@ -24,9 +41,6 @@
 #include "KLD_estimation/csv_reader.hpp"
 #include "KLD_estimation/InformationFilter.hpp"
 
-/*******  simulation switch *******/ 
-inline constexpr bool SimMode = true; // true → simulation, false → real robot
-
 /******* mechanism *******/ 
 inline constexpr double MOTOR_OFFSET_X = 0.222;   // [m]
 inline constexpr double MOTOR_OFFSET_Y = 0.193;   // [m]
@@ -35,9 +49,14 @@ inline constexpr double MOTOR_OFFSET_Z = 0.0;     // [m]
 inline constexpr double WHEEL_RADIUS = 0.10;     // [m]
 inline constexpr double WHEEL_WIDTH_SIM  = 0.012; // [m]
 inline constexpr double WHEEL_WIDTH_REAL = 0.019; // [m]
-inline constexpr double WHEEL_WIDTH = SimMode ? WHEEL_WIDTH_SIM : WHEEL_WIDTH_REAL;
+inline constexpr double WHEEL_WIDTH = SIM ? WHEEL_WIDTH_SIM : WHEEL_WIDTH_REAL;
 
 inline constexpr double GRAVITY        = 9.80665; // [m/s²]
+
+/******* odometry data logging *******/ 
+inline constexpr int DATA_SIZE_ORIGIN = 39;
+inline constexpr int DATA_SIZE_FILTER = 45;
+inline constexpr int DATA_SIZE = FILTE_VEL ? DATA_SIZE_FILTER : DATA_SIZE_ORIGIN; 
 
 class Encoder{
     public:

@@ -2,33 +2,29 @@
 
 using namespace estimation_model;
 
-// Constants
-#define ODOM_ESTIMATOR_RATE 500.0 //Hz
-#define THRESHOLD 0.08 //threshold of KLD
-#define J 10 //sample time (matrix size)
-#define lpf_alpha 0.5 //low pass filter alpha
-
-// CSV file parameters
-std::vector<std::string> headers = {
-    "v_.x", "v_.y", "v_.z", 
-    "p.x", "p.y", "p.z", 
-    "zLF.x", "zLF.y", "zLF.z", 
-    "zRF.x", "zRF.y", "zRF.z", 
-    "zRH.x", "zRH.y", "zRH.z", 
-    "zLH.x", "zLH.y", "zLH.z", 
-    "ba.x", "ba.y", "ba.z", 
-    "lf.contact","rf.contact","rh.contact","lh.contact",
-    "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
-    "threshold",
-    "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz",
-    "filtered_v_.x", "filtered_v_.y", "filtered_v_.z",
-    "filtered_p.x", "filtered_p.y", "filtered_p.z"
-};
 DataProcessor::CsvLogger logger;
+
+std::vector<std::string> odo_headers = {
+        "v_.x", "v_.y", "v_.z", 
+        "p.x", "p.y", "p.z", 
+        "zLF.x", "zLF.y", "zLF.z", 
+        "zRF.x", "zRF.y", "zRF.z", 
+        "zRH.x", "zRH.y", "zRH.z", 
+        "zLH.x", "zLH.y", "zLH.z", 
+        "ba.x", "ba.y", "ba.z", 
+        "lf.contact","rf.contact","rh.contact","lh.contact",
+        "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
+        "threshold",
+        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz",
+        "filtered_v_.x", "filtered_v_.y", "filtered_v_.z",
+        "filtered_p.x", "filtered_p.y", "filtered_p.z"
+};
+
 std::string filepath;
 std::string filename;
 
 // Variables
+int J = ODOM_ESTIMATION_TIME_RANGE;
 bool trigger = false;
 float dt;
 bool initialized = false;
@@ -42,9 +38,10 @@ Eigen::Vector3f v_init;
 Eigen::Vector3f a;
 Eigen::Vector3f w;
 Eigen::Quaternionf q;
+
 geometry_msgs::Vector3 prev_v;
-double prev_time;
 Eigen::Vector3f filtered_position;
+
 bool exclude[4];
 
 int counter = 0;
@@ -130,20 +127,26 @@ int main(int argc, char **argv) {
         filepath += filename+ ".csv";
         ROS_INFO("Saving data to %s", filepath.c_str());
         // Initialize the CSV file.
-        if (!logger.initCSV(filepath, headers)) {
+        if (!logger.initCSV(filepath, odo_headers)) {
             return -1;  // Exit if the CSV file could not be created.
         }
     }
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
-    // ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
-    // ros::Publisher filtered_position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_position", 10);
 
     // ROS Subscribers
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", ODOM_ESTIMATOR_RATE, trigger_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", ODOM_ESTIMATOR_RATE, motor_state_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", ODOM_ESTIMATOR_RATE, imu_cb);
+
+    // Publishers for filtered velocity and position (work if FILTE_VEL is true)
+    ros::Publisher filtered_velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_velocity", 10);
+    ros::Publisher filtered_position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_position", 10);
+
+    // Contact state publisher
+    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", ODOM_ESTIMATOR_RATE);
+    // Contact state subscriber
     ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", ODOM_ESTIMATOR_RATE, contact_cb);
 
     Eigen::initParallel();
@@ -153,7 +156,6 @@ int main(int argc, char **argv) {
 
     //initial time
     dt = 1.0 / float(ODOM_ESTIMATOR_RATE);
-    prev_time = ros::Time::now().toSec();
 
     //initial velocity for low pass filter
     prev_v.x = 0.0;
@@ -182,7 +184,7 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
-    if(SimMode){
+    if(SIM){
         rot <<  1,  0,  0, 
                 0,  1,  0,
                 0,  0,  1;
@@ -218,13 +220,6 @@ int main(int argc, char **argv) {
 
     while (ros::ok()){
         ros::spinOnce();
-
-        // FIXME: dt calculation cannot work by calculate dynamically
-        // double current_time = ros::Time::now().toSec();
-        // dt = float(current_time - prev_time);
-        // prev_time = current_time;
-        // ROS_INFO("dt: %f", dt);
-        dt = 1.0 / ODOM_ESTIMATOR_RATE;
 
         if(trigger){
             if (!initialized) {
@@ -273,9 +268,14 @@ int main(int argc, char **argv) {
             lh.push_data(encoder_lh.GetState(), w, dt, alpha_lh);
 
             filter.predict();
-            // filter.valid();
-            // implement the valid function w/ known contact leg
-            filter.valid(exclude);
+
+            if (KLD){
+                filter.valid();
+            }
+            else{
+                filter.valid(exclude);
+            }
+            
             x = filter.state();
             
             P_cov = filter.Y_inv.block<3, 3>(3*J-3, 3*J-3);
@@ -285,18 +285,6 @@ int main(int argc, char **argv) {
             ROS_INFO("Counter: %d", counter);
             ROS_INFO("Estimated Position: %f, %f, %f", p(0), p(1), p(2));
             ROS_INFO("Estimated Velocity: %f, %f, %f", x(3 * J - 3), x(3 * J - 2), x(3 * J - 1));
-
-            // // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
-            // corgi_msgs::ContactStateStamped contact_msg;
-            // contact_msg.module_a.contact = !filter.exclude[0];
-            // contact_msg.module_b.contact = !filter.exclude[1];
-            // contact_msg.module_c.contact = !filter.exclude[2];
-            // contact_msg.module_d.contact = !filter.exclude[3];
-            // contact_msg.module_a.score = filter.scores[0];
-            // contact_msg.module_b.score = filter.scores[1];
-            // contact_msg.module_c.score = filter.scores[2];
-            // contact_msg.module_d.score = filter.scores[3];
-            // contact_pub.publish(contact_msg);
 
             // Publish the estimated velocity and position
             geometry_msgs::Vector3 velocity_msg;
@@ -311,24 +299,22 @@ int main(int argc, char **argv) {
             position_msg.z = p(2);
             position_pub.publish(position_msg);
 
-            // geometry_msgs::Vector3 filtered_velocity_msg;
-            // float cutoff_freq = 10.0; //Hz
-            // filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
-            // prev_v = filtered_velocity_msg;
-            // filtered_velocity_pub.publish(filtered_velocity_msg);
-            
-            // Eigen::Vector<float, 3> filtered_velocity;
-            // filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
-            // filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
-
-            // geometry_msgs::Vector3 filtered_position_msg;
-            // filtered_position_msg.x = filtered_position(0);
-            // filtered_position_msg.y = filtered_position(1);
-            // filtered_position_msg.z = filtered_position(2);
-            // filtered_position_pub.publish(filtered_position_msg);
+            if (PUB_CONTACT){
+                // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
+                corgi_msgs::ContactStateStamped contact_msg;
+                contact_msg.module_a.contact = !filter.exclude[0];
+                contact_msg.module_b.contact = !filter.exclude[1];
+                contact_msg.module_c.contact = !filter.exclude[2];
+                contact_msg.module_d.contact = !filter.exclude[3];
+                contact_msg.module_a.score = filter.scores[0];
+                contact_msg.module_b.score = filter.scores[1];
+                contact_msg.module_c.score = filter.scores[2];
+                contact_msg.module_d.score = filter.scores[3];
+                contact_pub.publish(contact_msg);
+            }
 
             // Store the estimated state to a csv file
-            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(39);
+            Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(DATA_SIZE);
             estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
             estimate_state.segment(3, 3) = p;                                                       //position
             estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
@@ -339,10 +325,29 @@ int main(int argc, char **argv) {
             estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);            //contact
             estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
             estimate_state(29) = filter.threshold;                                                                                                  //threshold
-            estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());                                          //covariance
-            // estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
-            // estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position                                                                                       
-            
+            estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
+
+            geometry_msgs::Vector3 filtered_velocity_msg;
+            geometry_msgs::Vector3 filtered_position_msg;
+            if (FILTE_VEL){
+                float cutoff_freq = 10.0; //Hz
+                filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
+                prev_v = filtered_velocity_msg;
+                filtered_velocity_pub.publish(filtered_velocity_msg);
+                
+                Eigen::Vector<float, 3> filtered_velocity;
+                filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
+                filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
+
+                geometry_msgs::Vector3 filtered_position_msg;
+                filtered_position_msg.x = filtered_position(0);
+                filtered_position_msg.y = filtered_position(1);
+                filtered_position_msg.z = filtered_position(2);
+                filtered_position_pub.publish(filtered_position_msg);
+
+                estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
+                estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position   
+            }
             
             if(argc == 2){logger.logState(estimate_state);}
 
