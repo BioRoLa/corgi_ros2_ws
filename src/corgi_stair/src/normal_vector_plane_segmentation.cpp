@@ -137,21 +137,11 @@ struct AvgNormal
 
 // 成員變數
 tf2_ros::Buffer tf_buffer_;
-tf2_ros::TransformListener tf_listener_(tf_buffer_);
+tf2_ros::TransformListener* tf_listener_;
 
 
-void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
-{
+void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     /* Step 0: transform from camera coord to world coord */
-    geometry_msgs::TransformStamped transformStamped;
-    try { // 檢查是否能從 zed 相機轉換到 map
-        transformStamped = tf_buffer_.lookupTransform("map", input->header.frame_id,
-                                                        input->header.stamp, ros::Duration(0.1));
-    } catch (tf2::TransformException &ex) {
-        ROS_WARN("Transform error: %s", ex.what());
-        return;
-    }
-    // 點雲轉換
     sensor_msgs::PointCloud2 transformed_cloud;
     pcl_ros::transformPointCloud("map", *input, transformed_cloud, tf_buffer_);
 
@@ -499,6 +489,7 @@ int main(int argc, char** argv) {
     ros::Subscriber cloud_sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
+    tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     ros::spin();
     return 0;
 }//end main
