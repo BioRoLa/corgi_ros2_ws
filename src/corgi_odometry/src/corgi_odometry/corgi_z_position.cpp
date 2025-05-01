@@ -1,26 +1,9 @@
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <Eigen/Geometry>
-#include <algorithm>
-#include "ros/ros.h"
+#include "corgi_odometry.hpp"
 
-#include "corgi_msgs/MotorStateStamped.h"
-#include "corgi_msgs/TriggerStamped.h"
-#include "corgi_msgs/ContactStateStamped.h"
-#include "sensor_msgs/Imu.h"
-#include <std_msgs/Float64.h>
-
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
-#include "KLD_estimation/csv_reader.hpp"
-
-bool sim = true;
-LegModel legmodel(sim);
+LegModel legmodel(SIM);
 
 // Constants
-#define SAMPLE_RATE 1000.0 //Hz
+constexpr double Z_POS_ANALYSIS_RATE = 1000.0;
 
 // Variables
 bool trigger = false;
@@ -36,10 +19,41 @@ std::vector<std::string> headers = {
 };
 DataProcessor::CsvLogger logger;
 
+std::string output_file_path;
+std::string output_file_name = "";
+Eigen::VectorXf state = Eigen::VectorXf::Zero(Z_POS_DATA_SIZE);
 
 // Callbacks
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
     trigger = msg.enable;
+
+    if (RECORD_DATA){output_file_name = msg.output_filename;}
+
+    if (trigger && msg.output_filename != "") {
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+
+        int index = 1;
+        std::string file_path_with_extension = output_file_path + "_pos_z.csv";
+        while (logger.file_exists(file_path_with_extension)) {
+            file_path_with_extension = output_file_path + "_" + std::to_string(index) + "_pos_z.csv";
+            index++;
+        }
+        if (index != 1) output_file_name += "_" + std::to_string(index-1);
+        output_file_name += "_pos_z.csv";
+
+        output_file_path = file_path_with_extension;
+
+        // Initialize the CSV file.
+        logger.initCSV(output_file_path, headers);
+
+        ROS_INFO("Saving data to %s\n", output_file_name.c_str());
+    }
+    else{
+        if(logger.outFile.is_open()){
+            logger.finalizeCSV();
+            ROS_INFO("Saved data to %s", output_file_name.c_str());
+        }
+    }
 }
 
 void motor_state_cb(const corgi_msgs::MotorStateStamped state){
@@ -57,7 +71,7 @@ void contact_cb(const corgi_msgs::ContactStateStamped msg){
 double estimate_z(double theta, double beta) {
     legmodel.forward(theta, beta);
     legmodel.contact_map(theta, beta);
-    return -legmodel.contact_p[1]; // Replace with actual calculation
+    return -legmodel.contact_p[1];
 }
 
 // Function to compute Euler angles from a quaternion using ZYX order.
@@ -93,23 +107,19 @@ double low_pass_filter(double value, double prev_value, double cutoff_freq, doub
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "corgi_z_positiony");
+    ros::init(argc, argv, "corgi_z_position");
 
     ros::NodeHandle nh;
 
     // ROS Publishers
     ros::Publisher z_position_pub = nh.advertise<std_msgs::Float64>("odometry/z_position_hip", 10);
     // ROS Subscribers
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
-    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
-    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
-    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
+    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", Z_POS_ANALYSIS_RATE, trigger_cb);
+    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", Z_POS_ANALYSIS_RATE, motor_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", Z_POS_ANALYSIS_RATE, imu_cb);
+    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", Z_POS_ANALYSIS_RATE, contact_cb);
     
-    std::string filepath = std::getenv("HOME");
-    filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/z_test.csv";
-    logger.initCSV(filepath, headers);
-
-    ros::Rate rate(SAMPLE_RATE);
+    ros::Rate rate(Z_POS_ANALYSIS_RATE);
 
     Eigen::Quaterniond q;
     double roll = 0;
@@ -140,7 +150,7 @@ int main(int argc, char **argv) {
 
         q = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
         quaternionToEuler(q, roll, pitch, yaw);
-        if(!sim){
+        if(!SIM){
             pitch = -pitch;
             roll = -roll;
         }
@@ -170,27 +180,25 @@ int main(int argc, char **argv) {
             else {
                 z_COM.data = median(contact_heights);
             }
-            z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, SAMPLE_RATE);
+            z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, Z_POS_ANALYSIS_RATE);
             prev_z_COM.data = z_COM.data;
 
             z_position_pub.publish(z_COM);
             ROS_INFO("z_COM: %f", z_COM);
 
-            Eigen::VectorXf state = Eigen::VectorXf::Zero(9); //total 10 columns
-            state(0) = z_COM.data;
-            for (int i = 0; i < 4; i++) {
-                state(1 + i) = contact_modules[i]->contact;
+            if (RECORD_DATA){
+                state(0) = z_COM.data;
+                for (int i = 0; i < 4; i++) {
+                    state(1 + i) = contact_modules[i]->contact;
+                }
+                for (int i = 0; i < 4; i++) {
+                    state(5 + i) = contact_modules[i]->score;
+                }
+                logger.logState(state);
             }
-            for (int i = 0; i < 4; i++) {
-                state(5 + i) = contact_modules[i]->score;
-            }
-            logger.logState(state);
 
             rate.sleep();
         }
-
-        logger.finalizeCSV();
-
     }
     
     ros::shutdown();
