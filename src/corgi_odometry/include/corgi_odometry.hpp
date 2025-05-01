@@ -9,12 +9,17 @@ inline constexpr bool FILTE_VEL = false;
 inline constexpr bool KLD = true;               
 // publish contact state (only if KLD is used)
 inline constexpr bool PUB_CONTACT = false;
+// velocity are estimated in body frame, choose the frame that you want to estimate position
+inline constexpr bool BODY_FRAME = false; 
+inline constexpr bool WORLD_FRAME = true;
+inline constexpr bool ESTIMATE_POSITION_FRAME = BODY_FRAME; // BODY_FRAME or WORLD_FRAME
 
 /******* odometry *******/
 
 inline constexpr float ODOM_ESTIMATOR_RATE = 500.0; //Hz
 inline constexpr float THRESHOLD = 0.08; //threshold of KLD
 inline constexpr float ODOM_ESTIMATION_TIME_RANGE = 10.0; // matrix size
+inline constexpr float FILTE_VEL_CUT_OFF_FREQ = 10.0; //Hz
 
 /******* std lib *******/
 #include <iostream>

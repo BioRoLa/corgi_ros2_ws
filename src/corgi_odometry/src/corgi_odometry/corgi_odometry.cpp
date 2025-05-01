@@ -131,6 +131,7 @@ int main(int argc, char **argv) {
             return -1;  // Exit if the CSV file could not be created.
         }
     }
+
     // ROS Publishers
     ros::Publisher velocity_pub = nh.advertise<geometry_msgs::Vector3>("odometry/velocity", 10);
     ros::Publisher position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/position", 10);
@@ -260,7 +261,7 @@ int main(int argc, char **argv) {
             encoder_rh.UpdateState(dt);
             encoder_lh.UpdateState(dt);
 
-            R = q.toRotationMatrix();
+            R = ESTIMATE_POSITION_FRAME ? q.toRotationMatrix() : Eigen::Matrix3f::Identity();
             u.push_data(a, w, dt);
             lf.push_data(encoder_lf.GetState(), w, dt, alpha_lf);
             rf.push_data(encoder_rf.GetState(), w, dt, alpha_rf);
@@ -327,10 +328,11 @@ int main(int argc, char **argv) {
             estimate_state(29) = filter.threshold;                                                                                                  //threshold
             estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
 
-            geometry_msgs::Vector3 filtered_velocity_msg;
-            geometry_msgs::Vector3 filtered_position_msg;
+
             if (FILTE_VEL){
-                float cutoff_freq = 10.0; //Hz
+
+                geometry_msgs::Vector3 filtered_velocity_msg;
+                float cutoff_freq = FILTE_VEL_CUT_OFF_FREQ; //Hz
                 filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
                 prev_v = filtered_velocity_msg;
                 filtered_velocity_pub.publish(filtered_velocity_msg);

@@ -1,7 +1,6 @@
 #include "corgi_odometry.hpp"
 
-bool sim = true;
-LegModel legmodel(sim);
+LegModel legmodel(SIM);
 
 // Constants
 constexpr double Z_POS_ANALYSIS_RATE = 1000.0;
@@ -41,7 +40,7 @@ void contact_cb(const corgi_msgs::ContactStateStamped msg){
 double estimate_z(double theta, double beta) {
     legmodel.forward(theta, beta);
     legmodel.contact_map(theta, beta);
-    return -legmodel.contact_p[1]; // Replace with actual calculation
+    return -legmodel.contact_p[1];
 }
 
 // Function to compute Euler angles from a quaternion using ZYX order.
@@ -77,7 +76,7 @@ double low_pass_filter(double value, double prev_value, double cutoff_freq, doub
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "corgi_z_positiony");
+    ros::init(argc, argv, "corgi_z_position");
 
     ros::NodeHandle nh;
 
@@ -124,7 +123,7 @@ int main(int argc, char **argv) {
 
         q = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
         quaternionToEuler(q, roll, pitch, yaw);
-        if(!sim){
+        if(!SIM){
             pitch = -pitch;
             roll = -roll;
         }
