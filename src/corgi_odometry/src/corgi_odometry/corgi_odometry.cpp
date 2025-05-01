@@ -3,18 +3,11 @@
 using namespace estimation_model;
 
 // Constants
-#define SAMPLE_RATE 500.0 //Hz
+#define ODOM_ESTIMATOR_RATE 500.0 //Hz
 #define THRESHOLD 0.08 //threshold of KLD
 #define J 10 //sample time (matrix size)
-#define MOTOR_OFFSET_X 0.222
-#define MOTOR_OFFSET_Y 0.193
-#define MOTOR_OFFSET_Z 0.0
-#define WHEEL_RADIUS 0.1
-#define GRAVITY 9.80665
 #define lpf_alpha 0.5 //low pass filter alpha
 
-bool sim = true;
-const float WHEEL_WIDTH = sim ? 0.012 : 0.019;
 // CSV file parameters
 std::vector<std::string> headers = {
     "v_.x", "v_.y", "v_.z", 
@@ -192,10 +185,10 @@ int main(int argc, char **argv) {
     U u(J, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt);
 
     //Legs model
-    Leg lf_leg(Eigen::Vector3f( MotorOffsetX,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg rf_leg(Eigen::Vector3f( MotorOffsetX, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg rh_leg(Eigen::Vector3f(-MotorOffsetX, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg lh_leg(Eigen::Vector3f(-MotorOffsetX,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg lf_leg(Eigen::Vector3f( MOTOR_OFFSET_X,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg rf_leg(Eigen::Vector3f( MOTOR_OFFSET_X, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg rh_leg(Eigen::Vector3f(-MOTOR_OFFSET_X, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg lh_leg(Eigen::Vector3f(-MOTOR_OFFSET_X,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
     
     //Legs encoder
     // motor a,d for left side, which rotation is opposite to right side

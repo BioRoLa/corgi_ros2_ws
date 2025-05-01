@@ -4,7 +4,7 @@ bool sim = true;
 LegModel legmodel(sim);
 
 // Constants
-constexpr double Z_POS_ANALYSIS_RATE 1000.0;
+constexpr double Z_POS_ANALYSIS_RATE = 1000.0;
 
 // Variables
 bool trigger = false;
