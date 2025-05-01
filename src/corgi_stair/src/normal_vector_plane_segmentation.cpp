@@ -162,7 +162,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(0.20, 1.0);
+    pass.setFilterLimits(0.20, 2.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
     pass.setFilterLimits(-1.0, 1.0);
@@ -416,6 +416,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     sensor_msgs::PointCloud2 output;
     pcl::toROSMsg(*colored_cloud, output);
     output.header = input->header;
+    output.header.frame_id = "map";
     pub.publish(output);
 
 
@@ -423,7 +424,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // 可視化 Marker
     visualization_msgs::MarkerArray marker_array;
     visualization_msgs::Marker marker_template;
-    marker_template.header.frame_id = input->header.frame_id;
+    marker_template.header.frame_id = "map";
     marker_template.type = visualization_msgs::Marker::ARROW;
     marker_template.action = visualization_msgs::Marker::ADD;
     marker_template.scale.x = 0.01;
