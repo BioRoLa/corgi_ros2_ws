@@ -16,6 +16,10 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <pcl_ros/transforms.h>
 #include <unordered_map>
 #include <random>
 
@@ -131,14 +135,30 @@ struct AvgNormal
 };
 
 
-
+// 成員變數
+tf2_ros::Buffer tf_buffer_;
+tf2_ros::TransformListener tf_listener_(tf_buffer_);
 
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 {
+    /* Step 0: transform from camera coord to world coord */
+    geometry_msgs::TransformStamped transformStamped;
+    try { // 檢查是否能從 zed 相機轉換到 map
+        transformStamped = tf_buffer_.lookupTransform("map", input->header.frame_id,
+                                                        input->header.stamp, ros::Duration(0.1));
+    } catch (tf2::TransformException &ex) {
+        ROS_WARN("Transform error: %s", ex.what());
+        return;
+    }
+    // 點雲轉換
+    sensor_msgs::PointCloud2 transformed_cloud;
+    pcl_ros::transformPointCloud("map", transformStamped, *input, transformed_cloud);
+
+
     /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
-    pcl::fromROSMsg(*input, *cloud);
+    pcl::fromROSMsg(*transformed_cloud, *cloud);
     if (!cloud->isOrganized())
     {
         ROS_WARN("Point cloud is not organized. Skipping frame.");
@@ -476,7 +496,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
 int main(int argc, char** argv) {
     ros::init(argc, argv, "plane_segmentation_node");
     ros::NodeHandle nh;
-    ros::Subscriber sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
+    ros::Subscriber cloud_sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
+    ros::Subscriber pose_sub  = nh.subscribe("/zedxm/zed_node/pose", 1, poseCallback);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
     ros::spin();
