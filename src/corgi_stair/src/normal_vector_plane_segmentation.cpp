@@ -33,27 +33,22 @@ ros::Publisher pub;
 ros::Publisher normal_pub;
 
 /* K-mean */
-struct Color
-{
+struct Color {
     uint8_t r, g, b;
 };
 
-
-struct NormalPoint
-{
+struct NormalPoint {
     Eigen::Vector3f normal;
     int clusterID = -1;
 };
 
 // 計算歐式距離平方
-float euclideanDistanceSquared(const Eigen::Vector3f& a, const Eigen::Vector3f& b)
-{
+float euclideanDistanceSquared(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
     return (a - b).squaredNorm();
 }
 
 // 簡單版 KMeans
-void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100)
-{
+void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) {
     const int N = points.size();
     if (N == 0) return;
 
@@ -162,7 +157,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(0.20, 2.0);
+    pass.setFilterLimits(0.20, 1.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
     pass.setFilterLimits(-1.0, 1.0);
@@ -180,8 +175,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
     ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(10.0f);
-    ne.setNormalSmoothingSize(5.0f);
+    ne.setMaxDepthChangeFactor(0.10f);
+    ne.setNormalSmoothingSize(10.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
     #else // too slow
@@ -194,6 +189,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input)
     ne.setRadiusSearch(0.03); // 設置搜索半徑
     ne.compute(*normals);
     #endif
+
 
     #if CLUSTER_NORMAL
     /* Step 4: Implementing DBSCAN for clustering */
