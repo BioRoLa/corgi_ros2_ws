@@ -173,7 +173,6 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
 
 
     /* Step 2.5: transform from camera coord to world coord */
-    tf_buffer_.lookupTransform("map", cloud->header.frame_id, ros::Time(0), ros::Duration(1.0));
     pcl_ros::transformPointCloud("map", *cloud, *cloud, tf_buffer_);
 
 
