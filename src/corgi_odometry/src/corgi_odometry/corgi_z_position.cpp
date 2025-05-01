@@ -4,7 +4,7 @@ bool sim = true;
 LegModel legmodel(sim);
 
 // Constants
-#define SAMPLE_RATE 1000.0 //Hz
+constexpr double Z_POS_ANALYSIS_RATE 1000.0;
 
 // Variables
 bool trigger = false;
@@ -84,16 +84,16 @@ int main(int argc, char **argv) {
     // ROS Publishers
     ros::Publisher z_position_pub = nh.advertise<std_msgs::Float64>("odometry/z_position_hip", 10);
     // ROS Subscribers
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
-    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
-    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
-    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
+    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", Z_POS_ANALYSIS_RATE, trigger_cb);
+    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", Z_POS_ANALYSIS_RATE, motor_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", Z_POS_ANALYSIS_RATE, imu_cb);
+    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", Z_POS_ANALYSIS_RATE, contact_cb);
     
     std::string filepath = std::getenv("HOME");
     filepath += "/corgi_ws/corgi_ros_ws/src/corgi_odometry/data/z_test.csv";
     logger.initCSV(filepath, headers);
 
-    ros::Rate rate(SAMPLE_RATE);
+    ros::Rate rate(Z_POS_ANALYSIS_RATE);
 
     Eigen::Quaterniond q;
     double roll = 0;
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
             else {
                 z_COM.data = median(contact_heights);
             }
-            z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, SAMPLE_RATE);
+            z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, Z_POS_ANALYSIS_RATE);
             prev_z_COM.data = z_COM.data;
 
             z_position_pub.publish(z_COM);

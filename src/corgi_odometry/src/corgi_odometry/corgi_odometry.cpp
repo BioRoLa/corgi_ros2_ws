@@ -12,7 +12,7 @@ using namespace estimation_model;
 #define WHEEL_RADIUS 0.1
 #define GRAVITY 9.80665
 #define lpf_alpha 0.5 //low pass filter alpha
-#define SIM True //simulation mode
+
 bool sim = true;
 const float WHEEL_WIDTH = sim ? 0.012 : 0.019;
 // CSV file parameters
@@ -169,18 +169,18 @@ int main(int argc, char **argv) {
     // ros::Publisher filtered_position_pub = nh.advertise<geometry_msgs::Vector3>("odometry/filtered_position", 10);
 
     // ROS Subscribers
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", SAMPLE_RATE, trigger_cb);
-    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", SAMPLE_RATE, motor_state_cb);
-    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", SAMPLE_RATE, imu_cb);
-    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", SAMPLE_RATE, contact_cb);
+    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", ODOM_ESTIMATOR_RATE, trigger_cb);
+    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", ODOM_ESTIMATOR_RATE, motor_state_cb);
+    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", ODOM_ESTIMATOR_RATE, imu_cb);
+    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", ODOM_ESTIMATOR_RATE, contact_cb);
 
     Eigen::initParallel();
-    ros::Rate rate(SAMPLE_RATE);
+    ros::Rate rate(ODOM_ESTIMATOR_RATE);
 
     /* Estimate model initialization */
 
     //initial time
-    dt = 1.0 / float(SAMPLE_RATE);
+    dt = 1.0 / float(ODOM_ESTIMATOR_RATE);
     prev_time = ros::Time::now().toSec();
 
     //initial velocity for low pass filter
@@ -192,10 +192,10 @@ int main(int argc, char **argv) {
     U u(J, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt);
 
     //Legs model
-    Leg lf_leg(Eigen::Vector3f( MOTOR_OFFSET_X,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg rf_leg(Eigen::Vector3f( MOTOR_OFFSET_X, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg rh_leg(Eigen::Vector3f(-MOTOR_OFFSET_X, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
-    Leg lh_leg(Eigen::Vector3f(-MOTOR_OFFSET_X,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg lf_leg(Eigen::Vector3f( MotorOffsetX,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg rf_leg(Eigen::Vector3f( MotorOffsetX, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg rh_leg(Eigen::Vector3f(-MotorOffsetX, -MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
+    Leg lh_leg(Eigen::Vector3f(-MotorOffsetX,  MOTOR_OFFSET_Y, MOTOR_OFFSET_Z), WHEEL_RADIUS, WHEEL_WIDTH);
     
     //Legs encoder
     // motor a,d for left side, which rotation is opposite to right side
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
-    if(sim){
+    if(SimMode){
         rot <<  1,  0,  0, 
                 0,  1,  0,
                 0,  0,  1;
@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
         // dt = float(current_time - prev_time);
         // prev_time = current_time;
         // ROS_INFO("dt: %f", dt);
-        dt = 1.0 / float(SAMPLE_RATE);
+        dt = 1.0 / float(ODOM_ESTIMATOR_RATE);
 
         if(trigger){
             if (!initialized) {
@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
 
             // geometry_msgs::Vector3 filtered_velocity_msg;
             // float cutoff_freq = 10.0; //Hz
-            // filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, SAMPLE_RATE);
+            // filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
             // prev_v = filtered_velocity_msg;
             // filtered_velocity_pub.publish(filtered_velocity_msg);
             
