@@ -318,43 +318,43 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // std::vector<pcl::PointIndices> cluster_indices;
     // ec.extract(cluster_indices);
 
-    std::vector<AvgNormal> avg_normals(k);
+    // std::vector<AvgNormal> avg_normals(k);
 
-    for (const auto& p : normal_points)
-    {
-        avg_normals[p.clusterID].x += p.normal.x();
-        avg_normals[p.clusterID].y += p.normal.y();
-        avg_normals[p.clusterID].z += p.normal.z();
-        avg_normals[p.clusterID].count += 1;
-    }
+    // for (const auto& p : normal_points)
+    // {
+    //     avg_normals[p.clusterID].x += p.normal.x();
+    //     avg_normals[p.clusterID].y += p.normal.y();
+    //     avg_normals[p.clusterID].z += p.normal.z();
+    //     avg_normals[p.clusterID].count += 1;
+    // }
     
-    for (int i = 0; i < k; ++i)
-    {
-        if (avg_normals[i].count > 0)
-        {
-            avg_normals[i].x /= avg_normals[i].count;
-            avg_normals[i].y /= avg_normals[i].count;
-            avg_normals[i].z /= avg_normals[i].count;
-        }
-    }
+    // for (int i = 0; i < k; ++i)
+    // {
+    //     if (avg_normals[i].count > 0)
+    //     {
+    //         avg_normals[i].x /= avg_normals[i].count;
+    //         avg_normals[i].y /= avg_normals[i].count;
+    //         avg_normals[i].z /= avg_normals[i].count;
+    //     }
+    // }
     
     // 2. 根據最大分量 (x/y/z) 給群指定顏色
-
     std::vector<Color> cluster_colors(k);
+    cluster_colorss[0] = {0, 0, 255};     // Z -> 藍色
+    cluster_colorss[1] = {255, 0, 0};     // X -> 紅色
+    // for (int i = 0; i < k; ++i)
+    // {
+    //     float abs_x = std::abs(avg_normals[i].x);
+    //     float abs_y = std::abs(avg_normals[i].y);
+    //     float abs_z = std::abs(avg_normals[i].z);
     
-    for (int i = 0; i < k; ++i)
-    {
-        float abs_x = std::abs(avg_normals[i].x);
-        float abs_y = std::abs(avg_normals[i].y);
-        float abs_z = std::abs(avg_normals[i].z);
-    
-        if (abs_x >= abs_y && abs_x >= abs_z)
-            cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
-        else if (abs_y >= abs_x && abs_y >= abs_z)
-            cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
-        else
-            cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
-    }
+    //     if (abs_x >= abs_y && abs_x >= abs_z)
+    //         cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
+    //     else if (abs_y >= abs_x && abs_y >= abs_z)
+    //         cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
+    //     else
+    //         cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
+    // }
     
     // Step 5: Visualize the clusters (use random colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
