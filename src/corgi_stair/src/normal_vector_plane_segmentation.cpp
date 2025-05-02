@@ -36,6 +36,8 @@ typedef pcl::PointXYZ PointT_no_color;
 ros::Publisher pub;
 ros::Publisher normal_pub;
 
+
+
 /* K-mean */
 std::vector<Eigen::Vector3f> cluster_centroids;
 struct Color {
@@ -43,14 +45,70 @@ struct Color {
 };
 
 struct NormalPoint {
-    Eigen::Vector3f normal;
+    Eigen::Vector3f position;  // 空間座標
+    Eigen::Vector3f normal;    // 單位法向量
     int clusterID = -1;
+    double distance_proj = 0.0; // 投影距離
 };
 
-// 計算歐式距離平方
-float euclideanDistanceSquared(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
+void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points, int num_bins = 5) {
+    // 將每個點在對應群的 normal 方向做投影
+    for (auto& p : points) {
+        if (p.clusterID == -1 || p.clusterID >= cluster_centroids.size()) continue;
+        const Eigen::Vector3f& n = cluster_centroids[p.clusterID];
+        p.distance_proj = p.position.dot(n);  // 投影到 normal 上
+    }
+
+    // 分群：將每群的投影距離列出（你可以接下來用這些值再做 1D clustering）
+    std::unordered_map<int, std::vector<float>> cluster_distances;
+    for (const auto& p : points) {
+        if (p.clusterID >= 0)
+            cluster_distances[p.clusterID].push_back(p.distance_proj);
+    }
+
+    // 顯示每群的距離分布
+    for (const auto& [cid, distances] : cluster_distances) {
+        if (distances.empty()) continue;
+
+        float min_d = *std::min_element(distances.begin(), distances.end());
+        float max_d = *std::max_element(distances.begin(), distances.end());
+        float bin_width = (max_d - min_d) / num_bins;
+
+        struct BinInfo {
+            int count;
+            float start, end;
+        };
+
+        std::vector<BinInfo> bins(num_bins, {0, 0, 0});
+        for (int i = 0; i < num_bins; ++i) {
+            bins[i].start = min_d + i * bin_width;
+            bins[i].end = bins[i].start + bin_width;
+        }
+
+        for (float d : distances) {
+            int bin = std::min(static_cast<int>((d - min_d) / bin_width), num_bins - 1);
+            bins[bin].count++;
+        }
+
+        // 找出最多的兩個 bin
+        std::vector<BinInfo> sorted_bins = bins;
+        std::sort(sorted_bins.begin(), sorted_bins.end(),
+                  [](const BinInfo& a, const BinInfo& b) { return a.count > b.count; });
+
+        std::cout << "Cluster " << cid << " top 2 bins with most points:\n";
+        for (int i = 0; i < std::min(2, num_bins); ++i) {
+            const auto& bin = sorted_bins[i];
+            std::cout << std::fixed << std::setprecision(2)
+                      << "  Bin [" << bin.start << ", " << bin.end << "] → "
+                      << bin.count << " points\n";
+        }
+        std::cout << std::endl;
+    }
+}
+
+// 計算1 - cos(a, b)
+double angleDistance(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
     return 1 - a.dot(b);
-    return (a - b).squaredNorm();
 }
 
 // 簡單版 KMeans
@@ -80,7 +138,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
             int best_cluster = -1;
             for (int c = 0; c < k; ++c)
             {
-                float dist_sq = euclideanDistanceSquared(p.normal, centroids[c]);
+                float dist_sq = angleDistance(p.normal, centroids[c]);
                 if (dist_sq < min_dist)
                 {
                     min_dist = dist_sq;
@@ -126,7 +184,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
     cluster_centroids = centroids;
 }//end kmeansNormals
 
-void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 100) {
+void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 1) {
     const int N = points.size();
     if (N == 0) return;
 
@@ -139,12 +197,12 @@ void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 100) {
     centroids.push_back(c2); // Vertical plane
 
     
-    double threshold = std::cos(20.0 * M_PI / 180.0);  // 20度
+    double threshold = std::cos(30.0 * M_PI / 180.0);  // 20度
     for (int iter = 0; iter < max_iter; ++iter)
     {
         bool changed = false;
 
-        // 2. 分配每個點到最近中心，移除outlier
+        // 2. 分配每個點到最近中心
         for (auto& p : points)
         {
             double angle1 = p.normal.dot(centroids[0]);
@@ -295,8 +353,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z))
         {
             Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
+            Eigen::Vector3f position_vec(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
             normal_vec.normalize();
-            normal_points.push_back({ normal_vec, -1 });
+            normal_points.push_back({position_vec, normal_vec, -1, 0.0});
         }
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
@@ -305,8 +364,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     int k = 3;
     // kmeansNormals(normal_points, k);
     Group2Normals(normal_points);
-    std::cout << "cluster_centroid0: " << cluster_centroids[0] << std::endl;
-    std::cout << "cluster_centroid1: " << cluster_centroids[1] << std::endl;
+    std::cout << "cluster_centroid0: \n" << cluster_centroids[0] << std::endl;
+    std::cout << "cluster_centroid1: \n" << cluster_centroids[1] << std::endl;
+    ComputeClusterDirectionDistances(normal_points);
     // pcl::VoxelGrid<PointT> vg;
     // vg.setInputCloud(normal_clouds);
     // vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
