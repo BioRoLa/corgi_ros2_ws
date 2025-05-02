@@ -53,10 +53,6 @@ struct NormalPoint {
 
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const float bin_width = 0.01f;
-    const float range_min = -0.5f;
-    const float range_max = 5.0f;
-    const int num_bins = static_cast<int>((range_max - range_min) / bin_width);
-
 
     // 將每個點在對應群的 normal 方向做投影
     for (auto& p : points) {
@@ -74,16 +70,28 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
 
     // 顯示每群的距離分布
     for (const auto& [cid, distances] : cluster_distances) {
-        std::vector<int> bins(num_bins, 0);
+        if (distances.empty()) continue;
 
-        for (float d : distances) {
-            if (d >= range_min && d < range_max) {
-                int bin_idx = static_cast<int>((d - range_min) / bin_width);
-                bins[bin_idx]++;
-            }
+        // 計算動態範圍
+        float range_min = *std::min_element(distances.begin(), distances.end());
+        float range_max = *std::max_element(distances.begin(), distances.end());
+
+        if (range_max == range_min) {
+            std::cout << "Cluster " << cid << " has uniform values at " << range_min << "\n";
+            continue;
         }
 
-        // 找出最多點數的 bin
+        int num_bins = static_cast<int>((range_max - range_min) / bin_width) + 1;
+        std::vector<int> bins(num_bins, 0);
+
+        // 建立 histogram
+        for (float d : distances) {
+            int bin_idx = static_cast<int>((d - range_min) / bin_width);
+            if (bin_idx >= 0 && bin_idx < num_bins)
+                bins[bin_idx]++;
+        }
+
+        // 找最多點的 bin
         int max_count = 0;
         int max_bin_idx = -1;
         for (int i = 0; i < num_bins; ++i) {
@@ -101,7 +109,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
                       << bin_start << ", " << bin_end << "] → "
                       << max_count << " points\n";
         } else {
-            std::cout << "Cluster " << cid << " has no points in range.\n";
+            std::cout << "Cluster " << cid << " has no valid bins.\n";
         }
     }
 }
