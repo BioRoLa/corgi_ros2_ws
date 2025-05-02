@@ -37,6 +37,7 @@ ros::Publisher pub;
 ros::Publisher normal_pub;
 
 /* K-mean */
+std::vector<Eigen::Vector3f> cluster_centroids;
 struct Color {
     uint8_t r, g, b;
 };
@@ -121,9 +122,73 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
         if (!changed)
             break; // 收斂了
     }
+    cluster_centroids = centroids;
+}//end kmeansNormals
 
-}
+void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 100) {
+    const int N = points.size();
+    if (N == 0) return;
 
+    // 1. 初始化：設定初始中心
+    std::vector<Eigen::Vector3f> centroids;
+    centroids.reserve(2);
+    Eigen::Vector3f c1(0, 0, 1);
+    Eigen::Vector3f c2(-1, 0, 0);
+    centroids.push_back(c1);  // Horizontal plane
+    centroids.push_back(c2); // Vertical plane
+
+    
+    double threshold = std::cos(20.0 * M_PI / 180.0);  // 20度
+    for (int iter = 0; iter < max_iter; ++iter)
+    {
+        bool changed = false;
+
+        // 2. 分配每個點到最近中心，移除outlier
+        for (auto& p : points)
+        {
+            double angle1 = std::abs(p.normal.dot(centroids[0]));
+            double angle2 = std::abs(p.normal.dot(centroids[1]));
+            int best_cluster = -1;
+            if (angle1 > angle2) {
+                if (angle1 > threshold) {
+                    best_cluster = 0;
+                }//end if
+            } else {
+                if (angle2 > threshold) {
+                    best_cluster = 1;
+                }//end if
+            }//end if else
+
+            if (p.clusterID != best_cluster) {
+                changed = true;
+                p.clusterID = best_cluster;
+            }//end if
+        }//end for
+
+        // 3. 重新計算每個中心
+        std::vector<Eigen::Vector3f> new_centroids(2, Eigen::Vector3f::Zero());
+        std::vector<int> counts(2, 0);
+        for (const auto& p : points) {
+            new_centroids[p.clusterID] += p.normal;
+            counts[p.clusterID] += 1;
+        }//end for
+
+        for (int c = 0; c < 2; ++c) {
+            if (counts[c] > 0) {
+                new_centroids[c] /= static_cast<float>(counts[c]);
+                new_centroids[c].normalize(); // Normal vector保持單位長度
+            } else {
+                // 這個 cluster 沒有人？重新設定為初始中心
+                new_centroids[c] = c==0? c1 : c2;
+            }//end if
+        }//end for
+
+        centroids = new_centroids;
+        if (!changed)
+            break; // 收斂了
+    }//end for
+    cluster_centroids = centroids;
+}//end Group2Normals
 
 // 1. 先計算每個群的平均 normal vector
 struct AvgNormal
@@ -235,7 +300,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // ds.run();
     // 執行 KMeans (分成3群)
     int k = 3;
-    kmeansNormals(normal_points, k);
+    // kmeansNormals(normal_points, k);
+    Group2Normals(normal_points);
     // pcl::VoxelGrid<PointT> vg;
     // vg.setInputCloud(normal_clouds);
     // vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
