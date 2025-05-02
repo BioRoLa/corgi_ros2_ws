@@ -49,6 +49,7 @@ struct NormalPoint {
 
 // 計算歐式距離平方
 float euclideanDistanceSquared(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
+
     return (a - b).squaredNorm();
 }
 
@@ -146,8 +147,8 @@ void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 100) {
         // 2. 分配每個點到最近中心，移除outlier
         for (auto& p : points)
         {
-            double angle1 = std::abs(p.normal.dot(centroids[0]));
-            double angle2 = std::abs(p.normal.dot(centroids[1]));
+            double angle1 = p.normal.dot(centroids[0]);
+            double angle2 = p.normal.dot(centroids[1]);
             int best_cluster = -1;
             if (angle1 > angle2) {
                 if (angle1 > threshold) {
