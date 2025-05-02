@@ -169,8 +169,10 @@ void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 100) {
         std::vector<Eigen::Vector3f> new_centroids(2, Eigen::Vector3f::Zero());
         std::vector<int> counts(2, 0);
         for (const auto& p : points) {
-            new_centroids[p.clusterID] += p.normal;
-            counts[p.clusterID] += 1;
+            if (p.clusterID != -1) {
+                new_centroids[p.clusterID] += p.normal;
+                counts[p.clusterID] += 1;
+            }//end if
         }//end for
 
         for (int c = 0; c < 2; ++c) {
