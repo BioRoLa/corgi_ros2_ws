@@ -54,7 +54,7 @@ struct NormalPoint {
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const float bin_width = 0.01f;
     const float range_min = -0.5f;
-    const float range_max = 3.0f;
+    const float range_max = 5.0f;
     const int num_bins = static_cast<int>((range_max - range_min) / bin_width);
 
 
