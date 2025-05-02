@@ -340,8 +340,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     
     // 2. 根據最大分量 (x/y/z) 給群指定顏色
     std::vector<Color> cluster_colors(k);
-    cluster_colorss[0] = {0, 0, 255};     // Z -> 藍色
-    cluster_colorss[1] = {255, 0, 0};     // X -> 紅色
+    cluster_colors[0] = {0, 0, 255};     // Z -> 藍色
+    cluster_colors[1] = {255, 0, 0};     // X -> 紅色
     // for (int i = 0; i < k; ++i)
     // {
     //     float abs_x = std::abs(avg_normals[i].x);
