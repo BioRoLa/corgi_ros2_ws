@@ -51,7 +51,13 @@ struct NormalPoint {
     double distance_proj = 0.0; // 投影距離
 };
 
-void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points, int num_bins = 5) {
+void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
+    const float bin_width = 0.01f;
+    const float range_min = -0.5f;
+    const float range_max = 2.0f;
+    const int num_bins = static_cast<int>((range_max - range_min) / bin_width);
+
+
     // 將每個點在對應群的 normal 方向做投影
     for (auto& p : points) {
         if (p.clusterID == -1 || p.clusterID >= cluster_centroids.size()) continue;
@@ -68,41 +74,35 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points, int num_
 
     // 顯示每群的距離分布
     for (const auto& [cid, distances] : cluster_distances) {
-        if (distances.empty()) continue;
-
-        float min_d = *std::min_element(distances.begin(), distances.end());
-        float max_d = *std::max_element(distances.begin(), distances.end());
-        float bin_width = (max_d - min_d) / num_bins;
-
-        struct BinInfo {
-            int count;
-            float start, end;
-        };
-
-        std::vector<BinInfo> bins(num_bins, {0, 0, 0});
-        for (int i = 0; i < num_bins; ++i) {
-            bins[i].start = min_d + i * bin_width;
-            bins[i].end = bins[i].start + bin_width;
-        }
-
+        std::vector<int> bins(num_bins, 0);
+        
         for (float d : distances) {
-            int bin = std::min(static_cast<int>((d - min_d) / bin_width), num_bins - 1);
-            bins[bin].count++;
+            if (d >= range_min && d < range_max) {
+                int bin_idx = static_cast<int>((d - range_min) / bin_width);
+                bins[bin_idx]++;
+            }
         }
 
-        // 找出最多的兩個 bin
-        std::vector<BinInfo> sorted_bins = bins;
-        std::sort(sorted_bins.begin(), sorted_bins.end(),
-                  [](const BinInfo& a, const BinInfo& b) { return a.count > b.count; });
-
-        std::cout << "Cluster " << cid << " top 2 bins with most points:\n";
-        for (int i = 0; i < std::min(2, num_bins); ++i) {
-            const auto& bin = sorted_bins[i];
-            std::cout << std::fixed << std::setprecision(2)
-                      << "  Bin [" << bin.start << ", " << bin.end << "] → "
-                      << bin.count << " points\n";
+        // 找出最多點數的 bin
+        int max_count = 0;
+        int max_bin_idx = -1;
+        for (int i = 0; i < num_bins; ++i) {
+            if (bins[i] > max_count) {
+                max_count = bins[i];
+                max_bin_idx = i;
+            }
         }
-        std::cout << std::endl;
+
+        if (max_bin_idx >= 0) {
+            float bin_start = range_min + max_bin_idx * bin_width;
+            float bin_end = bin_start + bin_width;
+            std::cout << std::fixed << std::setprecision(2);
+            std::cout << "Cluster " << cid << " peak bin: ["
+                      << bin_start << ", " << bin_end << "] → "
+                      << max_count << " points\n";
+        } else {
+            std::cout << "Cluster " << cid << " has no points in range.\n";
+        }
     }
 }
 
