@@ -54,7 +54,7 @@ struct NormalPoint {
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const float bin_width = 0.01f;
     const float range_min = -0.5f;
-    const float range_max = 2.0f;
+    const float range_max = 3.0f;
     const int num_bins = static_cast<int>((range_max - range_min) / bin_width);
 
 
@@ -75,7 +75,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     // 顯示每群的距離分布
     for (const auto& [cid, distances] : cluster_distances) {
         std::vector<int> bins(num_bins, 0);
-        
+
         for (float d : distances) {
             if (d >= range_min && d < range_max) {
                 int bin_idx = static_cast<int>((d - range_min) / bin_width);
