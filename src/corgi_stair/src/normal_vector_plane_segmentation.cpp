@@ -52,17 +52,20 @@ struct NormalPoint {
 };
 
 struct Range {
-    float start;
-    float end;
+    double start;
+    double end;
     int total_count;
+    double mean_distance;
 };
 
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001;
-    const int peak_threshold = 5000;
+    const int peak_threshold = 1000;
+    const double merge_threshold = 0.05;
 
     const int num_clusters = cluster_centroids.size();
     for (int c = 0; c < num_clusters; ++c) {
+        std::vector<Range> raw_ranges;
         std::vector<double> distances;
 
         // 收集 cluster c 的距離值
@@ -82,13 +85,13 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
 
         int bin_count = static_cast<int>((max_val - min_val) / bin_width) + 1;
         std::vector<int> histogram(bin_count, 0);
+        std::vector<std::vector<float>> bin_values(bin_count);
 
         // 計算 histogram
         for (double d : distances) {
             int bin = static_cast<int>((d - min_val) / bin_width);
-            if (bin >= 0 && bin < bin_count)
-                histogram[bin]++;
-
+            histogram[bin]++;
+            bin_values[bin].push_back(d);
         }
 
         std::cout << "Cluster " << c << " histogram peaks:\n";
@@ -96,6 +99,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         // 找出連續高密度 bin
         bool in_range = false;
         Range current;
+        std::vector<double> current_values;
 
         for (int i = 0; i < bin_count; ++i) {
             if (histogram[i] >= peak_threshold) {
@@ -103,18 +107,62 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
                     in_range = true;
                     current.start = min_val + i * bin_width;
                     current.total_count = histogram[i];
+                    current_values = bin_values[i];
                 } else {
                     current.total_count += histogram[i];
+                    current_values.insert(current_values.end(), bin_values[i].begin(), bin_values[i].end());
                 }
                 current.end = min_val + (i + 1) * bin_width;
             } else if (in_range) {
-                std::cout << "  Peak bin [" << current.start << ", " << current.end << "): Count = " << current.total_count << "\n";
+                double sum = std::accumulate(current_values.begin(), current_values.end(), 0.0f);
+                current.mean_distance = sum / current_values.size();
+                raw_ranges.push_back(current);
                 in_range = false;
+                current_values.clear();
             }
         }
+        if (in_range) {
+            double sum = std::accumulate(current_values.begin(), current_values.end(), 0.0f);
+            current.mean_distance = sum / current_values.size();
+            raw_ranges.push_back(current);
+        }
+
+
+        // Step 2: 過濾過近的範圍，只保留每對中點數較多的
+        std::vector<bool> keep(raw_ranges.size(), true);
+        for (size_t i = 0; i < raw_ranges.size(); ++i) {
+            for (size_t j = i + 1; j < raw_ranges.size(); ++j) {
+                float dist = std::abs(raw_ranges[i].mean_distance - raw_ranges[j].mean_distance);
+                if (dist < merge_threshold) {
+                    if (raw_ranges[i].total_count >= raw_ranges[j].total_count) {
+                        keep[j] = false;
+                    } else {
+                        keep[i] = false;
+                    }
+                }
+            }
+        }
+    
+        std::vector<Range> final_ranges;
+        for (size_t i = 0; i < raw_ranges.size(); ++i) {
+            if (keep[i]) {
+                final_ranges.push_back(raw_ranges[i]);
+            }
+        }
+
+        
+        for (const auto& range : final_ranges) {
+            std::cout << "Plane approx in [" << range.start << ", " << range.end << "]\n";
+            std::cout << " → count: " << range.total_count
+                      << ", mean distance: " << range.mean_distance << "\n";
+        }
         std::cout << std::endl;
-    }
-}
+    }//end for
+
+
+
+
+}//end ComputeClusterDirectionDistances
 
 // 計算 1 - cos(a, b)
 double angleDistance(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
@@ -320,8 +368,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
     ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(0.10f);
-    ne.setNormalSmoothingSize(10.0f);
+    ne.setMaxDepthChangeFactor(0.05f);
+    ne.setNormalSmoothingSize(15.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
     #else // too slow
