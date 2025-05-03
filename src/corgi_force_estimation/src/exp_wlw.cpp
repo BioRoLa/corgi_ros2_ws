@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
     gait_selector.stand_height = 0.16;
     gait_selector.step_length = 0.3;
     hybrid_gait.Initialize(0, 0, 0, 0, 0, 0, -0.03);
+    hybrid_gait.change_Velocity(velocity);
     
     double init_eta[8];
     for (int i=0; i<4; i++) {
@@ -56,13 +57,13 @@ int main(int argc, char **argv) {
     for (auto& cmd : motor_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
-        cmd->kp_r = 150;
-        cmd->kp_l = 150;
+        cmd->kp_r = 90;
+        cmd->kp_l = 90;
         cmd->ki_r = 0;
         cmd->ki_l = 0;
         if (sim) {
-            cmd->kd_r = 0.75;
-            cmd->kd_l = 0.75;
+            cmd->kd_r = 1;
+            cmd->kd_l = 1;
         }
         else {
             cmd->kd_r = 1.75;
