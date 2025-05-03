@@ -680,8 +680,8 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
-    csv << "could_seq: " << ", ";
-    csv << "Trigger: " << ", ";
+    csv << "could_seq,";
+    csv << "Trigger," ;
     csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) csv << "Horizontal" << i << ", ";
     csv << ",Vertical0,";  for (int i = 1; i < 10; ++i) csv << "Vertical"   << i << ", ";
     csv << "\n";
