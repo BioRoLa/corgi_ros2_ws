@@ -177,7 +177,7 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         // 根據平均距離排序，並分配 planeID（全局唯一）
         if (c==0) { // horizontal plane: small -> large
             std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
-                return a.mean_distance > b.mean_distance;
+                return a.mean_distance < b.mean_distance;
             });
         } else {    // vertical plane: large -> small
             std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
