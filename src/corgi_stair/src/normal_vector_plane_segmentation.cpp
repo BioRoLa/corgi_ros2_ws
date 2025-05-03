@@ -108,7 +108,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
                 }
                 current.end = min_val + (i + 1) * bin_width;
             } else if (in_range) {
-                std::cout << "  Peak bin [" << bin_start << ", " << bin_end << "): Count = " << histogram[i] << "\n";
+                std::cout << "  Peak bin [" << current.start << ", " << current.end << "): Count = " << current.total_count << "\n";
                 in_range = false;
             }
         }
