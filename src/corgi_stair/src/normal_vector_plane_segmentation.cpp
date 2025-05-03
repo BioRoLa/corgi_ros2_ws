@@ -82,7 +82,7 @@ Color GetColor(int clusterID, int planeID) {
 std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001; // 1mm
     const int one_bin_point_threshold = 100;    // 100 points
-    const int total_point_threshold   = 10000;    // 10000 points
+    const int total_point_threshold   = 5000;    // 5000 points
     const double merge_threshold = 0.05;    // 5cm
     const int num_clusters = cluster_centroids.size();
 
@@ -388,7 +388,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pass.setFilterLimits(0.20, 2.0);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
-    pass.setFilterLimits(-1.0, 1.0);
+    pass.setFilterLimits(-0.5, 0.5);
     pass.filter(*cloud);
     pass.setFilterFieldName("z");
     pass.setFilterLimits(-0.5, 1.0);
