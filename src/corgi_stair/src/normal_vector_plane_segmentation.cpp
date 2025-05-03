@@ -684,7 +684,7 @@ int main(int argc, char** argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
-        csv << trigger_msg.enable << ",";
+        csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
             if (i < global_range[0].size())
                 csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
