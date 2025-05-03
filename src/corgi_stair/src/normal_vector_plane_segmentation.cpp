@@ -62,7 +62,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         // 收集 cluster c 的距離值
         for (const auto& p : points) {
             if (p.clusterID == c) {
-                double d = p.normal.dot(p.position);  // 投影距離
+                double d = cluster_centroids[c].dot(p.position);  // 投影距離
                 distances.push_back(d);
             }
         }
