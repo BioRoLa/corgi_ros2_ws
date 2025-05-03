@@ -175,14 +175,11 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
             std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
                 return a.mean_distance > b.mean_distance;
             });
-        } else {
+        } else {    // vertical plane: large -> small
             std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
                 return a.mean_distance > b.mean_distance;
             });
         }
-        std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
-            return a.mean_distance < b.mean_distance;
-        });
 
         std::map<float, int> distance_to_planeID;
         for (int i = 0; i < final_ranges.size(); ++i) {
