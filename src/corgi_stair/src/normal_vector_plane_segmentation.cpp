@@ -85,7 +85,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
 
         int bin_count = static_cast<int>((max_val - min_val) / bin_width) + 1;
         std::vector<int> histogram(bin_count, 0);
-        std::vector<std::vector<float>> bin_values(bin_count);
+        std::vector<std::vector<double>> bin_values(bin_count);
 
         // 計算 histogram
         for (double d : distances) {
@@ -132,7 +132,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         std::vector<bool> keep(raw_ranges.size(), true);
         for (size_t i = 0; i < raw_ranges.size(); ++i) {
             for (size_t j = i + 1; j < raw_ranges.size(); ++j) {
-                float dist = std::abs(raw_ranges[i].mean_distance - raw_ranges[j].mean_distance);
+                double dist = std::abs(raw_ranges[i].mean_distance - raw_ranges[j].mean_distance);
                 if (dist < merge_threshold) {
                     if (raw_ranges[i].total_count >= raw_ranges[j].total_count) {
                         keep[j] = false;
