@@ -33,16 +33,7 @@
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointXYZ PointT_no_color;
 
-
-/* Global variables */
-ros::Publisher pub;
-ros::Publisher normal_pub;
-tf2_ros::Buffer tf_buffer_;
-tf2_ros::TransformListener* tf_listener_;
-
-
-/* K-mean */
-std::vector<Eigen::Vector3f> cluster_centroids;
+/* Structure */
 struct Color {
     uint8_t r, g, b;
 };
@@ -62,6 +53,17 @@ struct Range {
     double mean_distance;
 };
 
+/* Global variables */
+ros::Publisher pub;
+ros::Publisher normal_pub;
+tf2_ros::Buffer tf_buffer_;
+tf2_ros::TransformListener* tf_listener_;
+std::vector<Eigen::Vector3f> cluster_centroids;
+std::array<std::vector<Range>, 2> global_range;
+
+/* K-mean */
+
+
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
 Color GetColor(int clusterID, int planeID) {
     int shade = planeID % 10; // 深淺 (最多支援100階)
@@ -76,29 +78,29 @@ Color GetColor(int clusterID, int planeID) {
     }
 }
 
-void group_by_plane_distance(std::vector<NormalPoint>& points) {
+std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001; // 1mm
     const int point_threshold = 1000;    // 1000 points
     const double merge_threshold = 0.05;    // 5cm
-
     const int num_clusters = cluster_centroids.size();
-    for (int c = 0; c < num_clusters; ++c) {
-        std::vector<Range> raw_ranges;
-        std::vector<double> distances;
 
-        // 收集 cluster c 的距離值
-        for (NormalPoint& p : points) {
-            if (p.clusterID == c) {
-                double d = cluster_centroids[c].dot(p.position);  // 投影距離
-                p.distance_proj = d; // 記錄投影距離
-                distances.push_back(d);
-            }
-        }
+    std::array<std::vector<Range>, 2> return_range;
+    std::vector<Range> raw_ranges;
+    std::vector<std::vector<double>> distances(num_clusters);
+    // Calculate plane distance
+    for (NormalPoint& p : points) {
+        int clusterID = p.clusterID;
+        double d = cluster_centroids[clusterID].dot(p.position);  // 投影距離
+        p.distance_proj = d;
+        distances[clusterID].push_back(d);
+    }//end for
 
-        if (distances.empty()) continue;
+    // Calculate histogram for each cluster
+    for (int c=0; c<num_clusters; c++) {
+        if (distances[c].empty()) continue;
 
-        // 計算距離的最小與最大
-        auto [min_it, max_it] = std::minmax_element(distances.begin(), distances.end());
+        // Calculate max & min distances
+        auto [min_it, max_it] = std::minmax_element(distances[c].begin(), distances[c].end());
         double min_val = *min_it;
         double max_val = *max_it;
 
@@ -106,14 +108,13 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
         std::vector<int> histogram(bin_count, 0);
         std::vector<std::vector<double>> bin_values(bin_count);
 
-        // 計算 histogram
-        for (double d : distances) {
+        // Calculate histogram
+        for (double d : distances[c]) {
             int bin = static_cast<int>((d - min_val) / bin_width);
             histogram[bin]++;
             bin_values[bin].push_back(d);
         }
 
-        std::cout << "Cluster " << c << " histogram peaks:\n";
 
         // 找出連續高密度 bin
         bool in_range = false;
@@ -161,7 +162,6 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
                 }
             }
         }
-    
         std::vector<Range> final_ranges;
         for (size_t i = 0; i < raw_ranges.size(); ++i) {
             if (keep[i]) {
@@ -169,7 +169,6 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
             }
         }
 
-        
 
         // 根據平均距離排序，並分配 planeID（全局唯一）
         std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
@@ -191,8 +190,10 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
                 }
             }
         }
+        return_range[c] = final_ranges;
 
-
+        // Print cluster info
+        std::cout << "Cluster " << c << " histogram peaks:\n";
         for (const auto& range : final_ranges) {
             std::cout << "Plane approx in [" << range.start << ", " << range.end << "]\n";
             std::cout << " → plane_ID: "<< distance_to_planeID[range.mean_distance]
@@ -200,15 +201,17 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
                       << ", mean distance: " << range.mean_distance << "\n";
         }
         std::cout << std::endl;
-
     }//end for
 
-}//end ComputeClusterDirectionDistances
+    return return_range;
+}//end group_by_plane_distance
+
 
 // 計算 1 - cos(a, b)
 double angleDistance(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
     return 1 - a.dot(b);
 }
+
 
 // 簡單版 KMeans
 void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) {
@@ -283,6 +286,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
     cluster_centroids = centroids;
 }//end kmeansNormals
 
+
 void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
     const int N = points.size();
     if (N == 0) return;
@@ -296,14 +300,12 @@ void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
     centroids.push_back(c2); // Vertical plane
 
     double thresholds_angle[2] = {30.0, 20.0};  // 30度, 20度
-    for (int iter = 0; iter < max_iter; ++iter)
-    {
+    for (int iter = 0; iter < max_iter; iter++) {
         double threshold = std::cos(thresholds_angle[iter] * M_PI / 180.0);  
         bool changed = false;
 
         // 2. 分配每個點到最近中心
-        for (auto& p : points)
-        {
+        for (auto& p : points) {
             double angle1 = p.normal.dot(centroids[0]);
             double angle2 = p.normal.dot(centroids[1]);
             int best_cluster = -1;
@@ -451,7 +453,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     group_by_normals(normal_points);
     std::cout << "cluster_centroid0: \n" << cluster_centroids[0] << std::endl;
     std::cout << "cluster_centroid1: \n" << cluster_centroids[1] << std::endl;
-    group_by_plane_distance(normal_points);
+    std::array<std::vector<Range>, 2> plane_ranges = group_by_plane_distance(normal_points);
+    global_range[0] = plane_ranges[0];
+    global_range[1] = plane_ranges[1];
     // pcl::VoxelGrid<PointT> vg;
     // vg.setInputCloud(normal_clouds);
     // vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
@@ -655,6 +659,27 @@ int main(int argc, char** argv) {
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
-    ros::spin();
+
+    ros::Rate rate(10);
+
+    std::ofstream csv("plane_distances.csv");
+    csv << "ClusterID,PlaneID,MeanDistance,ToHorizontal,ToVertical\n";
+    csv << "Horizontal" << "Vertical" << "\n";
+
+    while (ros::ok()) {
+        ros::spinOnce();
+
+        for (int i=0; i<global_range[0].size(); i++) {
+            csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance << "\n";
+        }//end for
+        for (int i=0; i<global_range[1].size(); i++) {
+            csv << std::fixed << std::setprecision(4) << global_range[1][i].mean_distance << "\n";
+        }//end for
+
+        rate.sleep();
+    }//end while
+
+    csv.close();
+    ros::shutdown();
     return 0;
 }//end main
