@@ -26,16 +26,19 @@
 #include <dbscan.hpp>
 
 
+/* Define */
 #define INTERGRAL_IMAGE_NORMAL_ESTIMATION 1
 #define CLUSTER_NORMAL 1
 #define VISUALIZE_NORMAL 1 
-
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointXYZ PointT_no_color;
 
+
+/* Global variables */
 ros::Publisher pub;
 ros::Publisher normal_pub;
-
+tf2_ros::Buffer tf_buffer_;
+tf2_ros::TransformListener* tf_listener_;
 
 
 /* K-mean */
@@ -49,6 +52,7 @@ struct NormalPoint {
     Eigen::Vector3f normal;    // 單位法向量
     int clusterID = -1;
     double distance_proj = 0.0; // 投影距離
+    int planeID = -1; // 平面ID
 };
 
 struct Range {
@@ -58,10 +62,24 @@ struct Range {
     double mean_distance;
 };
 
-void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
-    const double bin_width = 0.001;
-    const int peak_threshold = 1000;
-    const double merge_threshold = 0.05;
+// 顏色視覺化輔助（你可以在顯示點雲時使用）
+Color GetColor(int clusterID, int planeID) {
+    int shade = planeID % 100; // 深淺 (最多支援100階)
+    shade = std::min(255, 50 + shade * 10);
+
+    if (clusterID == 0 && planeID != -1) {
+        return Color(0, 0, shade); // 藍色漸層
+    } else if (clusterID == 1 && planeID != -1) {
+        return Color(shade, 0, 0); // 紅色漸層
+    } else {
+        return Color(128, 128, 128); // default 灰色
+    }
+}
+
+void group_by_plane_distance(std::vector<NormalPoint>& points) {
+    const double bin_width = 0.001; // 1mm
+    const int point_threshold = 1000;    // 1000 points
+    const double merge_threshold = 0.05;    // 5cm
 
     const int num_clusters = cluster_centroids.size();
     for (int c = 0; c < num_clusters; ++c) {
@@ -72,6 +90,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         for (const auto& p : points) {
             if (p.clusterID == c) {
                 double d = cluster_centroids[c].dot(p.position);  // 投影距離
+                p.distance_proj = d; // 記錄投影距離
                 distances.push_back(d);
             }
         }
@@ -102,7 +121,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         std::vector<double> current_values;
 
         for (int i = 0; i < bin_count; ++i) {
-            if (histogram[i] >= peak_threshold) {
+            if (histogram[i] >= point_threshold) {
                 if (!in_range) {
                     in_range = true;
                     current.start = min_val + i * bin_width;
@@ -157,10 +176,30 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
                       << ", mean distance: " << range.mean_distance << "\n";
         }
         std::cout << std::endl;
+
+
+        // 根據平均距離排序，並分配 planeID（全局唯一）
+        std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
+            return a.mean_distance < b.mean_distance;
+        });
+
+        std::map<float, int> distance_to_planeID;
+        for (int i = 0; i < final_ranges.size(); ++i) {
+            distance_to_planeID[final_ranges[i].mean_distance] = i;
+        }
+
+        // 分配 planeID 給每個點
+        for (auto& p : normal_points) {
+            if (p.clusterID != c) continue;
+            for (const auto& range : final_ranges) {
+                if (p.distance_proj >= range.start && p.distance_proj <= range.end) {
+                    p.planeID = distance_to_planeID[range.mean_distance];
+                    break;
+                }
+            }
+        }
+
     }//end for
-
-
-
 
 }//end ComputeClusterDirectionDistances
 
@@ -242,7 +281,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
     cluster_centroids = centroids;
 }//end kmeansNormals
 
-void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 2) {
+void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
     const int N = points.size();
     if (N == 0) return;
 
@@ -307,21 +346,7 @@ void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 2) {
             break; // 收斂了
     }//end for
     cluster_centroids = centroids;
-}//end Group2Normals
-
-// 1. 先計算每個群的平均 normal vector
-struct AvgNormal
-{
-    float x = 0;
-    float y = 0;
-    float z = 0;
-    int count = 0;
-};
-
-
-// 成員變數
-tf2_ros::Buffer tf_buffer_;
-tf2_ros::TransformListener* tf_listener_;
+}//end group_by_normals
 
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
@@ -413,7 +438,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
             Eigen::Vector3f position_vec(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
             normal_vec.normalize();
-            normal_points.push_back({position_vec, normal_vec, -1, 0.0});
+            normal_points.push_back({position_vec, normal_vec, -1, 0.0, -1});
         }
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
@@ -421,10 +446,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // 執行 KMeans (分成3群)
     int k = 3;
     // kmeansNormals(normal_points, k);
-    Group2Normals(normal_points);
+    group_by_normals(normal_points);
     std::cout << "cluster_centroid0: \n" << cluster_centroids[0] << std::endl;
     std::cout << "cluster_centroid1: \n" << cluster_centroids[1] << std::endl;
-    ComputeClusterDirectionDistances(normal_points);
+    group_by_plane_distance(normal_points);
     // pcl::VoxelGrid<PointT> vg;
     // vg.setInputCloud(normal_clouds);
     // vg.setLeafSize(0.01f, 0.01f, 0.01f);  // 設定 voxel 的大小
@@ -441,70 +466,19 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // std::vector<pcl::PointIndices> cluster_indices;
     // ec.extract(cluster_indices);
 
-    // std::vector<AvgNormal> avg_normals(k);
-
-    // for (const auto& p : normal_points)
-    // {
-    //     avg_normals[p.clusterID].x += p.normal.x();
-    //     avg_normals[p.clusterID].y += p.normal.y();
-    //     avg_normals[p.clusterID].z += p.normal.z();
-    //     avg_normals[p.clusterID].count += 1;
-    // }
     
-    // for (int i = 0; i < k; ++i)
-    // {
-    //     if (avg_normals[i].count > 0)
-    //     {
-    //         avg_normals[i].x /= avg_normals[i].count;
-    //         avg_normals[i].y /= avg_normals[i].count;
-    //         avg_normals[i].z /= avg_normals[i].count;
-    //     }
-    // }
-    
-    // 2. 根據最大分量 (x/y/z) 給群指定顏色
-    std::vector<Color> cluster_colors(k);
-    cluster_colors[0] = {0, 0, 255};     // Z -> 藍色
-    cluster_colors[1] = {255, 0, 0};     // X -> 紅色
-    // for (int i = 0; i < k; ++i)
-    // {
-    //     float abs_x = std::abs(avg_normals[i].x);
-    //     float abs_y = std::abs(avg_normals[i].y);
-    //     float abs_z = std::abs(avg_normals[i].z);
-    
-    //     if (abs_x >= abs_y && abs_x >= abs_z)
-    //         cluster_colors[i] = {255, 0, 0};     // X最大 -> 紅色
-    //     else if (abs_y >= abs_x && abs_y >= abs_z)
-    //         cluster_colors[i] = {255, 255, 0};   // Y最大 -> 黃色
-    //     else
-    //         cluster_colors[i] = {0, 0, 255};     // Z最大 -> 藍色
-    // }
-    
-    // Step 5: Visualize the clusters (use random colors)
+    // Step 5: Visualize the clusters (use different colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
-
     int idx = 0;
-    // int cluster_id = 0;
-    std::mt19937 rng;
-    rng.seed(std::random_device()());
-    std::uniform_int_distribution<int> dist(0, 255);
-    // 現在給每個 colored_cloud 的點塗上對應顏色
     for (size_t i = 0; i < cloud->size(); ++i) {
         if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
             int cluster_id = normal_points[idx].clusterID;
-            if (cluster_id != UNCLASSIFIED) {
-                auto color = cluster_colors[cluster_id];
-                // uint8_t r = static_cast<uint8_t>(128 + (cluster_id * 53) % 127);
-                // uint8_t g = static_cast<uint8_t>(128 + (cluster_id * 97) % 127);
-                // uint8_t b = static_cast<uint8_t>(128 + (cluster_id * 223) % 127);
-                colored_cloud->points[i].r = color.r;
-                colored_cloud->points[i].g = color.g;
-                colored_cloud->points[i].b = color.b;
-            } else {
-                // 不是有效分類的點，塗成灰色
-                colored_cloud->points[i].r = 128;
-                colored_cloud->points[i].g = 128;
-                colored_cloud->points[i].b = 128;
-            }
+            int plane_id   = normal_points[idx].planeID;
+            // auto color = cluster_colors[cluster_id];
+            Color color = GetColor(cluster_id, plane_id);
+            colored_cloud->points[i].r = color.r;
+            colored_cloud->points[i].g = color.g;
+            colored_cloud->points[i].b = color.b;
             idx ++;
         } else {
             // 沒有有效 normal 的點，塗成黑色
