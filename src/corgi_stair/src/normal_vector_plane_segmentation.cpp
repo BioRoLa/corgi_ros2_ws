@@ -663,18 +663,28 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
-    csv << "ClusterID,PlaneID,MeanDistance,ToHorizontal,ToVertical\n";
-    csv << "Horizontal" << "Vertical" << "\n";
+    csv << "Horizontal"; for (int i = 1; i < 10; ++i) csv << ", ";
+    csv << ",Vertical";  for (int i = 1; i < 10; ++i) csv << ", ";
+    csv << "\n";
 
     while (ros::ok()) {
         ros::spinOnce();
 
-        for (int i=0; i<global_range[0].size(); i++) {
-            csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance << "\n";
+        for (int i=0; i<10; i++) {
+            if (i < global_range[0].size())
+                csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
+            else
+                csv << "0";
+            csv << ",";
         }//end for
-        for (int i=0; i<global_range[1].size(); i++) {
-            csv << std::fixed << std::setprecision(4) << global_range[1][i].mean_distance << "\n";
+        for (int i=0; i<10; i++) {
+            if (i < global_range[1].size())
+                csv << std::fixed << std::setprecision(4) << global_range[1][i].mean_distance;
+            else 
+                csv << "0";
+            csv << ",";
         }//end for
+        csv << "\n";
 
         rate.sleep();
     }//end while
