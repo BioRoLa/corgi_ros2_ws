@@ -59,7 +59,7 @@ struct Range {
 
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001;
-    const int peak_threshold = 1000;
+    const int peak_threshold = 5000;
 
     const int num_clusters = cluster_centroids.size();
     for (int c = 0; c < num_clusters; ++c) {
@@ -116,7 +116,7 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     }
 }
 
-// 計算1 - cos(a, b)
+// 計算 1 - cos(a, b)
 double angleDistance(const Eigen::Vector3f& a, const Eigen::Vector3f& b) {
     return 1 - a.dot(b);
 }
@@ -194,7 +194,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
     cluster_centroids = centroids;
 }//end kmeansNormals
 
-void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 1) {
+void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 2) {
     const int N = points.size();
     if (N == 0) return;
 
@@ -206,10 +206,10 @@ void Group2Normals(std::vector<NormalPoint>& points, int max_iter = 1) {
     centroids.push_back(c1);  // Horizontal plane
     centroids.push_back(c2); // Vertical plane
 
-    
-    double threshold = std::cos(30.0 * M_PI / 180.0);  // 20度
+    double thresholds_angle[2] = {30.0, 20.0};  // 30度, 20度
     for (int iter = 0; iter < max_iter; ++iter)
     {
+        double threshold = std::cos(thresholds_angle[iter] * M_PI / 180.0);  
         bool changed = false;
 
         // 2. 分配每個點到最近中心
