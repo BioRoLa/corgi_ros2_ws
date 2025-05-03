@@ -383,10 +383,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pass.setKeepOrganized(true);
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(0.20, 2.0);
+    pass.setFilterLimits(0.20, 1.5);
     pass.filter(*cloud);
     pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.5, 0.5);
+    pass.setFilterLimits(-0.4, 0.4);
     pass.filter(*cloud);
     pass.setFilterFieldName("z");
     pass.setFilterLimits(-0.5, 1.0);
