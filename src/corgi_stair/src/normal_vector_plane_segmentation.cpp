@@ -298,9 +298,6 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
 
 
 void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
-    const int N = points.size();
-    if (N == 0) return;
-
     // 1. 初始化：設定初始中心
     std::vector<Eigen::Vector3f> centroids;
     centroids.reserve(2);
