@@ -62,7 +62,7 @@ tf2_ros::TransformListener* tf_listener_;
 std::vector<Eigen::Vector3f> cluster_centroids;
 std::array<std::vector<Range>, 2> global_range;
 corgi_msgs::TriggerStamped trigger_msg;
-
+int could_seq = 0;
 
 /* K-mean */
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
@@ -364,6 +364,7 @@ void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
 
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
+    could_seq = input->header.seq;
     /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
     pcl::fromROSMsg(*input, *cloud);
@@ -679,6 +680,7 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
+    csv << "could_seq: " << ", ";
     csv << "Trigger: " << ", ";
     csv << "Horizontal"; for (int i = 1; i < 10; ++i) csv << ", ";
     csv << ",Vertical";  for (int i = 1; i < 10; ++i) csv << ", ";
@@ -687,6 +689,7 @@ int main(int argc, char** argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
+        csv << could_seq << ",";
         csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
             if (i < global_range[0].size())
