@@ -64,8 +64,8 @@ struct Range {
 
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
 Color GetColor(int clusterID, int planeID) {
-    int shade = planeID % 100; // 深淺 (最多支援100階)
-    shade = std::min(255, 50 + shade * 10);
+    int shade = planeID % 10; // 深淺 (最多支援100階)
+    shade = std::min(0, 255 - shade * 50);
 
     if (clusterID == 0 && planeID != -1) {
         return Color{0, 0, shade}; // 藍色漸層
