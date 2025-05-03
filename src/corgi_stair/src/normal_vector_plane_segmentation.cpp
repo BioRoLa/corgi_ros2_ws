@@ -82,7 +82,7 @@ Color GetColor(int clusterID, int planeID) {
 std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001; // 1mm
     const int one_bin_point_threshold = 100;    // 100 points
-    const int total_point_threshold   = 5000;    // 5000 points
+    const int total_point_threshold   = 1000;    // 5000 points
     const double merge_threshold = 0.05;    // 5cm
     const int num_clusters = cluster_centroids.size();
 
@@ -306,7 +306,7 @@ void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
     centroids.push_back(c1);  // Horizontal plane
     centroids.push_back(c2); // Vertical plane
 
-    double thresholds_angle[2] = {30.0, 20.0};  // 30度, 20度
+    double thresholds_angle[2] = {10.0, 10.0};  // 30度, 20度
     for (int iter = 0; iter < max_iter; iter++) {
         double threshold = std::cos(thresholds_angle[iter] * M_PI / 180.0);  
         bool changed = false;
@@ -402,11 +402,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     #if INTERGRAL_IMAGE_NORMAL_ESTIMATION
     pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> ne;
-    // ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
+    ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
-    ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
+    // ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
     ne.setMaxDepthChangeFactor(0.05f);
-    ne.setNormalSmoothingSize(15.0f);
+    ne.setNormalSmoothingSize(10.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
     #else // too slow
