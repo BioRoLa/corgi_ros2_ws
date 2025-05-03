@@ -81,7 +81,7 @@ Color GetColor(int clusterID, int planeID) {
 
 std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001; // 1mm
-    const int point_threshold = 1000;    // 1000 points
+    const int point_threshold = 100;    // 1000 points
     const double merge_threshold = 0.05;    // 5cm
     const int num_clusters = cluster_centroids.size();
 
@@ -684,7 +684,7 @@ int main(int argc, char** argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
-        csv << trigger_msg.trigger << ",";
+        csv << trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
             if (i < global_range[0].size())
                 csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
