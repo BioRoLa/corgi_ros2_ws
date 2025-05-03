@@ -91,25 +91,25 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
                 bins[bin_idx]++;
         }
 
-        // 找最多點的 bin
-        int max_count = 0;
-        int max_bin_idx = -1;
+        // 找前三名 bin
+        std::vector<std::pair<int, int>> bin_counts;  // pair<bin_idx, count>
         for (int i = 0; i < num_bins; ++i) {
-            if (bins[i] > max_count) {
-                max_count = bins[i];
-                max_bin_idx = i;
-            }
+            bin_counts.emplace_back(i, bins[i]);
         }
 
-        if (max_bin_idx >= 0) {
-            float bin_start = range_min + max_bin_idx * bin_width;
+        std::sort(bin_counts.begin(), bin_counts.end(),
+                  [](const auto& a, const auto& b) {
+                      return a.second > b.second;
+                  });
+
+        std::cout << std::fixed << std::setprecision(3);
+        std::cout << "Cluster " << cid << " top 3 bins:\n";
+        for (int i = 0; i < std::min(3, (int)bin_counts.size()); ++i) {
+            int idx = bin_counts[i].first;
+            int count = bin_counts[i].second;
+            float bin_start = range_min + idx * bin_width;
             float bin_end = bin_start + bin_width;
-            std::cout << std::fixed << std::setprecision(2);
-            std::cout << "Cluster " << cid << " peak bin: ["
-                      << bin_start << ", " << bin_end << "] → "
-                      << max_count << " points\n";
-        } else {
-            std::cout << "Cluster " << cid << " has no valid bins.\n";
+            std::cout << "  [" << bin_start << ", " << bin_end << "): " << count << " points\n";
         }
     }
 }
