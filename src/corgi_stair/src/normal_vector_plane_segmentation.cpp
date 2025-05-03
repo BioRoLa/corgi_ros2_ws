@@ -52,7 +52,7 @@ struct NormalPoint {
 };
 
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
-    const double bin_width = 0.01;
+    const double bin_width = 0.001;
     const int peak_threshold = 1000;
 
     const int num_clusters = cluster_centroids.size();
@@ -89,7 +89,9 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
         // 偵測峰值（局部最大）
         for (int i = 1; i < bin_count - 1; ++i) {
             if (histogram[i] > histogram[i - 1] &&
+                histogram[i] > histogram[i - 2] &&
                 histogram[i] > histogram[i + 1] &&
+                histogram[i] > histogram[i + 2] &&
                 histogram[i] > peak_threshold) {
 
                 float bin_start = min_val + i * bin_width;
