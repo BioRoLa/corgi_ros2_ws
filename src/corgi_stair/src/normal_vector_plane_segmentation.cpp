@@ -89,6 +89,7 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
     std::vector<std::vector<double>> distances(num_clusters);
     // Calculate plane distance
     for (NormalPoint& p : points) {
+        if (p.clusterID == -1) continue; // Skip unclassified points
         int clusterID = p.clusterID;
         double d = cluster_centroids[clusterID].dot(p.position);  // 投影距離
         p.distance_proj = d;
