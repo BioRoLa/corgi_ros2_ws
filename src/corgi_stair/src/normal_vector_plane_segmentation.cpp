@@ -189,7 +189,7 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
         }
 
         // 分配 planeID 給每個點
-        for (auto& p : normal_points) {
+        for (auto& p : points) {
             if (p.clusterID != c) continue;
             for (const auto& range : final_ranges) {
                 if (p.distance_proj >= range.start && p.distance_proj <= range.end) {
