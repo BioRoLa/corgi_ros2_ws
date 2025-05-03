@@ -170,13 +170,6 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
         }
 
         
-        for (const auto& range : final_ranges) {
-            std::cout << "Plane approx in [" << range.start << ", " << range.end << "]\n";
-            std::cout << " → count: " << range.total_count
-                      << ", mean distance: " << range.mean_distance << "\n";
-        }
-        std::cout << std::endl;
-
 
         // 根據平均距離排序，並分配 planeID（全局唯一）
         std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
@@ -198,6 +191,15 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
                 }
             }
         }
+
+
+        for (const auto& range : final_ranges) {
+            std::cout << "Plane approx in [" << range.start << ", " << range.end << "]\n";
+            std::cout << " → plane_ID: "<< distance_to_planeID[range.mean_distance]
+                      << ", count: " << range.total_count
+                      << ", mean distance: " << range.mean_distance << "\n";
+        }
+        std::cout << std::endl;
 
     }//end for
 
