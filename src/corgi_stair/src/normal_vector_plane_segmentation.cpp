@@ -24,6 +24,7 @@
 #include <random>
 
 #include <dbscan.hpp>
+#include "corgi_msgs/TriggerStamped.h"
 
 
 /* Define */
@@ -60,10 +61,10 @@ tf2_ros::Buffer tf_buffer_;
 tf2_ros::TransformListener* tf_listener_;
 std::vector<Eigen::Vector3f> cluster_centroids;
 std::array<std::vector<Range>, 2> global_range;
+corgi_msgs::TriggerStamped trigger_msg;
+
 
 /* K-mean */
-
-
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
 Color GetColor(int clusterID, int planeID) {
     int shade = planeID % 10; // 深淺 (最多支援100階)
@@ -657,11 +658,17 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     #endif // VISUALIZE_NORMAL
 }//end cloudCallback
 
+void trigger_cb(const corgi_msgs::TriggerStamped msg) {
+    trigger_msg = msg;
+}//end trigger_cb
+
+
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "plane_segmentation_node");
     ros::NodeHandle nh;
     ros::Subscriber cloud_sub = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloudCallback);
+    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
@@ -669,6 +676,7 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
+    csv << "Trigger: " << ", ";
     csv << "Horizontal"; for (int i = 1; i < 10; ++i) csv << ", ";
     csv << ",Vertical";  for (int i = 1; i < 10; ++i) csv << ", ";
     csv << "\n";
@@ -676,6 +684,7 @@ int main(int argc, char** argv) {
     while (ros::ok()) {
         ros::spinOnce();
 
+        csv << trigger_msg.trigger << ",";
         for (int i=0; i<10; i++) {
             if (i < global_range[0].size())
                 csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
