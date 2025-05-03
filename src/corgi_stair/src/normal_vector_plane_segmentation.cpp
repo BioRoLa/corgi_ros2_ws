@@ -85,9 +85,8 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
     const int num_clusters = cluster_centroids.size();
 
     std::array<std::vector<Range>, 2> return_range;
-    std::vector<Range> raw_ranges;
-    std::vector<std::vector<double>> distances(num_clusters);
     // Calculate plane distance
+    std::vector<std::vector<double>> distances(num_clusters);
     for (NormalPoint& p : points) {
         if (p.clusterID == -1) continue; // Skip unclassified points
         int clusterID = p.clusterID;
@@ -121,7 +120,7 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         bool in_range = false;
         Range current;
         std::vector<double> current_values;
-
+        std::vector<Range> raw_ranges;
         for (int i = 0; i < bin_count; ++i) {
             if (histogram[i] >= point_threshold) {
                 if (!in_range) {
@@ -172,6 +171,15 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
 
 
         // 根據平均距離排序，並分配 planeID（全局唯一）
+        if (c==0) { // horizontal plane: small -> large
+            std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
+                return a.mean_distance > b.mean_distance;
+            });
+        } else {
+            std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
+                return a.mean_distance > b.mean_distance;
+            });
+        }
         std::sort(final_ranges.begin(), final_ranges.end(), [](const Range& a, const Range& b) {
             return a.mean_distance < b.mean_distance;
         });
