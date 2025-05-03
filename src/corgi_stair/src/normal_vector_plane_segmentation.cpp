@@ -81,7 +81,8 @@ Color GetColor(int clusterID, int planeID) {
 
 std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001; // 1mm
-    const int point_threshold = 100;    // 1000 points
+    const int one_bin_point_threshold = 100;    // 100 points
+    const int total_point_threshold   = 10000;    // 10000 points
     const double merge_threshold = 0.05;    // 5cm
     const int num_clusters = cluster_centroids.size();
 
@@ -123,7 +124,7 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         std::vector<double> current_values;
         std::vector<Range> raw_ranges;
         for (int i = 0; i < bin_count; ++i) {
-            if (histogram[i] >= point_threshold) {
+            if (histogram[i] >= one_bin_point_threshold) {
                 if (!in_range) {
                     in_range = true;
                     current.start = min_val + i * bin_width;
@@ -135,12 +136,14 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
                 }
                 current.end = min_val + (i + 1) * bin_width;
             } else if (in_range) {
-                double sum = std::accumulate(current_values.begin(), current_values.end(), 0.0f);
-                current.mean_distance = sum / current_values.size();
-                raw_ranges.push_back(current);
+                if (current.total_count >= total_point_threshold) {
+                    double sum = std::accumulate(current_values.begin(), current_values.end(), 0.0f);
+                    current.mean_distance = sum / current_values.size();
+                    raw_ranges.push_back(current);
+                }//end if
                 in_range = false;
                 current_values.clear();
-            }
+            }//end if else
         }
         if (in_range) {
             double sum = std::accumulate(current_values.begin(), current_values.end(), 0.0f);
