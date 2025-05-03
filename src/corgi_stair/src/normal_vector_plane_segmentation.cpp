@@ -68,11 +68,11 @@ Color GetColor(int clusterID, int planeID) {
     shade = std::min(255, 50 + shade * 10);
 
     if (clusterID == 0 && planeID != -1) {
-        return Color(0, 0, shade); // 藍色漸層
+        return Color{0, 0, shade}; // 藍色漸層
     } else if (clusterID == 1 && planeID != -1) {
-        return Color(shade, 0, 0); // 紅色漸層
+        return Color{shade, 0, 0}; // 紅色漸層
     } else {
-        return Color(128, 128, 128); // default 灰色
+        return Color{128, 128, 128}; // default 灰色
     }
 }
 
@@ -87,7 +87,7 @@ void group_by_plane_distance(std::vector<NormalPoint>& points) {
         std::vector<double> distances;
 
         // 收集 cluster c 的距離值
-        for (const auto& p : points) {
+        for (NormalPoint& p : points) {
             if (p.clusterID == c) {
                 double d = cluster_centroids[c].dot(p.position);  // 投影距離
                 p.distance_proj = d; // 記錄投影距離
