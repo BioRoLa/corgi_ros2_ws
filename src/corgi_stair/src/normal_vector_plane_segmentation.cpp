@@ -51,6 +51,12 @@ struct NormalPoint {
     double distance_proj = 0.0; // 投影距離
 };
 
+struct Range {
+    float start;
+    float end;
+    int total_count;
+};
+
 void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
     const double bin_width = 0.001;
     const int peak_threshold = 1000;
@@ -82,22 +88,28 @@ void ComputeClusterDirectionDistances(std::vector<NormalPoint>& points) {
             int bin = static_cast<int>((d - min_val) / bin_width);
             if (bin >= 0 && bin < bin_count)
                 histogram[bin]++;
+
         }
 
         std::cout << "Cluster " << c << " histogram peaks:\n";
 
-        // 偵測峰值（局部最大）
-        for (int i = 1; i < bin_count - 1; ++i) {
-            if (histogram[i] > histogram[i - 1] &&
-                histogram[i] > histogram[i - 2] &&
-                histogram[i] > histogram[i + 1] &&
-                histogram[i] > histogram[i + 2] &&
-                histogram[i] > peak_threshold) {
+        // 找出連續高密度 bin
+        bool in_range = false;
+        Range current;
 
-                float bin_start = min_val + i * bin_width;
-                float bin_end = bin_start + bin_width;
-                std::cout << "  Peak bin [" << bin_start << ", " << bin_end
-                          << "): Count = " << histogram[i] << "\n";
+        for (int i = 0; i < bin_count; ++i) {
+            if (histogram[i] >= peak_threshold) {
+                if (!in_range) {
+                    in_range = true;
+                    current.start = min_val + i * bin_width;
+                    current.total_count = histogram[i];
+                } else {
+                    current.total_count += histogram[i];
+                }
+                current.end = min_val + (i + 1) * bin_width;
+            } else if (in_range) {
+                std::cout << "  Peak bin [" << bin_start << ", " << bin_end << "): Count = " << histogram[i] << "\n";
+                in_range = false;
             }
         }
         std::cout << std::endl;
