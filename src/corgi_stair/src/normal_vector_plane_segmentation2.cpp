@@ -541,7 +541,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             z_sum += edge_cloud->points[idx].z;
             z_count ++;
         }
-        double avg_height_i = (count > 0) ? (z_sum / count) : 0.0;
+        double avg_height_i = (z_count > 0) ? (z_sum / z_count) : 0.0;
         avg_height.push_back(avg_height_i);
 
         /* Publish the result */
