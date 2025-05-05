@@ -66,6 +66,7 @@ std::array<std::vector<Range>, 2> global_range;
 corgi_msgs::TriggerStamped trigger_msg;
 int could_seq = 0;
 std::vector<int> global_histogram;
+std::vector<double> global_height;
 
 /* K-mean */
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
@@ -472,10 +473,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     global_range[0] = plane_ranges[0];
     global_range[1] = plane_ranges[1];
 
-    if (plane_ranges[1].size() >= 1) {
+    std::vector<double> avg_height;
+    for (const auto& range : plane_ranges[1]) {
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
-        double mean_d = plane_ranges[1][0].mean_distance;
+        double mean_d = range.mean_distance;
         double lower = mean_d - 0.05;
         double upper = mean_d + 0.05;
     
@@ -530,11 +532,17 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         // }
         
         // 2. 把 inliers 點設為黃色
+        double z_sum = 0.0;
+        int z_count = 0;
         for (int idx : inliers->indices) {
             edge_cloud->points[idx].r = 255;
             edge_cloud->points[idx].g = 255;
             edge_cloud->points[idx].b = 0;
+            z_sum += edge_cloud->points[idx].z;
+            z_count ++;
         }
+        double avg_height_i = (count > 0) ? (z_sum / count) : 0.0;
+        avg_height.push_back(avg_height_i);
 
         /* Publish the result */
         sensor_msgs::PointCloud2 output;
@@ -543,7 +551,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         output.header.frame_id = "map";
         edge_pub.publish(output);
     }
-
+    global_height = avg_height;
 
 
     // pcl::VoxelGrid<PointT> vg;
@@ -773,8 +781,12 @@ int main(int argc, char** argv) {
         csv << could_seq << ",";
         csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
-            if (i < global_range[0].size())
-                csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
+            // if (i < global_range[0].size())
+            //     csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
+            // else
+            //     csv << "0";
+            if (i < global_height.size())
+                csv << std::fixed << std::setprecision(4) << global_height;
             else
                 csv << "0";
             csv << ",";
