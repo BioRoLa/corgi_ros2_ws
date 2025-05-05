@@ -63,6 +63,7 @@ std::vector<Eigen::Vector3f> cluster_centroids;
 std::array<std::vector<Range>, 2> global_range;
 corgi_msgs::TriggerStamped trigger_msg;
 int could_seq = 0;
+std::vector<int> global_histogram;
 
 /* K-mean */
 // 顏色視覺化輔助（你可以在顯示點雲時使用）
@@ -118,19 +119,7 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         }
         
         if (c==1) {
-            int max_count = *std::max_element(histogram.begin(), histogram.end());
-            const int bar_max_width = 50;  // 最長條列印寬度（字元數）
-            std::cout << "\033[2J\033[1;1H"; // 清螢幕並移到左上角
-            for (int i = 0; i < bin_count; ++i) {
-                if (histogram[i] == 0) continue;
-
-                double bin_center = min_val + (i + 0.5) * bin_width;
-                int bar_len = static_cast<int>(static_cast<double>(histogram[i]) / max_count * bar_max_width);
-                std::cout << std::fixed << std::setprecision(4)
-                        << bin_center << " | "
-                        << std::string(bar_len, '*') << " (" << histogram[i] << ")\n";
-            }
-            std::cout << std::endl;
+            global_histogram = histogram;
         }
         
 
@@ -692,6 +681,7 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
+    std::ofstream csv_histogram("histogram.csv");
     csv << "could_seq,";
     csv << "Trigger," ;
     csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) csv << "Horizontal" << i << ",";
@@ -718,6 +708,12 @@ int main(int argc, char** argv) {
             csv << ",";
         }//end for
         csv << "\n";
+
+        for (int i=0; i<global_histogram.size(); i++) {
+            csv_histogram << global_histogram[i] << ",";
+        }
+        csv_histogram << "\n";
+
 
         rate.sleep();
     }//end while
