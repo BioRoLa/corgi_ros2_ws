@@ -487,7 +487,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
                 if (row_max_z_map.find(u) == row_max_z_map.end() ||
                     p.position.z() > row_max_z_map[u].position.z()) {
                     if (p.position.z() > 0.05)
-                        row_max_z_map[v] = p;
+                        row_max_z_map[u] = p;
                 }
             }
         }
