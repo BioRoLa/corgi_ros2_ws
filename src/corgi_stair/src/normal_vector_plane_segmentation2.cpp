@@ -771,7 +771,7 @@ int main(int argc, char** argv) {
     std::ofstream csv_histogram("histogram.csv");
     csv << "could_seq,";
     csv << "Trigger," ;
-    csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) csv << "Horizontal" << i << ",";
+    csv << "Height,"; for (int i = 1; i < 10; ++i) csv << "Height" << i << ",";
     csv << "Vertical0,";  for (int i = 1; i < 10; ++i) csv << "Vertical"   << i << ",";
     csv << "\n";
 
@@ -781,12 +781,8 @@ int main(int argc, char** argv) {
         csv << could_seq << ",";
         csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
-            // if (i < global_range[0].size())
-            //     csv << std::fixed << std::setprecision(4) << global_range[0][i].mean_distance;
-            // else
-            //     csv << "0";
             if (i < global_height.size())
-                csv << std::fixed << std::setprecision(4) << global_height;
+                csv << std::fixed << std::setprecision(4) << global_height[i];
             else
                 csv << "0";
             csv << ",";
