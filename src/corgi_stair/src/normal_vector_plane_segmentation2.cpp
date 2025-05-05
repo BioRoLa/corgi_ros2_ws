@@ -497,7 +497,14 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
 
         pcl::PointCloud<PointT>::Ptr edge_cloud(new pcl::PointCloud<PointT>);
         for (const auto& pt : stair_edge_points) {
-            edge_cloud->points.emplace_back(pt.x(), pt.y(), pt.z());
+            PointT p;
+            p.x = pt.x();
+            p.y = pt.y();
+            p.z = pt.z();
+            p.r = 255;
+            p.g = 255;
+            p.b = 0;
+            edge_cloud->points.emplace_back(p);
         }
         edge_cloud->width = edge_cloud->points.size();
         edge_cloud->height = 1;
