@@ -4,6 +4,13 @@ target_link_libraries(stair_main ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK
 add_executable(normal_vector_plane_segmentation normal_vector_plane_segmentation.cpp)
 target_link_libraries(normal_vector_plane_segmentation ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
 
+add_executable(normal_vector_plane_segmentation2 normal_vector_plane_segmentation2.cpp)
+target_link_libraries(normal_vector_plane_segmentation2 ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
+
+
+add_executable(stair_edge_plane_segmentation stair_edge_plane_segmentation.cpp)
+target_link_libraries(stair_edge_plane_segmentation ${catkin_LIBRARIES})
+
 add_executable(ransac_plane_segmentation ransac_plane_segmentation.cpp)
 target_link_libraries(ransac_plane_segmentation ${catkin_LIBRARIES})
 
