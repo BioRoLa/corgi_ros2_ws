@@ -476,17 +476,18 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
         double mean_d = plane_ranges[1][0].mean_distance;
-        double lower = mean_d - 0.01;
-        double upper = mean_d + 0.01;
+        double lower = mean_d - 0.05;
+        double upper = mean_d + 0.05;
     
         for (const auto& p : normal_points) {
             double distance = cluster_centroids[1].dot(p.position);
             if (distance >= lower && distance <= upper) {
-                int v = p.v;  // image row
+                int u = p.u;  // image column
                 // 若該 row 尚未記錄，或 z 值更大，就更新
                 if (row_max_z_map.find(v) == row_max_z_map.end() ||
                     p.position.z() > row_max_z_map[v].position.z()) {
-                    row_max_z_map[v] = p;
+                    if (p.position.z() > 0.05)
+                        row_max_z_map[v] = p;
                 }
             }
         }
