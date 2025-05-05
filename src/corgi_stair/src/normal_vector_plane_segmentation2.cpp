@@ -480,7 +480,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         double upper = mean_d + 0.01;
     
         for (const auto& p : normal_points) {
-            if (p.distance_proj >= lower && p.distance_proj <= upper) {
+            double distance = cluster_centroids[1].dot(p.position);
+            if (distance >= lower && distance <= upper) {
                 int v = p.v;  // image row
                 // 若該 row 尚未記錄，或 z 值更大，就更新
                 if (row_max_z_map.find(v) == row_max_z_map.end() ||
