@@ -116,7 +116,23 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
             histogram[bin]++;
             bin_values[bin].push_back(d);
         }
+        
+        if (c==1) {
+            int max_count = *std::max_element(histogram.begin(), histogram.end());
+            const int bar_max_width = 50;  // 最長條列印寬度（字元數）
+            std::cout << "\033[2J\033[1;1H"; // 清螢幕並移到左上角
+            for (int i = 0; i < bin_count; ++i) {
+                if (histogram[i] == 0) continue;
 
+                double bin_center = min_val + (i + 0.5) * bin_width;
+                int bar_len = static_cast<int>(static_cast<double>(histogram[i]) / max_count * bar_max_width);
+                std::cout << std::fixed << std::setprecision(4)
+                        << bin_center << " | "
+                        << std::string(bar_len, '*') << " (" << histogram[i] << ")\n";
+            }
+            std::cout << std::endl;
+        }
+        
 
         // 找出連續高密度 bin
         bool in_range = false;
@@ -365,14 +381,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
     pcl::fromROSMsg(*input, *cloud);
-    if (!cloud->isOrganized())
-    {
+    if (!cloud->isOrganized()) {
         ROS_WARN("Point cloud is not organized. Skipping frame.");
         return;
     }
 
 
-    /* Step 2: Set ROI */
+    /* Step 2: Apply ROI filtering */
     // pcl::VoxelGrid<PointT> voxel;
     // voxel.setInputCloud(cloud);
     // voxel.setLeafSize(0.01f, 0.01f, 0.01f);  // 1cm
