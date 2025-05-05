@@ -48,13 +48,13 @@ void ModelPredictiveController::init_matrices(const double *ra, const double *rb
 
     // Cost matrices
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 5,   5,     0,       // roll, pitch, yaw
-                    1,   0,     10,    // x, y, z
-                    1e-1, 1e-1, 0,     // ω_x, ω_y, ω_z
-                    1,    0,    5e-1,  // v_x, v_y, v_z
-                    0;                 // additional state
+    Q.diagonal() << 10,    10,    0,     // roll, pitch, yaw
+                    0,     0,     50,    // x, y, z
+                    1e-1,  1e-1,  0,     // ω_x, ω_y, ω_z
+                    0,     0,     1,     // v_x, v_y, v_z
+                    0;                   // additional state
 
-    R = 1e-8 * Eigen::MatrixXd::Identity(n_u, n_u);
+    R = 1e-7 * Eigen::MatrixXd::Identity(n_u, n_u);
 }
 
 Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref,
