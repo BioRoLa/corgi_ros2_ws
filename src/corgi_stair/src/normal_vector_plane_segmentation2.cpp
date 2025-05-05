@@ -503,7 +503,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             p.x = pt.x();
             p.y = pt.y();
             p.z = pt.z();
-            p.r = 255;
+            p.r = 0;
             p.g = 255;
             p.b = 0;
             edge_cloud->points.emplace_back(p);
@@ -523,18 +523,18 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         seg.setInputCloud(edge_cloud);
         seg.segment(*inliers, *line_coeff);
 
-        for (size_t i = 0; i < edge_cloud->points.size(); ++i) {
-            edge_cloud->points[i].r = 255; 
-            edge_cloud->points[i].g = 255;
-            edge_cloud->points[i].b = 0;
-        }
-        
-        // // 2. 把 inliers 點設為黃色
-        // for (int idx : inliers->indices) {
-        //     edge_cloud->points[idx].r = 255;
-        //     edge_cloud->points[idx].g = 255;
-        //     edge_cloud->points[idx].b = 0;
+        // for (size_t i = 0; i < edge_cloud->points.size(); ++i) {
+        //     edge_cloud->points[i].r = 255; 
+        //     edge_cloud->points[i].g = 255;
+        //     edge_cloud->points[i].b = 0;
         // }
+        
+        // 2. 把 inliers 點設為黃色
+        for (int idx : inliers->indices) {
+            edge_cloud->points[idx].r = 255;
+            edge_cloud->points[idx].g = 255;
+            edge_cloud->points[idx].b = 0;
+        }
 
         /* Publish the result */
         sensor_msgs::PointCloud2 output;
