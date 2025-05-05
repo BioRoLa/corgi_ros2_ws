@@ -484,8 +484,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             if (distance >= lower && distance <= upper) {
                 int u = p.u;  // image column
                 // 若該 row 尚未記錄，或 z 值更大，就更新
-                if (row_max_z_map.find(v) == row_max_z_map.end() ||
-                    p.position.z() > row_max_z_map[v].position.z()) {
+                if (row_max_z_map.find(u) == row_max_z_map.end() ||
+                    p.position.z() > row_max_z_map[u].position.z()) {
                     if (p.position.z() > 0.05)
                         row_max_z_map[v] = p;
                 }
