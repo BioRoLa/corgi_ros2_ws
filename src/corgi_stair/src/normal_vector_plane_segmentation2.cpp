@@ -369,7 +369,6 @@ void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
 
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     could_seq = input->header.seq;
-    int width = cloud->width;
 
     /* Step 1: Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
@@ -458,7 +457,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
             Eigen::Vector3f position_vec(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
             normal_vec.normalize();
-            normal_points.push_back({position_vec, normal_vec, -1, 0.0, -1, i % width, i / width});
+            normal_points.push_back({position_vec, normal_vec, -1, 0.0, -1, i % cloud->width, i / cloud->width});
         }
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
