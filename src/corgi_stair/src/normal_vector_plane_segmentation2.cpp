@@ -46,6 +46,7 @@ struct NormalPoint {
     double distance_proj = 0.0; // 投影距離
     int planeID = -1; // 平面ID
     int u = -1, v = -1;
+    bool valid = true;
 };
 
 struct Range {
@@ -321,22 +322,24 @@ void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 1) {
 
         // 2. 分配每個點到最近中心
         for (auto& p : points) {
-            double angle1 = p.normal.dot(centroids[0]);
-            double angle2 = p.normal.dot(centroids[1]);
-            int best_cluster = -1;
-            if (angle1 > angle2) {
-                if (angle1 > threshold) {
-                    best_cluster = 0;
+            if (p.valid) {
+                double angle1 = p.normal.dot(centroids[0]);
+                double angle2 = p.normal.dot(centroids[1]);
+                int best_cluster = -1;
+                if (angle1 > angle2) {
+                    if (angle1 > threshold) {
+                        best_cluster = 0;
+                    }//end if
+                } else {
+                    if (angle2 > threshold) {
+                        best_cluster = 1;
+                    }//end if
+                }//end if else
+    
+                if (p.clusterID != best_cluster) {
+                    changed = true;
+                    p.clusterID = best_cluster;
                 }//end if
-            } else {
-                if (angle2 > threshold) {
-                    best_cluster = 1;
-                }//end if
-            }//end if else
-
-            if (p.clusterID != best_cluster) {
-                changed = true;
-                p.clusterID = best_cluster;
             }//end if
         }//end for
 
@@ -430,7 +433,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
 
 
     #if CLUSTER_NORMAL
-    /* Step 4: Implementing DBSCAN for clustering */
+    /* Step 4: Clustering */
     // pcl::PointCloud<PointT>::Ptr normal_clouds(new pcl::PointCloud<PointT>);
     // // vector<Point> normal_points;
     // for (size_t i = 0; i < cloud->size(); ++i) {
@@ -453,13 +456,11 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     for (size_t i = 0; i < normals->size(); ++i)
     {
         const auto& n = normals->points[i];
-        if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z))
-        {
-            Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
-            Eigen::Vector3f position_vec(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
-            normal_vec.normalize();
-            normal_points.push_back({position_vec, normal_vec, -1, 0.0, -1, i % cloud->width, i / cloud->width});
-        }
+        bool valid = !std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z);
+        Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
+        Eigen::Vector3f position_vec(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
+        normal_vec.normalize();
+        normal_points.push_back({position_vec, normal_vec, -1, 0.0, -1, i % cloud->width, i / cloud->width, valid});
     }
     // DBSCAN ds(2, 0.1*0.1, normal_points); // minimum number of cluster, distance for clustering(metre^2), points
     // ds.run();
@@ -469,6 +470,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     group_by_normals(normal_points);
     std::cout << "cluster_centroid0: \n" << cluster_centroids[0] << std::endl;
     std::cout << "cluster_centroid1: \n" << cluster_centroids[1] << std::endl;
+    std::cout << "angle(deg): " << std::acos(cluster_centroids[0].dot(cluster_centroids[1]) * 180.0f / M_PI) << std::endl;
+
     std::array<std::vector<Range>, 2> plane_ranges = group_by_plane_distance(normal_points);
     global_range[0] = plane_ranges[0];
     global_range[1] = plane_ranges[1];
