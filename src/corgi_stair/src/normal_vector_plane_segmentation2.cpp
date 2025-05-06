@@ -486,10 +486,16 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             if (distance >= lower && distance <= upper) {
                 int u = p.u;  // image column
                 // 若該 row 尚未記錄，或 z 值更大，就更新
-                if (row_max_z_map.find(u) == row_max_z_map.end() ||
-                    p.position.z() > row_max_z_map[u].position.z()) {
-                    if (p.position.z() > plane_ranges[0][0].mean_distance + 0.05)
+                if (p.position.z() > plane_ranges[0][0].mean_distance + 0.05) {
+                    if (row_max_z_map.find(u) == row_max_z_map.end()) {
                         row_max_z_map[u] = p;
+                    } else {
+                        double p_z = cluster_centroids[0].dot(p.position);
+                        double pu_z = cluster_centroids[0].dot(row_max_z_map[u].position);
+                        if (p_z > pu_z) {
+                            row_max_z_map[u] = p;
+                        }
+                    }
                 }
             }
         }
