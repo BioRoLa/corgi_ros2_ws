@@ -550,7 +550,6 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         plane_seg.setInputCloud(plane_cloud);
         plane_seg.segment(*plane_inliers, *plane_coefficients);
         Eigen::Vector3f normal_vector(plane_coefficients->values[0], plane_coefficients->values[1], plane_coefficients->values[2]);
-        int ground_idx = 0;
         for (const auto& idx_in_plane_cloud : plane_inliers->indices) {
             int idx_in_normal_points = plane_cloud_to_np_index[idx_in_plane_cloud];
             normal_points[idx_in_normal_points].valid = true;
@@ -559,7 +558,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
         // double mean_d = range.mean_distance;
-        double mean_d = plane_coefficients->values[3];
+        double mean_d = -plane_coefficients->values[3];
         double lower = mean_d - 0.03;
         double upper = mean_d + 0.03;
     
