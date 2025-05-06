@@ -453,8 +453,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // }
     // 把 normal 抓出來
     std::vector<NormalPoint> normal_points;
-    for (size_t i = 0; i < normals->size(); ++i)
-    {
+    for (size_t i = 0; i < normals->size(); ++i) {
         const auto& n = normals->points[i];
         bool valid = !std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z);
         Eigen::Vector3f normal_vec(n.normal_x, n.normal_y, n.normal_z);
@@ -470,7 +469,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     group_by_normals(normal_points);
     std::cout << "cluster_centroid0: \n" << cluster_centroids[0] << std::endl;
     std::cout << "cluster_centroid1: \n" << cluster_centroids[1] << std::endl;
-    std::cout << "angle(deg): " << std::acos(cluster_centroids[0].dot(cluster_centroids[1]) * 180.0f / M_PI) << std::endl;
+    std::cout << "angle(deg): " << std::acos(cluster_centroids[0].dot(cluster_centroids[1])) * 180.0f / M_PI << std::endl;
 
     std::array<std::vector<Range>, 2> plane_ranges = group_by_plane_distance(normal_points);
     global_range[0] = plane_ranges[0];
@@ -586,17 +585,15 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     
     // Step 5: Visualize the clusters (use different colors)
     pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud));
-    int idx = 0;
     for (size_t i = 0; i < cloud->size(); ++i) {
-        if (!std::isnan(normals->points[i].normal_x) && !std::isnan(normals->points[i].normal_y) && !std::isnan(normals->points[i].normal_z)) {
-            int cluster_id = normal_points[idx].clusterID;
-            int plane_id   = normal_points[idx].planeID;
+        if (normal_points[i].valid) {
+            int cluster_id = normal_points[i].clusterID;
+            int plane_id   = normal_points[i].planeID;
             // auto color = cluster_colors[cluster_id];
             Color color = GetColor(cluster_id, plane_id);
             colored_cloud->points[i].r = color.r;
             colored_cloud->points[i].g = color.g;
             colored_cloud->points[i].b = color.b;
-            idx ++;
         } else {
             // 沒有有效 normal 的點，塗成黑色
             colored_cloud->points[i].r = 0;
