@@ -484,7 +484,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     pcl::PointCloud<PointT_no_color>::Ptr ground_plane_cloud(new pcl::PointCloud<PointT_no_color>);
     std::vector<int> plane_cloud_to_np_index;
     for (size_t i = 0; i < normal_points.size(); ++i) {
-        const auto& np = normal_points[i];
+        auto& np = normal_points[i];
         if (np.clusterID==0 && np.planeID==0) {
             PointT_no_color pt;
             pt.x = np.position.x();
@@ -526,7 +526,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         pcl::PointCloud<PointT_no_color>::Ptr plane_cloud(new pcl::PointCloud<PointT_no_color>);
         std::vector<int> plane_cloud_to_np_index;
         for (size_t i = 0; i < normal_points.size(); ++i) {
-            const auto& np = normal_points[i];
+            auto& np = normal_points[i];
             if (np.clusterID==range.clusterID && np.planeID==range.planeID) {
                 PointT_no_color pt;
                 pt.x = np.position.x();
