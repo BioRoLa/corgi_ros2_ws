@@ -491,7 +491,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
                 Eigen::Vector3f pt_u(row_max_z_map[u].position.x(), row_max_z_map[u].position.y(), row_max_z_map[u].position.z());
                 double pu_z = cluster_centroids[1].dot(pt_u);
                 if (row_max_z_map.find(u) == row_max_z_map.end() || p_z > pu_z) {
-                    if (p_z > plane_ranges[0][0].mean_distance + 0.05)
+                    if (p.position.z() > plane_ranges[0][0].mean_distance + 0.05)
                         row_max_z_map[u] = p;
                 }
             }
