@@ -305,7 +305,7 @@ void kmeansNormals(std::vector<NormalPoint>& points, int k, int max_iter = 100) 
 }//end kmeansNormals
 
 
-void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 2) {
+void group_by_normals(std::vector<NormalPoint>& points, int max_iter = 1) {
     // 1. 初始化：設定初始中心
     std::vector<Eigen::Vector3f> centroids;
     centroids.reserve(2);
@@ -413,7 +413,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     ne.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
     // ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
     // ne.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
-    ne.setMaxDepthChangeFactor(0.05f);
+    ne.setMaxDepthChangeFactor(0.01f);
     ne.setNormalSmoothingSize(10.0f);
     ne.setInputCloud(cloud);
     ne.compute(*normals);
@@ -478,8 +478,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
         double mean_d = range.mean_distance;
-        double lower = mean_d - 0.05;
-        double upper = mean_d + 0.05;
+        double lower = mean_d - 0.03;
+        double upper = mean_d + 0.03;
     
         for (const auto& p : normal_points) {
             double distance = cluster_centroids[1].dot(p.position);
