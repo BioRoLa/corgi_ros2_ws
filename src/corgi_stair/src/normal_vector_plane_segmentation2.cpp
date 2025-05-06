@@ -538,7 +538,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             edge_cloud->points[idx].r = 255;
             edge_cloud->points[idx].g = 255;
             edge_cloud->points[idx].b = 0;
-            z_sum += cluster_centroids[1].dot(edge_cloud->points[idx]);
+            Eigen::Vector3f pt(edge_cloud->points[idx].x,
+                edge_cloud->points[idx].y,
+                edge_cloud->points[idx].z);
+            z_sum += cluster_centroids[0].dot(pt);
             // z_sum += edge_cloud->points[idx].z;
             z_count ++;
         }
