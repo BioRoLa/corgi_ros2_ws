@@ -486,7 +486,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             if (distance >= lower && distance <= upper) {
                 int u = p.u;  // image column
                 // 若該 row 尚未記錄，或 z 值更大，就更新
-                Eigen::Vector3f pt(p.x(), p.y(), p.z());
+                Eigen::Vector3f pt(p.position.x(), p.position.y(), p.position.z());
                 double p_z = cluster_centroids[1].dot(pt);
                 Eigen::Vector3f pt_u(row_max_z_map[u].position.x(), row_max_z_map[u].position.y(), row_max_z_map[u].position.z());
                 double pu_z = cluster_centroids[1].dot(pt_u);
