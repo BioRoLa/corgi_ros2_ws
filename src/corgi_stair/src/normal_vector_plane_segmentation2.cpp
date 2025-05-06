@@ -491,7 +491,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             ground_plane_cloud->points.push_back(pt);
         }
     }
+
     pcl::SACSegmentation<PointT_no_color> ground_seg;
+    pcl::ModelCoefficients::Ptr plane_coefficients(new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr plane_inliers(new pcl::PointIndices);
     ground_seg.setOptimizeCoefficients(true);
     // seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
     ground_seg.setModelType(pcl::SACMODEL_PLANE);
@@ -500,9 +503,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     // ground_seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
     // ground_seg.setInputNormals(ground_plane_cloud);
     ground_seg.setInputCloud(ground_plane_cloud);
-    ground_seg.segment(*inliers, *coefficients);
-    Eigen::Vector3f ground_normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
-    double ground_d = coefficients->values[3];
+    ground_seg.segment(*plane_inliers, *plane_coefficients);
+    Eigen::Vector3f ground_normal_vector(plane_coefficients->values[0], plane_coefficients->values[1], plane_coefficients->values[2]);
+    double ground_d = plane_coefficients->values[3];
     if (ground_normal_vector.z() < 0) {
         ground_normal_vector = -ground_normal_vector;
         ground_d = -ground_d;
@@ -531,13 +534,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         // plane_seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
         // plane_seg.setInputNormals(plane_cloud);
         plane_seg.setInputCloud(plane_cloud);
-        plane_seg.segment(*inliers, *coefficients);
-        Eigen::Vector3f normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
+        plane_seg.segment(*plane_inliers, *plane_coefficients);
+        Eigen::Vector3f normal_vector(plane_coefficients->values[0], plane_coefficients->values[1], plane_coefficients->values[2]);
 
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
         // double mean_d = range.mean_distance;
-        double mean_d = coefficients->values[3];
+        double mean_d = plane_coefficients->values[3];
         double lower = mean_d - 0.03;
         double upper = mean_d + 0.03;
     
