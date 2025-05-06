@@ -64,7 +64,7 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 
     if (RECORD_DATA){output_file_name = msg.output_filename;}
 
-    if (trigger && msg.output_filename != "") {
+    if (trigger && output_file_name != "") {
         output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
 
         int index = 1;
