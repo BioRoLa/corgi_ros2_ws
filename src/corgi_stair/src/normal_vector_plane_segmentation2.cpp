@@ -522,16 +522,16 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
                 plane_cloud->points.push_back(pt);
             }
         }
-        pcl::SACSegmentation<PointT_no_color> seg;
-        seg.setOptimizeCoefficients(true);
-        // seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
-        seg.setModelType(pcl::SACMODEL_PLANE);
-        seg.setMethodType(pcl::SAC_RANSAC);
-        seg.setDistanceThreshold(0.001);
-        // seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
-        // seg.setInputNormals(plane_cloud);
-        seg.setInputCloud(plane_cloud);
-        seg.segment(*inliers, *coefficients);
+        pcl::SACSegmentation<PointT_no_color> plane_seg;
+        plane_seg.setOptimizeCoefficients(true);
+        // plane_seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
+        plane_seg.setModelType(pcl::SACMODEL_PLANE);
+        plane_seg.setMethodType(pcl::SAC_RANSAC);
+        plane_seg.setDistanceThreshold(0.001);
+        // plane_seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
+        // plane_seg.setInputNormals(plane_cloud);
+        plane_seg.setInputCloud(plane_cloud);
+        plane_seg.segment(*inliers, *coefficients);
         Eigen::Vector3f normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
 
         std::unordered_map<int, NormalPoint> row_max_z_map;
