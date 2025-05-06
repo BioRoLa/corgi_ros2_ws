@@ -141,7 +141,6 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
                     in_range = true;
                     current.start = min_val + i * bin_width;
                     current.total_count = histogram[i];
-                    current.planeID++;
                     current_values = bin_values[i];
                 } else {
                     current.total_count += histogram[i];
@@ -206,9 +205,10 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         // 分配 planeID 給每個點
         for (auto& p : points) {
             if (p.clusterID != c) continue;
-            for (const auto& range : final_ranges) {
+            for (auto& range : final_ranges) {
                 if (p.distance_proj >= range.start && p.distance_proj <= range.end) {
                     p.planeID = distance_to_planeID[range.mean_distance];
+                    range.planeID = p.planeID;
                     break;
                 }
             }
