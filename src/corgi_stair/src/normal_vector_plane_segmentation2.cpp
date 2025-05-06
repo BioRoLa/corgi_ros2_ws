@@ -54,6 +54,8 @@ struct Range {
     double end;
     int total_count;
     double mean_distance;
+    int clusterID = -1;
+    int planeID = -1; // 平面ID
 };
 
 /* Global variables */
@@ -132,12 +134,14 @@ std::array<std::vector<Range>, 2> group_by_plane_distance(std::vector<NormalPoin
         Range current;
         std::vector<double> current_values;
         std::vector<Range> raw_ranges;
+        current.clusterID = c;
         for (int i = 0; i < bin_count; ++i) {
             if (histogram[i] >= one_bin_point_threshold) {
                 if (!in_range) {
                     in_range = true;
                     current.start = min_val + i * bin_width;
                     current.total_count = histogram[i];
+                    current.planeID++;
                     current_values = bin_values[i];
                 } else {
                     current.total_count += histogram[i];
@@ -475,25 +479,84 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     global_range[0] = plane_ranges[0];
     global_range[1] = plane_ranges[1];
 
+
+    // Ground plane by ransac
+    pcl::PointCloud<PointT_no_color>::Ptr ground_plane_cloud(new pcl::PointCloud<PointT_no_color>);
+    for (const auto& np : normal_points) {
+        if (np.clusterID==0 && np.planeID==0) {
+            PointT_no_color pt;
+            pt.x = np.position.x();
+            pt.y = np.position.y();
+            pt.z = np.position.z();
+            ground_plane_cloud->points.push_back(pt);
+        }
+    }
+    pcl::SACSegmentation<pcl::PointNormal> seg;
+    seg.setOptimizeCoefficients(true);
+    // seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setDistanceThreshold(0.001);
+    // seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
+    // seg.setInputNormals(ground_plane_cloud);
+    seg.setInputCloud(ground_plane_cloud);
+    seg.segment(*inliers, *coefficients);
+    Eigen::Vector3f ground_normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
+    double ground_d = coefficients->values[3];
+    if (ground_normal_vector.z() < 0) {
+        ground_normal_vector = -ground_normal_vector;
+        ground_d = -ground_d;
+    }
+
+    /* Edge */
     std::vector<double> avg_height;
     for (const auto& range : plane_ranges[1]) {
+        // Put points in each plane into pcl cloud
+        pcl::PointCloud<PointT_no_color>::Ptr plane_cloud(new pcl::PointCloud<PointT_no_color>);
+        for (const auto& np : normal_points) {
+            if (np.clusterID==range.clusterID && np.planeID==range.planeID) {
+                PointT_no_color pt;
+                pt.x = np.position.x();
+                pt.y = np.position.y();
+                pt.z = np.position.z();
+                plane_cloud->points.push_back(pt);
+            }
+        }
+        pcl::SACSegmentation<pcl::PointNormal> seg;
+        seg.setOptimizeCoefficients(true);
+        // seg.setModelType(pcl::SACMODEL_NORMAL_PLANE);
+        seg.setModelType(pcl::SACMODEL_PLANE);
+        seg.setMethodType(pcl::SAC_RANSAC);
+        seg.setDistanceThreshold(0.001);
+        // seg.setEpsAngle(10.0 * M_PI / 180.0); // 允許最大10度的偏差
+        // seg.setInputNormals(plane_cloud);
+        seg.setInputCloud(plane_cloud);
+        seg.segment(*inliers, *coefficients);
+        Eigen::Vector3f normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
+
         std::unordered_map<int, NormalPoint> row_max_z_map;
 
-        double mean_d = range.mean_distance;
+        // double mean_d = range.mean_distance;
+        double mean_d = coefficients->values[3];
         double lower = mean_d - 0.03;
         double upper = mean_d + 0.03;
     
         for (const auto& p : normal_points) {
-            double distance = cluster_centroids[1].dot(p.position);
+            // double distance = cluster_centroids[1].dot(p.position);
+            double distance = normal_vector.dot(p.position);
+
             if (distance >= lower && distance <= upper) {
                 int u = p.u;  // image column
                 // 若該 row 尚未記錄，或 z 值更大，就更新
-                if (p.position.z() > plane_ranges[0][0].mean_distance + 0.05) {
+                // if (p.position.z() > plane_ranges[0][0].mean_distance + 0.05) {
+                if (p.position.z() > ground_d + 0.05) {
                     if (row_max_z_map.find(u) == row_max_z_map.end()) {
                         row_max_z_map[u] = p;
                     } else {
-                        double p_z = cluster_centroids[0].dot(p.position);
-                        double pu_z = cluster_centroids[0].dot(row_max_z_map[u].position);
+                        // double p_z = cluster_centroids[0].dot(p.position);
+                        // double pu_z = cluster_centroids[0].dot(row_max_z_map[u].position);
+                        double p_z = ground_normal_vector.dot(p.position);
+                        double pu_z = ground_normal_vector.dot(row_max_z_map[u].position);
                         if (p_z > pu_z) {
                             row_max_z_map[u] = p;
                         }
@@ -502,17 +565,12 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
             }
         }
 
-        std::vector<Eigen::Vector3f> stair_edge_points;
-        for (const auto& [v, p] : row_max_z_map) {
-            stair_edge_points.push_back(p.position);
-        }
-
         pcl::PointCloud<PointT>::Ptr edge_cloud(new pcl::PointCloud<PointT>);
-        for (const auto& pt : stair_edge_points) {
+        for (const auto& [v, pt] : row_max_z_map) {
             PointT p;
-            p.x = pt.x();
-            p.y = pt.y();
-            p.z = pt.z();
+            p.x = pt.position.x();
+            p.y = pt.position.y();
+            p.z = pt.position.z();
             p.r = 0;
             p.g = 255;
             p.b = 0;
@@ -777,7 +835,7 @@ int main(int argc, char** argv) {
 
     ros::Rate rate(10);
 
-    std::ofstream csv("plane_distances.csv");
+    std::ofstream csv("plane_distances_edge_normal_z.csv");
     std::ofstream csv_histogram("histogram.csv");
     csv << "could_seq,";
     csv << "Trigger," ;
