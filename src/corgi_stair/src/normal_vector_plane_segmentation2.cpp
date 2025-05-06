@@ -509,7 +509,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
     ground_seg.setInputCloud(ground_plane_cloud);
     ground_seg.segment(*plane_inliers, *plane_coefficients);
     Eigen::Vector3f ground_normal_vector(plane_coefficients->values[0], plane_coefficients->values[1], plane_coefficients->values[2]);
-    double ground_d = plane_coefficients->values[3];
+    double ground_d = -plane_coefficients->values[3];
     if (ground_normal_vector.z() < 0) {
         ground_normal_vector = -ground_normal_vector;
         ground_d = -ground_d;
