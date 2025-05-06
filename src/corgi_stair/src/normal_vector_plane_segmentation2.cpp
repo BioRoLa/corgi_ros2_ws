@@ -518,6 +518,8 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         int idx_in_normal_points = plane_cloud_to_np_index[idx_in_plane_cloud];
         normal_points[idx_in_normal_points].valid = true;
     }
+    std::cout << "ground_normal_vector: \n" << ground_normal_vector << std::endl;
+    std::cout << "ground_d: " << ground_d << std::endl;
 
     /* Edge */
     std::vector<double> avg_height;
@@ -561,6 +563,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
         double lower = mean_d - 0.03;
         double upper = mean_d + 0.03;
     
+        std::cout << "normal_vector: \n" << normal_vector << std::endl;
+        std::cout << "mean_d: " << mean_d << std::endl;
+
         for (const auto& p : normal_points) {
             // double distance = cluster_centroids[1].dot(p.position);
             double distance = normal_vector.dot(p.position);
