@@ -44,12 +44,12 @@ int main(int argc, char** argv) {
     };
     // pid command
     for (int i=0; i<4; i++) {
-        motor_cmd_modules[i]->kp_r = 90;
+        motor_cmd_modules[i]->kp_r = 150.0;
         motor_cmd_modules[i]->ki_r = 0;
-        motor_cmd_modules[i]->kd_r = 1.0;
-        motor_cmd_modules[i]->kp_l = 90;
+        motor_cmd_modules[i]->kd_r = 1.75;
+        motor_cmd_modules[i]->kp_l = 150.0;
         motor_cmd_modules[i]->ki_l = 0;
-        motor_cmd_modules[i]->kd_l = 1.0;
+        motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     const int transform_count = 2*sampling_rate; // 2s
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3
+    double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
     double velocity = 0.1; // velocity for walk gait
     double stand_height = 0.25; // stand height for walk gait
     double step_length = 0.3; // step length for walk gait
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
                 for (int i=0; i<4; i++) {
                     eta_list[0][i] = INIT_THETA + transform_ratio * (init_eta[i*2]   - INIT_THETA);
                     eta_list[1][i] = INIT_BETA  + transform_ratio * (init_eta[i*2+1] - INIT_BETA);
-                    eta_list[1][i] = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];
+                    eta_list[1][i] = (i == 1 || i == 2)? eta_list[1][i] : -eta_list[1][i];  
                 }//end for
                 break;
             case WAIT:
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
                 // hip_x = sim_data.position.x + 0.222; // front hip
                 // // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                // max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 // if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
                 hip_x = exp_robot_x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                max_step_length_last = (-D/2.0 - 0.25 - hip_x)*2; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
             case STAIR:
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                    stair_climb.initialize(current_eta);
+                    stair_climb.initialize(current_eta, velocity);
                     for (int i=0; i<stair_num; i++) {
                         // stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
                         stair_climb.add_stair_edge(-D/2.0 + i*D - exp_robot_x, (i+1)*H);
@@ -214,11 +214,11 @@ int main(int argc, char** argv) {
         /* Publish motor commands */
         for (int i=0; i<4; i++) {
             if (eta_list[0][i] > M_PI*160.0/180.0) {
-                std::cout << "Exceed upper bound." << std::endl;
+                std::cout << "Leg " << i << " exceed upper bound." << std::endl;
                 eta_list[0][i] = M_PI*160.0/180.0;
             }//end if 
             if (eta_list[0][i] < M_PI*16.9/180.0) {
-                std::cout << "Exceed lower bound." << std::endl;
+                std::cout << "Leg " << i << " exceed lower bound." << std::endl;
                 eta_list[0][i] = M_PI*16.9/180.0;
             }//end if 
             motor_cmd_modules[i]->theta = eta_list[0][i];
