@@ -44,12 +44,12 @@ int main(int argc, char** argv) {
     };
     // pid command
     for (int i=0; i<4; i++) {
-        motor_cmd_modules[i]->kp_r = 90;
+        motor_cmd_modules[i]->kp_r = 150.0;
         motor_cmd_modules[i]->ki_r = 0;
-        motor_cmd_modules[i]->kd_r = 1.0;
-        motor_cmd_modules[i]->kp_l = 90;
+        motor_cmd_modules[i]->kd_r = 1.75;
+        motor_cmd_modules[i]->kp_l = 150.0;
         motor_cmd_modules[i]->ki_l = 0;
-        motor_cmd_modules[i]->kd_l = 1.0;
+        motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 

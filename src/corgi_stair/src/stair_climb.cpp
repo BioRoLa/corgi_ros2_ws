@@ -13,7 +13,7 @@
 #include "stair_climb.hpp"
 
 // #define BEZIER_CURVE_SWING 1
-#define CHANGE_FIRST_SWING_LEG 1
+// #define CHANGE_FIRST_SWING_LEG 1
 
 StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, double BL, double BW, double BH) : 
     /* Initializer List */
