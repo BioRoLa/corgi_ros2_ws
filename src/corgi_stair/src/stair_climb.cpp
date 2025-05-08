@@ -620,8 +620,11 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
     for (size_t iter = 0; iter < max_iter; ++iter) {
-        double cost = this->objective_edge(guess_dx, init_U, contact_p, contact_alpha);     // 计算当前函数值
-        if (std::abs(cost) < tol) {                // 判断收敛
+        std::array<double, 2> cost = this->objective_edge(guess_dq, {theta[leg_ID], beta[leg_ID]}, contact_p, contact_alpha);     // 计算当前函数值
+        Eigen::Vector2d cost_vec(cost[0], cost[1]);
+        
+        double norm_cost = cost_vec.norm();          // 计算残差范数
+        if (norm_cost < tol) {                // 判断收敛
             // std::cout << "cost converged after " << iter << " iterations.\n";
             break;
         }//end if
@@ -644,16 +647,16 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         }//end if
 
         // 更新解
-        guess_dx += dx;
+        guess_dq[0] += dq[0];
+        guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
             throw std::runtime_error("StairClimb::Move_edge: Newton solver did not converge.");
         }//end if
     }//end for
 
-    double d_y = std::sqrt(std::pow(leg_model.radius, 2) - std::pow(contact_p[0]-(init_U[0]+guess_dx), 2)) - (init_U[1] - contact_p[1]);
-    std::array<double, 2> new_U = {init_U[0]+guess_dx, init_U[1]+d_y};
-    result_eta = leg_model.inverse(new_U, "U_r");
+    result_eta[0] = theta[leg_ID] + guess_dq[0];
+    result_eta[1] = beta[leg_ID]  + guess_dq[1];
     return result_eta;
 }//end move_edge
 
