@@ -28,17 +28,17 @@
 
 class ModelPredictiveController {
     public:
-        int target_loop = 3000;
+        int target_loop = 2000;
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 60;
-        double By_swing = 60;
-        double Bx_stance = 30;
+        double Bx_swing = 100;
+        double By_swing = 100;
+        double Bx_stance = 100;
         double By_stance = 10;
-        double Kx_swing = 2000;
-        double Ky_swing = 2000;
-        double Kx_stance = 600;
+        double Kx_swing = 4000;
+        double Ky_swing = 4000;
+        double Kx_stance = 4000;
         double Ky_stance = 200;
 
 

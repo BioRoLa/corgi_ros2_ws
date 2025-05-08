@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
     double velocity        = 0.1;
     double stand_height    = 0.25;
     double step_length     = 0.3;
-    double step_height     = 0.1;
+    double step_height     = 0.05;
     
     walk_gait.set_velocity(mpc.target_vel_x);
     walk_gait.set_stand_height(stand_height);
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
                     // if (walk_gait.get_swing_phase()[i] == 1) {
                     //     check_contact_state(i, contact_state_modules);
                     // }
-                    if (walk_gait.get_duty()[i] < 0.8 && walk_gait.get_duty()[i] > 0) {
+                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
                 if (loop_count > mpc.target_loop*10-1000 && loop_count < mpc.target_loop*10) {
-                    mpc.target_vel_x -= velocity/3000.0;
+                    mpc.target_vel_x -= velocity/1000.0;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
 

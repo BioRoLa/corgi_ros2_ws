@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
     double velocity        = 0.1;
     double stand_height    = 0.25;
     double step_length     = 0.3;
-    double step_height     = 0.1;
+    double step_height     = 0.05;
     bool touched[4] = {true, true, true, true};
     bool selection_matrix[4] = {true, true, true, true};
     
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    if (walk_gait.get_duty()[i] < 0.8 && walk_gait.get_duty()[i] > 0) {
+                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -320,13 +320,13 @@ int main(int argc, char **argv) {
                 convert_force_to_local(force_D, R_T);
 
 
-                imp_cmd_modules[0]->Fx =  force_A[0];
+                imp_cmd_modules[0]->Fx = -force_A[0];
                 imp_cmd_modules[0]->Fy = -force_A[2];
-                imp_cmd_modules[1]->Fx = -force_B[0];
+                imp_cmd_modules[1]->Fx =  force_B[0];
                 imp_cmd_modules[1]->Fy = -force_B[2];
-                imp_cmd_modules[2]->Fx = -force_C[0];
+                imp_cmd_modules[2]->Fx =  force_C[0];
                 imp_cmd_modules[2]->Fy = -force_C[2];
-                imp_cmd_modules[3]->Fx =  force_D[0];
+                imp_cmd_modules[3]->Fx = -force_D[0];
                 imp_cmd_modules[3]->Fy = -force_D[2];
 
                 imp_cmd.header.seq = loop_count;
