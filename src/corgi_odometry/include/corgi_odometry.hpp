@@ -15,6 +15,9 @@ inline constexpr bool WORLD_FRAME = true;
 inline constexpr bool ESTIMATE_POSITION_FRAME = BODY_FRAME; // BODY_FRAME or WORLD_FRAME
 //record data or not
 inline constexpr bool RECORD_DATA = true;
+// z_position calcution method
+enum Method { AVG, MID, MAX, MIN };
+inline constexpr Method Z_POS_METHOD = AVG;
 
 /******* odometry *******/
 
@@ -30,6 +33,7 @@ inline constexpr float FILTE_VEL_CUT_OFF_FREQ = 10.0; //Hz
 #include <vector>
 #include <Eigen/Geometry>
 #include <algorithm>
+#include <numeric>
 #include "ros/ros.h"
 
 /******* ROS msg *******/
