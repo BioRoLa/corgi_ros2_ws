@@ -178,7 +178,24 @@ int main(int argc, char **argv) {
                 z_COM.data = prev_z_COM.data;
             } 
             else {
-                z_COM.data = median(contact_heights);
+                switch(Z_POS_METHOD){
+                    case AVG:{
+                        double sum = std::accumulate(contact_heights.begin(), contact_heights.end(), 0.0);
+                        z_COM.data = sum / contact_heights.size();
+                        break;
+                    }
+                    case MID:
+                        z_COM.data = median(contact_heights);
+                        break;
+                    case MAX:
+                        z_COM.data = *std::max_element(contact_heights.begin(), contact_heights.end());
+                        break;
+                    case MIN:
+                        z_COM.data = *std::min_element(contact_heights.begin(), contact_heights.end());
+                        break;    
+                    default:
+                        ROS_INFO("Invalid Z_POS_METHOD");
+                }
             }
             z_COM.data = low_pass_filter(z_COM.data, prev_z_COM.data, 10, Z_POS_ANALYSIS_RATE);
             prev_z_COM.data = z_COM.data;
