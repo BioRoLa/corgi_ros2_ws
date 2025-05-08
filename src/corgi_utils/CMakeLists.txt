@@ -38,3 +38,4 @@ add_library(${PROJECT_NAME}
   src/bezier.cpp
   src/trajectory_plan.cpp
 )
+
