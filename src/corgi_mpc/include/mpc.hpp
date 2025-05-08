@@ -28,7 +28,7 @@
 
 class ModelPredictiveController {
     public:
-        int target_loop = 2000;
+        int target_loop = 3000;
 
         double Mx = 0;
         double My = 0;
