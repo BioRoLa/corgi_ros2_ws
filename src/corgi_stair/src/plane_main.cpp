@@ -34,7 +34,7 @@ int cloud_seq = 0;
 
 
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
-    could_seq = msg->header.seq;
+    cloud_seq = msg->header.seq;
     /* Convert the ROS PointCloud2 message to PCL point cloud */
     pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
     pcl::fromROSMsg(*msg, *cloud);
