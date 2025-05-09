@@ -43,7 +43,8 @@ class Hybrid{
 
         std::array<double, 2> swing_pose;
         std::array<double, 2> swing_variation;
-        SwingType swing_type = SwingType::OPTIMIZE;
+        SwingType swing_type = SwingType::LINEAR;
+        double terrain_slope = 0 * M_PI / 180.0; // 10 degree
         
     private:
         std::shared_ptr<GaitSelector> gaitSelector;

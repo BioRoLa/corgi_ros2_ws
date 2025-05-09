@@ -184,7 +184,7 @@ std::array<int, 4> GaitSelector::swing_phase = {0};
 
 double GaitSelector::swing_time = 0.2;   
 double GaitSelector::velocity = 0.05;  
-double GaitSelector::stand_height = 0.14;
+double GaitSelector::stand_height = 0.15;
 double GaitSelector::step_length = 0.4; 
 double GaitSelector::step_height = 0.03; 
 

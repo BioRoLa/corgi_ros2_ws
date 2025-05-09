@@ -55,7 +55,7 @@ void Hybrid::Initialize(int swing_index, int set_type) {
                 break;
         }
         for(int i =0; i<4;i++){
-            auto tmp0 = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length/2) - (gaitSelector->duty[i]/(1-gaitSelector->swing_time)) * gaitSelector->step_length, 0);
+            auto tmp0 = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length/2) - (gaitSelector->duty[i]/(1-gaitSelector->swing_time)) * gaitSelector->step_length, 0.0);
             gaitSelector->next_eta[i][0] = tmp0[0];
             gaitSelector->next_eta[i][1] = tmp0[1];
         }
@@ -232,7 +232,7 @@ void Hybrid::Step(){
                 // gaitSelector->foothold[i] = {gaitSelector->next_hip[i][0] + ((1-gaitSelector->swing_time)/2+gaitSelector->swing_time)*(gaitSelector->step_length), 0};
                 gaitSelector->incre_duty = gaitSelector->dS / gaitSelector->step_length;  // change incre_duty corresponding to new step length when hind leg start to swing.
             }
-            swing_pose = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length*3/6), 0);  
+            swing_pose = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length*3/6), terrain_slope);  
             Swing(gaitSelector->eta, swing_pose, swing_variation, i);
             
         } 
@@ -258,7 +258,7 @@ void Hybrid::Step(){
             gaitSelector->leg_model.forward(gaitSelector->eta[i][0], gaitSelector->eta[i][1],true);
             std::array<double, 2> result_eta;
             // result_eta = gaitSelector->leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, 0); 
-            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {-(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), gaitSelector->next_hip[i][1]-gaitSelector->hip[i][1]}, 0);
+            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {-(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), gaitSelector->next_hip[i][1]-gaitSelector->hip[i][1]}, terrain_slope);
             gaitSelector->eta[i][0] = result_eta[0];
             gaitSelector->eta[i][1] = result_eta[1];
         } 

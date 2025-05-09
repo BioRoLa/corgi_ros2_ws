@@ -37,6 +37,8 @@ int main(int argc, char** argv) {
     // hybrid.swing_type = SwingType::LINEAR;
     // cout<< "LINEAR"<<endl;
     for (int step = 0;step<10000;step++) {
+        hybrid.change_Height(0.15-0.03*step/10000);
+        // 前後高度？
         gaitSelector->motor_cmd.header.seq = step;
         gaitSelector->motor_cmd.header.stamp = ros::Time::now();
         hybrid.Step();
