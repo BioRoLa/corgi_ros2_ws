@@ -31,20 +31,20 @@ int main(int argc, char **argv) {
     // initialize gait
     double CoM_bias = 0.0;
 
-    GaitSelector gait_selector(nh, sim, CoM_bias, 1000);
-    Hybrid hybrid_gait(nh);   
+    auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, 1000);
+    Hybrid hybrid_gait(gait_selector); 
 
     std::cout << "hybrid" << std::endl;
     double velocity = 0.1;
-    gait_selector.stand_height = 0.16;
-    gait_selector.step_length = 0.3;
-    hybrid_gait.Initialize(0, 0, 0, 0, 0, 0, -0.03);
+    hybrid_gait.Initialize(1, 1);
     hybrid_gait.change_Velocity(velocity);
+    hybrid_gait.change_Height(0.16);
+    hybrid_gait.change_Step_length(0.3);
     
     double init_eta[8];
     for (int i=0; i<4; i++) {
-        init_eta[2*i] = gait_selector.eta[i][0];
-        init_eta[2*i+1] = gait_selector.eta[i][1];
+        init_eta[2*i] = gait_selector->eta[i][0];
+        init_eta[2*i+1] = gait_selector->eta[i][1];
     }
 
     init_eta[3] *= -1;
@@ -108,11 +108,11 @@ int main(int argc, char **argv) {
                 }
 
                 // get next eta
-                hybrid_gait.Step(0, 0, -0.03);
+                hybrid_gait.Step();
 
                 for (int i=0; i<4; i++) {
-                    eta_list[0][i] = gait_selector.eta[i][0];
-                    eta_list[1][i] = gait_selector.eta[i][1];
+                    eta_list[0][i] = gait_selector->eta[i][0];
+                    eta_list[1][i] = gait_selector->eta[i][1];
                 }
 
 
