@@ -36,7 +36,6 @@ PlaneSegmentation::PlaneSegmentation() :
     normals_(new pcl::PointCloud<pcl::Normal>)
 {
     // Initialize
-    tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pass_.setKeepOrganized(true);
     normal_estimator_.setNormalEstimationMethod(normal_estimator_.AVERAGE_3D_GRADIENT);
     // normal_estimator_.setNormalEstimationMethod(normal_estimator_.AVERAGE_DEPTH_CHANGE);
@@ -45,6 +44,11 @@ PlaneSegmentation::PlaneSegmentation() :
     normal_estimator_.setNormalSmoothingSize(10.0f);
 
 }//end PlaneSegmentation
+
+
+void PlaneSegmentation::init_tf() {
+    tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
+}//end init_tf
 
 
 PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cloud) {

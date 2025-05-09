@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::Subscriber cloud_sub   = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloud_cb);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
-
+    plane_segmentation.init_tf();
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
