@@ -225,7 +225,7 @@ int GaitSelector::pub_time = 1;
 int GaitSelector::do_pub = 1;
 int GaitSelector::transfer_state = 1;
 int GaitSelector::transfer_sec = 5;
-int GaitSelector::wait_sec = 2;
+int GaitSelector::wait_sec = 10;
 
 int GaitSelector::direction = 1;
 
