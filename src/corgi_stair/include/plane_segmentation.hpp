@@ -1,6 +1,7 @@
 #ifndef PLANESEG_HPP
 #define PLANESEG_HPP
 
+#include <ros/ros.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/features/normal_3d.h>
@@ -35,6 +36,9 @@ class PlaneSegmentation {
         std::vector<double> segment_by_distances(Eigen::Vector3f centroid, const std::vector<int>& indices);
         Eigen::Vector3f computeCentroid(const std::vector<int>& indices);
 
+        void visualize_planes();
+        void visualize_normal();
+        
     private:
         tf2_ros::Buffer tf_buffer_;
         tf2_ros::TransformListener* tf_listener_;
@@ -48,6 +52,10 @@ class PlaneSegmentation {
         std::vector<int> h_point_idx;   // point index in cloud blongs to horizontal planes
         std::vector<int> v_point_idx;   // point index in cloud blongs to vertical   planes
         const double cos_threshold_ = std::cos(pcl::deg2rad(10.0));
+
+        ros::Publisher pub;
+        ros::Publisher normal_pub;
+
 };
 
 #endif // PLANESEG_HPP

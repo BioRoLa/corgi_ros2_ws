@@ -48,6 +48,8 @@ PlaneSegmentation::PlaneSegmentation() :
 
 void PlaneSegmentation::init_tf() {
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
+    pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
+    normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
 }//end init_tf
 
 
@@ -58,6 +60,9 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     std::vector<double> h_plane_distances = this->segment_by_distances(centroid_z, h_point_idx);
     std::vector<double> v_plane_distances = this->segment_by_distances(centroid_x, v_point_idx);
     std::reverse(v_plane_distances.begin(), v_plane_distances.end());
+
+    this->visualize_planes();
+    this->visualize_normal();
 
     return {h_plane_distances, v_plane_distances};
 }//end segment_planes
@@ -127,8 +132,8 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         const pcl::Normal& n = normals_->points[i];
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
             Eigen::Vector3f position(cloud_->points[i].x,
-                cloud_->points[i].y,
-                cloud_->points[i].z);
+                                    cloud_->points[i].y,
+                                    cloud_->points[i].z);
             double d = centroid.dot(position);  // projective distance
             distances.push_back(d);
         }//end if
@@ -203,7 +208,6 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         }
     }
 
-
     return final_distances; // from smalleset to largest
 }//end segment_by_distances
 
@@ -219,3 +223,95 @@ Eigen::Vector3f PlaneSegmentation::computeCentroid(const std::vector<int>& indic
     }//end if 
     return centroid;
 }//end computeCentroid
+
+
+void PlaneSegmentation::visualize_planes() {
+    pcl::PointCloud<PointT>::Ptr colored_cloud(new pcl::PointCloud<PointT>(*cloud_));
+    int idx = 0;
+    for (size_t i = 0; i < cloud_->size(); ++i) {
+            // 沒有有效 normal 的點，塗成黑色
+            colored_cloud->points[i].r = 0;
+            colored_cloud->points[i].g = 0;
+            colored_cloud->points[i].b = 0;
+    }
+    for (int i : h_point_idx) {
+        colored_cloud->points[i].r = 0;
+        colored_cloud->points[i].g = 0;
+        colored_cloud->points[i].b = 255;
+    }
+    for (int i : v_point_idx) {
+        colored_cloud->points[i].r = 255;
+        colored_cloud->points[i].g = 0;
+        colored_cloud->points[i].b = 0;
+    }
+
+    /* Publish the result */
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*colored_cloud, output);
+    output.header.frame_id = "map";
+    pub.publish(output);
+
+}//end visualize_planes
+
+
+void PlaneSegmentation::visualize_normal() {
+    // 可視化 Marker
+    visualization_msgs::MarkerArray marker_array;
+    visualization_msgs::Marker marker_template;
+    marker_template.header.frame_id = "map";
+    marker_template.type = visualization_msgs::Marker::ARROW;
+    marker_template.action = visualization_msgs::Marker::ADD;
+    marker_template.scale.x = 0.01;
+    marker_template.scale.y = 0.002;
+    marker_template.scale.z = 0.002;
+    marker_template.color.r = 0.0;
+    marker_template.color.g = 1.0;
+    marker_template.color.b = 0.0;
+    marker_template.color.a = 1.0;
+    marker_template.pose.orientation.x = 0.0;
+    marker_template.pose.orientation.y = 0.0;
+    marker_template.pose.orientation.z = 0.0;
+    marker_template.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
+    marker_template.lifetime = ros::Duration(0.1);
+
+    // 空間分格子平均
+    float grid_size = 0.10f;
+    std::unordered_map<std::tuple<int, int, int>, pcl::PointNormal, boost::hash<std::tuple<int, int, int>>> grid_map;
+    for (size_t i = 0; i < cloud_->size(); ++i) {
+        const auto& pt = cloud_->points[i];
+        const auto& nm = normals_->points[i];
+        if (!pcl::isFinite(pt) || !pcl::isFinite(nm))
+            continue;
+        int gx = static_cast<int>(std::floor(pt.x / grid_size));
+        int gy = static_cast<int>(std::floor(pt.y / grid_size));
+        int gz = static_cast<int>(std::floor(pt.z / grid_size));
+        auto key = std::make_tuple(gx, gy, gz);
+        if (grid_map.find(key) == grid_map.end()) {
+            pcl::PointNormal ptn;
+            ptn.x = pt.x; ptn.y = pt.y; ptn.z = pt.z;
+            ptn.normal_x = nm.normal_x; ptn.normal_y = nm.normal_y; ptn.normal_z = nm.normal_z;
+            grid_map[key] = ptn;
+        }
+    }
+
+    int id = 0;
+    for (const auto& kv : grid_map) {
+        const auto& pt = kv.second;
+
+        visualization_msgs::Marker arrow = marker_template;
+        arrow.id = id++;
+
+        geometry_msgs::Point start, end;
+        start.x = pt.x;
+        start.y = pt.y;
+        start.z = pt.z;
+        end.x = pt.x + 0.05 * pt.normal_x;
+        end.y = pt.y + 0.05 * pt.normal_y;
+        end.z = pt.z + 0.05 * pt.normal_z;
+        arrow.points.push_back(start);
+        arrow.points.push_back(end);
+
+        marker_array.markers.push_back(arrow);
+    }
+    normal_pub.publish(marker_array);
+}//end visualize_normal
