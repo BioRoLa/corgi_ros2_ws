@@ -38,7 +38,7 @@ class PlaneSegmentation {
 
         void visualize_planes();
         void visualize_normal();
-        
+
     private:
         tf2_ros::Buffer tf_buffer_;
         tf2_ros::TransformListener* tf_listener_;
@@ -55,7 +55,7 @@ class PlaneSegmentation {
 
         ros::Publisher pub;
         ros::Publisher normal_pub;
-
+        ros::NodeHandle nh;
 };
 
 #endif // PLANESEG_HPP
