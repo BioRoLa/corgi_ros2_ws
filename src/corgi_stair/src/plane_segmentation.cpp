@@ -124,12 +124,16 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     /* Calculate distances */
     std::vector<double> distances;
     for (size_t i = 0; i < cloud_->size(); i++) {
-        Eigen::Vector3f position(cloud_->points[i].x,
-                                cloud_->points[i].y,
-                                cloud_->points[i].z);
-        double d = centroid.dot(position);  // projective distance
-        distances.push_back(d);
+        const pcl::Normal& n = normals_->points[i];
+        if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
+            Eigen::Vector3f position(cloud_->points[i].x,
+                cloud_->points[i].y,
+                cloud_->points[i].z);
+            double d = centroid.dot(position);  // projective distance
+            distances.push_back(d);
+        }//end if
     }//end for
+    if (distances.empty()) return {};
 
     /* Create histogram by distances */
     // Calculate range of histogram
