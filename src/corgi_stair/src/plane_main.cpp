@@ -27,7 +27,7 @@
 #include "plane_segmentation.hpp"
 
 
-PlaneSegmentation plane_segmentation;
+PlaneSegmentation* plane_segmentation;
 PlaneDistances plane_distances;
 corgi_msgs::TriggerStamped trigger_msg;
 int cloud_seq = 0;
@@ -43,7 +43,7 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
         return;
     }
 
-    plane_distances = plane_segmentation.segment_planes(cloud);
+    plane_distances = plane_segmentation->segment_planes(cloud);
 }//end cloud_cb
 
 
@@ -58,7 +58,8 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::Subscriber cloud_sub   = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloud_cb);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
-    plane_segmentation.init_tf();
+    plane_segmentation = new PlaneSegmentation;
+    plane_segmentation->init_tf();
     ros::Rate rate(10);
 
     std::ofstream csv("plane_distances.csv");
