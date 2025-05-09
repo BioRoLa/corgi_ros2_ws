@@ -39,7 +39,7 @@ class PlaneSegmentation {
         tf2_ros::TransformListener* tf_listener_;
         pcl::PointCloud<PointT>::Ptr cloud_;
         pcl::PassThrough<PointT> pass_;
-        pcl::PointCloud<pcl::Normal>::Ptr normals_(new pcl::PointCloud<pcl::Normal>);
+        pcl::PointCloud<pcl::Normal>::Ptr normals_;
         pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> normal_estimator_;
         pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree_;
 

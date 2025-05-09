@@ -31,7 +31,10 @@
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointXYZ PointT_no_color;
 
-PlaneSegmentation::PlaneSegmentation() {
+PlaneSegmentation::PlaneSegmentation() :
+    /* Initializer List */
+    normals_(new pcl::PointCloud<pcl::Normal>)
+{
     // Initialize
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pass_.setKeepOrganized(true);
