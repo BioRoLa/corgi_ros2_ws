@@ -20,19 +20,16 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk 
   sensor_msgs visualization_msgs tf2_ros tf2_eigen pcl_ros pcl_conversions pcl_msgs
 )
-find_package(PCL REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils corgi_walk sensor_msgs visualization_msgs tf2_ros tf2_eigen pcl_ros pcl_conversions pcl_msgs
-  DEPENDS PCL
 )
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
   ${EIGEN3_INCLUDE_DIR}
-  ${PCL_INCLUDE_DIRS}
   include
 )
 
@@ -52,5 +49,4 @@ target_link_libraries(${PROJECT_NAME}
   ${CORGI_UTILS}
   ${CORGI_WALK}
   ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
 )
