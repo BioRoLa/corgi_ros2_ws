@@ -27,7 +27,7 @@
 #include "plane_segmentation.hpp"
 
 
-PlaneSegmentation plane_segmentation();
+PlaneSegmentation plane_segmentation;
 PlaneDistances plane_distances;
 corgi_msgs::TriggerStamped trigger_msg;
 int cloud_seq = 0;
