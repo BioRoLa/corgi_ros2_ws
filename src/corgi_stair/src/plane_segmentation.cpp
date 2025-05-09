@@ -114,8 +114,8 @@ void PlaneSegmentation::group_by_normals() {
     }//end for
 
     // Update centroid
-    centroid_z = computeCentroid(h_point_idx);
-    centroid_x = computeCentroid(v_point_idx);
+    centroid_z = h_point_idx.size()>0? computeCentroid(h_point_idx) : centroid_z;
+    centroid_x = v_point_idx.size()>0? computeCentroid(v_point_idx) : centroid_x;
 }//end group_by_normals
 
 
@@ -128,7 +128,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
 
     /* Calculate distances */
     std::vector<double> distances;
-    for (size_t i = 0; i < cloud_->size(); i++) {
+    for (int i : indices) {
         const pcl::Normal& n = normals_->points[i];
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
             Eigen::Vector3f position(cloud_->points[i].x,
