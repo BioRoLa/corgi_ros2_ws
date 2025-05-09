@@ -38,9 +38,9 @@ PlaneSegmentation::PlaneSegmentation() :
     // Initialize
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pass_.setKeepOrganized(true);
-    normal_estimator_.setNormalEstimationMethod(ne.AVERAGE_3D_GRADIENT);
-    // normal_estimator_.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
-    // normal_estimator_.setNormalEstimationMethod(ne.COVARIANCE_MATRIX);
+    normal_estimator_.setNormalEstimationMethod(normal_estimator_.AVERAGE_3D_GRADIENT);
+    // normal_estimator_.setNormalEstimationMethod(normal_estimator_.AVERAGE_DEPTH_CHANGE);
+    // normal_estimator_.setNormalEstimationMethod(normal_estimator_.COVARIANCE_MATRIX);
     normal_estimator_.setMaxDepthChangeFactor(0.01f);
     normal_estimator_.setNormalSmoothingSize(10.0f);
 
