@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
         }//end for
         for (int i=0; i<10; i++) {
             if (i < plane_distances.vertical.size())
-                csv << std::fixed << std::setprecision(4) << plane_distances.vertical[i]
+                csv << std::fixed << std::setprecision(4) << plane_distances.vertical[i];
             else 
                 csv << "0";
             csv << ",";
