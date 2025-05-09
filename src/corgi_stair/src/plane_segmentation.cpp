@@ -101,9 +101,9 @@ void PlaneSegmentation::group_by_normals() {
         double cos_z = normal.dot(centroid_z);
         double cos_x = normal.dot(centroid_x);
 
-        if (cos_z < cos_threshold_) {   // belongs to horizontal planes
+        if (cos_z > cos_threshold_) {   // belongs to horizontal planes
             h_point_idx.push_back(i);
-        } else if (cos_x < cos_threshold_) {    // belongs to vertical planes
+        } else if (cos_x > cos_threshold_) {    // belongs to vertical planes
             v_point_idx.push_back(i);
         }//end if else
     }//end for
