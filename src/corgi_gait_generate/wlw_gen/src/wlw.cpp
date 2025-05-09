@@ -111,14 +111,14 @@ int main(int argc, char **argv) {
     };
     ros::Rate rate(1000);
 
-    bool sim = true;
-    LegModel leg_model(sim);
-    LegModel leg_model2(sim);
+    // bool sim = true;
+    // LegModel leg_model(sim);
+    // LegModel leg_model2(sim);
 
-    InputData Input;
-    Input.MaxTDlength = 0.1;
+    // InputData Input;
+    // Input.MaxTDlength = 0.1;
     // sqrt(pow(0.340, 2) - pow(Input.Height, 2)); // m 
-    Input.total_time = Input.Distance / Input.Velocity;
+    // Input.total_time = Input.Distance / Input.Velocity;
 
     // // Define O_list
     // vector<Vector2d> O_list;

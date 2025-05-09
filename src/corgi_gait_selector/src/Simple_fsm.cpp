@@ -193,7 +193,7 @@ double GaitSelector::curvature = 0.0; // +: turn left, -:turn right, 0: straight
 std::array<double, 4> GaitSelector::current_step_length = {step_length, step_length, step_length, step_length};
 std::array<double, 4> GaitSelector::next_step_length    = {step_length, step_length, step_length, step_length};
 double GaitSelector::new_step_length = step_length;
-std::array<double, 4> GaitSelector::current_shift = {0.0, 0.0, 0.0, 0.0};
+std::array<double, 4> GaitSelector::current_shift = {-0.03, -0.03, -0.03, -0.03};
 double GaitSelector::relative_foothold[4][2] = {0.0};
 double GaitSelector::eta[4][2] = {0.0};
 double GaitSelector::next_eta[4][2]= {0.0};
@@ -223,7 +223,7 @@ std::vector<corgi_msgs::MotorState*> GaitSelector::motor_state_modules = {
 
 int GaitSelector::pub_time = 1;
 int GaitSelector::do_pub = 1;
-int GaitSelector::transfer_state = 0;
+int GaitSelector::transfer_state = 1;
 int GaitSelector::transfer_sec = 5;
 int GaitSelector::wait_sec = 2;
 
