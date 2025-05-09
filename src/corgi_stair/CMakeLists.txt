@@ -41,6 +41,7 @@ add_library(${PROJECT_NAME}
   src/stair_climb.cpp
   src/leg_info.cpp
   src/dbscan.cpp
+  src/plane_segmentation.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

@@ -18,3 +18,6 @@ target_link_libraries(flood_plane_segmentation ${catkin_LIBRARIES})
 
 add_executable(pointcloud_map pointcloud_map.cpp)
 target_link_libraries(pointcloud_map ${catkin_LIBRARIES})
+
+add_executable(plane_main plane_main.cpp)
+target_link_libraries(plane_main ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
