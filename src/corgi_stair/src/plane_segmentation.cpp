@@ -141,43 +141,43 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     
     /* 找出連續高密度 bin */
     bool in_range = false;
-    std::vector<double> total_count;
+    std::vector<double> total_counts;
     std::vector<double> mean_distances;
     double sum_count;
-    double sum_values;
+    double sum_value;
     for (int i = 0; i < bin_count; ++i) {   // from smallest distance
         if (histogram[i] >= one_bin_point_threshold) {
             if (!in_range) {
                 in_range = true;
                 sum_count = histogram[i];
-                sum_values = bin_values[i];
+                sum_value = bin_values[i];
             } else {
                 sum_count += histogram[i];
-                sum_values += bin_values[i];
+                sum_value += bin_values[i];
             }//end if else
         } else if (in_range) {
             if (sum_count >= total_point_threshold) {
-                total_count.push_back(sum_count);
-                mean_distance.push_back(sum_values / sum_count);
+                total_counts.push_back(sum_count);
+                mean_distances.push_back(sum_value / sum_count);
             }//end if
             in_range = false;
         }//end if else
     }//end for
     if (in_range) {
         if (sum_count >= total_point_threshold) {
-            total_count.push_back(sum_count);
-            mean_distance.push_back(sum_values / sum_count);
+            total_counts.push_back(sum_count);
+            mean_distances.push_back(sum_value / sum_count);
         }//end if
         in_range = false;
     }//end if
 
     /* Only keep max bin in a range (merge_threshold) */
-    std::vector<bool> keep(mean_distance.size(), true);
-    for (size_t i = 0; i < mean_distance.size(); i++) {
-        for (size_t j = i + 1; j < mean_distance.size(); j++) {
-            double dist = std::abs(mean_distance[i] - mean_distance[j]);
+    std::vector<bool> keep(mean_distances.size(), true);
+    for (size_t i = 0; i < mean_distances.size(); i++) {
+        for (size_t j = i + 1; j < mean_distances.size(); j++) {
+            double dist = std::abs(mean_distances[i] - mean_distances[j]);
             if (dist < merge_threshold) {
-                if (total_count[i] >= total_count[j]) {
+                if (total_counts[i] >= total_counts[j]) {
                     keep[j] = false;
                 } else {
                     keep[i] = false;
@@ -186,9 +186,9 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         }
     }
     std::vector<double> final_distances;
-    for (size_t i = 0; i < mean_distance.size(); i++) {
+    for (size_t i = 0; i < mean_distances.size(); i++) {
         if (keep[i]) {
-            final_distances.push_back(mean_distance[i]);
+            final_distances.push_back(mean_distances[i]);
         }
     }
 

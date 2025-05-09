@@ -28,7 +28,7 @@ class PlaneSegmentation {
         PlaneSegmentation();
 
         PlaneDistances segment_planes(pcl::PointCloud<PointT>::Ptr cloud);
-        void setInputCloud(pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud);
+        void setInputCloud(pcl::PointCloud<PointT>::Ptr cloud);
         void computeNormals();
         void group_by_normals();
         std::vector<double> segment_by_distances(Eigen::Vector3f centroid, const std::vector<int>& indices);
