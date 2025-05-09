@@ -59,4 +59,5 @@ add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
   src/hybrid_gen.cpp
+  src/hybrid_swing.cpp
 )

@@ -36,7 +36,7 @@ class Legged: public GaitSelector
 
     private:
         std::array<int, 4> step_count  = {0, 0, 0, 0};
-        int direction = 1;
+        
         bool touchdown;
 
         std::array<double, 4> theta;

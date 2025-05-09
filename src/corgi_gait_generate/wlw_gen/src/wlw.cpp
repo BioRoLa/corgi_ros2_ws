@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
 
     // InputData Input;
     // Input.MaxTDlength = 0.1;
-    // //sqrt(pow(0.340, 2) - pow(Input.Height, 2)); // m 
+    // sqrt(pow(0.340, 2) - pow(Input.Height, 2)); // m 
     // Input.total_time = Input.Distance / Input.Velocity;
 
     // // Define O_list
