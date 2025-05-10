@@ -10,7 +10,7 @@ std::array<double, 2> Hybrid::find_pose(double height, float shift, float steple
     std::array<double, 2> pose;
     double pos[2] = {0, -height + gaitSelector->leg_model.r};
     pose = gaitSelector->leg_model.inverse(pos, "G");
-    if (steplength >= 0) {
+    if (shift + steplength >= 0) {
         for (double i = 0; i < shift + steplength; i += 0.001) {
             pose = gaitSelector->leg_model.move(pose[0], pose[1], {0.001, 0}, slope);
         }
@@ -54,6 +54,8 @@ void Hybrid::Initialize(int swing_index, int set_type) {
                 }
                 break;
         }
+                
+
         for(int i =0; i<4;i++){
             auto tmp0 = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length/2) - (gaitSelector->duty[i]/(1-gaitSelector->swing_time)) * gaitSelector->step_length, 0.0);
             gaitSelector->next_eta[i][0] = tmp0[0];
@@ -258,7 +260,7 @@ void Hybrid::Step(){
             gaitSelector->leg_model.forward(gaitSelector->eta[i][0], gaitSelector->eta[i][1],true);
             std::array<double, 2> result_eta;
             // result_eta = gaitSelector->leg_model.move(current_eta[i][0], current_eta[i][1], {-dS, 0}, 0); 
-            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {-(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), gaitSelector->next_hip[i][1]-gaitSelector->hip[i][1]}, terrain_slope);
+            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {-(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), gaitSelector->next_hip[i][2]-gaitSelector->hip[i][2]}, terrain_slope);
             gaitSelector->eta[i][0] = result_eta[0];
             gaitSelector->eta[i][1] = result_eta[1];
         } 
@@ -280,7 +282,7 @@ void Hybrid::Step(){
 void Hybrid::change_Height(double new_value){
     gaitSelector->stand_height = new_value;
     for (int i=0; i<4; i++) {
-        gaitSelector->next_hip[i][1] = gaitSelector->stand_height;
+        gaitSelector->next_hip[i][2] = gaitSelector->stand_height;
     }
     // add limitation
 }

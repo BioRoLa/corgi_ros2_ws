@@ -18,27 +18,25 @@ int main(int argc, char** argv) {
     int pub_rate = 1000;
     LegModel leg_model(sim);
 
-    // GaitSelector gaitSelector(nh, sim, CoM_bias, pub_rate);
     auto gaitSelector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, pub_rate);
     std::cout << "gaitSelector initialized" << std::endl;
     /*    Initialize of each mode   */ 
     // hybrid mode 
-    // Hybrid hybrid(nh);   
     Hybrid hybrid(gaitSelector); 
 
     /*  wlw initial pose  */
     std::cout << "hybrid" << std::endl;
-    
+    gaitSelector->do_pub = 0;
+    gaitSelector->transfer_state = 0;
     hybrid.Initialize(1, 1);
-    // hybrid.Initialize(2, 300, 0, 0, 5, 2, 0);
-    // hybrid.Initialize(0, 10, 1, 0, 5, 2, 0);
+    hybrid.change_Velocity(0.1);
+    hybrid.change_Height(0.16);
+    hybrid.change_Step_length(0.3);
     // // /*  wlw real-time   */
     // // cout<< "-----wlw------"<<endl;
-    // hybrid.swing_type = SwingType::LINEAR;
-    // cout<< "LINEAR"<<endl;
+
+    gaitSelector->do_pub = 1;
     for (int step = 0;step<50000;step++) {
-        // hybrid.change_Height(0.15-0.03*step/10000);
-        // 前後高度？
         gaitSelector->motor_cmd.header.seq = step;
         gaitSelector->motor_cmd.header.stamp = ros::Time::now();
         hybrid.Step();
