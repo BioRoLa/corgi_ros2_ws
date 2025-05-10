@@ -2840,12 +2840,3 @@ SolidBox {
     metalness 0
   }
 }
-SolidBox {
-  translation 1 0 0.15
-  name "box(1)"
-  size 1 1 0.01
-  appearance PBRAppearance {
-    baseColor 0.7 1 1
-    metalness 0
-  }
-}

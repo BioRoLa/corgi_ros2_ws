@@ -214,7 +214,7 @@ void odom_z_cb(const std_msgs::Float64::ConstPtr &msg){
 void stair_info_cb(const std_msgs::Float32MultiArray::ConstPtr &msg){
     // Process stair information if needed
     // camera
-    camera.data.resize(msg->data.size());
+    // camera.data.resize(msg->data.size());
     camera.data = msg->data;
 
     // float dist = msg->data[0];
@@ -292,12 +292,20 @@ void write_data() {
                 << power_state.v_8 << "," << power_state.i_8 << ","
                 << power_state.v_9 << "," << power_state.i_9 << ","
                 << power_state.v_10 << "," << power_state.i_10 << ","
-                << power_state.v_11 << "," << power_state.i_11 << ","
+                << power_state.v_11 << "," << power_state.i_11 ;
+
+                // camera 資訊
+                if (camera.data.size() >= 2) {
+                    output_file << "," << camera.data[0] << "," << camera.data[1];
+                } else {
+                    output_file << ",NaN,NaN";
+                }
+
+                // 換行 & flush
+                output_file << "\n";
+                output_file.flush();
                 
-                << camera.data[0] << "," << camera.data[1]
-                << "\n";
-                
-    output_file.flush();
+    // output_file.flush();
 }
 
 
