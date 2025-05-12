@@ -84,6 +84,19 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
         d = -d + h_d;
     }
     
+    if (h_plane_distances.size() >= 1 && v_plane_distances.size() >= 1) {
+        Eigen::Vector3f dir = centroid_z.cross(centroid_x); // 交線方向
+        Eigen::Matrix2f A;
+        A << centroid_z.x(), centroid_z.z(),
+            centroid_x.x(), centroid_x.z();
+        Eigen::Vector2f b(h_plane_distances[0], v_plane_distances[0]);
+        Eigen::Vector2f xz = A.inverse() * b;
+        Eigen::Vector3f p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
+        double dist = std::abs(centroid_z.dot(p0) - h_plane_distances[0]) / centroid_z.norm();    // 交線與ground距離
+        std::cout << "stair height: " << dist << std::endl;
+    }
+
+
     return {h_plane_distances, v_plane_distances};
 }//end segment_planes
 
@@ -292,7 +305,7 @@ void PlaneSegmentation::visualize_normal() {
     marker_template.pose.orientation.y = 0.0;
     marker_template.pose.orientation.z = 0.0;
     marker_template.pose.orientation.w = 1.0;  // 這是必要的！不能為 0
-    marker_template.lifetime = ros::Duration(0.1);
+    // marker_template.lifetime = ros::Duration(0.1);
 
     // 空間分格子平均
     float grid_size = 0.10f;
@@ -337,7 +350,6 @@ void PlaneSegmentation::visualize_normal() {
 
     /* Plane normal */
     marker_template.scale.y = 0.001;
-
     // 水平面法向量：centroid_z
     std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> h_grid_map;
     for (int idx : h_point_idx) {
@@ -378,7 +390,6 @@ void PlaneSegmentation::visualize_normal() {
 
         marker_array.markers.push_back(arrow);
     }
-
     // 垂直面法向量：centroid_x
     std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> v_grid_map;
     for (int idx : v_point_idx) {
