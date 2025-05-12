@@ -232,9 +232,9 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     }//end if
 
     std::vector<Eigen::Vector3f> points;
+    int count = 0;
+    Eigen::Vector3f sum_p(0, 0, 0);
     if (mean_distances.size() >= 1 ) {
-        int count = 0;
-        Eigen::Vector3f sum_p(0, 0, 0);
         for (int i : indices) {
             const pcl::Normal& n = normals_->points[i];
             if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
