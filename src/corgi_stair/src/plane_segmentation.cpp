@@ -245,7 +245,6 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
                     p_centroid += position;
                     points.push_back(position);
                 }
-                distances.push_back(d);
             }//end if
         }//end for
     }
@@ -255,7 +254,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         std::cout << "p_centroid: " << p_centroid << std::endl;
         Eigen::MatrixXf A(points.size(), 3);
         for (size_t i = 0; i < points.size(); ++i) {
-            A.row(i) = points[i] - centroid;
+            A.row(i) = points[i] - p_centroid;
         }
         Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
         Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
