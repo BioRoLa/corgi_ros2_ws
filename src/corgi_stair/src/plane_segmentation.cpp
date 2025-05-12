@@ -251,10 +251,10 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
             }//end if
         }//end for
     }
-    Eigen::Vector3f centroid(0, 0, 0);
-    centroid = sum_p / count;
-    std::cout << "sum_p: " << sum_p.transpose() << std::endl;
-    A.resize(points.size(), 3);
+    Eigen::Vector3f p_centroid(0, 0, 0);
+    p_centroid = sum_p / count;
+    std::cout << "p_centroid: " << p_centroid << std::endl;
+    Eigen::MatrixXf A(points.size(), 3);
     for (size_t i = 0; i < points.size(); ++i) {
         A.row(i) = points[i] - centroid;
     }
