@@ -231,6 +231,39 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         in_range = false;
     }//end if
 
+    std::vector<Eigen::Vector3f> points;
+    if (mean_distances.size() >= 1 ) {
+        int count = 0;
+        Eigen::Vector3f sum_p(0, 0, 0);
+        for (int i : indices) {
+            const pcl::Normal& n = normals_->points[i];
+            if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
+                Eigen::Vector3f position(cloud_->points[i].x,
+                                        cloud_->points[i].y,
+                                        cloud_->points[i].z);
+                double d = centroid.dot(position);  // projective distance
+                if (d > mean_distances[0]-bin_width && d < mean_distances[0]+bin_width) {
+                    count++;
+                    sum_p += position;
+                    points.push_back(position);
+                }
+                distances.push_back(d);
+            }//end if
+        }//end for
+    }
+    Eigen::Vector3f centroid(0, 0, 0);
+    centroid = sum_p / count;
+    std::cout << "sum_p: " << sum_p.transpose() << std::endl;
+    A.resize(points.size(), 3);
+    for (size_t i = 0; i < points.size(); ++i) {
+        A.row(i) = points[i] - centroid;
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
+    std::cout << "before normal: " << centroid << std::endl;
+    std::cout << "after  normal: " << normal << std::endl;
+
+    
     /* Only keep max bin in a range (merge_threshold) */
     std::vector<bool> keep(mean_distances.size(), true);
     for (size_t i = 0; i < mean_distances.size(); i++) {
