@@ -8,6 +8,7 @@ corgi_msgs::ForceStateStamped force_state;
 corgi_msgs::MotorStateStamped motor_state;
 geometry_msgs::Vector3 odom_pos;
 geometry_msgs::Vector3 odom_vel;
+double odom_z;
 sensor_msgs::Imu imu;
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg){
@@ -34,6 +35,10 @@ void odom_vel_cb(const geometry_msgs::Vector3::ConstPtr &msg){
     odom_vel = *msg;
 }
 
+void odom_z_cb(const std_msgs::Float64::ConstPtr &msg){
+    odom_z = msg->data;
+}
+
 void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
     imu = *msg;
 }
@@ -48,7 +53,7 @@ void convert_force_to_local(double *f_global, const Eigen::Matrix3d& R_T) {
 
 
 int main(int argc, char **argv) {
-    ROS_INFO("Corgi WLW Starts");
+    ROS_INFO("Corgi MPC Starts");
 
     ModelPredictiveController mpc;
 
@@ -56,23 +61,33 @@ int main(int argc, char **argv) {
 
     ros::NodeHandle nh;
     ros::Publisher imp_cmd_pub = nh.advertise<corgi_msgs::ImpedanceCmdStamped>("impedance/command", 1000);
+    ros::Publisher contact_pub = nh.advertise<corgi_msgs::ContactStateStamped>("odometry/contact", 1000);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
     ros::Subscriber sim_data_sub = nh.subscribe<corgi_msgs::SimDataStamped>("sim/data", 1000, sim_data_cb);
     ros::Subscriber force_state_sub = nh.subscribe<corgi_msgs::ForceStateStamped>("force/state", 1000, force_state_cb);
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber odom_pos_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/position", 1000, odom_pos_cb);
     ros::Subscriber odom_vel_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/velocity", 1000, odom_vel_cb);
+    ros::Subscriber odom_z_sub = nh.subscribe<std_msgs::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
 
     ros::Rate rate(mpc.freq);
 
     corgi_msgs::ImpedanceCmdStamped imp_cmd;
+    corgi_msgs::ContactStateStamped contact_state;
 
     std::vector<corgi_msgs::ImpedanceCmd*> imp_cmd_modules = {
         &imp_cmd.module_a,
         &imp_cmd.module_b,
         &imp_cmd.module_c,
         &imp_cmd.module_d
+    };
+
+    std::vector<corgi_msgs::ContactState*> contact_state_modules = {
+        &contact_state.module_a,
+        &contact_state.module_b,
+        &contact_state.module_c,
+        &contact_state.module_d
     };
 
     std::vector<corgi_msgs::ForceState*> force_state_modules = {
@@ -89,32 +104,34 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    // initialize gait
+    // Initialize gait
     double CoM_bias = 0.0;
 
-    GaitSelector gait_selector(nh, sim, CoM_bias, mpc.freq);
-    Hybrid hybrid_gait(nh);
-    hybrid_gait.pub_rate = mpc.freq;
+    auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, mpc.freq);
+    gait_selector->do_pub = 0;
+    Hybrid hybrid_gait(gait_selector); 
 
     std::cout << "hybrid" << std::endl;
-    gait_selector.stand_height = 0.16;
-    gait_selector.step_length = 0.3;
-    hybrid_gait.Initialize(0, 0, 0, 0, 0, 0, -0.03);
+    double velocity = 0.1;
+    hybrid_gait.Initialize(1, 1);
+    hybrid_gait.change_Velocity(velocity);
+    hybrid_gait.change_Height(0.16);
+    hybrid_gait.change_Step_length(0.3);
+    bool touched[4] = {true, true, true, true};
+    bool selection_matrix[4] = {true, true, true, true};
+
+    mpc.target_pos_z = 0.16;
 
     double init_eta[8];
     for (int i=0; i<4; i++) {
-        init_eta[2*i] = gait_selector.eta[i][0];
-        init_eta[2*i+1] = gait_selector.eta[i][1];
+        init_eta[2*i] = gait_selector->eta[i][0];
+        init_eta[2*i+1] = gait_selector->eta[i][1];
     }
 
     init_eta[3] *= -1;
     init_eta[5] *= -1;
-    
-    double velocity = 0.1;
-    bool touched[4] = {true, true, true, true};
-    bool selection_matrix[4] = {true, true, true, true};
 
-    // initialize impedance command
+    // Initialize impedance command
     for (auto& cmd : imp_cmd_modules){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
@@ -130,18 +147,18 @@ int main(int argc, char **argv) {
 
     ROS_INFO("Wait For Force Control Node ...\n");
     
-    // wait for force control node
-    for (int i=0; i<300; i++) {
-        rate.sleep();
+    if (!sim) {
+        for (int i=0; i<int(3*mpc.freq); i++) {
+            rate.sleep();
+        }
     }
 
     ROS_INFO("Transform Starts\n");
 
-    // transform
-    for (int i=0; i<300; i++) {
+    for (int i=0; i<int(3*mpc.freq); i++) {
         for (int j=0; j<4; j++) {
-            imp_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/300.0;
-            imp_cmd_modules[j]->beta += init_eta[2*j+1]/300.0;
+            imp_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/(3*mpc.freq);
+            imp_cmd_modules[j]->beta += init_eta[2*j+1]/(3*mpc.freq);
         }
         imp_cmd.header.seq = -1;
         imp_cmd_pub.publish(imp_cmd);
@@ -151,20 +168,26 @@ int main(int argc, char **argv) {
     ROS_INFO("Transform Finished\n");
 
     // stay
-    for (int i=0; i<100; i++) {
+    for (int i=0; i<int(2*mpc.freq); i++) {
         imp_cmd.header.seq = -1;
         imp_cmd_pub.publish(imp_cmd);
         rate.sleep();
     }
+    
 
     while (ros::ok()) {
         ros::spinOnce();
         if (trigger){
             ROS_INFO("Wait For Odometry Node Initializing ...\n");
 
-            // wait for odometry node
-            for (int i=0; i<500; i++) {
-                rate.sleep();
+            if (!sim) {
+                for (int i=0; i<int(3*mpc.freq); i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
+                    rate.sleep();
+                }
             }
             
             for (auto& cmd : imp_cmd_modules){
@@ -181,12 +204,12 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 // update target vel and pos
-                if (loop_count < 300) {
-                    mpc.target_vel_x += velocity/300.0;
+                if (loop_count < int(1*mpc.freq)) {
+                    mpc.target_vel_x += velocity/(1*mpc.freq);
                     hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
-                else if (loop_count > mpc.target_loop-300 && loop_count < mpc.target_loop) {
-                    mpc.target_vel_x -= velocity/300.0;
+                else if (loop_count > mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
+                    mpc.target_vel_x -= velocity/(1*mpc.freq);
                     hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
 
@@ -196,28 +219,37 @@ int main(int argc, char **argv) {
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt;
 
                 // get next eta
-                hybrid_gait.Step(0, 0, -0.03);
+                hybrid_gait.Step();
 
                 for (int i=0; i<4; i++) {
-                    mpc.eta_list[0][i] = gait_selector.eta[i][0];
-                    mpc.eta_list[1][i] = gait_selector.eta[i][1];
+                    mpc.eta_list[0][i] = gait_selector->eta[i][0];
+                    mpc.eta_list[1][i] = gait_selector->eta[i][1];
                 }
 
                 for (int i=0; i<4; i++) {
                     imp_cmd_modules[i]->theta = mpc.eta_list[0][i];
                     imp_cmd_modules[i]->beta = (i == 0 || i == 3) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
-                    if (gait_selector.swing_phase[i] == 1 && touched[i]) {
+                    if (gait_selector->swing_phase[i] == 1 && touched[i]) {
                         selection_matrix[i] = false;
                         touched[i] = false;
                         imp_cmd_modules[i]->By = mpc.By_swing;
                         imp_cmd_modules[i]->Ky = mpc.Ky_swing;
+                        
+                        check_contact_state(i, contact_state_modules);
                     }
-                    else if (gait_selector.swing_phase[i] == 0 && !touched[i]) {
+                    else if (gait_selector->swing_phase[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
                         touched[i] = true;
                         imp_cmd_modules[i]->By = mpc.By_stance;
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
+
+                    // if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
+                    //     contact_state_modules[i]->contact = true;
+                    // }
+                    // else {
+                    //     contact_state_modules[i]->contact = false;
+                    // }
                 }
 
                 // update state
@@ -227,13 +259,12 @@ int main(int argc, char **argv) {
                 
                 mpc.robot_pos[0] = odom_pos.x;
                 mpc.robot_pos[1] = odom_pos.y;
-                mpc.robot_pos[2] = odom_pos.z;
+                // mpc.robot_pos[2] = odom_pos.z;
+                mpc.robot_pos[2] = odom_z;
 
-                // mpc.target_pos_z = 0.16;
-
-                // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/0.01;
-                // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/0.01;
-                // mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/0.01;
+                // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
+                // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
+                // mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
                 
                 // mpc.robot_pos[0] = sim_data.position.x;
                 // mpc.robot_pos[1] = sim_data.position.y;
@@ -246,7 +277,7 @@ int main(int argc, char **argv) {
                 
                 mpc.robot_ang_vel[0] = imu.angular_velocity.x;
                 mpc.robot_ang_vel[1] = imu.angular_velocity.y;
-                mpc.robot_ang_vel[0] = imu.angular_velocity.z;
+                mpc.robot_ang_vel[2] = imu.angular_velocity.z;
 
                 quaternion_to_euler(mpc.robot_ang, mpc.roll, mpc.pitch, mpc.yaw);
                 if (!sim) {
@@ -255,17 +286,19 @@ int main(int argc, char **argv) {
                 }
 
                 Eigen::VectorXd x(mpc.n_x);
-                x << mpc.robot_pos[0],     mpc.robot_pos[1],     mpc.robot_pos[2],
+                x << mpc.roll,             mpc.pitch,            mpc.yaw,
+                     mpc.robot_pos[0],     mpc.robot_pos[1],     mpc.robot_pos[2],
+                     mpc.robot_ang_vel[0], mpc.robot_ang_vel[1], mpc.robot_ang_vel[2],
                      mpc.robot_vel[0],     mpc.robot_vel[1],     mpc.robot_vel[2],
-                     mpc.roll,             mpc.pitch,            mpc.yaw,
-                     mpc.robot_ang_vel[0], mpc.robot_ang_vel[1], mpc.robot_ang_vel[2];
+                     -mpc.gravity;
 
-                Eigen::VectorXd x_ref = Eigen::VectorXd::Zero(mpc.N * mpc.n_x);
-                for (int i = 0; i < mpc.N; ++i) {
-                    x_ref.segment(i * mpc.n_x, mpc.n_x) << mpc.target_pos_x, 0, mpc.target_pos_z,
-                                                           mpc.target_vel_x, 0, mpc.target_vel_z,
+                Eigen::VectorXd x_ref = Eigen::VectorXd::Zero((mpc.N-1) * mpc.n_x);
+                for (int i = 0; i < mpc.N-1; ++i) {
+                    x_ref.segment(i * mpc.n_x, mpc.n_x) << 0,                0,                0,
+                                                           mpc.target_pos_x, 0, mpc.target_pos_z,
                                                            0,                0,                0,
-                                                           0,                0,                0;
+                                                           mpc.target_vel_x, 0, mpc.target_vel_z,
+                                                           -mpc.gravity;
                 }
 
                 // model predictive control
@@ -288,41 +321,46 @@ int main(int argc, char **argv) {
                 double force_D[3] = {force(9), force(10), force(11)};
 
                 Eigen::Matrix3d R_T = mpc.robot_ang.toRotationMatrix().transpose();
-                R_T(1, 2) *= -1;
-                R_T(2, 1) *= -1;
-
+                if (!sim) {
+                    R_T(1, 2) *= -1;
+                    R_T(2, 1) *= -1;
+                }
+                
                 convert_force_to_local(force_A, R_T);
                 convert_force_to_local(force_B, R_T);
                 convert_force_to_local(force_C, R_T);
                 convert_force_to_local(force_D, R_T);
 
 
-                imp_cmd_modules[0]->Fx =  force_A[0];
+                imp_cmd_modules[0]->Fx = -force_A[0];
                 imp_cmd_modules[0]->Fy = -force_A[2];
-                imp_cmd_modules[1]->Fx = -force_B[0];
+                imp_cmd_modules[1]->Fx =  force_B[0];
                 imp_cmd_modules[1]->Fy = -force_B[2];
-                imp_cmd_modules[2]->Fx = -force_C[0];
+                imp_cmd_modules[2]->Fx =  force_C[0];
                 imp_cmd_modules[2]->Fy = -force_C[2];
-                imp_cmd_modules[3]->Fx =  force_D[0];
+                imp_cmd_modules[3]->Fx = -force_D[0];
                 imp_cmd_modules[3]->Fy = -force_D[2];
 
                 imp_cmd.header.seq = loop_count;
                 imp_cmd_pub.publish(imp_cmd);
 
+                contact_state.header.seq = loop_count;
+                // contact_pub.publish(contact_state);
+
                 std::cout << std::fixed << std::setprecision(3);
-                std::cout << "Ref Pos = [" << x_ref[0] << ", " << x_ref[1] << ", " << x_ref[2] << "]" << std::endl << std::endl;
+                std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;
                 std::cout << "Odom Pos = [" << mpc.robot_pos[0] << ", " << mpc.robot_pos[1] << ", " << mpc.robot_pos[2] << "]" << std::endl;
                 std::cout << "Odom Vel = [" << mpc.robot_vel[0] << ", " << mpc.robot_vel[1] << ", " << mpc.robot_vel[2] << "]" << std::endl;
                 std::cout << "Odom Ang (deg) = [" << mpc.roll/M_PI*180 << ", " << mpc.pitch/M_PI*180 << ", " << mpc.yaw/M_PI*180 << "]" << std::endl << std::endl;
 
-                std::cout << "Force A: [" << -force_A[0] << ", " << force_A[2] << "]" << std::endl;
-                std::cout << "State A: [" << force_state_modules[0]->Fx << ", " << force_state_modules[0]->Fy << "]" << " " << selection_matrix[0] << std::endl << std::endl;
-                std::cout << "Force B: [" << -force_B[0] << ", " << force_B[2] << "]" << std::endl;
-                std::cout << "State B: [" << force_state_modules[1]->Fx << ", " << force_state_modules[1]->Fy << "]" << " " << selection_matrix[1] << std::endl << std::endl;
-                std::cout << "Force C: [" << -force_C[0] << ", " << force_C[2] << "]" << std::endl;
-                std::cout << "State C: [" << force_state_modules[2]->Fx << ", " << force_state_modules[2]->Fy << "]" << " " << selection_matrix[2] << std::endl << std::endl;
-                std::cout << "Force D: [" << -force_D[0] << ", " << force_D[2] << "]" << std::endl;
-                std::cout << "State D: [" << force_state_modules[3]->Fx << ", " << force_state_modules[3]->Fy << "]" << " " << selection_matrix[3] << std::endl << std::endl;
+                std::cout << "Force A: [" << force_A[0] << ", " << force_A[2] << "]" << std::endl;
+                std::cout << "State A: [" << force_state_modules[0]->Fx << ", " << force_state_modules[0]->Fy << "]" << std::endl << std::endl;
+                std::cout << "Force B: [" << force_B[0] << ", " << force_B[2] << "]" << std::endl;
+                std::cout << "State B: [" << force_state_modules[1]->Fx << ", " << force_state_modules[1]->Fy << "]" << std::endl << std::endl;
+                std::cout << "Force C: [" << force_C[0] << ", " << force_C[2] << "]" << std::endl;
+                std::cout << "State C: [" << force_state_modules[2]->Fx << ", " << force_state_modules[2]->Fy << "]" << std::endl << std::endl;
+                std::cout << "Force D: [" << force_D[0] << ", " << force_D[2] << "]" << std::endl;
+                std::cout << "State D: [" << force_state_modules[3]->Fx << ", " << force_state_modules[3]->Fy << "]" << std::endl << std::endl;
 
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 

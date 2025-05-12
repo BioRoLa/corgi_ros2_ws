@@ -2,5 +2,6 @@
     <node name="force_control" pkg="corgi_force_control" type="force_control" output="log"/>
     <node name="corgi_odometry" pkg="corgi_odometry" type="corgi_odometry" args="TEST" output="log"/>
     <node name="corgi_z_position" pkg="corgi_odometry" type="corgi_z_position" args="TEST" output="log"/>
-    <node name="corgi_mpc" pkg="corgi_mpc" type="walk_closed_loop" output="screen"/>
+    <!-- <node name="corgi_mpc" pkg="corgi_mpc" type="walk_closed_loop" output="screen"/> -->
+    <node name="corgi_mpc" pkg="corgi_mpc" type="wlw_closed_loop" output="screen"/>
 </launch>

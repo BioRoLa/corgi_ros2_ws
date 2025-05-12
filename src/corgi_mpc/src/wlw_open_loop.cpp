@@ -148,12 +148,15 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 for (int i=0; i<4; i++) {
-                    if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
-                        contact_state_modules[i]->contact = true;
+                    if (gait_selector->swing_phase[i] == 1) {
+                        check_contact_state(i, contact_state_modules);
                     }
-                    else {
-                        contact_state_modules[i]->contact = false;
-                    }
+                    // if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
+                    //     contact_state_modules[i]->contact = true;
+                    // }
+                    // else {
+                    //     contact_state_modules[i]->contact = false;
+                    // }
                 }
 
                 // update target vel and pos
@@ -194,7 +197,7 @@ int main(int argc, char **argv) {
                 motor_cmd_pub.publish(motor_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;
