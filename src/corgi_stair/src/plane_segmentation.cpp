@@ -434,7 +434,6 @@ void PlaneSegmentation::visualize_normal() {
     // 刪除多餘的舊 marker
     visualization_msgs::Marker delete_marker;
     delete_marker.action = visualization_msgs::Marker::DELETE;
-    delete_marker.ns = "normals";
     for (int i = id; i < last_marker_count_; ++i) {
         delete_marker.id = i;
         marker_array.markers.push_back(delete_marker);
