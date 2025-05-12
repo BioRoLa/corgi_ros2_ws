@@ -64,6 +64,26 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     this->visualize_planes();
     this->visualize_normal();
 
+    Eigen::Vector3f base_link_pos;
+    try {
+        geometry_msgs::TransformStamped transformStamped = 
+            tf_buffer_.lookupTransform(target_frame, "base_link", ros::Time(0), ros::Duration(1.0));
+        
+        base_link_pos.x() = transformStamped.transform.translation.x;
+        base_link_pos.y() = transformStamped.transform.translation.y;
+        base_link_pos.z() = transformStamped.transform.translation.z;
+    } catch (tf2::TransformException &ex) {
+        ROS_WARN("TF error: %s", ex.what());
+    }
+    v_d = base_link_pos.dot(centroid_z);
+    h_d = base_link_pos.dot(centroid_x);
+    for (double& d : h_plane_distances) {
+        d -= h_d;
+    }
+    for (double& d : v_plane_distances) {
+        d = -d + v_d;
+    }
+    
     return {h_plane_distances, v_plane_distances};
 }//end segment_planes
 
