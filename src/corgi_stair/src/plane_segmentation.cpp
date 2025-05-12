@@ -260,6 +260,9 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
         std::cout << "before normal: " << centroid << std::endl;
         std::cout << "after  normal: " << normal << std::endl;
+        std::cout << "before d: " << mean_distances[0] << std::endl;
+        std::cout << "after  d: " << -normal.dot(p_centroid) << std::endl;
+
     }
 
     
