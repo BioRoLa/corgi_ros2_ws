@@ -78,10 +78,10 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     double v_d = base_link_pos.dot(centroid_z);
     double h_d = base_link_pos.dot(centroid_x);
     for (double& d : h_plane_distances) {
-        d -= v_d;
+        // d -= v_d;
     }
     for (double& d : v_plane_distances) {
-        d = -d + h_d;
+        // d = -d + h_d;
     }
     
     if (h_plane_distances.size() >= 1 && v_plane_distances.size() >= 1) {
@@ -430,6 +430,16 @@ void PlaneSegmentation::visualize_normal() {
 
         marker_array.markers.push_back(arrow);
     }
+
+    // 刪除多餘的舊 marker
+    visualization_msgs::Marker delete_marker;
+    delete_marker.action = visualization_msgs::Marker::DELETE;
+    delete_marker.ns = "normals";
+    for (int i = id; i < last_marker_count_; ++i) {
+        delete_marker.id = i;
+        marker_array.markers.push_back(delete_marker);
+    }
+    last_marker_count_ = id;  // 記住這次用了幾個 marker
 
     normal_pub.publish(marker_array);
 }//end visualize_normal

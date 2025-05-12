@@ -56,6 +56,8 @@ class PlaneSegmentation {
         ros::Publisher pub;
         ros::Publisher normal_pub;
         ros::NodeHandle nh;
+
+        int last_marker_count_ = 0; // 用於記錄上次發佈的 marker 數量
 };
 
 #endif // PLANESEG_HPP
