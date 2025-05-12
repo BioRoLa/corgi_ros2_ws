@@ -32,6 +32,7 @@ int main(int argc, char **argv) {
     double CoM_bias = 0.0;
 
     auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, 1000);
+    gait_selector->do_pub = 0;
     Hybrid hybrid_gait(gait_selector); 
 
     std::cout << "hybrid" << std::endl;
