@@ -75,8 +75,8 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     } catch (tf2::TransformException &ex) {
         ROS_WARN("TF error: %s", ex.what());
     }
-    v_d = base_link_pos.dot(centroid_z);
-    h_d = base_link_pos.dot(centroid_x);
+    double v_d = base_link_pos.dot(centroid_z);
+    double h_d = base_link_pos.dot(centroid_x);
     for (double& d : h_plane_distances) {
         d -= h_d;
     }
