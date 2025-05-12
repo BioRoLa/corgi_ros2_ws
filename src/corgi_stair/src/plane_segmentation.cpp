@@ -232,8 +232,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     }//end if
 
     std::vector<Eigen::Vector3f> points;
-    int count = 0;
-    Eigen::Vector3f sum_p(0, 0, 0);
+    Eigen::Vector3f p_centroid(0, 0, 0);
     if (mean_distances.size() >= 1 ) {
         for (int i : indices) {
             const pcl::Normal& n = normals_->points[i];
@@ -243,25 +242,26 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
                                         cloud_->points[i].z);
                 double d = centroid.dot(position);  // projective distance
                 if (d > mean_distances[0]-bin_width && d < mean_distances[0]+bin_width) {
-                    count++;
-                    sum_p += position;
+                    p_centroid += position;
                     points.push_back(position);
                 }
                 distances.push_back(d);
             }//end if
         }//end for
     }
-    Eigen::Vector3f p_centroid(0, 0, 0);
-    p_centroid = sum_p / count;
-    std::cout << "p_centroid: " << p_centroid << std::endl;
-    Eigen::MatrixXf A(points.size(), 3);
-    for (size_t i = 0; i < points.size(); ++i) {
-        A.row(i) = points[i] - centroid;
+
+    if (points.size() >= 1) {
+        p_centroid /= static_cast<double>(points.size());
+        std::cout << "p_centroid: " << p_centroid << std::endl;
+        Eigen::MatrixXf A(points.size(), 3);
+        for (size_t i = 0; i < points.size(); ++i) {
+            A.row(i) = points[i] - centroid;
+        }
+        Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
+        std::cout << "before normal: " << centroid << std::endl;
+        std::cout << "after  normal: " << normal << std::endl;
     }
-    Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
-    std::cout << "before normal: " << centroid << std::endl;
-    std::cout << "after  normal: " << normal << std::endl;
 
     
     /* Only keep max bin in a range (merge_threshold) */
