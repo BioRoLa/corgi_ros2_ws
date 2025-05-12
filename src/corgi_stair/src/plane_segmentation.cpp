@@ -78,10 +78,10 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     double v_d = base_link_pos.dot(centroid_z);
     double h_d = base_link_pos.dot(centroid_x);
     for (double& d : h_plane_distances) {
-        d -= h_d;
+        d -= v_d;
     }
     for (double& d : v_plane_distances) {
-        d = -d + v_d;
+        d = -d + h_d;
     }
     
     return {h_plane_distances, v_plane_distances};
