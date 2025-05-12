@@ -84,12 +84,12 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
         // d = -d + h_d;
     }
     
-    if (h_plane_distances.size() >= 1 && v_plane_distances.size() >= 1) {
+    if (h_plane_distances.size() >= 2 && v_plane_distances.size() >= 1) {
         Eigen::Vector3f dir = centroid_z.cross(centroid_x); // 交線方向
         Eigen::Matrix2f A;
         A << centroid_z.x(), centroid_z.z(),
             centroid_x.x(), centroid_x.z();
-        Eigen::Vector2f b(h_plane_distances[0], v_plane_distances[0]);
+        Eigen::Vector2f b(h_plane_distances[1], v_plane_distances[0]);
         Eigen::Vector2f xz = A.inverse() * b;
         Eigen::Vector3f p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
         double dist = std::abs(centroid_z.dot(p0) - h_plane_distances[0]) / centroid_z.norm();    // 交線與ground距離
