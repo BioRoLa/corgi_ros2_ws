@@ -67,7 +67,7 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     Eigen::Vector3f base_link_pos;
     try {
         geometry_msgs::TransformStamped transformStamped = 
-            tf_buffer_.lookupTransform(target_frame, "base_link", ros::Time(0), ros::Duration(1.0));
+            tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
         
         base_link_pos.x() = transformStamped.transform.translation.x;
         base_link_pos.y() = transformStamped.transform.translation.y;
