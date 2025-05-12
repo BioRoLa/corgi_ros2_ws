@@ -194,20 +194,30 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     std::vector<double> mean_distances;
     double sum_count;
     double sum_value;
+    int max_bin_index;
+    int max_bin_value;
+
     for (int i = 0; i < bin_count; ++i) {   // from smallest distance
         if (histogram[i] >= one_bin_point_threshold) {
             if (!in_range) {
                 in_range = true;
                 sum_count = histogram[i];
                 sum_value = bin_values[i];
+                max_bin_index = i;
+                max_bin_value = histogram[i];
             } else {
                 sum_count += histogram[i];
                 sum_value += bin_values[i];
+                if (histogram[i] > max_bin_value) {
+                    max_bin_index = i;
+                    max_bin_value = histogram[i];
+                }
             }//end if else
         } else if (in_range) {
             if (sum_count >= total_point_threshold) {
                 total_counts.push_back(sum_count);
-                mean_distances.push_back(sum_value / sum_count);
+                // mean_distances.push_back(sum_value / sum_count);
+                mean_distances.push_back(bin_values[max_bin_index]);
             }//end if
             in_range = false;
         }//end if else
@@ -215,7 +225,8 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     if (in_range) {
         if (sum_count >= total_point_threshold) {
             total_counts.push_back(sum_count);
-            mean_distances.push_back(sum_value / sum_count);
+            // mean_distances.push_back(sum_value / sum_count);
+            mean_distances.push_back(bin_values[max_bin_index]);
         }//end if
         in_range = false;
     }//end if
