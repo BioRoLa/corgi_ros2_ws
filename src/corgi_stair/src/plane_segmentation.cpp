@@ -185,7 +185,8 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     for (double d : distances) {
         int bin = static_cast<int>((d - min_val) / bin_width);
         histogram[bin]++;
-        bin_values[bin] += d;
+        // bin_values[bin] += d;
+        bin_values[bin] = d;
     }//end for
     
     /* 找出連續高密度 bin */
