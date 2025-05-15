@@ -39,18 +39,30 @@ int main(int argc, char **argv) {
         cmd->Fy = 0;
         cmd->Mx = 0;
         cmd->My = 0;
-        cmd->Bx = 30;
+        cmd->Bx = 80;
         cmd->By = 10;
-        cmd->Kx = 500;
-        cmd->Ky = 200;
+        cmd->Kx = 2000;
+        cmd->Ky = 100;
     }
 
     std::array<double, 2> eta;
     double ds = 0.0;
-    double mg = 19.5*9.81;
+    double mg = 20.6*9.81;
+
+    double s = 0.0;
+    double h = 0.0;
     
     for (int i=0; i<2000; i++){
-        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {0/2000.0, 0.03/2000.0});
+        // s = 0.25;
+        // h = 0.03;
+    
+        // s = 0.12;
+        // h = 0.06;
+    
+        s = 0.12;
+        h = 0.09;
+
+        eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {-s/2000.0, h/2000.0});
         
         imp_cmd_modules[0]->theta = eta[0];
         imp_cmd_modules[1]->theta = eta[0];
@@ -84,10 +96,22 @@ int main(int argc, char **argv) {
             int loop_count = 0;
             while (ros::ok()) {
                 if (loop_count < 2000) {
-
+                    ds = 0.0;
                 }
-                else if (loop_count < 22000) {
-                    ds = 0.08*M_PI/2000.0*sin((loop_count-2000)*M_PI/2000.0);
+                else if (loop_count < 10000) {
+                    if (loop_count < 2200) { ds += s/2000.0/200.0; }
+                    else if (loop_count < 3800) { ds =   s/2000.0; }
+                    else if (loop_count < 4000) { ds -=  s/2000.0/200.0; }
+                    else if (loop_count < 4200) { ds -=  s/2000.0/200.0; }
+                    else if (loop_count < 5800) { ds =  -s/2000.0; }
+                    else if (loop_count < 6000) { ds +=  s/2000.0/200.0; }
+                    else if (loop_count < 6200) { ds +=  s/2000.0/200.0; }
+                    else if (loop_count < 7800) { ds =   s/2000.0; }
+                    else if (loop_count < 8000) { ds -=  s/2000.0/200.0; }
+                    else if (loop_count < 8200) { ds -=  s/2000.0/200.0; }
+                    else if (loop_count < 9800) { ds =  -s/2000.0; }
+                    else if (loop_count < 10000) { ds += s/2000.0/200.0; }
+
                     eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {ds, 0.0});
 
                     imp_cmd_modules[0]->theta = eta[0];
@@ -108,12 +132,19 @@ int main(int argc, char **argv) {
                     imp_cmd_modules[2]->Fy = f_hind;
                     imp_cmd_modules[3]->Fy = f_hind;
 
-                    if (loop_count > 12000) {
-                        imp_cmd_modules[0]->Fy += 10 * sin((loop_count-2000)/1000.0*M_PI);
-                        imp_cmd_modules[1]->Fy -= 10 * sin((loop_count-2000)/1000.0*M_PI);
-                        imp_cmd_modules[2]->Fy += 10 * sin((loop_count-2000)/1000.0*M_PI);
-                        imp_cmd_modules[3]->Fy -= 10 * sin((loop_count-2000)/1000.0*M_PI);
+                    if (loop_count > 6000 && loop_count < 10000) {
+                        imp_cmd_modules[0]->Fy += 10 * sin((loop_count-2000)/500.0*M_PI);
+                        imp_cmd_modules[1]->Fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
+                        imp_cmd_modules[2]->Fy += 10 * sin((loop_count-2000)/500.0*M_PI);
+                        imp_cmd_modules[3]->Fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
                     }
+                    // else if (loop_count > 8000 && loop_count < 10000) {
+                    //     imp_cmd_modules[0]->Fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
+                    //     imp_cmd_modules[1]->Fy += 10 * sin((loop_count-2000)/500.0*M_PI);
+                    //     imp_cmd_modules[2]->Fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
+                    //     imp_cmd_modules[3]->Fy += 10 * sin((loop_count-2000)/500.0*M_PI);
+                    // }
+
                 }
                 else {
                     break;
