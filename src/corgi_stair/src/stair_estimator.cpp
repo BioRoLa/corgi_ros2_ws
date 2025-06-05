@@ -89,14 +89,14 @@ int main(int argc, char** argv) {
             if (i < plane_msg.horizontal.size())
                 csv << std::fixed << std::setprecision(4) << plane_msg.horizontal[i];
             else
-                csv << ",";
+                csv << "0";
             csv << ",";
         }//end for
         for (int i=0; i<10; i++) {
             if (i < plane_msg.vertical.size())
                 csv << std::fixed << std::setprecision(4) << plane_msg.vertical[i];
             else 
-                csv << ",";
+                csv << "0";
             csv << ",";
         }//end for
         csv << "\n";
