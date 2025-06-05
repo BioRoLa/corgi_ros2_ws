@@ -24,6 +24,10 @@ struct TrackedPlane {
     bool is_close(double d, double threshold = 0.03) const {
         return std::abs(average() - d) <= threshold;
     }
+
+    bool is_stable(size_t required_count = 5) const {
+        return recent_distances.size() >= required_count;
+    }
 };
 
 struct PlaneTracker {
@@ -67,14 +71,16 @@ struct PlaneTracker {
     std::vector<double> get_horizontal_averages() const {
         std::vector<double> result;
         for (const auto& p : horizontal_planes)
-            result.push_back(p.average());
+            if (p.is_stable())
+                result.push_back(p.average());
         return result;
     }
 
     std::vector<double> get_vertical_averages() const {
         std::vector<double> result;
         for (const auto& p : vertical_planes)
-            result.push_back(p.average());
+            if (p.is_stable())
+                result.push_back(p.average());
         return result;
     }
 };
