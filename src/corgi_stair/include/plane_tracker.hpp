@@ -21,7 +21,7 @@ struct TrackedPlane {
         return sum / recent_distances.size();
     }
 
-    bool is_close(double d, double threshold = 0.05) const {
+    bool is_close(double d, double threshold = 0.03) const {
         return std::abs(average() - d) <= threshold;
     }
 };

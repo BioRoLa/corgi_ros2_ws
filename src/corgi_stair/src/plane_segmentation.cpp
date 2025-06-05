@@ -75,26 +75,26 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     } catch (tf2::TransformException &ex) {
         ROS_WARN("TF error: %s", ex.what());
     }
-    double v_d = base_link_pos.dot(centroid_z);
-    double h_d = base_link_pos.dot(centroid_x);
-    for (double& d : h_plane_distances) {
-        // d -= v_d;
-    }
-    for (double& d : v_plane_distances) {
-        // d = -d + h_d;
-    }
+    // double v_d = base_link_pos.dot(centroid_z);
+    // double h_d = base_link_pos.dot(centroid_x);
+    // for (double& d : h_plane_distances) {
+    //     // d -= v_d;
+    // }
+    // for (double& d : v_plane_distances) {
+    //     // d = -d + h_d;
+    // }
     
-    if (h_plane_distances.size() >= 2 && v_plane_distances.size() >= 1) {
-        Eigen::Vector3f dir = centroid_z.cross(centroid_x); // 交線方向
-        Eigen::Matrix2f A;
-        A << centroid_z.x(), centroid_z.z(),
-            centroid_x.x(), centroid_x.z();
-        Eigen::Vector2f b(h_plane_distances[1], v_plane_distances[0]);
-        Eigen::Vector2f xz = A.inverse() * b;
-        Eigen::Vector3f p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
-        double dist = std::abs(centroid_z.dot(p0) - h_plane_distances[0]) / centroid_z.norm();    // 交線與ground距離
-        std::cout << "stair height: " << dist << std::endl;
-    }
+    // if (h_plane_distances.size() >= 2 && v_plane_distances.size() >= 1) {
+    //     Eigen::Vector3f dir = centroid_z.cross(centroid_x); // 交線方向
+    //     Eigen::Matrix2f A;
+    //     A << centroid_z.x(), centroid_z.z(),
+    //         centroid_x.x(), centroid_x.z();
+    //     Eigen::Vector2f b(h_plane_distances[1], v_plane_distances[0]);
+    //     Eigen::Vector2f xz = A.inverse() * b;
+    //     Eigen::Vector3f p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
+    //     double dist = std::abs(centroid_z.dot(p0) - h_plane_distances[0]) / centroid_z.norm();    // 交線與ground距離
+    //     std::cout << "stair height: " << dist << std::endl;
+    // }
 
 
     return {h_plane_distances, v_plane_distances};
@@ -111,7 +111,7 @@ void PlaneSegmentation::setInputCloud(pcl::PointCloud<PointT>::Ptr cloud) {
     pass_.setFilterLimits(-0.4, 0.4);
     pass_.filter(*cloud);
     pass_.setFilterFieldName("z");
-    pass_.setFilterLimits(-0.5, 1.0);
+    pass_.setFilterLimits(-0.5, 1.5);
     pass_.filter(*cloud);
     /* Transform from camera coord to world coord */
     pcl_ros::transformPointCloud("map", *cloud, *cloud, tf_buffer_);
@@ -156,7 +156,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     const double bin_width = 0.001; // 1mm
     const int one_bin_point_threshold = 100;    // 100 points
     const int total_point_threshold   = 1000;    // 5000 points
-    const double merge_threshold = 0.05;    // 5cm
+    const double merge_threshold = 0.03;    // 5cm
     const int num_clusters = 2;
 
     /* Calculate distances */
@@ -231,39 +231,37 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         in_range = false;
     }//end if
 
-    std::vector<Eigen::Vector3f> points;
-    Eigen::Vector3f p_centroid(0, 0, 0);
-    if (mean_distances.size() >= 1 ) {
-        for (int i : indices) {
-            const pcl::Normal& n = normals_->points[i];
-            if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
-                Eigen::Vector3f position(cloud_->points[i].x,
-                                        cloud_->points[i].y,
-                                        cloud_->points[i].z);
-                double d = centroid.dot(position);  // projective distance
-                if (d > mean_distances[0]-bin_width && d < mean_distances[0]+bin_width) {
-                    p_centroid += position;
-                    points.push_back(position);
-                }
-            }//end if
-        }//end for
-    }
-
-    if (points.size() >= 1) {
-        p_centroid /= static_cast<double>(points.size());
-        std::cout << "p_centroid: " << p_centroid << std::endl;
-        Eigen::MatrixXf A(points.size(), 3);
-        for (size_t i = 0; i < points.size(); ++i) {
-            A.row(i) = points[i] - p_centroid;
-        }
-        Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
-        Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
-        std::cout << "before normal: " << centroid << std::endl;
-        std::cout << "after  normal: " << normal << std::endl;
-        std::cout << "before d: " << mean_distances[0] << std::endl;
-        std::cout << "after  d: " << -normal.dot(p_centroid) << std::endl;
-
-    }
+    // std::vector<Eigen::Vector3f> points;
+    // Eigen::Vector3f p_centroid(0, 0, 0);
+    // if (mean_distances.size() >= 1 ) {
+    //     for (int i : indices) {
+    //         const pcl::Normal& n = normals_->points[i];
+    //         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
+    //             Eigen::Vector3f position(cloud_->points[i].x,
+    //                                     cloud_->points[i].y,
+    //                                     cloud_->points[i].z);
+    //             double d = centroid.dot(position);  // projective distance
+    //             if (d > mean_distances[0]-bin_width && d < mean_distances[0]+bin_width) {
+    //                 p_centroid += position;
+    //                 points.push_back(position);
+    //             }
+    //         }//end if
+    //     }//end for
+    // }
+    // if (points.size() >= 1) {
+    //     p_centroid /= static_cast<double>(points.size());
+    //     // std::cout << "p_centroid: " << p_centroid << std::endl;
+    //     Eigen::MatrixXf A(points.size(), 3);
+    //     for (size_t i = 0; i < points.size(); ++i) {
+    //         A.row(i) = points[i] - p_centroid;
+    //     }
+    //     Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    //     Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
+    //     std::cout << "before normal: " << centroid << std::endl;
+    //     std::cout << "after  normal: " << normal << std::endl;
+    //     std::cout << "before d: " << mean_distances[0] << std::endl;
+    //     std::cout << "after  d: " << -normal.dot(p_centroid) << std::endl;
+    // }
 
     
     /* Only keep max bin in a range (merge_threshold) */
