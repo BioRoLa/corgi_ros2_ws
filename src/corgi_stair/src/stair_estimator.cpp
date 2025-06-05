@@ -40,27 +40,27 @@ int cloud_seq = 0;
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
     cloud_seq = msg->header.seq;
     /* Convert the ROS PointCloud2 message to PCL point cloud */
-    pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
-    pcl::fromROSMsg(*msg, *cloud);
-    if (!cloud->isOrganized()) {
-        ROS_WARN("Point cloud is not organized. Skipping frame.");
-        return;
+    if (trigger_msg.enable) {
+        pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+        pcl::fromROSMsg(*msg, *cloud);
+        if (!cloud->isOrganized()) {
+            ROS_WARN("Point cloud is not organized. Skipping frame.");
+            return;
+        }
+
+        plane_distances = plane_segmentation->segment_planes(cloud);
+
+        /* Update & publish all planes */
+        plane_tracker.update(plane_distances);
+        plane_msg.horizontal = plane_tracker.get_horizontal_averages();
+        plane_msg.vertical = plane_tracker.get_vertical_averages();
+        plane_pub.publish(plane_msg);
     }
-
-    plane_distances = plane_segmentation->segment_planes(cloud);
-
-    /* Update & publish all planes */
-    plane_tracker.update(plane_distances);
-    plane_msg.horizontal = plane_tracker.get_horizontal_averages();
-    plane_msg.vertical = plane_tracker.get_vertical_averages();
-    plane_pub.publish(plane_msg);
 }//end cloud_cb
-
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg) {
     trigger_msg = msg;
 }//end trigger_cb
-
 
 
 int main(int argc, char** argv) {
@@ -73,38 +73,65 @@ int main(int argc, char** argv) {
     plane_pub = nh.advertise<corgi_msgs::StairPlanes>("/stair_planes", 1);;
     ros::Rate rate(10);
 
-    std::ofstream csv("stair_planes.csv");
-    csv << "cloud_seq,";
-    csv << "Trigger," ;
-    csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) csv << "Horizontal" << i << ",";
-    csv << "Vertical0,";  for (int i = 1; i < 10; ++i) csv << "Vertical"   << i << ",";
-    csv << "\n";
+    std::ofstream plane_csv("plane_distances.csv");
+    plane_csv << "cloud_seq,";
+    plane_csv << "Trigger," ;
+    plane_csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) plane_csv << "Horizontal" << i << ",";
+    plane_csv << "Vertical0,";  for (int i = 1; i < 10; ++i) plane_csv << "Vertical"   << i << ",";
+    plane_csv << "\n";
+    std::ofstream stair_csv("stair_planes.csv");
+    stair_csv << "cloud_seq,";
+    stair_csv << "Trigger," ;
+    stair_csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) stair_csv << "Horizontal" << i << ",";
+    stair_csv << "Vertical0,";  for (int i = 1; i < 10; ++i) stair_csv << "Vertical"   << i << ",";
+    stair_csv << "\n";
 
     while (ros::ok()) {
         ros::spinOnce();
 
-        csv << cloud_seq << ",";
-        csv << (int)trigger_msg.enable << ",";
+        /* plane_csv */
+        plane_csv << cloud_seq << ",";
+        plane_csv << (int)trigger_msg.enable << ",";
+        for (int i=0; i<10; i++) {
+            if (i < plane_distances.horizontal.size())
+                plane_csv << std::fixed << std::setprecision(4) << plane_distances.horizontal[i];
+            else
+                plane_csv << "0";
+            plane_csv << ",";
+        }//end for
+        for (int i=0; i<10; i++) {
+            if (i < plane_distances.vertical.size())
+                plane_csv << std::fixed << std::setprecision(4) << plane_distances.vertical[i];
+            else 
+                plane_csv << "0";
+            plane_csv << ",";
+        }//end for
+        plane_csv << "\n";
+
+        /* stair_csv */
+        stair_csv << cloud_seq << ",";
+        stair_csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
             if (i < plane_msg.horizontal.size())
-                csv << std::fixed << std::setprecision(4) << plane_msg.horizontal[i];
+                stair_csv << std::fixed << std::setprecision(4) << plane_msg.horizontal[i];
             else
-                csv << "0";
-            csv << ",";
+                stair_csv << "0";
+            stair_csv << ",";
         }//end for
         for (int i=0; i<10; i++) {
             if (i < plane_msg.vertical.size())
-                csv << std::fixed << std::setprecision(4) << plane_msg.vertical[i];
+                stair_csv << std::fixed << std::setprecision(4) << plane_msg.vertical[i];
             else 
-                csv << "0";
-            csv << ",";
+                stair_csv << "0";
+            stair_csv << ",";
         }//end for
-        csv << "\n";
+        stair_csv << "\n";
 
         rate.sleep();
     }//end while
 
-    csv.close();
+    plane_csv.close();
+    stair_csv.close();
     ros::shutdown();
     return 0;
 }//end main
