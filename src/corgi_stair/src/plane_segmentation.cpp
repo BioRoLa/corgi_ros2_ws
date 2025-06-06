@@ -561,5 +561,5 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
 
         marker_array.markers.push_back(marker);
     }
-    plane_pub.publish(marker);
+    plane_pub.publish(marker_array);
 }
