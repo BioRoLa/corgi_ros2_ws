@@ -491,9 +491,9 @@ void PlaneSegmentation::visualize_normal() {
 
 void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
     visualization_msgs::MarkerArray marker_array;
-    Eigen::Vector3d n_z = centroid_z.normalized();
-    Eigen::Vector3d n_x = centroid_x.normalized();
-    Eigen::Vector3d z_axis(0, 0, 1);
+    Eigen::Vector3f n_z = centroid_z.normalized();
+    Eigen::Vector3f n_x = centroid_x.normalized();
+    Eigen::Vector3f z_axis(0, 0, 1);
     Eigen::Quaterniond q_z = Eigen::Quaterniond::FromTwoVectors(z_axis, n_z);
     Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);
     // 顏色設定
@@ -505,7 +505,7 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     int start_id = 0;
     for (size_t i = 0; i < h_plane_distances.size(); ++i) {
         double d = h_plane_distances[i];
-        Eigen::Vector3d center = d * n_z;
+        Eigen::Vector3f center = d * n_z;
 
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -535,7 +535,7 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     start_id = 100;
     for (size_t i = 0; i < v_plane_distances.size(); ++i) {
         double d = v_plane_distances[i];
-        Eigen::Vector3d center = d * n_x;
+        Eigen::Vector3f center = d * n_x;
 
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
