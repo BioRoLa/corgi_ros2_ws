@@ -498,8 +498,8 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);
     // 顏色設定
     std_msgs::ColorRGBA blue, red;
-    blue.b = 1.0; blue.a = 0.4;
-    red.r = 1.0; red.a = 0.4;
+    blue.b = 1.0; blue.a = 0.3;
+    red.r = 1.0; red.a = 0.3;
 
 
     int start_id = 0;
@@ -522,12 +522,11 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.pose.orientation.z = q_z.z();
         marker.pose.orientation.w = q_z.w();
 
-        marker.scale.x = 10.0;  // width
-        marker.scale.y = 10.0;  // height
+        marker.scale.x = 2.0;  // width
+        marker.scale.y = 2.0;  // height
         marker.scale.z = 0.001; // thickness
 
         marker.color = blue;
-        marker.color.a = 0.5;
 
         marker_array.markers.push_back(marker);
     }
@@ -565,7 +564,6 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.scale.z = 0.001; // thickness
 
         marker.color = red;
-        marker.color.a = 0.5;
 
         marker_array.markers.push_back(marker);
     }
