@@ -38,7 +38,7 @@ class PlaneSegmentation {
 
         void visualize_planes();
         void visualize_normal();
-        void visualize_CubePlanes();
+        void visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances);
 
     private:
         tf2_ros::Buffer tf_buffer_;

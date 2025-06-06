@@ -489,7 +489,7 @@ void PlaneSegmentation::visualize_normal() {
 }//end visualize_normal
 
 
-void visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
+void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
     visualization_msgs::MarkerArray marker_array;
     Eigen::Vector3d n_z = centroid_z.normalized();
     Eigen::Vector3d n_x = centroid_x.normalized();
