@@ -33,8 +33,8 @@ class PlaneSegmentation {
         void setInputCloud(pcl::PointCloud<PointT>::Ptr cloud);
         void computeNormals();
         void group_by_normals();
-        std::vector<double> segment_by_distances(Eigen::Vector3f centroid, const std::vector<int>& indices);
-        Eigen::Vector3f computeCentroid(const std::vector<int>& indices);
+        std::vector<double> segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices);
+        Eigen::Vector3d computeCentroid(const std::vector<int>& indices);
 
         void visualize_planes();
         void visualize_normal();
@@ -49,7 +49,7 @@ class PlaneSegmentation {
         pcl::IntegralImageNormalEstimation<PointT, pcl::Normal> normal_estimator_;
         pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree_;
 
-        Eigen::Vector3f centroid_z, centroid_x;
+        Eigen::Vector3d centroid_z, centroid_x;
         std::vector<int> h_point_idx;   // point index in cloud blongs to horizontal planes
         std::vector<int> v_point_idx;   // point index in cloud blongs to vertical   planes
         const double cos_threshold_ = std::cos(pcl::deg2rad(10.0));

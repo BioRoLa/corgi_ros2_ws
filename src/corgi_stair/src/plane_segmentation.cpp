@@ -66,7 +66,7 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     this->visualize_normal();
     this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
-    // Eigen::Vector3f base_link_pos;
+    // Eigen::Vector3d base_link_pos;
     // try {
     //     geometry_msgs::TransformStamped transformStamped = 
     //         tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
@@ -87,13 +87,13 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     // }
     
     // if (h_plane_distances.size() >= 2 && v_plane_distances.size() >= 1) {
-    //     Eigen::Vector3f dir = centroid_z.cross(centroid_x); // 交線方向
+    //     Eigen::Vector3d dir = centroid_z.cross(centroid_x); // 交線方向
     //     Eigen::Matrix2f A;
     //     A << centroid_z.x(), centroid_z.z(),
     //         centroid_x.x(), centroid_x.z();
-    //     Eigen::Vector2f b(h_plane_distances[1], v_plane_distances[0]);
-    //     Eigen::Vector2f xz = A.inverse() * b;
-    //     Eigen::Vector3f p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
+    //     Eigen::Vector2d b(h_plane_distances[1], v_plane_distances[0]);
+    //     Eigen::Vector2d xz = A.inverse() * b;
+    //     Eigen::Vector3d p0(xz.x(), 0, xz.y()); // 交線在ground上的投影
     //     double dist = std::abs(centroid_z.dot(p0) - h_plane_distances[0]) / centroid_z.norm();    // 交線與ground距離
     //     std::cout << "stair height: " << dist << std::endl;
     // }
@@ -129,13 +129,13 @@ void PlaneSegmentation::computeNormals() {
 
 
 void PlaneSegmentation::group_by_normals() {
-    centroid_z = Eigen::Vector3f(0, 0, 1);  // initial normal vector for horizontal plane
-    centroid_x = Eigen::Vector3f(-1, 0, 0); // initial normal vector for vertical   plane
+    centroid_z = Eigen::Vector3d(0, 0, 1);  // initial normal vector for horizontal plane
+    centroid_x = Eigen::Vector3d(-1, 0, 0); // initial normal vector for vertical   plane
     h_point_idx.clear();
     v_point_idx.clear();
 
     for (size_t i = 0; i < normals_->size(); i++) {
-        Eigen::Vector3f normal(normals_->points[i].normal_x,
+        Eigen::Vector3d normal(normals_->points[i].normal_x,
                             normals_->points[i].normal_y,
                             normals_->points[i].normal_z);
         double cos_z = normal.dot(centroid_z);
@@ -154,7 +154,7 @@ void PlaneSegmentation::group_by_normals() {
 }//end group_by_normals
 
 
-std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f centroid, const std::vector<int>& indices) {
+std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices) {
     const double bin_width = 0.001; // 1mm
     const int one_bin_point_threshold = 100;    // 100 points
     const int total_point_threshold   = 1000;    // 5000 points
@@ -165,7 +165,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     for (int i : indices) {
         const pcl::Normal& n = normals_->points[i];
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
-            Eigen::Vector3f position(cloud_->points[i].x,
+            Eigen::Vector3d position(cloud_->points[i].x,
                                     cloud_->points[i].y,
                                     cloud_->points[i].z);
             double d = centroid.dot(position);  // projective distance
@@ -232,13 +232,13 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
         in_range = false;
     }//end if
 
-    // std::vector<Eigen::Vector3f> points;
-    // Eigen::Vector3f p_centroid(0, 0, 0);
+    // std::vector<Eigen::Vector3d> points;
+    // Eigen::Vector3d p_centroid(0, 0, 0);
     // if (mean_distances.size() >= 1 ) {
     //     for (int i : indices) {
     //         const pcl::Normal& n = normals_->points[i];
     //         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
-    //             Eigen::Vector3f position(cloud_->points[i].x,
+    //             Eigen::Vector3d position(cloud_->points[i].x,
     //                                     cloud_->points[i].y,
     //                                     cloud_->points[i].z);
     //             double d = centroid.dot(position);  // projective distance
@@ -257,7 +257,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     //         A.row(i) = points[i] - p_centroid;
     //     }
     //     Eigen::JacobiSVD<Eigen::MatrixXf> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    //     Eigen::Vector3f normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
+    //     Eigen::Vector3d normal = svd.matrixV().col(2);  // 最小奇異值對應方向（即平面法向）
     //     std::cout << "before normal: " << centroid << std::endl;
     //     std::cout << "after  normal: " << normal << std::endl;
     //     std::cout << "before d: " << mean_distances[0] << std::endl;
@@ -290,11 +290,11 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
 }//end segment_by_distances
 
 
-Eigen::Vector3f PlaneSegmentation::computeCentroid(const std::vector<int>& indices) {
-    Eigen::Vector3f centroid = Eigen::Vector3f::Zero();
+Eigen::Vector3d PlaneSegmentation::computeCentroid(const std::vector<int>& indices) {
+    Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
     for (int idx : indices) {
         const pcl::Normal& n = normals_->points[idx];
-        centroid += Eigen::Vector3f(n.normal_x, n.normal_y, n.normal_z);
+        centroid += Eigen::Vector3d(n.normal_x, n.normal_y, n.normal_z);
     }//end for
     if (!indices.empty()) {
         centroid.normalize();
@@ -491,11 +491,11 @@ void PlaneSegmentation::visualize_normal() {
 
 void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
     visualization_msgs::MarkerArray marker_array;
-    Eigen::Vector3f n_z = centroid_z.normalized();
-    Eigen::Vector3f n_x = centroid_x.normalized();
-    Eigen::Vector3f z_axis(0, 0, 1);
-    Eigen::Quaternionf q_z = Eigen::Quaternionf::FromTwoVectors(z_axis, n_z);
-    Eigen::Quaternionf q_x = Eigen::Quaternionf::FromTwoVectors(z_axis, n_x);
+    Eigen::Vector3d n_z = centroid_z.normalized();
+    Eigen::Vector3d n_x = centroid_x.normalized();
+    Eigen::Vector3d z_axis(0, 0, 1);
+    Eigen::Quaterniond q_z = Eigen::Quaterniond::FromTwoVectors(z_axis, n_z);
+    Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);
     // 顏色設定
     std_msgs::ColorRGBA blue, red;
     blue.b = 1.0; blue.a = 0.4;
@@ -505,7 +505,7 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     int start_id = 0;
     for (size_t i = 0; i < h_plane_distances.size(); ++i) {
         double d = h_plane_distances[i];
-        Eigen::Vector3f center = d * n_z;
+        Eigen::Vector3d center = d * n_z;
 
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -522,20 +522,28 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.pose.orientation.z = q_z.z();
         marker.pose.orientation.w = q_z.w();
 
-        marker.scale.x = 1.0;  // width
-        marker.scale.y = 1.0;  // height
-        marker.scale.z = 0.01; // thickness
+        marker.scale.x = 10.0;  // width
+        marker.scale.y = 10.0;  // height
+        marker.scale.z = 0.001; // thickness
 
         marker.color = blue;
         marker.color.a = 0.5;
 
         marker_array.markers.push_back(marker);
     }
+    for (int i = h_plane_distances.size(); i < 10; ++i) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+        marker.id = start_id + i;
+        marker.action = visualization_msgs::Marker::DELETE;
+        marker_array.markers.push_back(marker);
+    }
 
     start_id = 100;
     for (size_t i = 0; i < v_plane_distances.size(); ++i) {
         double d = v_plane_distances[i];
-        Eigen::Vector3f center = d * n_x;
+        Eigen::Vector3d center = d * n_x;
 
         visualization_msgs::Marker marker;
         marker.header.frame_id = "map";
@@ -552,14 +560,23 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.pose.orientation.z = q_x.z();
         marker.pose.orientation.w = q_x.w();
 
-        marker.scale.x = 1.0;  // width
-        marker.scale.y = 1.0;  // height
-        marker.scale.z = 0.01; // thickness
+        marker.scale.x = 10.0;  // width
+        marker.scale.y = 10.0;  // height
+        marker.scale.z = 0.001; // thickness
 
         marker.color = red;
         marker.color.a = 0.5;
 
         marker_array.markers.push_back(marker);
     }
+    for (int i = v_plane_distances.size(); i < 10; ++i) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+        marker.id = start_id + i;
+        marker.action = visualization_msgs::Marker::DELETE;
+        marker_array.markers.push_back(marker);
+    }
+
     plane_pub.publish(marker_array);
 }
