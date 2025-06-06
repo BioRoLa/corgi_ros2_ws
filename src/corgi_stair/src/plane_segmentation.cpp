@@ -50,6 +50,7 @@ void PlaneSegmentation::init_tf() {
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
+    plane_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_plane", 1);
 }//end init_tf
 
 
@@ -63,18 +64,19 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
 
     this->visualize_planes();
     this->visualize_normal();
+    this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
-    Eigen::Vector3f base_link_pos;
-    try {
-        geometry_msgs::TransformStamped transformStamped = 
-            tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
+    // Eigen::Vector3f base_link_pos;
+    // try {
+    //     geometry_msgs::TransformStamped transformStamped = 
+    //         tf_buffer_.lookupTransform("map", "base_link", ros::Time(0), ros::Duration(1.0));
         
-        base_link_pos.x() = transformStamped.transform.translation.x;
-        base_link_pos.y() = transformStamped.transform.translation.y;
-        base_link_pos.z() = transformStamped.transform.translation.z;
-    } catch (tf2::TransformException &ex) {
-        ROS_WARN("TF error: %s", ex.what());
-    }
+    //     base_link_pos.x() = transformStamped.transform.translation.x;
+    //     base_link_pos.y() = transformStamped.transform.translation.y;
+    //     base_link_pos.z() = transformStamped.transform.translation.z;
+    // } catch (tf2::TransformException &ex) {
+    //     ROS_WARN("TF error: %s", ex.what());
+    // }
     // double v_d = base_link_pos.dot(centroid_z);
     // double h_d = base_link_pos.dot(centroid_x);
     // for (double& d : h_plane_distances) {
@@ -157,7 +159,6 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3f cent
     const int one_bin_point_threshold = 100;    // 100 points
     const int total_point_threshold   = 1000;    // 5000 points
     const double merge_threshold = 0.03;    // 5cm
-    const int num_clusters = 2;
 
     /* Calculate distances */
     std::vector<double> distances;
@@ -486,3 +487,79 @@ void PlaneSegmentation::visualize_normal() {
 
     normal_pub.publish(marker_array);
 }//end visualize_normal
+
+
+void visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
+    visualization_msgs::MarkerArray marker_array;
+    Eigen::Vector3d n_z = centroid_z.normalized();
+    Eigen::Vector3d n_x = centroid_x.normalized();
+    Eigen::Vector3d z_axis(0, 0, 1);
+    Eigen::Quaterniond q_z = Eigen::Quaterniond::FromTwoVectors(z_axis, n_z);
+    Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);
+    // 顏色設定
+    std_msgs::ColorRGBA blue, red;
+    blue.b = 1.0; blue.a = 0.4;
+    red.r = 1.0; red.a = 0.4;
+
+
+    int start_id = 0;
+    for (size_t i = 0; i < h_plane_distances.size(); ++i) {
+        double d = h_plane_distances[i];
+        Eigen::Vector3d center = d * n_z;
+
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+        marker.id = start_id + i;
+        marker.type = visualization_msgs::Marker::CUBE;
+        marker.action = visualization_msgs::Marker::ADD;
+
+        marker.pose.position.x = center.x();
+        marker.pose.position.y = center.y();
+        marker.pose.position.z = center.z();
+        marker.pose.orientation.x = q_z.x();
+        marker.pose.orientation.y = q_z.y();
+        marker.pose.orientation.z = q_z.z();
+        marker.pose.orientation.w = q_z.w();
+
+        marker.scale.x = 1.0;  // width
+        marker.scale.y = 1.0;  // height
+        marker.scale.z = 0.01; // thickness
+
+        marker.color = blue;
+        marker.color.a = 0.5;
+
+        marker_array.markers.push_back(marker);
+    }
+
+    start_id = 100;
+    for (size_t i = 0; i < v_plane_distances.size(); ++i) {
+        double d = v_plane_distances[i];
+        Eigen::Vector3d center = d * n_x;
+
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+        marker.id = start_id + i;
+        marker.type = visualization_msgs::Marker::CUBE;
+        marker.action = visualization_msgs::Marker::ADD;
+
+        marker.pose.position.x = center.x();
+        marker.pose.position.y = center.y();
+        marker.pose.position.z = center.z();
+        marker.pose.orientation.x = q_x.x();
+        marker.pose.orientation.y = q_x.y();
+        marker.pose.orientation.z = q_x.z();
+        marker.pose.orientation.w = q_x.w();
+
+        marker.scale.x = 1.0;  // width
+        marker.scale.y = 1.0;  // height
+        marker.scale.z = 0.01; // thickness
+
+        marker.color = red;
+        marker.color.a = 0.5;
+
+        marker_array.markers.push_back(marker);
+    }
+    plane_pub.publish(marker);
+}

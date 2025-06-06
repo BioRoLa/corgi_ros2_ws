@@ -38,6 +38,7 @@ class PlaneSegmentation {
 
         void visualize_planes();
         void visualize_normal();
+        void visualize_CubePlanes();
 
     private:
         tf2_ros::Buffer tf_buffer_;
@@ -55,6 +56,7 @@ class PlaneSegmentation {
 
         ros::Publisher pub;
         ros::Publisher normal_pub;
+        ros::Publisher plane_pub;
         ros::NodeHandle nh;
 
         int last_marker_count_ = 0; // 用於記錄上次發佈的 marker 數量
