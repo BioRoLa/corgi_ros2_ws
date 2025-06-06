@@ -494,8 +494,8 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     Eigen::Vector3f n_z = centroid_z.normalized();
     Eigen::Vector3f n_x = centroid_x.normalized();
     Eigen::Vector3f z_axis(0, 0, 1);
-    Eigen::Quaterniond q_z = Eigen::Quaterniond::FromTwoVectors(z_axis, n_z);
-    Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);
+    Eigen::Quaternionf q_z = Eigen::Quaternionf::FromTwoVectors(z_axis, n_z);
+    Eigen::Quaternionf q_x = Eigen::Quaternionf::FromTwoVectors(z_axis, n_x);
     // 顏色設定
     std_msgs::ColorRGBA blue, red;
     blue.b = 1.0; blue.a = 0.4;
