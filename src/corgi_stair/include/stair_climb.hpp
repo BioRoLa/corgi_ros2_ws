@@ -33,6 +33,7 @@ class StairClimb {
         /* Private function */
         void init_move_CoM_stable(int swing_leg);
         bool move_CoM_stable();
+        bool slow_to_stop();
         // void move_CoM_stable_fixed_leg_length();
         void init_swing_same_step(int swing_leg, double front_height, double hind_height);
         bool swing_same_step();
@@ -63,7 +64,7 @@ class StairClimb {
         const double swing_time = 0.2;                                                
         const double min_margin = 0.01;
         const double max_velocity = 0.1; // m/s, max velocity of CoM
-        const std::array<double, 2> acc = {max_velocity / 0.5, max_velocity / 0.5}; // m/s^2, acceleration of CoM
+        const std::array<double, 2> acc = {max_velocity / 0.3, max_velocity / 0.5}; // m/s^2, acceleration of CoM
         const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
         const double keep_edge_d = 0.03;
@@ -109,7 +110,7 @@ class StairClimb {
         std::vector<StairEdge> stair_edge[4];
         int stair_count;
 
-        enum STATES {MOVE_STABLE, SWING_SAME, SWING_NEXT, END};
+        enum STATES {MOVE_STABLE, SLOW_DOWN, SWING_SAME, SWING_NEXT, END};
         STATES state;
         STATES last_state;
 

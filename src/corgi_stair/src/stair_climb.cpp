@@ -98,6 +98,9 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
             }//end if
             finish_move = move_CoM_stable();
             break;
+        case SLOW_DOWN:
+            finish_move = slow_to_stop();
+            break;
         case SWING_SAME:
             if (last_state != state) {
                 swing_leg = swing_sequence[swing_count % 4];
@@ -167,6 +170,11 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     // next state
     switch (this->state) {
         case MOVE_STABLE:
+            if (finish_move) {
+                state = SLOW_DOWN;
+            }//end if
+            break;
+        case SLOW_DOWN:
             if (finish_move) {
                 bool up_stair = determine_next_foothold();
                 state = up_stair? SWING_NEXT : SWING_SAME;
@@ -310,6 +318,32 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     }//end if else
 }//end move_CoM_stable
 
+bool StairClimb::slow_to_stop() {    // return true if stop, false if not
+    this->update_hip();
+    /* Slow down velocity */
+    if (velocity[0] > vel_incre) {
+        velocity[0] -= vel_incre;
+    } else if (velocity[0] < -vel_incre) {
+        velocity[0] += vel_incre;
+    } else {
+        velocity[0] = 0.0;
+    }//end if else
+    CoM[0] += velocity[0] / rate;
+    /* Calculate leg command */
+    for (int i=0; i<4; i++) {
+        hip[i] = leg_info[i].get_hip_position(CoM, pitch);
+        result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
+        theta[i] = result_eta[0];
+        beta[i]  = result_eta[1];
+    }//end for
+    /* Return if stop */
+    if (velocity[0] == 0.0) {
+        return true;
+    } else {
+        return false;
+    }//end if else
+}//end slow_to_stop
+
 // void StairClimb::move_CoM_stable_smooth_fixed_leg_length(std::vector<LegInfo>& leg_info, int swing_leg, Eigen::Vector2d& CoM, double pitch) {
 //     Eigen::Matrix2d rotation;
 //     rotation << std::cos(pitch), -std::sin(pitch),
@@ -357,7 +391,8 @@ void StairClimb::init_swing_same_step(int swing_leg, double front_height, double
     this->t_f_x = margin_d / max_velocity;
     this->t_f_y = - coeff_b / coeff_a;
     this->t_f = std::max({min_swing_time_step, t_f_x, t_f_y});
-    this->local_max_velocity = margin_d / t_f;
+    // this->local_max_velocity = margin_d / t_f;
+    this->local_max_velocity = 0.0;
     this->total_steps = static_cast<int>(t_f * rate); // total steps for swinging
     this->step_count = 0;
 }//end init_swing_same_step
