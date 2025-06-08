@@ -522,8 +522,8 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.pose.orientation.z = q_z.z();
         marker.pose.orientation.w = q_z.w();
 
-        marker.scale.x = 2.0;  // width
-        marker.scale.y = 2.0;  // height
+        marker.scale.x = 1.0;  // width
+        marker.scale.y = 1.0;  // height
         marker.scale.z = 0.001; // thickness
 
         marker.color = blue;
@@ -559,8 +559,8 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
         marker.pose.orientation.z = q_x.z();
         marker.pose.orientation.w = q_x.w();
 
-        marker.scale.x = 10.0;  // width
-        marker.scale.y = 10.0;  // height
+        marker.scale.x = 1.0;  // width
+        marker.scale.y = 1.0;  // height
         marker.scale.z = 0.001; // thickness
 
         marker.color = red;

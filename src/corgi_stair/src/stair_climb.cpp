@@ -212,6 +212,16 @@ void StairClimb::add_stair_edge(double x, double y) {
     stair_edge[3].push_back({{x, y}, stair_count});
 }//end add_stair_edge
 
+void StairClimb::add_stair_edge_CoM(double x, double y) {
+    stair_count ++;
+    x += CoM[0];
+    y += CoM[1];
+    stair_edge[0].push_back({{x, y}, stair_count});
+    stair_edge[1].push_back({{x, y}, stair_count});
+    stair_edge[2].push_back({{x, y}, stair_count});
+    stair_edge[3].push_back({{x, y}, stair_count});
+}//end add_stair_edge_CoM
+
 double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch
@@ -224,6 +234,15 @@ bool StairClimb::if_any_stair() {
     }//end for
     return false;
 }//end if_any_stair
+
+bool StairClimb::any_no_stair() {
+    for (int i=0; i<4; i++) {
+        if (stair_edge[i].empty()) {
+            return true;
+        }//end if
+    }//end for
+    return false;
+}//end any_no_stair
 
 std::array<bool, 4> StairClimb::get_contact_edge_leg() {
     std::array<bool, 4> if_contact_edge = {false, false, false, false};

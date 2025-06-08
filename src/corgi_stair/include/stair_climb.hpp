@@ -23,8 +23,10 @@ class StairClimb {
         void initialize(double init_eta[8], double init_vel=0.0);
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
+        void add_stair_edge_CoM(double x, double y);
         double get_pitch();
         bool if_any_stair();
+        bool any_no_stair();
         std::array<bool, 4> get_contact_edge_leg();
         
     private:
