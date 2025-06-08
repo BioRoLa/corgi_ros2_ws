@@ -30,7 +30,7 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg) {
     trigger_msg = msg;
 }//end trigger_cb
 
-void camera_cb(const corgi_msgs::StairPlaness::ConstPtr& msg) {
+void camera_cb(const corgi_msgs::StairPlanes::ConstPtr& msg) {
     plane_msg = *msg;
 }//end camera_cb
 
