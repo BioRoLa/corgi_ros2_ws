@@ -171,7 +171,15 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     switch (this->state) {
         case MOVE_STABLE:
             if (finish_move) {
-                state = SLOW_DOWN;
+                if (velocity[0] >= 0.0) {
+                    bool up_stair = determine_next_foothold();
+                    state = up_stair? SWING_NEXT : SWING_SAME;
+                    if (!this->if_any_stair()) {
+                        state = END;
+                    }//end if
+                } else {
+                    state = SLOW_DOWN;
+                }//end if else
             }//end if
             break;
         case SLOW_DOWN:
@@ -391,8 +399,8 @@ void StairClimb::init_swing_same_step(int swing_leg, double front_height, double
     this->t_f_x = margin_d / max_velocity;
     this->t_f_y = - coeff_b / coeff_a;
     this->t_f = std::max({min_swing_time_step, t_f_x, t_f_y});
-    // this->local_max_velocity = margin_d / t_f;
-    this->local_max_velocity = 0.0;
+    this->local_max_velocity = margin_d / t_f;
+    // this->local_max_velocity = 0.0;
     this->total_steps = static_cast<int>(t_f * rate); // total steps for swinging
     this->step_count = 0;
 }//end init_swing_same_step
