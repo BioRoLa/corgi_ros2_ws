@@ -10,7 +10,7 @@
 LegModel::LegModel(bool sim) : 
     /* Initializer List */
     max_theta(M_PI * 160.0 / 180.0),
-    min_theta(M_PI * 17.0 / 180.0),
+    min_theta(M_PI * 16.9 / 180.0),
     theta0(M_PI * 17.0 / 180.0),
     beta0(M_PI * 90.0 / 180.0),
     // Wheel radius
