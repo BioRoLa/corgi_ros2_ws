@@ -44,7 +44,7 @@ double getPitchFromTransform(const geometry_msgs::TransformStamped& tf) {
 
     double roll, pitch, yaw;
     tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-    std::cout << "Pitch: " << pitch << " radians" << std::endl;
+    // std::cout << "Pitch: " << pitch << " radians" << std::endl;
     return pitch;  // 這就是繞 Y 軸的旋轉角（弧度）
 }//end getPitchFromTransform
 
@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const std::array<double, 3> camera_bias = {-0.01, 0.25, 0.032};   // initial camera position in map frame, (x, y, z)
-    // const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
-    const std::array<double, 2> CoM2cemera = {0.32075, 0.050};  // translation from CoM to camera
+    const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
+    // const std::array<double, 2> CoM2cemera = {0.32075, 0.050};  // translation from CoM to camera
     const int sampling_rate = 1000;
     const int transform_count = 2*sampling_rate; // 2 second
     double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
@@ -168,8 +168,8 @@ int main(int argc, char** argv) {
                 /* Vision feedback for real robot */
                 hip_x = camera_transform.transform.translation.x - CoM2cemera[0] + 0.222; // front hip
                 to_stair_d = hip_x + 100;  // set far from hip if not detect stair
-                // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 if (plane_msg.vertical.size() > 0) {
+                    // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                     to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
                     max_step_length_last = (to_stair_d - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                     // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
@@ -205,9 +205,19 @@ int main(int argc, char** argv) {
                         double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
                         
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
+                        std::cout << "Pitch: " << real_pitch << " radians" << std::endl;
                         double CoM2camera_x = CoM2cemera[0] * std::cos(real_pitch) - CoM2cemera[1] * std::sin(real_pitch);
                         double CoM2camera_z = CoM2cemera[0] * std::sin(real_pitch) + CoM2cemera[1] * std::cos(real_pitch);
                         stair_climb.add_stair_edge_CoM(CoM2camera_x + next_edge_x, CoM2camera_z + next_edge_z);
+                        double H = plane_msg.horizontal[stair_count+1] - plane_msg.horizontal[stair_count];
+                        double D;
+                        if (plane_msg.vertical.size() == 1) {
+                            D = CoM2camera_x + next_edge_x;
+                            std::cout << "Stair H: " << H << " cm, D: " << D << " cm." << std::endl;
+                        } else {
+                            D = plane_msg.vertical[stair_count+1] - plane_msg.vertical[stair_count];
+                            std::cout << "Stair H: " << H << " cm, D: " << D << " cm." << std::endl;
+                        }//end if else
                         stair_count++;
                     }//end if
                 }//end if

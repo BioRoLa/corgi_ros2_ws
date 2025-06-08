@@ -62,10 +62,12 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
     // std::reverse(v_plane_distances.begin(), v_plane_distances.end());
 
-    this->visualize_planes();
-    this->visualize_normal();
-    this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
+    /* Visualize in rviz */
+    // this->visualize_planes();
+    // this->visualize_normal();
+    // this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
+    
     // Eigen::Vector3d base_link_pos;
     // try {
     //     geometry_msgs::TransformStamped transformStamped = 

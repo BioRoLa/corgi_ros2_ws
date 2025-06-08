@@ -156,12 +156,11 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         default:
             break;
     }//end switch
-    if (last_state != state) {
-        std::cout << "State:" << this->state << std::endl;
-        std::cout << "Swing leg:" << swing_leg << std::endl;
-        std::cout << "next_foothold:" << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
-        std::cout << "front_height:" << this->front_height << std::endl;
-        std::cout << "hind_height:" << this->hind_height << std::endl;
+    if (last_state != state && state == MOVE_STABLE) {
+        // std::cout << "State " << this->state << std::endl;
+        std::cout << "Leg " << swing_leg << " next_foothold: " << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
+        // std::cout << "front_height:" << this->front_height << std::endl;
+        // std::cout << "hind_height:" << this->hind_height << std::endl;
     }
     last_state = state;
 
