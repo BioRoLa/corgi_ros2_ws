@@ -214,9 +214,9 @@ void StairClimb::add_stair_edge(double x, double y) {
 
 void StairClimb::add_stair_edge_CoM(double x, double y) {
     stair_count ++;
+    std::cout << "Add stair edge at (" << x << ", " << y << ") relative to CoM." << std::endl;
     x += CoM[0];
     y += CoM[1];
-    std::cout << "Add stair edge at (" << x << ", " << y << ") relative to CoM." << std::endl;
     stair_edge[0].push_back({{x, y}, stair_count});
     stair_edge[1].push_back({{x, y}, stair_count});
     stair_edge[2].push_back({{x, y}, stair_count});
