@@ -59,8 +59,8 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     this->computeNormals();
     this->group_by_normals();
     std::vector<double> h_plane_distances = this->segment_by_distances(centroid_z, h_point_idx);
-    std::vector<double> v_plane_distances = this->segment_by_distances(centroid_x, v_point_idx);
-    std::reverse(v_plane_distances.begin(), v_plane_distances.end());
+    std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
+    // std::reverse(v_plane_distances.begin(), v_plane_distances.end());
 
     this->visualize_planes();
     this->visualize_normal();
@@ -492,7 +492,7 @@ void PlaneSegmentation::visualize_normal() {
 void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances) {
     visualization_msgs::MarkerArray marker_array;
     Eigen::Vector3d n_z = centroid_z.normalized();
-    Eigen::Vector3d n_x = centroid_x.normalized();
+    Eigen::Vector3d n_x = -centroid_x.normalized();
     Eigen::Vector3d z_axis(0, 0, 1);
     Eigen::Quaterniond q_z = Eigen::Quaterniond::FromTwoVectors(z_axis, n_z);
     Eigen::Quaterniond q_x = Eigen::Quaterniond::FromTwoVectors(z_axis, n_x);

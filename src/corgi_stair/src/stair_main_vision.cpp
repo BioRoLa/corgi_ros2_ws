@@ -80,7 +80,8 @@ int main(int argc, char** argv) {
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const std::array<double, 3> camera_bias = {-0.01, 0.25, 0.032};   // initial camera position in map frame, (x, y, z)
-    const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
+    // const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
+    const std::array<double, 2> CoM2cemera = {0.32075, 0.050};  // translation from CoM to camera
     const int sampling_rate = 1000;
     const int transform_count = 2*sampling_rate; // 2 second
     double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
@@ -200,7 +201,7 @@ int main(int argc, char** argv) {
                 /* Add stair edge */
                 if (stair_climb.any_no_stair()) {
                     if (plane_msg.vertical.size() >= stair_count+1 && plane_msg.horizontal.size() >= stair_count+2) {
-                        double next_edge_x = - (plane_msg.vertical[stair_count] - camera_transform.transform.translation.x); // relative to camera
+                        double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
                         double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
                         
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
