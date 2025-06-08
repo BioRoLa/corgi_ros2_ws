@@ -70,10 +70,10 @@ class StairClimb {
         const double keep_edge_d = 0.03;
         const double stand_height_on_stair_front = 0.3;
         const double stand_height_on_stair_hind  = 0.3;
-        const double keep_stair_d_hind_max = 0.20;
-        const double keep_stair_d_hind_min = 0.20;
-        const double keep_stair_d_front_max = 0.10;
-        const double keep_stair_d_front_min = 0.05;
+        const double keep_stair_d_hind_max = 0.15;
+        const double keep_stair_d_hind_min = 0.15;
+        const double keep_stair_d_front_max = 0.15;
+        const double keep_stair_d_front_min = 0.10;
         const double step_length_up_stair = 0.3;
         const double min_swing_time_cw   = 1.5, 
                      min_swing_time_ccw  = 1.0, 
@@ -87,12 +87,12 @@ class StairClimb {
         double stand_height = 0.25;
         double step_length  = 0.3;
         double step_height  = 0.04; // step height for swing on same step
-        // double max_theta = 2.7348759382405214;  // rad, corresponding to leg length 0.34
-        // double max_length = 0.34;  // rad, corresponding to leg length 0.34
+        double max_theta = 2.7348759382405214;  // rad, corresponding to leg length 0.34
+        double max_length = 0.34;  // rad, corresponding to leg length 0.34
         // double max_theta = 2.5782087432372753;  // rad, corresponding to leg length 0.33
         // double max_length = 0.33;  // rad, corresponding to leg length 0.33
-        double max_theta = 2.448091729331016;  // rad, corresponding to leg length 0.32
-        double max_length = 0.32;  // rad, corresponding to leg length 0.32
+        // double max_theta = 2.448091729331016;  // rad, corresponding to leg length 0.32
+        // double max_length = 0.32;  // rad, corresponding to leg length 0.32
         std::array<SwingProfile, 4> sp;
         int swing_count;
         double vel_incre;   // velocity increment for x velocity of CoM
