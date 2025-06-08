@@ -40,7 +40,7 @@ class StairClimb {
         void init_swing_next_step(int swing_leg, double front_height, double hind_height); 
         bool swing_next_step();
         std::array<double, 2> move_consider_edge(int leg_ID, std::array<double, 2> move_vec);
-        std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-14, size_t max_iter = 10);
+        std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-4, size_t max_iter = 10);
         // double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
         std::array<double, 2> objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha);
         bool determine_next_foothold();

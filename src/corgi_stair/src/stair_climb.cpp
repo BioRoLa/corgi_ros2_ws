@@ -171,8 +171,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     switch (this->state) {
         case MOVE_STABLE:
             if (finish_move) {
-                // if (velocity[0] >= 0.0) {
-                if (true) {
+                if (velocity[0] >= 0.0) {
                     bool up_stair = determine_next_foothold();
                     state = up_stair? SWING_NEXT : SWING_SAME;
                     if (!this->if_any_stair()) {
@@ -704,7 +703,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         }//end for
 
         Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dq = -cost_vec
-        if (dq.norm() < tol) {             // 判断步长是否足够小
+        if (dq.norm() < epsilon) {             // 判断步长是否足够小
             // std::cout << "dx converged after " << iter << " iterations.\n";
             break;
         }//end if
