@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
                 max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
-                if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
+                if ( max_step_length_last > 0.01 && step_length >= max_step_length_last ) {
                     walk_gait.set_step_length(max_step_length_last); 
                 }//end if
 
