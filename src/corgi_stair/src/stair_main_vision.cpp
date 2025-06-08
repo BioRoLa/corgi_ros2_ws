@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
     /* Setting variable */
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
-    const std::array<double, 2> camera_bias = {-0.01, 0.25, 0.032};   // initial camera position in map frame, (x, y, z)
+    const std::array<double, 3> camera_bias = {-0.01, 0.25, 0.032};   // initial camera position in map frame, (x, y, z)
     const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
     const int sampling_rate = 1000;
     const int transform_count = 2*sampling_rate; // 2 second
