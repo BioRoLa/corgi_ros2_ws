@@ -200,13 +200,13 @@ int main(int argc, char** argv) {
                 /* Add stair edge */
                 if (stair_climb.any_no_stair()) {
                     if (plane_msg.vertical.size() >= stair_count+1 && plane_msg.horizontal.size() >= stair_count+2) {
-                        double next_edge_x = plane_msg.vertical[stair_count] + camera_bias[0];     // relative to camera frame
-                        double next_edge_z = plane_msg.horizontal[stair_count+1] + camera_bias[2]; // relative to camera frame
+                        double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
+                        double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
                         
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
                         double CoM2camera_x = CoM2cemera[0] * std::cos(real_pitch) - CoM2cemera[1] * std::sin(real_pitch);
                         double CoM2camera_z = CoM2cemera[0] * std::sin(real_pitch) + CoM2cemera[1] * std::cos(real_pitch);
-                        stair_climb.add_stair_edge_CoM(next_edge_x - camera_transform.transform.translation.x - CoM2camera_x, next_edge_z - camera_transform.transform.translation.z - CoM2camera_z);
+                        stair_climb.add_stair_edge_CoM(CoM2camera_x + next_edge_x, CoM2camera_z + next_edge_z);
                         stair_count++;
                     }//end if
                 }//end if
