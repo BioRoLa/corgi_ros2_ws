@@ -147,7 +147,6 @@ int main(int argc, char** argv) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
                     walk_gait.initialize(current_eta);
                 }//end if
-
                 break;
             case WALK:
                 /* Get camera pose */

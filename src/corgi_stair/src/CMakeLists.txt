@@ -27,3 +27,9 @@ target_link_libraries(plane_main ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK
 
 add_executable(stair_estimator stair_estimator.cpp)
 target_link_libraries(stair_estimator ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
+
+add_executable(save_motor_cmd save_motor_cmd.cpp)
+target_link_libraries(save_motor_cmd ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
+
+add_executable(play_motor_cmd play_motor_cmd.cpp)
+target_link_libraries(play_motor_cmd ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
