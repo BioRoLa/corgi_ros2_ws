@@ -64,7 +64,7 @@ class StairClimb {
         const double swing_time = 0.2;                                                
         const double min_margin = 0.01;
         const double max_velocity = 0.1; // m/s, max velocity of CoM
-        const std::array<double, 2> acc = {max_velocity / 0.5, max_velocity / 0.5}; // m/s^2, acceleration of CoM
+        const std::array<double, 2> acc = {max_velocity / 0.3, max_velocity / 0.5}; // m/s^2, acceleration of CoM
         const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
         const double keep_edge_d = 0.03;
@@ -72,8 +72,8 @@ class StairClimb {
         const double stand_height_on_stair_hind  = 0.30;
         const double keep_stair_d_hind_max = 0.15;
         const double keep_stair_d_hind_min = 0.15;
-        const double keep_stair_d_front_max = 0.10;
-        const double keep_stair_d_front_min = 0.05;
+        const double keep_stair_d_front_max = 0.15;
+        const double keep_stair_d_front_min = 0.10;
         const double step_length_up_stair = 0.3;
         const double min_swing_time_cw   = 1.5, 
                      min_swing_time_ccw  = 1.0, 
