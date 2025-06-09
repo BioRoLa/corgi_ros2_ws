@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
                 if (plane_msg.vertical.size() > 0) {
                     // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                     to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
-                    max_step_length_last = (to_stair_d - 0.25 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                    max_step_length_last = (to_stair_d - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                     // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                     // std::cout << "hip: " << hip_x << std::endl;
                     if ( max_step_length_last > 0.01 && step_length >= max_step_length_last ) {
@@ -249,7 +249,7 @@ int main(int argc, char** argv) {
                 // Entering stair climbing phase
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
-                    if (hip_x + 0.15 >= to_stair_d - 0.15) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
+                    if (hip_x + 0.15 >= to_stair_d - 0.10) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
                         state = STAIR;
                         std::cout << "Enter stair climbing phase." << std::endl;
                     }//end if
