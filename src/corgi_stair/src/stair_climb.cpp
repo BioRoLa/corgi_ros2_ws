@@ -713,7 +713,8 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
-            throw std::runtime_error("StairClimb::Move_edge: Newton solver did not converge.");
+            // throw std::runtime_error("StairClimb::Move_edge: Newton solver did not converge.");
+            std::cout << "StairClimb::Move_edge: Newton solver cost " << norm_cost << std::endl;
         }//end if
     }//end for
 

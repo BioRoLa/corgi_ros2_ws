@@ -18,6 +18,7 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include <pcl_ros/transforms.h>
 #include <unordered_map>
@@ -68,6 +69,10 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
     ros::Subscriber cloud_sub   = nh.subscribe("/zedxm/zed_node/point_cloud/cloud_registered", 1, cloud_cb);
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
+    tf2_ros::Buffer tfBuffer;
+    tf2_ros::TransformListener tfListener(tfBuffer);
+    geometry_msgs::TransformStamped camera_transform;
+
     plane_segmentation = new PlaneSegmentation;
     plane_segmentation->init_tf();
     plane_pub = nh.advertise<corgi_msgs::StairPlanes>("/stair_planes", 1);;
@@ -75,19 +80,31 @@ int main(int argc, char** argv) {
 
     std::ofstream plane_csv("plane_distances.csv");
     plane_csv << "cloud_seq,";
-    plane_csv << "Trigger," ;
+    plane_csv << "Trigger,";
     plane_csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) plane_csv << "Horizontal" << i << ",";
     plane_csv << "Vertical0,";  for (int i = 1; i < 10; ++i) plane_csv << "Vertical"   << i << ",";
     plane_csv << "\n";
     std::ofstream stair_csv("stair_planes.csv");
     stair_csv << "cloud_seq,";
     stair_csv << "Trigger," ;
+    stair_csv << "Camera_x,";
+    stair_csv << "Camera_z,";
     stair_csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) stair_csv << "Horizontal" << i << ",";
     stair_csv << "Vertical0,";  for (int i = 1; i < 10; ++i) stair_csv << "Vertical"   << i << ",";
     stair_csv << "\n";
 
     while (ros::ok()) {
         ros::spinOnce();
+        if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
+            try {
+                camera_transform = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+            }
+            catch (tf2::TransformException &ex) {
+                ROS_WARN_THROTTLE(1.0, "TF lookup failed even after canTransform: %s", ex.what());
+            }
+        } else {
+            ROS_WARN_THROTTLE(1.0, "TF not available at this moment");
+        }
 
         /* plane_csv */
         plane_csv << cloud_seq << ",";
@@ -111,6 +128,8 @@ int main(int argc, char** argv) {
         /* stair_csv */
         stair_csv << cloud_seq << ",";
         stair_csv << (int)trigger_msg.enable << ",";
+        stair_csv << camera_transform.transform.translation.x << ",";
+        stair_csv << camera_transform.transform.translation.z << ",";
         for (int i=0; i<10; i++) {
             if (i < plane_msg.horizontal.size())
                 stair_csv << std::fixed << std::setprecision(4) << plane_msg.horizontal[i];

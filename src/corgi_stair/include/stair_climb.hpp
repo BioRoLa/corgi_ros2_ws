@@ -40,7 +40,7 @@ class StairClimb {
         void init_swing_next_step(int swing_leg, double front_height, double hind_height); 
         bool swing_next_step();
         std::array<double, 2> move_consider_edge(int leg_ID, std::array<double, 2> move_vec);
-        std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-2, size_t max_iter = 10);
+        std::array<double, 2> move_edge(int leg_ID, std::array<double, 2> contact_p, double contact_alpha, double tol = 1e-3, size_t max_iter = 10);
         // double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
         std::array<double, 2> objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha);
         bool determine_next_foothold();
@@ -68,8 +68,8 @@ class StairClimb {
         const double stability_margin = 0.03;
         const std::array<int, 4> swing_sequence = {0, 2, 1, 3}; // sequence of swing leg 
         const double keep_edge_d = 0.03;
-        const double stand_height_on_stair_front = 0.3;
-        const double stand_height_on_stair_hind  = 0.3;
+        const double stand_height_on_stair_front = 0.30;
+        const double stand_height_on_stair_hind  = 0.30;
         const double keep_stair_d_hind_max = 0.15;
         const double keep_stair_d_hind_min = 0.15;
         const double keep_stair_d_front_max = 0.10;
