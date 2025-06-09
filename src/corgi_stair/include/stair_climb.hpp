@@ -69,8 +69,8 @@ class StairClimb {
         const double keep_edge_d = 0.03;
         const double stand_height_on_stair_front = 0.30;
         const double stand_height_on_stair_hind  = 0.30;
-        const double keep_stair_d_hind_max = 0.15;
-        const double keep_stair_d_hind_min = 0.15;
+        const double keep_stair_d_hind_max = 0.18;
+        const double keep_stair_d_hind_min = 0.18;
         const double keep_stair_d_front_max = 0.15;
         const double keep_stair_d_front_min = 0.10;
         const double step_length_up_stair = 0.3;
