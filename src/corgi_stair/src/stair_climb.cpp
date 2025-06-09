@@ -110,8 +110,10 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                     if (stair_edge[swing_leg].front().count == 1 && leg_info[swing_leg].next_up) {
                         if (swing_leg == 0 || swing_leg == 1) {
                             front_height = stand_height_on_stair_front;
+                            front_height = stand_height;
                         } else {
                             hind_height  = stand_height_on_stair_hind;
+                            hind_height  = stand_height;
                         }//end if else
                     }//end if
                 }//end if
