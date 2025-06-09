@@ -514,7 +514,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
     // } else {
     //     pitch = std::asin((front_height-CoM[1]) / (BL/2));
     // }//end if else
-    double CoM_up_ratio = (CoM[1] - init_CoM[1]) / (final_CoM[1] - init_CoM[1]);
+    double CoM_up_ratio = final_CoM[1]==init_CoM[1]? 0 : (CoM[1] - init_CoM[1]) / (final_CoM[1] - init_CoM[1]);
     double current_front_height = init_front_height + CoM_up_ratio*(front_height - init_front_height);
     double current_hind_height  = init_hind_height  + CoM_up_ratio*(hind_height - init_hind_height);
     pitch = std::asin((current_front_height-current_hind_height) / BL);
