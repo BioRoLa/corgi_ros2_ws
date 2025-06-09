@@ -388,7 +388,7 @@ bool StairClimb::slow_to_stop() {    // return true if stop, false if not
 
 void StairClimb::init_swing_same_step(int swing_leg, double front_height, double hind_height) { 
     this->swing_leg = swing_leg;
-    this->margin_d = std::abs(CoM[0] - (leg_info[(swing_leg+1)%4].foothold[0]+leg_info[(swing_leg+3)%4].foothold[0])/2) - min_margin;
+    this->margin_d = std::abs(CoM[0] - (leg_info[(swing_leg+1)%4].foothold[0]+leg_info[(swing_leg+3)%4].foothold[0])/2) - stability_margin;
     leg_model.forward(theta[swing_leg], beta[swing_leg]);
     std::array<double, 2> p_lo = {hip[swing_leg][0] + leg_model.G[0], hip[swing_leg][1] + leg_model.G[1]}; 
     std::array<double, 2> p_td = {leg_info[swing_leg].next_foothold[0], leg_info[swing_leg].next_foothold[1]+leg_model.r};
@@ -409,10 +409,12 @@ void StairClimb::init_swing_same_step(int swing_leg, double front_height, double
 bool StairClimb::swing_same_step() {  // return true if finish swinging, false if not
     this->update_hip();
     /* Change velocity */
-    if (velocity[0] < local_max_velocity) {
+    if (velocity[0] < local_max_velocity - vel_incre) {
         velocity[0] += vel_incre;
     } else if (velocity[0] > local_max_velocity + vel_incre) {
         velocity[0] -= vel_incre;
+    } else {
+        velocity[0] = local_max_velocity;
     }//end if else
     double t_ = (step_count+1.0) / rate;
     velocity[1] = (t_ <= t_f_y)? coeff_a * (t_*t_) + coeff_b * t_ : 0.0;

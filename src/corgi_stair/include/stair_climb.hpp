@@ -62,7 +62,6 @@ class StairClimb {
         const double BH;  // body height
         const std::array<double, 2> CoM_bias;
         const double swing_time = 0.2;                                                
-        const double min_margin = 0.01;
         const double max_velocity = 0.1; // m/s, max velocity of CoM
         const std::array<double, 2> acc = {max_velocity / 0.3, max_velocity / 0.5}; // m/s^2, acceleration of CoM
         const double stability_margin = 0.03;
