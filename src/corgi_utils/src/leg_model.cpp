@@ -326,7 +326,8 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
         guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
-            throw std::runtime_error("Newton solver did not converge.");
+            // throw std::runtime_error("Newton solver did not converge.");
+            std::cout << "LegModel::move: Newton solver cost " << norm_cost << std::endl;
         }//end if
     }//end for
 
