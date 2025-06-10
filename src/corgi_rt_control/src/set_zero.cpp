@@ -72,7 +72,18 @@ int main(int argc, char **argv) {
     for (int i=0; i<2000; i++){
         for (int j=0; j<4; j++){
             motor_cmd_modules[j]->theta += theta_err[j]/2000.0;
-            motor_cmd_modules[j]->beta += beta_err[j]/2000.0;
+        }
+
+        motor_cmd.header.seq = -1;
+
+        motor_cmd_pub.publish(motor_cmd);
+
+        rate.sleep();
+    }
+
+    for (int i=0; i<5000; i++){
+        for (int j=0; j<4; j++){
+            motor_cmd_modules[j]->beta += beta_err[j]/5000.0;
         }
 
         motor_cmd.header.seq = -1;
