@@ -34,6 +34,7 @@ add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
   src/walk_gait.cpp
+  src/trot_gait.cpp
 )
 target_link_libraries(${PROJECT_NAME}
   ${CORGI_UTILS}

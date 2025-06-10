@@ -39,18 +39,10 @@ int main(int argc, char **argv) {
         cmd->Fy = 0;
         cmd->Mx = 0;
         cmd->My = 0;
-        if (sim) {
-            cmd->Bx = 200;
-            cmd->By = 100;
-            cmd->Kx = 2000;
-            cmd->Ky = 1000;
-        }
-        else {
-            cmd->Bx = 80;
-            cmd->By = 10;
-            cmd->Kx = 2000;
-            cmd->Ky = 100;
-        }
+        cmd->Bx = 80;
+        cmd->By = 10;
+        cmd->Kx = 2000;
+        cmd->Ky = 1000;
     }
 
     std::array<double, 2> eta;
@@ -61,8 +53,8 @@ int main(int argc, char **argv) {
     double h = 0.0;
     
     for (int i=0; i<2000; i++){
-        s = 0.25;
-        h = 0.03;
+        s = 0.12;
+        h = 0.06;
 
         eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {-s/2000.0, h/2000.0});
         
@@ -101,18 +93,18 @@ int main(int argc, char **argv) {
                     ds = 0.0;
                 }
                 else if (loop_count < 10000) {
-                    if (loop_count < 2200) { ds += s/2000.0/200.0; }
-                    else if (loop_count < 3800) { ds =   s/2000.0; }
-                    else if (loop_count < 4000) { ds -=  s/2000.0/200.0; }
-                    else if (loop_count < 4200) { ds -=  s/2000.0/200.0; }
-                    else if (loop_count < 5800) { ds =  -s/2000.0; }
-                    else if (loop_count < 6000) { ds +=  s/2000.0/200.0; }
-                    else if (loop_count < 6200) { ds +=  s/2000.0/200.0; }
-                    else if (loop_count < 7800) { ds =   s/2000.0; }
-                    else if (loop_count < 8000) { ds -=  s/2000.0/200.0; }
-                    else if (loop_count < 8200) { ds -=  s/2000.0/200.0; }
-                    else if (loop_count < 9800) { ds =  -s/2000.0; }
-                    else if (loop_count < 10000) { ds += s/2000.0/200.0; }
+                    if (loop_count < 2200) { ds += 2*s/2000.0/200.0; }
+                    else if (loop_count < 3800) { ds =   2*s/2000.0; }
+                    else if (loop_count < 4000) { ds -=  2*s/2000.0/200.0; }
+                    else if (loop_count < 4200) { ds -=  2*s/2000.0/200.0; }
+                    else if (loop_count < 5800) { ds =  -2*s/2000.0; }
+                    else if (loop_count < 6000) { ds +=  2*s/2000.0/200.0; }
+                    else if (loop_count < 6200) { ds +=  2*s/2000.0/200.0; }
+                    else if (loop_count < 7800) { ds =   2*s/2000.0; }
+                    else if (loop_count < 8000) { ds -=  2*s/2000.0/200.0; }
+                    else if (loop_count < 8200) { ds -=  2*s/2000.0/200.0; }
+                    else if (loop_count < 9800) { ds =  -2*s/2000.0; }
+                    else if (loop_count < 10000) { ds += 2*s/2000.0/200.0; }
 
                     eta = legmodel.move(imp_cmd_modules[1]->theta, imp_cmd_modules[1]->beta, {ds, 0.0});
 

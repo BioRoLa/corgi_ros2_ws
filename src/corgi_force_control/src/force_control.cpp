@@ -44,11 +44,11 @@ void force_control(corgi_msgs::ImpedanceCmd* imp_cmd_, Eigen::MatrixXd phi_vel_p
     Eigen::MatrixXd pos_fb(2, 1);
 
     legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
-    if      (target_rim == 1 && (target_alpha > -M_PI*2/3.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
+    if      (target_rim == 1 && (target_alpha > -M_PI*1/2.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
     else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
     else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
     else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
-    else if (target_rim == 5 && (target_alpha < M_PI*2/3.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
+    else if (target_rim == 5 && (target_alpha < M_PI*1/2.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;

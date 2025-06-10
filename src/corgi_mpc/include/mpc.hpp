@@ -21,6 +21,7 @@
 #include "std_msgs/Float64.h"
 
 #include "walk_gait.hpp"
+#include "trot_gait.hpp"
 #include "hybrid_gen.hpp"
 
 #include <array>
@@ -28,7 +29,7 @@
 
 class ModelPredictiveController {
     public:
-        int target_loop = 3000;
+        int target_loop = 2000;
 
         double Mx = 0;
         double My = 0;
@@ -45,7 +46,7 @@ class ModelPredictiveController {
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const int m = 19.5;
+        const double m = 19.5;
         const double gravity = 9.81;
 
         const int N = 10;
@@ -82,6 +83,7 @@ class ModelPredictiveController {
         int fx_upper_bound = 0;
         int fx_lower_bound = -0;
         int fz_upper_bound = 200;
+        // int fz_lower_bound = -100;
         int fz_lower_bound = -10;
 
         double friction_coef = 1;

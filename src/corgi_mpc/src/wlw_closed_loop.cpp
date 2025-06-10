@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->By = mpc.By_swing;
                         imp_cmd_modules[i]->Ky = mpc.Ky_swing;
                         
-                        check_contact_state(i, contact_state_modules);
+                        // check_contact_state(i, contact_state_modules);
                     }
                     else if (gait_selector->swing_phase[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
@@ -244,12 +244,12 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    // if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
-                    //     contact_state_modules[i]->contact = true;
-                    // }
-                    // else {
-                    //     contact_state_modules[i]->contact = false;
-                    // }
+                    if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
+                        contact_state_modules[i]->contact = true;
+                    }
+                    else {
+                        contact_state_modules[i]->contact = false;
+                    }
                 }
 
                 // update state
@@ -345,7 +345,7 @@ int main(int argc, char **argv) {
                 imp_cmd_pub.publish(imp_cmd);
 
                 contact_state.header.seq = loop_count;
-                // contact_pub.publish(contact_state);
+                contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;

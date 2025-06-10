@@ -105,28 +105,16 @@ int main(int argc, char **argv) {
     };
 
     // Initialize gait
-    // sim, h25, sl0.3
-    double init_eta[8] = {1.9107879909396832,0.4678492649476779,1.6644526642960358,0.1256503306098462,1.6644526642960358,-0.1256503306098462,1.9107879909396832,-0.4678492649476779};
-        
-    // sim, h20, sl0.3
-    // double init_eta[8] = {1.5145026111157143,0.573900181729176,1.1975094246645916,0.1586552621864014,1.1975094246645916,-0.1586552621864014,1.5145026111157143,-0.573900181729176};
-
-
-    // real, h25, sl0.3
-    // double init_eta[8] = {1.857467698281913,0.4791102940603916,1.6046663223045279,0.12914729012802004,1.6046663223045279,-0.12914729012802004,1.857467698281913,-0.4791102940603916};
-
-    // real, h20, sl0.3
-    // double init_eta[8] = {1.4863321792421085,0.6075431293162905,1.1354779956465793,0.16425262030677687,1.1354779956465793,-0.16425262030677687,1.4863321792421085,-0.6075431293162905};
-
-    WalkGait walk_gait(sim, 0, mpc.freq);
+    double init_eta[8] = {1.6951516460296583,0.20749622643520274,1.6951516460296583,0.20749622643520274,1.6951516460296583,-0.20749622643520274,1.6951516460296583,-0.20749622643520274};
+    TrotGait walk_gait(sim, 0, mpc.freq);
     walk_gait.initialize(init_eta);
 
     mpc.target_pos_z = 0.25;
 
-    double velocity        = 0.1;
-    double stand_height    = 0.25;
-    double step_length     = 0.3;
-    double step_height     = 0.04;
+    double velocity        = 0.4;  // 0.2, 0.25
+    double stand_height    = 0.25;  // 0.2, 0.25
+    double step_length     = 0.2;
+    double step_height     = 0.06;
     bool touched[4] = {true, true, true, true};
     bool selection_matrix[4] = {true, true, true, true};
     
@@ -135,6 +123,7 @@ int main(int argc, char **argv) {
     walk_gait.set_step_length(step_length);
     walk_gait.set_step_height(step_height);
 
+    mpc.target_loop = 600;
 
     // Initialize impedance command
     for (auto& cmd : imp_cmd_modules){
@@ -244,7 +233,7 @@ int main(int argc, char **argv) {
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
+                    if (walk_gait.get_duty()[i] <= 0.5 && walk_gait.get_duty()[i] >= 0) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {

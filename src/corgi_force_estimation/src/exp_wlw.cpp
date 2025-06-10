@@ -36,10 +36,10 @@ int main(int argc, char **argv) {
     Hybrid hybrid_gait(gait_selector); 
 
     std::cout << "hybrid" << std::endl;
-    double velocity = 0.1;
+    double velocity = 0.1;  // 0.1, 0.15
     hybrid_gait.Initialize(1, 1);
     hybrid_gait.change_Velocity(velocity);
-    hybrid_gait.change_Height(0.16);
+    hybrid_gait.change_Height(0.16);  // 0.16, 0.18
     hybrid_gait.change_Step_length(0.3);
     
     double init_eta[8];
@@ -103,10 +103,10 @@ int main(int argc, char **argv) {
             while (ros::ok()) {
                 ros::spinOnce();
 
-                if (loop_count > target_loop-3000 && loop_count < target_loop) {
-                    velocity -= 0.1/3000.0;
-                    hybrid_gait.change_Velocity(velocity);
-                }
+                // if (loop_count > target_loop-3000 && loop_count < target_loop) {
+                //     velocity -= 0.1/3000.0;
+                //     hybrid_gait.change_Velocity(velocity);
+                // }
 
                 // get next eta
                 hybrid_gait.Step();

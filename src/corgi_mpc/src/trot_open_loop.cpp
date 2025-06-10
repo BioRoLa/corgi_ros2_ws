@@ -14,11 +14,11 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 
 
 int main(int argc, char **argv) {
-    ROS_INFO("Corgi WLW Starts");
+    ROS_INFO("Corgi Trot Starts");
 
     ModelPredictiveController mpc;
 
-    ros::init(argc, argv, "corgi_wlw");
+    ros::init(argc, argv, "corgi_trot");
 
     ros::NodeHandle nh;
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
@@ -53,29 +53,21 @@ int main(int argc, char **argv) {
     };
 
     // initialize gait
-    double CoM_bias = 0.0;
+    double init_eta[8] = {1.6951516460296583,0.20749622643520274,1.6951516460296583,0.20749622643520274,1.6951516460296583,-0.20749622643520274,1.6951516460296583,-0.20749622643520274};
+    TrotGait walk_gait(sim, 0, 1000);
+    walk_gait.initialize(init_eta);
 
-    auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, 1000);
-    gait_selector->do_pub = 0;
-    Hybrid hybrid_gait(gait_selector); 
+    double velocity        = 0.4;  // 0.2, 0.25
+    double stand_height    = 0.25;  // 0.2, 0.25
+    double step_length     = 0.2;
+    double step_height     = 0.06;
 
-    std::cout << "hybrid" << std::endl;
-    double velocity = 0.1;
-    hybrid_gait.Initialize(1, 1);
-    hybrid_gait.change_Velocity(velocity);
-    hybrid_gait.change_Height(0.16);
-    hybrid_gait.change_Step_length(0.3);
-    
-    double init_eta[8];
-    for (int i=0; i<4; i++) {
-        init_eta[2*i] = gait_selector->eta[i][0];
-        init_eta[2*i+1] = gait_selector->eta[i][1];
-    }
+    walk_gait.set_velocity(mpc.target_vel_x);
+    walk_gait.set_stand_height(stand_height);
+    walk_gait.set_step_length(step_length);
+    walk_gait.set_step_height(step_height);
 
-    init_eta[3] *= -1;
-    init_eta[5] *= -1;
-    
-    std::array<std::array<double, 4>, 2> eta_list = {{{17.0/180.0*M_PI, 17.0/180.0*M_PI, 17.0/180.0*M_PI, 17.0/180.0*M_PI}, {0, 0, 0, 0}}};
+    mpc.target_loop = 600;
 
     // initialize motor command
     for (auto& cmd : motor_cmd_modules){
@@ -148,51 +140,44 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 for (int i=0; i<4; i++) {
-                    // if (gait_selector->swing_phase[i] == 1) {
+                    // if (walk_gait.get_swing_phase()[i] == 1) {
                     //     check_contact_state(i, contact_state_modules);
                     // }
-                    std::cout << gait_selector->duty[i] << ", ";
-                    if (gait_selector->duty[i] < 0.75 && gait_selector->duty[i] > 0.05) {
+                    if (walk_gait.get_duty()[i] <= 0.5 && walk_gait.get_duty()[i] >= 0) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
                         contact_state_modules[i]->contact = false;
                     }
                 }
-                std::cout << std::endl;
 
                 // update target vel and pos
                 if (loop_count < 1000) {
                     mpc.target_vel_x += velocity/1000.0;
-                    hybrid_gait.change_Velocity(mpc.target_vel_x);
+                    walk_gait.set_velocity(mpc.target_vel_x);
                 }
                 if (loop_count > mpc.target_loop*10-1000 && loop_count < mpc.target_loop*10) {
                     mpc.target_vel_x -= velocity/1000.0;
-                    hybrid_gait.change_Velocity(mpc.target_vel_x);
+                    walk_gait.set_velocity(mpc.target_vel_x);
                 }
 
                 // mpc.target_vel_x = velocity;
-                // hybrid_gait.change_Velocity(mpc.target_vel_x);
+                // walk_gait.set_velocity(mpc.target_vel_x);
 
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt / 10.0;
 
                 // get next eta
-                hybrid_gait.Step();
+                mpc.eta_list = walk_gait.step();
 
                 for (int i=0; i<4; i++) {
-                    eta_list[0][i] = gait_selector->eta[i][0];
-                    eta_list[1][i] = gait_selector->eta[i][1];
-                }
-
-                for (int i=0; i<4; i++) {
-                    if (eta_list[0][i] > M_PI*160.0/180.0) {
+                    if (mpc.eta_list[0][i] > M_PI*160.0/180.0) {
                         std::cout << "Exceed upper bound." << std::endl;
                     }
-                    if (eta_list[0][i] < M_PI*17.0/180.0) {
+                    if (mpc.eta_list[0][i] < M_PI*17.0/180.0) {
                         std::cout << "Exceed lower bound." << std::endl;
                     }
-                    motor_cmd_modules[i]->theta = eta_list[0][i];
-                    motor_cmd_modules[i]->beta = (i == 0 || i == 3) ? eta_list[1][i] : -eta_list[1][i];
+                    motor_cmd_modules[i]->theta = mpc.eta_list[0][i];
+                    motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
                 }
 
                 motor_cmd.header.seq = loop_count;
