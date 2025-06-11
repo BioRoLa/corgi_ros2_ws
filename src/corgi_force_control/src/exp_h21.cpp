@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
 
     std::array<double, 2> eta;
     double ds = 0.0;
-    double mg = 19.5*9.81;
+    double mg = 19.68*9.81;
 
     double s = 0.0;
     double h = 0.0;

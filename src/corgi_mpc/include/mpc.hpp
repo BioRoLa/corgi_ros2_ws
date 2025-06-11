@@ -46,7 +46,7 @@ class ModelPredictiveController {
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const double m = 19.5;
+        const double m = 19.68;
         const double gravity = 9.81;
 
         const int N = 10;
