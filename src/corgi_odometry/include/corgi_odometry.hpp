@@ -4,17 +4,17 @@
 // true → simulation, false → real robot
 inline constexpr bool SIM = true;
 // [Hz]
-inline constexpr bool FILTE_VEL = true;        
+inline constexpr bool FILTE_VEL = false;        
 // use KLD or not (if KLD is not used, need to input the contact state for EKF estimation)
-inline constexpr bool KLD = false;               
+inline constexpr bool KLD = true;               
 // publish contact state (only if KLD is used)
-inline constexpr bool PUB_CONTACT = false;
+inline constexpr bool PUB_CONTACT = true;
 // velocity are estimated in body frame, choose the frame that you want to estimate position
 inline constexpr bool BODY_FRAME = false; 
 inline constexpr bool WORLD_FRAME = true;
 inline constexpr bool ESTIMATE_POSITION_FRAME = BODY_FRAME; // BODY_FRAME or WORLD_FRAME
 //record data or not
-inline constexpr bool RECORD_DATA = false;
+inline constexpr bool RECORD_DATA = true;
 // z_position calcution method
 enum Method { AVG, MID, MAX, MIN };
 inline constexpr Method Z_POS_METHOD = AVG;
