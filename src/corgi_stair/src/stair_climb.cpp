@@ -84,6 +84,7 @@ void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
     for (int i=0; i<4; i++) {
         theta[i] = init_theta[i];
         beta[i]  = init_beta[i];
+        enter_wheel_mode[i] = false;
     }//end for
     init_move_CoM_stable(swing_sequence[swing_count % 4]);
 }//end initialize
@@ -312,12 +313,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     CoM[0] += velocity[0] / rate;
     /* Calculate leg command */
     // if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed.
-    if (swing_leg >= 2) {
+    if (swing_leg >= 2 && enter_wheel_mode[swing_leg]) {
         if (!leg_info[swing_leg].contact_edge) {
             // leg_model.forward(theta[swing_leg], beta[swing_leg]);
             // velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
             // CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
         } else {
+            enter_wheel_mode[swing_leg] = true; // enter wheel mode
             velocity[1] = -velocity[0];
             double max_down = leg_info[swing_leg].get_hip_position(CoM, pitch)[1] - (stair_edge[swing_leg].front().edge[1] + leg_model.radius);
             if (max_down > - velocity[1] / rate) {
@@ -687,8 +689,14 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
     } else {
         std::array<double, 2> relative_foothold;
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
-            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
-            relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
+            // if (is_wheel_mode[leg_ID] && move_vec[1]==0.0) {
+            //     result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
+            //     relative_foothold = {0.0, -leg_model.radius};
+            // } else {
+                result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
+                relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
+                std::cout << "leg: " << leg_ID << ", theta: " << theta[leg_ID]*180/M_PI <<< std::endl;
+            // }//end if else
         } else {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
