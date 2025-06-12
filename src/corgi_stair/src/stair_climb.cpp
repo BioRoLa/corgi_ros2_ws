@@ -74,10 +74,10 @@ void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
     // Get foothold in world coordinate
     CoM = {CoM_x, stand_height};
     pitch = 0;
-    hip = {{{BL/2, stand_height} ,
-            {BL/2, stand_height} ,
-            {-BL/2, stand_height},
-            {-BL/2, stand_height}}};
+    hip = {{{CoM_x+BL/2, stand_height} ,
+            {CoM_x+BL/2, stand_height} ,
+            {CoM_x-BL/2, stand_height},
+            {CoM_x-BL/2, stand_height}}};
     front_height = stand_height;
     hind_height  = stand_height;
     // Initial theta/beta
@@ -260,7 +260,7 @@ double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch
 
-std::array<double, 2> get_CoM() {
+std::array<double, 2> StairClimb::get_CoM() {
     return this->CoM;
 }//end get_CoM
 
@@ -695,7 +695,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
             // } else {
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
                 relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
-                std::cout << "leg: " << leg_ID << ", theta: " << theta[leg_ID]*180/M_PI <<< std::endl;
+                std::cout << "leg: " << leg_ID << ", theta: " << theta[leg_ID]*180/M_PI << std::endl;
             // }//end if else
         } else {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
