@@ -313,12 +313,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     CoM[0] += velocity[0] / rate;
     /* Calculate leg command */
     // if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed.
-    if (swing_leg >= 2 && enter_wheel_mode[swing_leg]) {
-        if (!leg_info[swing_leg].contact_edge) {
+    if (swing_leg >= 2) {
+        // if (!leg_info[swing_leg].contact_edge) {
             // leg_model.forward(theta[swing_leg], beta[swing_leg]);
             // velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
             // CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
-        } else {
+        // } else {
+        if (leg_info[swing_leg].contact_edge || enter_wheel_mode[swing_leg]) {
             enter_wheel_mode[swing_leg] = true; // enter wheel mode
             velocity[1] = -velocity[0];
             double max_down = leg_info[swing_leg].get_hip_position(CoM, pitch)[1] - (stair_edge[swing_leg].front().edge[1] + leg_model.radius);
@@ -695,6 +696,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
             // } else {
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
                 relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
+                if (leg_ID>=2 && theta[leg_ID]*180/M_PI <20)
                 std::cout << "leg: " << leg_ID << ", theta: " << theta[leg_ID]*180/M_PI << std::endl;
             // }//end if else
         } else {
