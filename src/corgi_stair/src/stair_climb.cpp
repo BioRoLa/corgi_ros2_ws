@@ -202,6 +202,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 state = MOVE_STABLE;
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
+                enter_wheel_mode[swing_leg] = false; // exit wheel mode
                 swing_count ++;
             }//end if
             break;
@@ -211,6 +212,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 leg_info[swing_leg].stair_count = stair_edge[swing_leg].front().count;
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
+                enter_wheel_mode[swing_leg] = false; // exit wheel mode
                 stair_edge[swing_leg].erase(stair_edge[swing_leg].begin());
                 swing_count ++;
             }//end if
@@ -690,15 +692,14 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
     } else {
         std::array<double, 2> relative_foothold;
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
-            // if (is_wheel_mode[leg_ID] && move_vec[1]==0.0) {
-            //     result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
-            //     relative_foothold = {0.0, -leg_model.radius};
-            // } else {
+            if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
+                result_eta[0] = theta[leg_ID];
+                result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
+                relative_foothold = {0.0, -leg_model.radius};
+            } else {
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
                 relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
-                if (leg_ID>=2 && theta[leg_ID]*180/M_PI <20)
-                std::cout << "leg: " << leg_ID << ", theta: " << theta[leg_ID]*180/M_PI << std::endl;
-            // }//end if else
+            }//end if else
         } else {
             result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
             relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
