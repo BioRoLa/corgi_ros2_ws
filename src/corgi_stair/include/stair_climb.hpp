@@ -24,6 +24,7 @@ class StairClimb {
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
         void add_stair_edge_CoM(double x, double y);
+        double add_stair_edge_CoMx(double x, double y);
         double get_pitch();
         bool if_any_stair();
         bool any_no_stair();
@@ -69,12 +70,12 @@ class StairClimb {
         const double keep_edge_d = 0.03;
         const double stand_height_on_stair_front = 0.30;
         const double stand_height_on_stair_hind  = 0.30;
-        const double keep_stair_d_hind_max = 0.18;
-        const double keep_stair_d_hind_min = 0.18;
+        const double keep_stair_d_hind_max = 0.13;
+        const double keep_stair_d_hind_min = 0.13;
         const double keep_stair_d_front_max = 0.10;
         const double keep_stair_d_front_min = 0.05;
         const double step_length_up_stair = 0.3;
-        const double min_swing_time_cw   = 1.5, 
+        const double min_swing_time_cw   = 2.0, 
                      min_swing_time_ccw  = 1.0, 
                      min_swing_time_step = 0.5;
 

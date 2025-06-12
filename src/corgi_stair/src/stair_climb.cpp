@@ -175,8 +175,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     switch (this->state) {
         case MOVE_STABLE:
             if (finish_move) {
-                if (velocity[0] >= 0.0) {
-                // if (false) {
+                // if (velocity[0] >= 0.0) {
+                if (false) {
                     bool up_stair = determine_next_foothold();
                     state = up_stair? SWING_NEXT : SWING_SAME;
                     if (!this->if_any_stair()) {
@@ -226,6 +226,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
 
 void StairClimb::add_stair_edge(double x, double y) {
     stair_count ++;
+    std::cout << "Add stair edge at (" << x << ", " << y << ") relative to origin." << std::endl;
     stair_edge[0].push_back({{x, y}, stair_count});
     stair_edge[1].push_back({{x, y}, stair_count});
     stair_edge[2].push_back({{x, y}, stair_count});
@@ -241,6 +242,17 @@ void StairClimb::add_stair_edge_CoM(double x, double y) {
     stair_edge[1].push_back({{x, y}, stair_count});
     stair_edge[2].push_back({{x, y}, stair_count});
     stair_edge[3].push_back({{x, y}, stair_count});
+}//end add_stair_edge_CoM
+
+double StairClimb::add_stair_edge_CoMx(double x, double y) {  // only x relative to CoM, return x in wolrd coordinate
+    stair_count ++;
+    x += CoM[0];
+    std::cout << "Add stair edge at (" << x << ", " << y << ") relative to origin." << std::endl;
+    stair_edge[0].push_back({{x, y}, stair_count});
+    stair_edge[1].push_back({{x, y}, stair_count});
+    stair_edge[2].push_back({{x, y}, stair_count});
+    stair_edge[3].push_back({{x, y}, stair_count});
+    return x;  // return x in world coordinate
 }//end add_stair_edge_CoM
 
 double StairClimb::get_pitch() {
@@ -295,16 +307,22 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     }//end if else
     CoM[0] += velocity[0] / rate;
     /* Calculate leg command */
-    if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed.
+    // if (achieve_max_length) {   // if achieve max leg length, let the leg's length to be fixed.
+    if (swing_leg >= 2) {
         if (!leg_info[swing_leg].contact_edge) {
-            leg_model.forward(theta[swing_leg], beta[swing_leg]);
-            velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
-            CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
+            // leg_model.forward(theta[swing_leg], beta[swing_leg]);
+            // velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
+            // CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
         } else {
             velocity[1] = -velocity[0];
-            if (leg_info[swing_leg].get_hip_position(CoM, pitch)[1] > stair_edge[swing_leg].front().edge[1] + leg_model.radius - velocity[1] / rate) {
+            double max_down = leg_info[swing_leg].get_hip_position(CoM, pitch)[1] - (stair_edge[swing_leg].front().edge[1] + leg_model.radius);
+            if (max_down > - velocity[1] / rate) {
                 CoM[1] += velocity[1] / rate;
-            }//end if
+            } else if (max_down < velocity[1] / rate) {
+                CoM[1] -= velocity[1] / rate;
+            } else {
+                CoM[1] -= max_down;
+            }//end if else
         }//end if else
     }//end if
     for (int i=0; i<4; i++) {
@@ -314,15 +332,10 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         beta[i]  = result_eta[1];
     }//end for
     /* Check if achieve max leg length */
-    if (theta[swing_leg] >= max_theta) {
-        achieve_max_length = true;
-    }//end if
+    // if (theta[swing_leg] >= max_theta) {
+    //     achieve_max_length = true;
+    // }//end if
     /* Return if stable (entering support triangle) */
-    // if (move_dir * (get_foothold(theta[(swing_leg+1)%4], beta[(swing_leg+1)%4])[0] + get_foothold(theta[(swing_leg+3)%4], beta[(swing_leg+3)%4])[0]) / 2 < move_dir * CoM_offset[0] - stability_margin) {
-    //     return true;
-    // } else {
-    //     return false;
-    // }//end if else
     if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
         velocity[1] = 0.0;
         return true;
@@ -404,8 +417,8 @@ void StairClimb::init_swing_same_step(int swing_leg, double front_height, double
     this->t_f_x = margin_d / max_velocity;
     this->t_f_y = - coeff_b / coeff_a;
     this->t_f = std::max({min_swing_time_step, t_f_x, t_f_y});
-    this->local_max_velocity = margin_d / t_f;
-    // this->local_max_velocity = 0.0;
+    // this->local_max_velocity = margin_d / t_f;
+    this->local_max_velocity = 0.0;
     this->total_steps = static_cast<int>(t_f * rate); // total steps for swinging
     this->step_count = 0;
 }//end init_swing_same_step
@@ -820,6 +833,11 @@ bool StairClimb::determine_next_foothold() {
             if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
                 leg_info[swing_leg].one_step = false;
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+                // if (swing_leg<2) {
+                //     leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
+                // } else {
+                //     leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d + 0.05, current_stair_edge[1]};
+                // }
             } else {    //second swing leg: the same as first swing leg unless the leg can not reach keep_stair_d_max (because change first swing leg at each stair)
                 #if CHANGE_FIRST_SWING_LEG
                 if (swing_leg < 2) {    // front leg: change first swing leg

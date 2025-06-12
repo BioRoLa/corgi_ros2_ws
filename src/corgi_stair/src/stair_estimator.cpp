@@ -71,7 +71,10 @@ int main(int argc, char** argv) {
     ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
     tf2_ros::Buffer tfBuffer;
     tf2_ros::TransformListener tfListener(tfBuffer);
-    geometry_msgs::TransformStamped camera_transform;
+    geometry_msgs::TransformStamped camera_transform, last_camera_transform, camera_transform_tmp;
+    camera_transform.transform.translation.x = 0.0;
+    camera_transform.transform.translation.y = 0.0;
+    camera_transform.transform.translation.z = 0.0;
 
     plane_segmentation = new PlaneSegmentation;
     plane_segmentation->init_tf();
@@ -97,7 +100,13 @@ int main(int argc, char** argv) {
         ros::spinOnce();
         if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
             try {
-                camera_transform = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
+                    && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
+                    && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
+                    last_camera_transform = camera_transform; // update camera pose
+                    camera_transform = camera_transform_tmp; // update camera pose
+                }//end if
             }
             catch (tf2::TransformException &ex) {
                 ROS_WARN_THROTTLE(1.0, "TF lookup failed even after canTransform: %s", ex.what());

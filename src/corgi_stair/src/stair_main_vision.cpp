@@ -75,6 +75,8 @@ int main(int argc, char** argv) {
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 
+    std::ofstream stair_size_csv("stair_size.csv");
+    stair_size_csv << "command_seq," << "Trigger," << "D," << "H," << "\n";
 
     /* Setting variable */
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
@@ -111,7 +113,8 @@ int main(int argc, char** argv) {
     double hip_x, to_stair_d;
     double max_step_length_last;
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
-    geometry_msgs::TransformStamped initial_camera_transform, camera_transform;
+    geometry_msgs::TransformStamped initial_camera_transform, camera_transform, last_camera_transform, camera_transform_tmp;
+    double D_sum, H_sum, last_D_sum;
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -134,6 +137,8 @@ int main(int argc, char** argv) {
                 pitch = 0.0;
                 stair_count = 0;
                 command_count = 0;
+                D_sum = 0.0;
+                H_sum = 0.0;
                 break;
             case TRANSFORM:
                 transform_ratio += 1.0 / transform_count;
@@ -153,11 +158,21 @@ int main(int argc, char** argv) {
                 /* Get camera pose */
                 if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
                     try {
-                        camera_transform = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
                         if (!first_camera_pose) {
-                            initial_camera_transform = camera_transform; // set initial camera pose
-                            first_camera_pose = true;
-                        }//end if
+                            if (std::abs(camera_transform_tmp.transform.translation.x) < 0.05 && std::abs(camera_transform_tmp.transform.translation.y) < 0.05 && std::abs(camera_transform_tmp.transform.translation.z) < 0.05) {
+                                initial_camera_transform = camera_transform_tmp; // set initial camera pose
+                                camera_transform = camera_transform_tmp; // set camera pose
+                                first_camera_pose = true;
+                            }//end if
+                        } else {
+                            if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
+                                && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
+                                && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
+                                last_camera_transform = camera_transform; // update camera pose
+                                camera_transform = camera_transform_tmp; // update camera pose
+                            }//end if
+                        }//end if else
                     }
                     catch (tf2::TransformException &ex) {
                         ROS_WARN_THROTTLE(1.0, "TF lookup failed even after canTransform: %s", ex.what());
@@ -166,14 +181,14 @@ int main(int argc, char** argv) {
                     ROS_WARN_THROTTLE(1.0, "TF not available at this moment");
                 }
                 /* Vision feedback for real robot */
-                hip_x = camera_transform.transform.translation.x - CoM2cemera[0] + 0.222; // front hip
+                // hip_x = camera_transform.transform.translation.x - CoM2cemera[0] + 0.222; // front hip
+                hip_x = 0.222; // front hip
                 to_stair_d = hip_x + 100;  // set far from hip if not detect stair
                 if (plane_msg.vertical.size() > 0) {
                     // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                     to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
                     max_step_length_last = (to_stair_d - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                     // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
-                    // std::cout << "hip: " << hip_x << std::endl;
                     if ( max_step_length_last > 0.01 && step_length >= max_step_length_last ) {
                         walk_gait.set_step_length(max_step_length_last); 
                     }//end if
@@ -190,7 +205,13 @@ int main(int argc, char** argv) {
                 /* Get camera pose */
                 if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
                     try {
-                        camera_transform = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                        if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
+                            && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
+                            && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
+                            last_camera_transform = camera_transform; // update camera pose
+                            camera_transform = camera_transform_tmp; // update camera pose
+                        }//end if
                     }
                     catch (tf2::TransformException &ex) {
                         ROS_WARN_THROTTLE(1.0, "TF lookup failed even after canTransform: %s", ex.what());
@@ -200,24 +221,31 @@ int main(int argc, char** argv) {
                 }
                 /* Add stair edge */
                 if (stair_climb.any_no_stair()) {
-                    if (plane_msg.vertical.size() >= stair_count+1 && plane_msg.horizontal.size() >= stair_count+2) {
+                    if ( (stair_count == 0 || plane_msg.vertical.size() >= stair_count+1) && plane_msg.horizontal.size() >= stair_count+2) {
                         double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
                         double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
-                        
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
                         std::cout << "Pitch: " << real_pitch << " radians" << std::endl;
                         double CoM2camera_x = CoM2cemera[0] * std::cos(real_pitch) - CoM2cemera[1] * std::sin(real_pitch);
                         double CoM2camera_z = CoM2cemera[0] * std::sin(real_pitch) + CoM2cemera[1] * std::cos(real_pitch);
-                        stair_climb.add_stair_edge_CoM(CoM2camera_x + next_edge_x, CoM2camera_z + next_edge_z);
+                        // stair_climb.add_stair_edge_CoM(CoM2camera_x + next_edge_x, CoM2camera_z + next_edge_z);
                         double H = plane_msg.horizontal[stair_count+1] - plane_msg.horizontal[stair_count];
-                        double D;
-                        if (plane_msg.vertical.size() == 1) {
-                            D = CoM2camera_x + next_edge_x;
-                            std::cout << "Stair H: " << H << " cm, D: " << D << " cm." << std::endl;
-                        } else {
-                            D = plane_msg.vertical[stair_count+1] - plane_msg.vertical[stair_count];
-                            std::cout << "Stair H: " << H << " cm, D: " << D << " cm." << std::endl;
-                        }//end if else
+                        // if (stair_count == 0) {
+                        // if (true) {
+                        //     D = CoM2camera_x + next_edge_x;
+                        //     std::cout << "Stair H: " << H << " m, D: " << D << " m." << std::endl;
+                        // } else {
+                        //     D = plane_msg.vertical[stair_count+1] - plane_msg.vertical[stair_count];
+                        //     std::cout << "Stair H: " << H << " m, D: " << D << " m." << std::endl;
+                        // }//end if else
+                        // D_sum += D;
+                        H_sum += H;
+                        // stair_climb.add_stair_edge(D_sum, H_sum);
+                        last_D_sum = D_sum;  // save last D_sum
+                        D_sum = stair_climb.add_stair_edge_CoMx(CoM2camera_x + next_edge_x, H_sum);
+                        double D = D_sum - last_D_sum;
+                        std::cout << "Stair H: " << H << " m, D: " << D << " m." << std::endl;
+                        stair_size_csv << command_count << "," << (int)trigger_msg.enable << "," << D << "," << H << "\n";
                         stair_count++;
                     }//end if
                 }//end if
@@ -301,7 +329,7 @@ int main(int argc, char** argv) {
     std::cout << "time: " << duration.count() << " ms" << std::endl;
     std::cout << "total count: " << command_count << std::endl;
 
-    
+    stair_size_csv.close();
     ros::shutdown();
     return 0;
 }//end main
