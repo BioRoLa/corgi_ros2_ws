@@ -83,7 +83,7 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 
         ROS_INFO("Saving data to %s\n", output_file_name.c_str());
     }
-    else{
+    else if ( !trigger && output_file_name != ""){
         if(logger.outFile.is_open()){
             logger.finalizeCSV();
             ROS_INFO("Saved data to %s", output_file_name.c_str());
