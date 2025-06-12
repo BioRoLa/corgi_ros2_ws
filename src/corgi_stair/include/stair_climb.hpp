@@ -79,6 +79,17 @@ class StairClimb {
         const double min_swing_time_cw   = 2.0, 
                      min_swing_time_ccw  = 1.0, 
                      min_swing_time_step = 0.5;
+        const std::vector<std::pair<double, double>> foothold_table = {
+            {0.060, 0.07010}, {0.065, 0.11260}, {0.070, 0.12560},
+            {0.075, 0.13540}, {0.080, 0.14340}, {0.085, 0.15020},
+            {0.090, 0.15610}, {0.095, 0.16130}, {0.100, 0.16600},
+            {0.105, 0.17010}, {0.110, 0.17390}, {0.115, 0.17700},
+            {0.120, 0.18020}, {0.125, 0.18190}, {0.130, 0.18380},
+            {0.135, 0.18510}, {0.140, 0.18600}, {0.145, 0.18650},
+            {0.150, 0.18680}, {0.155, 0.18640}, {0.160, 0.18560},
+            {0.165, 0.18460}, {0.170, 0.18320}, {0.175, 0.18120},
+            {0.180, 0.17880}, {0.185, 0.17620}, {0.190, 0.16150}
+        };
 
         /* Variable */
         int rate;
@@ -110,6 +121,7 @@ class StairClimb {
         bool achieve_max_length;
 
         std::vector<StairEdge> stair_edge[4];
+        StairEdge last_stair_edge[4];
         int stair_count;
 
         enum STATES {MOVE_STABLE, SLOW_DOWN, SWING_SAME, SWING_NEXT, END};

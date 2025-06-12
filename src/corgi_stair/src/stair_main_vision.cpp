@@ -199,7 +199,7 @@ int main(int argc, char** argv) {
                 }//end if
                 eta_list = walk_gait.step();
                 CoM[0] += velocity / sampling_rate; // expected CoM x position
-                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << 0.0 << "," << CoM[0] << "," << stand_height << "\n";
+                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << CoM[0] << "," << stand_height << "\n";
                 command_count ++;
                 break;
             case STAIR:
@@ -258,7 +258,7 @@ int main(int argc, char** argv) {
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
                 CoM = stair_climb.get_CoM();
-                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
+                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
                 command_count ++;
                 break;
             default:

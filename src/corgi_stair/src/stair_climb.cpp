@@ -213,6 +213,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
                 enter_wheel_mode[swing_leg] = false; // exit wheel mode
+                last_stair_edge[swing_leg] = stair_edge[swing_leg].front();
                 stair_edge[swing_leg].erase(stair_edge[swing_leg].begin());
                 swing_count ++;
             }//end if
@@ -835,9 +836,27 @@ bool StairClimb::determine_next_foothold() {
     if (swing_leg < 2) {
         keep_stair_d_max = keep_stair_d_front_max;
         keep_stair_d_min = keep_stair_d_front_min;
-    } else {
-        keep_stair_d_max = keep_stair_d_hind_max;
-        keep_stair_d_min = keep_stair_d_hind_min;
+    } else {    // hind leg
+        if (!stair_edge[swing_leg].empty()) {
+            double H = last_stair_edge[swing_leg].edge[1] - stair_edge[swing_leg].front()edge[1];
+            if (H < foothold_table.front().first || H > foothold_table.back().first) {
+                throw std::out_of_range("H 超出查表範圍");
+            }
+            // 找到 H 介於哪兩個點之間
+            for (size_t i = 0; i < foothold_table.size() - 1; ++i) {
+                double H1 = foothold_table[i].first;
+                double V1 = foothold_table[i].second;
+                double H2 = foothold_table[i + 1].first;
+                double V2 = foothold_table[i + 1].second;
+                if (H >= H1 && H <= H2) {
+                    // 線性內插公式
+                    double ratio = (H - H1) / (H2 - H1);
+                    keep_stair_d_max = V1 + ratio * (V2 - V1);
+                    keep_stair_d_min = V1 + ratio * (V2 - V1);
+                    break;
+                }//end if
+            }//end for 
+        }//end if
     }//end if else
 
     if (!stair_edge[swing_leg].empty()) {
