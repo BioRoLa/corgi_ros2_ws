@@ -11,8 +11,8 @@
 #include "trajectory_plan.hpp"
 
 struct StairEdge {
-    std::array<double, 2> edge;
-    int count;
+    std::array<double, 2> edge{};
+    int count = 0;
 };
 
 class StairClimb {

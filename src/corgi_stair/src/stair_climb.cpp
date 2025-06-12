@@ -838,7 +838,7 @@ bool StairClimb::determine_next_foothold() {
         keep_stair_d_min = keep_stair_d_front_min;
     } else {    // hind leg
         if (!stair_edge[swing_leg].empty()) {
-            double H = last_stair_edge[swing_leg].edge[1] - stair_edge[swing_leg].front().edge[1];
+            double H = stair_edge[swing_leg].front().edge[1] - last_stair_edge[swing_leg].edge[1];
             if (H < foothold_table.front().first || H > foothold_table.back().first) {
                 throw std::out_of_range("H 超出查表範圍");
             }
