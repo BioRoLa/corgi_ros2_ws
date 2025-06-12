@@ -31,7 +31,7 @@ StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, doubl
     stair_count = 0;
 }//end StairClimb
 
-void StairClimb::initialize(double init_eta[8], double init_vel) {
+void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
     double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
     double init_beta[4]  = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
     velocity[0] = init_vel; // x velocity of CoM
@@ -72,7 +72,7 @@ void StairClimb::initialize(double init_eta[8], double init_vel) {
         default: std::cout << "Error in determining first swing leg." << std::endl; break;
     }//end switch
     // Get foothold in world coordinate
-    CoM = {0, stand_height};
+    CoM = {CoM_x, stand_height};
     pitch = 0;
     hip = {{{BL/2, stand_height} ,
             {BL/2, stand_height} ,
@@ -258,6 +258,10 @@ double StairClimb::add_stair_edge_CoMx(double x, double y) {  // only x relative
 double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch
+
+std::array<double, 2> get_CoM() {
+    return this->CoM;
+}//end get_CoM
 
 bool StairClimb::if_any_stair() {
     for (int i=0; i<4; i++) {

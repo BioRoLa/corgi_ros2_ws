@@ -20,12 +20,13 @@ class StairClimb {
         // Constructor
         StairClimb(bool sim=true, std::array<double, 2> CoM_bias={0.0, 0.0}, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
-        void initialize(double init_eta[8], double init_vel=0.0);
+        void initialize(double init_eta[8], double init_vel=0.0, double CoM_x=0.0);
         std::array<std::array<double, 4>, 2> step();
         void add_stair_edge(double x, double y);
         void add_stair_edge_CoM(double x, double y);
         double add_stair_edge_CoMx(double x, double y);
         double get_pitch();
+        std::array<double, 2> get_CoM();
         bool if_any_stair();
         bool any_no_stair();
         std::array<bool, 4> get_contact_edge_leg();

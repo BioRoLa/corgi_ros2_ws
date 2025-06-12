@@ -78,6 +78,8 @@ int main(int argc, char** argv) {
     }//end for 
     std::ofstream stair_size_csv("stair_size.csv");
     stair_size_csv << "command_seq," << "Trigger," << "D," << "H," << "\n";
+    std::ofstream command_pitch_CoM("command_pitch_CoM.csv");
+    command_pitch_CoM << "command_seq," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
@@ -108,6 +110,7 @@ int main(int argc, char** argv) {
     int stair_count;
     int command_count;
     double pitch;
+    std::array<double, 2> CoM = {0.0, 0.0}; // CoM position in map frame
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
     double min_keep_stair_d;
@@ -195,13 +198,15 @@ int main(int argc, char** argv) {
                     }//end if
                 }//end if
                 eta_list = walk_gait.step();
+                CoM[0] += velocity / sampling_rate; // expected CoM x position
+                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << 0.0 << "," << CoM[0] << "," << stand_height << "\n";
                 command_count ++;
                 break;
             case STAIR:
                 /* Initialize stair-climbing mode */
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                    stair_climb.initialize(current_eta, velocity);
+                    stair_climb.initialize(current_eta, velocity, CoM[0]);
                 }//end if
                 /* Get camera pose */
                 if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
@@ -252,6 +257,8 @@ int main(int argc, char** argv) {
                 }//end if
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
+                CoM = stair_climb.get_CoM();
+                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
                 command_count ++;
                 break;
             default:
@@ -331,6 +338,7 @@ int main(int argc, char** argv) {
     std::cout << "total count: " << command_count << std::endl;
 
     stair_size_csv.close();
+    command_pitch_CoM.close();
     ros::shutdown();
     return 0;
 }//end main

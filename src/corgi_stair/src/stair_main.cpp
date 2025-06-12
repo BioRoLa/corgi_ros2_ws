@@ -6,6 +6,7 @@
 #include <string>
 #include <chrono>
 #include "ros/ros.h"
+#include <fstream>
 
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/SimDataStamped.h"
@@ -53,6 +54,8 @@ int main(int argc, char** argv) {
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 
+    std::ofstream command_pitch_CoM("command_pitch_CoM.csv");
+    command_pitch_CoM << "command_seq," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
     double D=0.27, H=0.120;
@@ -80,8 +83,9 @@ int main(int argc, char** argv) {
     STATES state = INIT, last_state = INIT;
     double transform_ratio;
     bool trigger;
-    int count;
+    int command_count;
     double pitch;
+    std::array<double, 2> CoM;
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
     double min_keep_stair_d;
@@ -107,7 +111,7 @@ int main(int argc, char** argv) {
             case INIT:
                 transform_ratio = 0.0;
                 trigger = false;
-                count = 0;
+                command_count = 0;
                 break;
             case TRANSFORM:
                 transform_ratio += 1.0 / transform_count;
@@ -149,20 +153,24 @@ int main(int argc, char** argv) {
                 }//end if
 
                 eta_list = walk_gait.step();
-                count ++;
+                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
+                command_count ++;
                 break;
             case STAIR:
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                    stair_climb.initialize(current_eta, velocity);
+                    stair_climb.initialize(current_eta, velocity, exp_robot_x);
                     for (int i=0; i<stair_num; i++) {
                         // stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
-                        stair_climb.add_stair_edge(-D/2.0 + i*D - exp_robot_x, (i+1)*H);
+                        stair_climb.add_stair_edge(-D/2.0 + i*D, (i+1)*H);
                     }//end for
                 }//end if
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
-                count ++;
+                CoM = stair_climb.get_CoM();
+                command_pitch_CoM << command_count << "," << trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
+
+                command_count ++;
                 break;
             default:
                 break;
@@ -206,7 +214,7 @@ int main(int argc, char** argv) {
         if_contact_edge = stair_climb.get_contact_edge_leg();
         for (int i=0; i<4; i++) {
             if (if_contact_edge[i] && !last_if_contact_edge[i]) {
-                std::cout << "Command: " << count << ". Leg " << i << " is contacting the stair edge." << std::endl;
+                std::cout << "Command: " << command_count << ". Leg " << i << " is contacting the stair edge." << std::endl;
             }//end if
         }//end for
         last_if_contact_edge = if_contact_edge;
@@ -237,9 +245,10 @@ int main(int argc, char** argv) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "max time: " << max_cal_time << " us" << std::endl;
     std::cout << "time: " << duration.count() << " ms" << std::endl;
-    std::cout << "total count: " << count << std::endl;
+    std::cout << "total count: " << command_count << std::endl;
 
     
+    command_pitch_CoM.close();
     ros::shutdown();
     return 0;
 }//end main
