@@ -335,6 +335,40 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     //         }//end if else
     //     }//end if else
     // }//end if
+
+    if (leg_info[0].stair_count != leg_info[1].stair_count || leg_info[2].stair_count != leg_info[3].stair_count) {
+        if (velocity[1] > -max_velocity) {
+            velocity[1] -= vel_incre;
+        } 
+        if (leg_info[0].contact_edge || leg_info[1].contact_edge) {
+            front_height += velocity[1] / rate;
+        }
+        if (leg_info[2].contact_edge || leg_info[3].contact_edge) {
+            hind_height += velocity[1] / rate;
+        }
+    }
+    CoM[1] = (front_height + hind_height) / 2; // update CoM height
+    pitch = std::asin((front_height - hind_height) / BL); // update pitch angle
+    // if (swing_leg >= 2) {
+    //     // if (!leg_info[swing_leg].contact_edge) {
+    //         // leg_model.forward(theta[swing_leg], beta[swing_leg]);
+    //         // velocity[1] = (leg_model.G[1] + std::sqrt(max_length*max_length - std::pow(velocity[0]/rate - leg_model.G[0], 2))) * rate;
+    //         // CoM[1] += velocity[1] / rate;    // hip_y = last_hip_y + leg_model.G[1] + std::sqrt( max_length**2 - (hip_x - (last_hip_x + leg_model.G[0]))**2 ), hip_x - last_hip_x = velocity[0] / rate
+    //     // } else {
+
+    //     if (leg_info[swing_leg].contact_edge || enter_wheel_mode[swing_leg]) {
+    //         enter_wheel_mode[swing_leg] = true; // enter wheel mode
+    //         velocity[1] = -velocity[0];
+    //         double max_down = leg_info[swing_leg].get_hip_position(CoM, pitch)[1] - (stair_edge[swing_leg].front().edge[1] + leg_model.radius);
+    //         if (max_down > - velocity[1] / rate) {
+    //             CoM[1] += velocity[1] / rate;
+    //         } else if (max_down < velocity[1] / rate) {
+    //             CoM[1] -= velocity[1] / rate;
+    //         } else {
+    //             CoM[1] -= max_down;
+    //         }//end if else
+    //     }//end if else
+    // }//end if
     for (int i=0; i<4; i++) {
         hip[i] = leg_info[i].get_hip_position(CoM, pitch);
         result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], hip[i][1]-last_hip[i][1]});
