@@ -336,15 +336,39 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     //     }//end if else
     // }//end if
 
-    if (leg_info[0].stair_count != leg_info[1].stair_count || leg_info[2].stair_count != leg_info[3].stair_count) {
+    bool have_change_velocity = false;
+    if (leg_info[0].stair_count != leg_info[1].stair_count) {
         if (velocity[1] > -max_velocity) {
             velocity[1] -= vel_incre;
+            have_change_velocity = true;
         } 
-        if (leg_info[0].contact_edge || leg_info[1].contact_edge) {
-            front_height += velocity[1] / rate;
+
+        if (leg_info[0].contact_edge) {
+            if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
+                front_height += velocity[1] / rate;
+            }
+        } else if (leg_info[1].contact_edge) {
+            if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
+                front_height += velocity[1] / rate;
+            }
         }
         if (leg_info[2].contact_edge || leg_info[3].contact_edge) {
             hind_height += velocity[1] / rate;
+        }
+    }
+    if (leg_info[2].stair_count != leg_info[3].stair_count) {
+        if (!have_change_velocity && velocity[1] > -max_velocity) { // only change once
+            velocity[1] -= vel_incre;
+        } 
+
+        if (leg_info[2].contact_edge) {
+            if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
+                hind_height += velocity[1] / rate;
+            }
+        } else if (leg_info[3].contact_edge) {
+            if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
+                hind_height += velocity[1] / rate;
+            }
         }
     }
     CoM[1] = (front_height + hind_height) / 2; // update CoM height
