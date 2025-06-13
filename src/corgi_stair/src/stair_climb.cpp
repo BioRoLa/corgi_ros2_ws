@@ -336,6 +336,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     //     }//end if else
     // }//end if
 
+    if (move_dir == 1) {
     bool have_change_velocity = false;
     if (leg_info[0].stair_count != leg_info[1].stair_count) {
         velocity[1] = -velocity[0];
@@ -398,6 +399,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 }//end if else
             }
         }
+    }
     }
     CoM[1] = (front_height + hind_height) / 2; // update CoM height
     pitch = std::asin((front_height - hind_height) / BL); // update pitch angle
