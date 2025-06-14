@@ -2,6 +2,101 @@
 
 const double PI = M_PI;
 
+TerrainInfo::TerrainInfo(TerrainType type)
+: type_(type)
+, startX_(0.0), startY_(0.0)
+, segmentLength_(1.0), slopeAngleRad_(0.0)
+, numSegments_(0)
+, plainHeight_(0.0){
+    if (type_ == TerrainType::Zigzag) {
+        generateZigzagPoints();
+    }
+}
+
+void TerrainInfo::setTerrainType(TerrainType type) {
+    type_ = type;
+    if (type_ == TerrainType::Zigzag) {
+        generateZigzagPoints();
+    }
+}
+
+void TerrainInfo::setZigzagParameters(double startX, double startY,
+                                      double segmentLength,
+                                      double slopeDeg,
+                                      int numSegments)
+{
+    startX_        = startX;
+    startY_        = startY;
+    segmentLength_ = segmentLength;
+    slopeAngleRad_ = slopeDeg * M_PI / 180.0;
+    numSegments_   = numSegments;
+    generateZigzagPoints();
+}
+
+void TerrainInfo::setPlainHeight(double height) {
+    plainHeight_ = height;
+}
+
+void TerrainInfo::setSlopeAngle(double slopeDeg) {
+    // global linear slope: y = startY_ + tan(slopeAngle)*(x - startX_)
+    slopeAngleRad_ = slopeDeg * M_PI / 180.0;
+}
+
+void TerrainInfo::generateZigzagPoints() {
+    zigzagPoints_.clear();
+    zigzagPoints_.reserve(numSegments_ + 1);
+    zigzagPoints_.emplace_back(startX_, startY_);
+
+    for (int i = 0; i < numSegments_; ++i) {
+        double angle = (i % 2 == 0) ? slopeAngleRad_ : -slopeAngleRad_;
+        double dx    = segmentLength_;
+        double dy    = std::tan(angle) * segmentLength_;
+        auto [x0,y0] = zigzagPoints_.back();
+        zigzagPoints_.emplace_back(x0 + dx, y0 + dy);
+    }
+}
+
+double TerrainInfo::getTerrainHeight(double x) const {
+    switch (type_) {
+        case TerrainType::Zigzag: {
+            if (zigzagPoints_.empty()) return 0.0;
+            // 找到 x 落在哪一段
+            auto it = std::upper_bound(
+                zigzagPoints_.begin(), zigzagPoints_.end(), x,
+                [](double value, const std::pair<double,double>& pt){
+                    return value < pt.first;
+                });
+            if (it == zigzagPoints_.begin()) {
+                return zigzagPoints_.front().second;
+            }
+            if (it == zigzagPoints_.end()) {
+                return zigzagPoints_.back().second;
+            }
+            // 線性插值
+            auto [x1,y1] = *(it-1);
+            auto [x2,y2] = *it;
+            double t = (x - x1) / (x2 - x1);
+            return y1 + t * (y2 - y1);
+        }
+        case TerrainType::Plain:
+            return plainHeight_;
+        case TerrainType::Slope:
+            // 以 startX_, startY_ 作為基準
+            return startY_ + std::tan(slopeAngleRad_) * (x - startX_);
+        case TerrainType::Obstacle:
+            // TODO: 根據需求自行實作障礙
+            return plainHeight_;
+        default:
+            return 0.0;
+    }
+}
+
+double TerrainInfo::getTargetHeight(double x, double standHeight) const {
+    double terrainY = getTerrainHeight(x);
+    return standHeight - terrainY;
+}
+
+
 Hybrid::Hybrid(std::shared_ptr<GaitSelector> gait_selector_ptr)
     : gaitSelector(gait_selector_ptr) {
 }
@@ -12,11 +107,11 @@ std::array<double, 2> Hybrid::find_pose(double height, float shift, float steple
     pose = gaitSelector->leg_model.inverse(pos, "G");
     if (shift + steplength >= 0) {
         for (double i = 0; i < shift + steplength; i += 0.001) {
-            pose = gaitSelector->leg_model.move(pose[0], pose[1], {0.001, 0}, slope);
+            pose = gaitSelector->leg_model.move(pose[0], pose[1], {0.001, 0},0); //, slope
         }
     } else {
         for (double i = 0; i > shift + steplength; i -= 0.001) {
-            pose = gaitSelector->leg_model.move(pose[0], pose[1], {-0.001, 0}, slope);
+            pose = gaitSelector->leg_model.move(pose[0], pose[1], {-0.001, 0},0);
         }
     }
     return pose;
@@ -55,9 +150,9 @@ void Hybrid::Initialize(int swing_index, int set_type) {
                 break;
         }
                 
-
         for(int i =0; i<4;i++){
-            auto tmp0 = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length/2) - (gaitSelector->duty[i]/(1-gaitSelector->swing_time)) * gaitSelector->step_length, 0.0);
+            // std::cout << "gaitSelector->duty[" << i << "] = " << gaitSelector->duty[i] << std::endl;
+            auto tmp0 = find_pose(gaitSelector->current_stand_height[i], gaitSelector->current_shift[i], (gaitSelector->step_length/2) - (gaitSelector->duty[i]/(1-gaitSelector->swing_time)) * gaitSelector->step_length, terrain_slope);
             gaitSelector->next_eta[i][0] = tmp0[0];
             gaitSelector->next_eta[i][1] = tmp0[1];
         }
@@ -118,6 +213,7 @@ void Hybrid::Initialize(int swing_index, int set_type) {
                 }
                 break;
         }
+        
         gaitSelector->swing_phase = {0};  
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 2; j++) {
@@ -169,7 +265,8 @@ void Hybrid::Swing(double relative[4][2], std::array<double, 2> &target, std::ar
     int rim_id = gaitSelector->leg_model.rim;
     double alpha0 = gaitSelector->leg_model.alpha;
     Eigen::Vector2d body_velocity = {gaitSelector->velocity,0};
-    Eigen::Vector2d terrain = {1,0};
+    Eigen::Vector2d terrain = {cos(terrain_slope), sin(terrain_slope)};
+    // Eigen::Vector2d terrain = {1,0};
     // 儲存一條完整 swing 軌跡
     swing_traj[swing_leg] = HybridSwing::generate(gaitSelector->leg_model, swing_type, startX, endX, startY, endY, rim_id, alpha0, body_velocity, terrain, 100);
 
@@ -234,8 +331,23 @@ void Hybrid::Step(){
                 // gaitSelector->foothold[i] = {gaitSelector->next_hip[i][0] + ((1-gaitSelector->swing_time)/2+gaitSelector->swing_time)*(gaitSelector->step_length), 0};
                 gaitSelector->incre_duty = gaitSelector->dS / gaitSelector->step_length;  // change incre_duty corresponding to new step length when hind leg start to swing.
             }
-            swing_pose = find_pose(gaitSelector->stand_height, gaitSelector->current_shift[i], (gaitSelector->step_length*3/6), terrain_slope);  
-            Swing(gaitSelector->eta, swing_pose, swing_variation, i);
+
+
+            if (terrain_type == TerrainType::Slope){
+                // gaitSelector->duty[i] + step * gaitSelector->incre_duty < 1.0 calculate the step 
+                // step = (1.0 - gaitSelector->duty[i]) / gaitSelector->incre_duty; (how to take the integer part)
+                std::cout << "swing leg: " << i << std::endl;
+                swing_desired_height = gaitSelector->current_stand_height[i] + ((int)((1.0 - gaitSelector->duty[i]) / gaitSelector->incre_duty)) * gaitSelector->dS * tan(terrain_slope); 
+                std::cout << "current height: " << gaitSelector->current_stand_height[i] << std::endl;
+                std::cout << "desired height: " << swing_desired_height << std::endl;
+                swing_pose = find_pose(swing_desired_height, gaitSelector->current_shift[i], (gaitSelector->step_length*3/6), terrain_slope);  
+                Swing(gaitSelector->eta, swing_pose, swing_variation, i);
+            }
+            else{
+                swing_pose = find_pose(gaitSelector->current_stand_height[i], gaitSelector->current_shift[i], (gaitSelector->step_length*3/6), terrain_slope);  
+                Swing(gaitSelector->eta, swing_pose, swing_variation, i);
+            }
+            
             
         } 
         // Enter TD
@@ -279,10 +391,19 @@ void Hybrid::Step(){
 
 }
 
-void Hybrid::change_Height(double new_value){
-    gaitSelector->stand_height = new_value;
-    for (int i=0; i<4; i++) {
-        gaitSelector->next_hip[i][2] = gaitSelector->stand_height;
+void Hybrid::change_Height(double new_value, int leg_index){
+    // 0-3 specific leg, 4 all legs
+    // real-change when in the stance phase
+    // gaitSelector->new_step_length = new_value;
+    if (leg_index == 4){
+        for (int i=0; i<4; i++) {
+            // gaitSelector->new_stand_height[leg_index] = new_value;
+            gaitSelector->current_stand_height[leg_index] = new_value;
+        }
+    }
+    else{
+        // gaitSelector->new_stand_height[leg_index] = new_value;
+        gaitSelector->current_stand_height[leg_index] = new_value;
     }
     // add limitation
 }
@@ -347,4 +468,90 @@ void Hybrid::computeNextBody() {
 double Hybrid::clamp(double value, double min_val, double max_val)
 {
   return std::min(std::max(value, min_val), max_val);
+}
+void Hybrid::csv_title(std::ofstream &file) {
+    // open the file and keep saving / in no file then open the new one to save
+    if (!file.is_open()) {
+        std::cerr << "Error opening file" << std::endl;
+        return;
+    }
+    // write the header
+    file << "step, "
+         << "eta[0][0], eta[0][1], "
+         << "eta[1][0], eta[1][1], "
+         << "eta[2][0], eta[2][1], "
+         << "eta[3][0], eta[3][1], "
+         << "next_eta[0][0], next_eta[0][1], "
+         << "next_eta[1][0], next_eta[1][1], "
+         << "next_eta[2][0], next_eta[2][1], "
+         << "next_eta[3][0], next_eta[3][1], "
+         << "relative_foothold.x, relative_foothold.y, "
+         << "body.x, body.y, body.z, "
+         << "next_body.x, next_body.y, next_body.z, "
+         << "hip.x, hip.y, hip.z, "
+         << "next_hip.x, next_hip.y, next_hip.z, "
+         << "swing_phase[0], swing_phase[1], swing_phase[2], swing_phase[3], "
+         << "duty[0], duty[1], duty[2], duty[3]" << std::endl;
+
+}
+
+
+// save the step, eta, next_eta, relative_foothold, body, next_body, hip, next_hip, swing_phase, duty of each leg to csv "totall_steps.csv"
+void Hybrid::save_to_csv(std::ofstream &file, int step) {
+    // open the file and keep saving / in no file then open the new one to save
+    if (!file.is_open()) {
+        std::cerr << "Error opening file" << std::endl;
+        return;
+    }
+    // // write the header
+    // file << "step, "
+    //      << "eta[0][0], eta[0][1], "
+    //      << "eta[1][0], eta[1][1], "
+    //      << "eta[2][0], eta[2][1], "
+    //      << "eta[3][0], eta[3][1], "
+    //      << "next_eta[0][0], next_eta[0][1], "
+    //      << "next_eta[1][0], next_eta[1][1], "
+    //      << "next_eta[2][0], next_eta[2][1], "
+    //      << "next_eta[3][0], next_eta[3][1], "
+    //      << "relative_foothold.x, relative_foothold.y, "
+    //      << "body.x, body.y, body.z, "
+    //      << "next_body.x, next_body.y, next_body.z, "
+    //      << "hip.x, hip.y, hip.z, "
+    //      << "next_hip.x, next_hip.y, next_hip.z, "
+    //      << "swing_phase[0], swing_phase[1], swing_phase[2], swing_phase[3], "
+    //      << "duty[0], duty[1], duty[2], duty[3]" << std::endl;
+    // write the data
+    file << step << ", ";
+    for (int i = 0; i < 4; i++) {
+        file << gaitSelector->eta[i][0] << ", " << gaitSelector->eta[i][1] << ", ";
+    }
+    for (int i = 0; i < 4; i++) {
+        file << gaitSelector->next_eta[i][0] << ", " << gaitSelector->next_eta[i][1] << ", ";
+    }
+    for (int i = 0; i < 4; i++) {
+        file << gaitSelector->relative_foothold[i][0] << ", " << gaitSelector->relative_foothold[i][1] << ", ";
+    }
+    for (int i = 0; i < 3; i++) {
+        file << gaitSelector->body[i] << ", ";
+    }
+    for (int i = 0; i < 3; i++) {
+        file << gaitSelector->next_body[i] << ", ";
+    }
+    for (int i = 0; i < 3; i++) {
+        file << gaitSelector->hip[i][0] << ", " << gaitSelector->hip[i][1] << ", " << gaitSelector->hip[i][2] << ", ";
+    }
+    for (int i = 0; i < 3; i++) {
+        file << gaitSelector->next_hip[i][0] << ", " << gaitSelector->next_hip[i][1] << ", " << gaitSelector->next_hip[i][2] << ", ";
+    }
+    for (int i = 0; i < 4; i++) {
+        file << gaitSelector->swing_phase[i] << ", ";
+    }
+    for (int i = 0; i < 4; i++) {
+        file << gaitSelector->duty[i] << ", ";
+    }   
+    file << std::endl;
+    // close the file
+    
+    // std::cout << "Data saved to file" << std::endl;
+    std::cout << "step: " << step << std::endl;
 }

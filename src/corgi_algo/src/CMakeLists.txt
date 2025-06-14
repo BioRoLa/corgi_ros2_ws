@@ -7,6 +7,6 @@ target_link_libraries(algo
                         ${CORGI_HYBRID} 
                         ${CORGI_WHEELED} 
                         ${CORGI_LEGGED} 
-                        ${CORGI_TRANSFORMATION}
+                        # ${CORGI_TRANSFORMATION}
                         Eigen3::Eigen)
 

@@ -83,6 +83,10 @@ class GaitSelector {
         static std::array<double, 4> next_step_length;
         static double new_step_length ;
 
+        static std::array<double, 4> current_stand_height;
+        static std::array<double, 4> next_stand_height;
+        static std::array<double, 4> new_stand_height;
+
         static std::array<double, 4> current_shift;
 
         static double curvature;

@@ -29,7 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
   corgi_legged 
   corgi_wheeled
   corgi_hybrid
-  corgi_transformation
+  # corgi_transformation
   corgi_gait_selector
 )
 
@@ -48,7 +48,7 @@ catkin_package(
     corgi_legged 
     corgi_wheeled
     corgi_hybrid
-    corgi_transformation
+    # corgi_transformation
     corgi_gait_selector
 )
 
@@ -66,7 +66,7 @@ find_library(CORGI_HYBRID corgi_hybrid)
 find_library(CORGI_WHEELED corgi_wheeled)
 find_library(CORGI_LEGGED corgi_legged)
 find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
-find_library(CORGI_TRANSFORMATION corgi_transformation)
+# find_library(CORGI_TRANSFORMATION corgi_transformation)
 
 add_subdirectory(src)
 

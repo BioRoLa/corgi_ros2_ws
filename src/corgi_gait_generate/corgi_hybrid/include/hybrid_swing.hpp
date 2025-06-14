@@ -24,6 +24,13 @@ enum class SwingType {
     OPTIMIZE
 };
 
+enum class TerrainType {
+    Zigzag,
+    Plain,
+    Slope,
+    Obstacle
+};
+
 class HybridSwing {
 public:
     static std::vector<SwingPoint> generate(LegModel& leg, SwingType type, 

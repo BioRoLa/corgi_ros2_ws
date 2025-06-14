@@ -26,21 +26,23 @@ int main(int argc, char** argv) {
 
     /*  wlw initial pose  */
     std::cout << "hybrid" << std::endl;
-    gaitSelector->do_pub = 0;
-    gaitSelector->transfer_state = 0;
+    std::ofstream file("total_info.csv", std::ios::app);
     hybrid.Initialize(1, 1);
-    hybrid.change_Velocity(0.1);
-    hybrid.change_Height(0.16);
-    hybrid.change_Step_length(0.3);
+    hybrid.csv_title(file); 
+    hybrid.save_to_csv(file, 0); // Pass file by reference
     // // /*  wlw real-time   */
     // // cout<< "-----wlw------"<<endl;
 
-    gaitSelector->do_pub = 1;
-    for (int step = 0;step<50000;step++) {
+   for (int step = 0;step<100;step++) {
+         // Send in swing_desired_height
         gaitSelector->motor_cmd.header.seq = step;
         gaitSelector->motor_cmd.header.stamp = ros::Time::now();
         hybrid.Step();
+        hybrid.save_to_csv(file, step+1);
     }
+
+  
+
 
 
     // cout<< "----wlw-variation----"<<endl;
@@ -72,6 +74,7 @@ int main(int argc, char** argv) {
         
         
     // }
+    file.close();
     return 0;
 }
 
