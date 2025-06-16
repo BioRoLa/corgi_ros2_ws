@@ -29,6 +29,11 @@ class TrotGait {
         std::array<double, 4> get_duty();
         bool if_touchdown();
 
+        double velocity     = 0.4;
+        double stand_height = 0.25;
+        double step_length  = 0.2;
+        double step_height  = 0.04;
+        
     private:
         LegModel leg_model;
 
@@ -43,10 +48,6 @@ class TrotGait {
         int rate;
         double dS;
         double incre_duty;
-        double velocity     = 0.4;
-        double stand_height = 0.25;
-        double step_length  = 0.2;
-        double step_height  = 0.04;
         double curvature    = 0.0;  // +: turn left, -:turn right, 0: straight
 
         // State

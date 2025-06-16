@@ -15,3 +15,6 @@ target_link_libraries(exp_wlw ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS
 
 add_executable(exp_sim_leg exp_sim_leg.cpp)
 target_link_libraries(exp_sim_leg ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} Eigen3::Eigen)
+
+add_executable(exp_wheel exp_wheel.cpp)
+target_link_libraries(exp_wheel ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} Eigen3::Eigen)

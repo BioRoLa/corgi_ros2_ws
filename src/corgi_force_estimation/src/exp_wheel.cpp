@@ -8,9 +8,9 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 
 
 int main(int argc, char **argv) {
-    ROS_INFO("Corgi Sim Leg Starts");
+    ROS_INFO("Corgi Wheel Starts");
 
-    ros::init(argc, argv, "corgi_sim_leg");
+    ros::init(argc, argv, "corgi_wheel");
 
     ros::NodeHandle nh;
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
@@ -26,6 +26,12 @@ int main(int argc, char **argv) {
         &motor_cmd.module_c,
         &motor_cmd.module_d
     };
+
+    double init_eta[8] = {0.29670597283903605,-0.0,0.29670597283903605,0.0,0.29670597283903605,0.0,0.29670597283903605};    
+    
+    double velocity = 0.0;
+
+    int target_loop = 10000;
 
     // initialize motor command
     for (auto& cmd : motor_cmd_modules){
@@ -45,18 +51,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    // stay
-    for (int i=0; i<1000; i++) {
-        motor_cmd.header.seq = -1;
-        motor_cmd_pub.publish(motor_cmd);
-        rate.sleep();
-    }
-
     ROS_INFO("Transform Starts\n");
 
     // transform
     for (int i=0; i<3000; i++) {
-        motor_cmd_modules[0]->beta += M_PI/3000.0;
+        for (int j=0; j<4; j++) {
+            motor_cmd_modules[j]->theta += (init_eta[2*j]-17/180.0*M_PI)/3000.0;
+            motor_cmd_modules[j]->beta += init_eta[2*j+1]/3000.0;
+        }
         motor_cmd.header.seq = -1;
         motor_cmd_pub.publish(motor_cmd);
         rate.sleep();
@@ -80,17 +82,23 @@ int main(int argc, char **argv) {
             while (ros::ok()) {
                 ros::spinOnce();
 
-                if (loop_count < 36000) {
-                    motor_cmd_modules[0]->beta -= M_PI/6000.0;
+                if (loop_count < 500) {
+                    velocity += 0.3 / 500.0;
                 }
-                else {
-                    break;
+                else if (loop_count > target_loop - 500 && loop_count < target_loop) {
+                    velocity -= 0.3 / 500.0;
                 }
+
+                motor_cmd_modules[0]->beta += velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
+                motor_cmd_modules[1]->beta -= velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
+                motor_cmd_modules[2]->beta -= velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
+                motor_cmd_modules[3]->beta += velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
 
                 motor_cmd.header.seq = loop_count;
                 motor_cmd_pub.publish(motor_cmd);
 
                 loop_count++;
+                if (loop_count >= target_loop) break;
 
                 rate.sleep();
             }

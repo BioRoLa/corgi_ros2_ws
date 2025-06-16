@@ -46,7 +46,7 @@ class ModelPredictiveController {
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const double m = 19.68;
+        const double m = 19.5;
         const double gravity = 9.81;
 
         const int N = 10;
@@ -83,8 +83,7 @@ class ModelPredictiveController {
         int fx_upper_bound = 0;
         int fx_lower_bound = -0;
         int fz_upper_bound = 200;
-        // int fz_lower_bound = -100;
-        int fz_lower_bound = -10;
+        int fz_lower_bound = -100;
 
         double friction_coef = 1;
 

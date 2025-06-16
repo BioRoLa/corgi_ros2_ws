@@ -48,8 +48,8 @@ void ModelPredictiveController::init_matrices(const double *ra, const double *rb
 
     // Cost matrices
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 20,    20,    0,     // roll, pitch, yaw
-                    0,     0,     100,   // x, y, z
+    Q.diagonal() << 30,    30,    0,     // roll, pitch, yaw
+                    0,     0,     250,   // x, y, z
                     1e-1,  1e-1,  0,     // ω_x, ω_y, ω_z
                     0,     0,     1,     // v_x, v_y, v_z
                     0;                   // additional state

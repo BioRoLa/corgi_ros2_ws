@@ -49,6 +49,7 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
     double scaled_radius = legmodel.radius / legmodel.R;
 
     if (rim == 1 && alpha > -M_PI*2.0/3.0) {
+    // if (rim == 1) {
         Eigen::Rotation2D<double> rotation(alpha+M_PI);
         Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
         P_poly = rot_alpha * (H_l_coef-U_l_coef) * scaled_radius + U_l_coef;
@@ -69,6 +70,7 @@ Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
         P_poly = rot_alpha * (G_coef-L_r_coef) * scaled_radius + L_r_coef;
     }
     else if (rim == 5 && alpha < M_PI*2.0/3.0) {
+    // else if (rim == 5) {
         Eigen::Rotation2D<double> rotation(alpha-M_PI);
         Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
         P_poly = rot_alpha * (H_r_coef-U_r_coef) * scaled_radius + U_r_coef;

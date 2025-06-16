@@ -1995,7 +1995,7 @@ Robot {
           }
         }
       ]
-      name "force_plate_1"
+      name "force_plate_0"
       boundingObject Box {
         size 0.8 0.3 0.01
       }

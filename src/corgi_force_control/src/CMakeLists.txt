@@ -18,3 +18,6 @@ target_link_libraries(exp_h21 ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS
 
 add_executable(exp_h24 exp_h24.cpp)
 target_link_libraries(exp_h24 ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_FORCE_EST} Eigen3::Eigen)
+
+add_executable(exp_sim_stay exp_sim_stay.cpp)
+target_link_libraries(exp_sim_stay ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_FORCE_EST} Eigen3::Eigen)
