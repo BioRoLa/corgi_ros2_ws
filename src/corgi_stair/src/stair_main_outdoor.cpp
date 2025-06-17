@@ -191,8 +191,19 @@ int main(int argc, char** argv) {
                 hip_x = 0.222; // front hip
                 to_stair_d = hip_x + 100;  // set far from hip if not detect stair
                 if (plane_msg.vertical.size() > 0) {
+                    Eigen::Vector3d camera_position(
+                        camera_transform.transform.translation.x,
+                        camera_transform.transform.translation.y,
+                        camera_transform.transform.translation.z
+                    );
+                    Eigen::Vector3d normal_vec(
+                        plane_msg.v_normal.x,
+                        plane_msg.v_normal.y,
+                        plane_msg.v_normal.z
+                    );
                     // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
-                    to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
+                    to_stair_d = plane_msg.vertical[0] - camera_position.dot(normal_vec) + CoM2cemera[0]; // distance from robot center to stair edge
+                    // to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
                     max_step_length_last = (to_stair_d - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                     // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                     if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
