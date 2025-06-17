@@ -229,18 +229,7 @@ int main(int argc, char** argv) {
                 /* Add stair edge */
                 if (stair_climb.any_no_stair()) {
                     if ( (stair_count == 0 || plane_msg.vertical.size() >= stair_count+1) && plane_msg.horizontal.size() >= stair_count+2) {
-                        Eigen::Vector3d camera_position(
-                            camera_transform.transform.translation.x,
-                            camera_transform.transform.translation.y,
-                            camera_transform.transform.translation.z
-                        );
-                        Eigen::Vector3d normal_vec(
-                            plane_msg.v_normal.x,
-                            plane_msg.v_normal.y,
-                            plane_msg.v_normal.z
-                        );
-                        double next_edge_x = plane_msg.vertical[stair_count] - camera_position.dot(normal_vec);     // relative to camera
-                        // double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
+                        double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
                         // double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
                         std::cout << "Pitch: " << real_pitch << " radians" << std::endl;
