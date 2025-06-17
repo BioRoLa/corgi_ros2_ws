@@ -55,6 +55,7 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
         plane_tracker.update(plane_distances);
         plane_msg.horizontal = plane_tracker.get_horizontal_averages();
         plane_msg.vertical = plane_tracker.get_vertical_averages();
+        plane_msg.v_normal = plane_distances.v_normal;
         plane_pub.publish(plane_msg);
     }
 }//end cloud_cb
