@@ -234,7 +234,12 @@ int main(int argc, char** argv) {
                             camera_transform.transform.translation.y,
                             camera_transform.transform.translation.z
                         );
-                        double next_edge_x = plane_msg.vertical[stair_count] - camera_position.dot(plane_msg.v_normal);     // relative to camera
+                        Eigen::Vector3d normal_vec(
+                            plane_msg.v_normal.x,
+                            plane_msg.v_normal.y,
+                            plane_msg.v_normal.z
+                        );
+                        double next_edge_x = plane_msg.vertical[stair_count] - camera_position.dot(normal_vec);     // relative to camera
                         // double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
                         // double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
                         double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));

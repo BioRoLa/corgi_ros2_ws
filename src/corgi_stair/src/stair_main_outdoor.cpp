@@ -120,6 +120,7 @@ int main(int argc, char** argv) {
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
     geometry_msgs::TransformStamped initial_camera_transform, camera_transform, last_camera_transform, camera_transform_tmp;
     double D_sum, H_sum, last_D_sum;
+    std::array<int, 4> step_count;
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -318,7 +319,7 @@ int main(int argc, char** argv) {
                 }//end if  
                 break;
             case UPPER_WALK:
-                std::array<int, 4> step_count = walk_gait.get_step_count();
+                step_count = walk_gait.get_step_count();
                 if (step_count[0] >= 2 && step_count[1] >= 2 && step_count[2] >= 2 && step_count[3] >= 2) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
