@@ -121,9 +121,7 @@ class GaitSelector {
 
         
         /*     Cooperate functions      */ 
-        void setCmd(std::array<double, 2> send, int index, bool dir);
-        void publish(int freq);
-        void Send(int freq);
+        void Send();
         void Transfer(int pub, int transfer_sec, int wait_sec);
         void Receive();
         // void changeGait(const std::string& command);

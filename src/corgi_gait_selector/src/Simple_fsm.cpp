@@ -69,47 +69,31 @@ GaitSelector::~GaitSelector() {
 }
 
 
-
-void GaitSelector::setCmd(std::array<double, 2> send, int index, bool dir) {
-    if (dir==true){
-        motor_cmd_modules[index]->beta  = -send[1];
-    }
-    else{
-        motor_cmd_modules[index]->beta  = send[1];
-    }
-    motor_cmd_modules[index]->theta = send[0];
-    motor_cmd_modules[index]->kp_r = 150;
-    motor_cmd_modules[index]->ki_r = 0;
-    motor_cmd_modules[index]->kd_r = 1.75;
-    motor_cmd_modules[index]->kp_l = 150;
-    motor_cmd_modules[index]->ki_l = 0;
-    motor_cmd_modules[index]->kd_l = 1.75;
-}
-
-void GaitSelector::publish(int freq) {
-    for (int i = 0; i < freq; i++) {
-        motor_cmd_pub_.publish(motor_cmd);
-        rate_ptr->sleep();
-    }
-}
-
-void GaitSelector::Send(int freq){
+void GaitSelector::Send(){
     for(int i =0; i<4; i++){
-        // std::cout << i << ": " <<current_eta[i][0]*180.0/M_PI << ", "<< current_eta[i][1]*180.0/M_PI << std::endl;
-        // std::cout <<"Send"<<std::endl;
-        std::array<double, 2> tmp = { eta[i][0], eta[i][1] };
-        if (i==1 || i==2) {
-            setCmd(tmp, i, true);
+        if (i==0 || i==3) {
+            motor_cmd_modules[i]->beta  = -next_eta[i][1];            
         } else {
-            setCmd(tmp, i, false);
+            motor_cmd_modules[i]->beta  =  next_eta[i][1];
         }     
+        motor_cmd_modules[i]->theta = next_eta[i][0];
+        motor_cmd_modules[i]->kp_r = 150;
+        motor_cmd_modules[i]->ki_r = 0;
+        motor_cmd_modules[i]->kd_r = 1.75;
+        motor_cmd_modules[i]->kp_l = 150;
+        motor_cmd_modules[i]->ki_l = 0;
+        motor_cmd_modules[i]->kd_l = 1.75;
+        // Update eta to next_eta
+        for(int j = 0; j < 2; j++) {
+            eta[i][j] = next_eta[i][j];
+        }
     }
-    publish(freq);
+    motor_cmd_pub_.publish(motor_cmd);
+    rate_ptr->sleep();
 }
 
 void GaitSelector::motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
-    // std::cout << "motor_state: " << std::endl;
 }  
 
 
@@ -131,14 +115,14 @@ void GaitSelector::Transfer(int pub, int transfer_sec, int wait_sec){
             eta[i][1] = beta_steps[i][step_i];
         }       
         if (pub){
-            Send(1);
+            Send();
         }
     }
 
     // wait
     for (int step_i = 0; step_i < wait_sec*pub_rate; step_i++) {
         if (pub){
-            Send(1);
+            Send();
         }
     }
 

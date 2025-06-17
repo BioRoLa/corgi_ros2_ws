@@ -87,97 +87,111 @@ std::vector<SwingPoint> HybridSwing::generate(LegModel& leg, SwingType type, dou
         double t = static_cast<double>(i) / points;
         double theta = 0.0, beta = 0.0;
 
-        switch (type) {
-            case SwingType::LINEAR:
-                theta = theta_start + (theta_end - theta_start) * t;
-                beta  = beta_start  + (beta_end  - beta_start)  * t;
-                break;
-            case SwingType::CUBIC: {
-                double mid_theta = 17.0 * M_PI / 180.0;
-                if (t < 0.5) {
-                    theta = theta_start + (mid_theta - theta_start) * (2 * t);
-                } else {
-                    theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.5));
-                }
-                beta  = beta_start + (beta_end - beta_start) * (3*t*t - 2*t*t*t);
-                break;
-            }
-            case SwingType::FIVETIMES: {
-                double mid_theta = 17.0 * M_PI / 180.0;
-                if (t < 0.5) {
-                    theta = theta_start + (mid_theta - theta_start) * (2 * t);
-                } else {
-                    theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.5));
-                }
-                beta  = beta_start + (beta_end - beta_start) * (10*t*t*t - 15*t*t*t*t + 6*t*t*t*t*t);
-                break;
-            }
-            case SwingType::OPTIMIZE: {
-                // 1) Precompute landing compensation epsilon
-                Eigen::Vector2d P_end = pointOnRimByAlpha(leg, theta_end, beta_end, rim, alpha);
-                double raw_prev = double(points - 1) / points;
-                // θ 原始 RAW 兩段式（與 FIVETIMES 相同）
-                auto compute_theta_raw = [&](double r){
-                    double mid = 17.0 * M_PI / 180.0;
-                    if (r < 0.5)
-                        return theta_start + (mid - theta_start)*(2*r);
-                    else
-                        return mid + (theta_end - mid)*(2*(r - 0.5));
-                };
-                // β 原始 RAW 五次多項
-                auto compute_beta_raw = [&](double r){
-                    return beta_start + (beta_end - beta_start)*quintic(r);
-                };
-                Eigen::Vector2d P_prev = pointOnRimByAlpha(
-                    leg,
-                    compute_theta_raw(raw_prev),
-                    compute_beta_raw(raw_prev),
-                    rim, alpha
-                );
-                // 2) 計算 ε（預補償 warp 參數）
-                Eigen::Vector2d dPdr = (P_end - P_prev) * points;
-                double denom = dPdr.dot(ground_tangent);
-                double vb_t  = body_vel.dot(ground_tangent);
-                double eps   = (std::abs(denom) > 1e-6 ? 1.0 - vb_t/denom : 0.0);
-                eps = clamp(eps, -0.5, 0.5);
 
-                // 2) warp θ 用 lambda 曲線：r → r + ε·r(1−r)
-                auto warp_theta = [&](double r){ return clamp(r + eps*r*(1-r), 0.0, 1.0); };
-
-                // constraints
-                const double max_dtheta = 1.0 * M_PI/180.0; // max 1° per step
-                const double lambda     = 0.3;              // beta mix weight
-
-                double prev_theta = theta_start;
-                // 3) generate trajectory
-                for (int i = 0; i <= points; ++i) {
-                    double raw = double(i) / points;
-                    // theta: warped two-segment + clamp delta
-                    double t_th    = warp_theta(raw);
-                    double theta_uns = compute_theta_raw(t_th);
-                    double dtheta_val = theta_uns - prev_theta;
-                    double theta_cur  = prev_theta + std::copysign(std::min(std::abs(dtheta_val), max_dtheta), dtheta_val);
-            
-                    // beta: linear+quintic on raw (no warp)
-                    double s_lin   = raw;
-                    double s_quint = quintic(raw);
-                    double s_beta  = lambda*s_lin + (1.0 - lambda)*s_quint;
-                    double beta_cur = beta_start + (beta_end - beta_start) * s_beta;
-                    traj.push_back({ raw, theta_cur, beta_cur});
-                    prev_theta = theta_cur;
-                }
-
-                // 4) final refine by alpha optimization
-                auto pair_ref = solveThetaBetaForAlpha(leg, alpha,
-                    traj.back().theta, traj.back().beta);
-                traj.back().theta = pair_ref.first;
-                traj.back().beta  = pair_ref.second;
-
-            
-                break;
-               
-            }
+        double mid_theta = 30.0 * M_PI / 180.0;
+        if (t < 0.3) {
+            theta = theta_start + (mid_theta - theta_start) * (2 * t);
+        } else if(t>0.6) {
+            theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.6));
         }
+        if (t > 0.3) {
+            beta  = beta_start  + (beta_end - beta_start) * (10*t*t*t - 15*t*t*t*t + 6*t*t*t*t*t);
+        }
+        else{
+            beta  = beta_start;
+        }
+    
+        // switch (type) {
+        //     case SwingType::LINEAR:
+        //         theta = theta_start + (theta_end - theta_start) * t;
+        //         beta  = beta_start  + (beta_end  - beta_start)  * t;
+        //         break;
+        //     case SwingType::CUBIC: {
+        //         double mid_theta = 17.0 * M_PI / 180.0;
+        //         if (t < 0.5) {
+        //             theta = theta_start + (mid_theta - theta_start) * (2 * t);
+        //         } else {
+        //             theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.5));
+        //         }
+        //         beta  = beta_start + (beta_end - beta_start) * (3*t*t - 2*t*t*t);
+        //         break;
+        //     }
+        //     case SwingType::FIVETIMES: {
+        //         double mid_theta = 17.0 * M_PI / 180.0;
+        //         if (t < 0.5) {
+        //             theta = theta_start + (mid_theta - theta_start) * (2 * t);
+        //         } else {
+        //             theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.5));
+        //         }
+        //         beta  = beta_start + (beta_end - beta_start) * (10*t*t*t - 15*t*t*t*t + 6*t*t*t*t*t);
+        //         break;
+        //     }
+        //     case SwingType::OPTIMIZE: {
+        //         // 1) Precompute landing compensation epsilon
+        //         Eigen::Vector2d P_end = pointOnRimByAlpha(leg, theta_end, beta_end, rim, alpha);
+        //         double raw_prev = double(points - 1) / points;
+        //         // θ 原始 RAW 兩段式（與 FIVETIMES 相同）
+        //         auto compute_theta_raw = [&](double r){
+        //             double mid = 17.0 * M_PI / 180.0;
+        //             if (r < 0.5)
+        //                 return theta_start + (mid - theta_start)*(2*r);
+        //             else
+        //                 return mid + (theta_end - mid)*(2*(r - 0.5));
+        //         };
+        //         // β 原始 RAW 五次多項
+        //         auto compute_beta_raw = [&](double r){
+        //             return beta_start + (beta_end - beta_start)*quintic(r);
+        //         };
+        //         Eigen::Vector2d P_prev = pointOnRimByAlpha(
+        //             leg,
+        //             compute_theta_raw(raw_prev),
+        //             compute_beta_raw(raw_prev),
+        //             rim, alpha
+        //         );
+        //         // 2) 計算 ε（預補償 warp 參數）
+        //         Eigen::Vector2d dPdr = (P_end - P_prev) * points;
+        //         double denom = dPdr.dot(ground_tangent);
+        //         double vb_t  = body_vel.dot(ground_tangent);
+        //         double eps   = (std::abs(denom) > 1e-6 ? 1.0 - vb_t/denom : 0.0);
+        //         eps = clamp(eps, -0.5, 0.5);
+
+        //         // 2) warp θ 用 lambda 曲線：r → r + ε·r(1−r)
+        //         auto warp_theta = [&](double r){ return clamp(r + eps*r*(1-r), 0.0, 1.0); };
+
+        //         // constraints
+        //         const double max_dtheta = 1.0 * M_PI/180.0; // max 1° per step
+        //         const double lambda     = 0.3;              // beta mix weight
+
+        //         double prev_theta = theta_start;
+        //         // 3) generate trajectory
+        //         for (int i = 0; i <= points; ++i) {
+        //             double raw = double(i) / points;
+        //             // theta: warped two-segment + clamp delta
+        //             double t_th    = warp_theta(raw);
+        //             double theta_uns = compute_theta_raw(t_th);
+        //             double dtheta_val = theta_uns - prev_theta;
+        //             double theta_cur  = prev_theta + std::copysign(std::min(std::abs(dtheta_val), max_dtheta), dtheta_val);
+            
+        //             // beta: linear+quintic on raw (no warp)
+        //             double s_lin   = raw;
+        //             double s_quint = quintic(raw);
+        //             double s_beta  = lambda*s_lin + (1.0 - lambda)*s_quint;
+        //             double beta_cur = beta_start + (beta_end - beta_start) * s_beta;
+        //             traj.push_back({ raw, theta_cur, beta_cur});
+        //             prev_theta = theta_cur;
+        //         }
+
+        //         // 4) final refine by alpha optimization
+        //         auto pair_ref = solveThetaBetaForAlpha(leg, alpha,
+        //             traj.back().theta, traj.back().beta);
+        //         traj.back().theta = pair_ref.first;
+        //         traj.back().beta  = pair_ref.second;
+
+            
+        //         break;
+               
+        //     }
+        // }
 
         traj.push_back({t, theta, beta});
     }

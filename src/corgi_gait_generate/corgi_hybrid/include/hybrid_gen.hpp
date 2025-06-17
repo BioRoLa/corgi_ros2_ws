@@ -27,12 +27,13 @@
 
 class Hybrid{   
     public:
-        // Hybrid(ros::NodeHandle& nh);
+        std::shared_ptr<GaitSelector> gaitSelector;
         Hybrid(std::shared_ptr<GaitSelector> gait_selector_ptr);
+        
         ~Hybrid()= default;
 
         void Initialize(int swing_index, int set_type);
-        std::array<double, 2> find_pose(double height, float shift, float steplength, double slope);
+        std::array<double, 2> find_pose(double height, float shift, float steplength, double duty ,double slope);
         void Swing(double relative[4][2], std::array<double, 2> &target, std::array<double, 2> &variation, int swing_leg);
         void Swing_step(std::array<double, 2> target, std::array<double, 2> variation, int swing_leg, double duty_ratio);
  
@@ -46,14 +47,14 @@ class Hybrid{
 
         std::array<double, 2> swing_pose;
         std::array<double, 2> swing_variation;
-        SwingType swing_type = SwingType::OPTIMIZE;
+        SwingType swing_type = SwingType::FIVETIMES;
         TerrainType terrain_type = TerrainType::Plain;
         double terrain_slope = -14 * M_PI / 180.0; // 10 degree
         double swing_desired_height = 0.0; 
-        
-    private:
-        std::shared_ptr<GaitSelector> gaitSelector;
         std::vector<SwingPoint> swing_traj[4];  // 每條腿都有自己的swing軌跡
+    private:
+        
+        
         double clamp(double value, double min_val, double max_val);
         void update_nextFrame();
         void computeNextBody();

@@ -65,12 +65,12 @@ find_library(CORGI_LEGGED corgi_legged)
 
 add_subdirectory(src)
 
-# add_library(${PROJECT_NAME}
+add_library(${PROJECT_NAME}
 #   src/HybridToWheeled.cpp
-#   src/HybridToLegged.cpp
-#   src/WheeledToHybrid.cpp
+  src/HybridToLegged.cpp
+  src/WheeledToHybrid.cpp
 #   src/WheeledToLegged.cpp
 #   src/LeggedToWheeled.cpp
 #   src/LeggedToHybrid.cpp
-#   src/transform_gen.cpp
-# )
+  src/transform_gen.cpp
+)

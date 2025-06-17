@@ -73,7 +73,6 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
     }
     
     motor_cmd.header.seq = motor_state.header.seq + 1;
-    publish(1);
 }
 
 void Wheeled::steerCmdCallback(const corgi_msgs::SteeringCmdStamped::ConstPtr& msg)
@@ -159,8 +158,7 @@ void Wheeled::Roll(int pub_time, int do_pub, bool dir, bool ground_rotate, int v
         else{
             eta[i][1] = motor_cmd_modules[i]->beta;
         }
-    }
-    publish(1);    
+    }   
 }
 
 

@@ -250,7 +250,7 @@ bool checkCollision(LegModel &leg,
 // ———— 全域參數 ————
 static const double clearence      = 0.001;    // min安全距離 (m)
 static const double clearence_M    = 0.01;    // MAX安全距離 (m)
-static const double step_len       = 0.1;      // 步長 (m)
+static const double step_len       = 0.5;      // 步長 (m)
 static const double swing_t        = 0.2;      // 擺動階段比例
 static const double vel            = 0.2;      // 速度 (m/s)
 static const double dS             = vel / 1000.0;  // 每步腳移動量 (m)
@@ -794,9 +794,9 @@ int main() {
     std::ofstream file2("opt_6.csv");
     file2 << "theta,beta,x,y,phase\n";
     std::vector<DataPoint> data;
-    Terrain terrain(-0.149);
+    Terrain terrain(-0.150);
     // terrain.addPlain(0.4);  
-    terrain.addSlope(0.2593, 0.27); 
+    terrain.addSlope(0.2308, 0.27); 
     terrain.addPlain(0.4); 
     terrain.addSlope(-0.2593, 0.27);  
     terrain.addPlain(0.4); 
@@ -815,7 +815,8 @@ int main() {
     bool found = false;
     
 
-    for (double h = best_h; h >= 0.120; h -= 0.0005) {
+    // for (double h = best_h; h >= 0.120; h -= 0.0005) {
+    double h = 0.15;
         // std::cout << "Testing height: " << h << std::endl;
         bool theta_bound_reached = false;
         for (double sh = -step_len; sh <= step_len; sh += 0.01) {
@@ -852,80 +853,80 @@ int main() {
             }
         }
         // std::cout<<"Finish searching this Height: " << h << std::endl;
-        if (found) {break;}
-        if (theta_bound_reached) {continue;}
+        // if (found) {break;}
+        // if (theta_bound_reached) {continue;}
         
-    }
+    // }
     if (found) {
         std::cout << "Found pose: stand_h = " << best_h
                   << ", shift = " << best_shift << std::endl;
         found = false;
         LegModel leg_final(true);
         // return the final pose
-        std::array<double,2> eta_final = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2, O_start_x,0);
-        for (double h = stand_h; h >= 0.120; h -= 0.0005) {
-            // std::cout << "Testing height: " << h << std::endl;
-            bool theta_bound_reached = false;
-            for (double sh = -step_len; sh <= step_len; sh += 0.01) {
-                LegModel leg(true);
-                TouchdownStatus status = simulate_status(leg, terrain, h, sh, O_start_x+step_len+(swing_t/(1-swing_t))*step_len, eta_final, data);
-                if (status == LEGAL) {
-                    std::cout << "Found LEGAL"<< std::endl;
-                    best_h = h;
-                    found = true;
-                    best_shift = sh;
-                    break;
-                }
-                else if (status == THETA_VIOLATION) {
-                    theta_bound_reached = true;
-                    // std::cout << status << std::endl;
-                    break; 
-                }
-                else if (status == COLLISION) {
-                    // std::cout << status << std::endl;
-                    continue; 
-                }
-                else if (status == PENETRATION) {
-                    // std::cout << status << std::endl;
-                    continue; 
-                }
-                else if (status == UN_CONVERGED) {
-                    // std::cout << status << std::endl;
-                    break; 
-                }
-                else if (status == FURTHER){
-                    // std::cout << status << std::endl;
-                    continue; 
-                }
-            }
-            // std::cout<<"Finish searching this Height: " << h << std::endl;
-            if (found) {break;}
-            if (theta_bound_reached) {continue;}
+        // std::array<double,2> eta_final = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2, O_start_x,0);
+        // for (double h = stand_h; h >= 0.120; h -= 0.0005) {
+        //     // std::cout << "Testing height: " << h << std::endl;
+        //     bool theta_bound_reached = false;
+        //     for (double sh = -step_len; sh <= step_len; sh += 0.01) {
+        //         LegModel leg(true);
+        //         TouchdownStatus status = simulate_status(leg, terrain, h, sh, O_start_x+step_len+(swing_t/(1-swing_t))*step_len, eta_final, data);
+        //         if (status == LEGAL) {
+        //             std::cout << "Found LEGAL"<< std::endl;
+        //             best_h = h;
+        //             found = true;
+        //             best_shift = sh;
+        //             break;
+        //         }
+        //         else if (status == THETA_VIOLATION) {
+        //             theta_bound_reached = true;
+        //             // std::cout << status << std::endl;
+        //             break; 
+        //         }
+        //         else if (status == COLLISION) {
+        //             // std::cout << status << std::endl;
+        //             continue; 
+        //         }
+        //         else if (status == PENETRATION) {
+        //             // std::cout << status << std::endl;
+        //             continue; 
+        //         }
+        //         else if (status == UN_CONVERGED) {
+        //             // std::cout << status << std::endl;
+        //             break; 
+        //         }
+        //         else if (status == FURTHER){
+        //             // std::cout << status << std::endl;
+        //             continue; 
+        //         }
+        //     }
+        //     // std::cout<<"Finish searching this Height: " << h << std::endl;
+        //     if (found) {break;}
+        //     if (theta_bound_reached) {continue;}
             
-        }
+        // }
     } else {
         std::cout << "No legal pose found within bounds." << std::endl;
     }
 
-    if (found) {
-        std::cout << "Found2 pose: stand_h = " << best_h
-                  << ", shift = " << best_shift << std::endl;
-        LegModel leg_final(true);
-        // pushback all the lines in data to file2
-        // for every line in data
-        for (const auto& row : data) {
-            file2 << std::fixed << std::setprecision(6)
-                << row.theta << ','
-                << row.beta  << ','
-                << row.x     << ','
-                << row.y     << ','
-                << row.phase << '\n';
-        }
-        std::array<double,2> eta_final_2 = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2,  (O_start_x+step_len+(swing_t/(1-swing_t))*step_len), 1);
-        file2.close();
-    } else {
-        std::cout << "end without a result" << std::endl;
-    }
+    // if (found) {
+    //     std::cout << "Found2 pose: stand_h = " << best_h
+    //               << ", shift = " << best_shift << std::endl;
+    //     LegModel leg_final(true);
+    //     // pushback all the lines in data to file2
+    //     // for every line in data
+    //     for (const auto& row : data) {
+    //         file2 << std::fixed << std::setprecision(6)
+    //             << row.theta << ','
+    //             << row.beta  << ','
+    //             << row.x     << ','
+    //             << row.y     << ','
+    //             << row.phase << '\n';
+    //     }
+    //     std::array<double,2> eta_final_2 = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2,  (O_start_x+step_len+(swing_t/(1-swing_t))*step_len), 1);
+    //     file2.close();
+    // } else {
+    //     std::cout << "end without a result" << std::endl;
+    // }
 
 
     return 0;

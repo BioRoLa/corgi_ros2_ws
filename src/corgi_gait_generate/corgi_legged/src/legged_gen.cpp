@@ -184,7 +184,7 @@ void Legged::next_Step() {
         eta[i][0] = theta[i]; 
         eta[i][1] = -beta[i];
     }    
-    Send(1);
+    Send();
 }
 
 void Legged::set_velocity(double new_value){

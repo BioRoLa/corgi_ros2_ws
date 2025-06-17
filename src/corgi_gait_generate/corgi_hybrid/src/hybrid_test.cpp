@@ -28,8 +28,8 @@ int main(int argc, char** argv) {
     std::cout << "hybrid" << std::endl;
     std::ofstream file("total_info.csv", std::ios::app);
     hybrid.Initialize(1, 1);
-    hybrid.csv_title(file); 
-    hybrid.save_to_csv(file, 0); // Pass file by reference
+    // hybrid.csv_title(file); 
+    // hybrid.save_to_csv(file, 0); // Pass file by reference
     // // /*  wlw real-time   */
     // // cout<< "-----wlw------"<<endl;
 
