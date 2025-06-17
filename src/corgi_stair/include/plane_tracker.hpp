@@ -56,7 +56,7 @@ struct PlaneTracker {
             if (!matched) {
                 // 僅當距離比現有極值「更大/更小」才新增
                 bool allow_insert = false;
-                if (true || tracked_planes.empty()) {
+                if (tracked_planes.empty()) {
                     allow_insert = true;  // 第一個平面直接接受
                 } else {
                     double reference = tracked_planes.back().average();
@@ -90,7 +90,7 @@ struct PlaneTracker {
 
     void update(const PlaneDistances& new_distances) {
         update_planes(new_distances.horizontal, horizontal_planes, true);
-        update_planes(new_distances.vertical, vertical_planes, false);
+        update_planes(new_distances.vertical, vertical_planes, true);
     }
 
     std::vector<double> get_horizontal_averages() const {

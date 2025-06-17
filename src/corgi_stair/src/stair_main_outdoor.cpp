@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
     command_pitch_CoM << "command_seq," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
-    enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
+    enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, UPPER_WALK, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const std::array<double, 3> camera_bias = {-0.01, 0.25, 0.032};   // initial camera position in map frame, (x, y, z)
     const std::array<double, 2> CoM2cemera = {0.32075, 0.099};  // translation from CoM to camera
@@ -268,6 +268,14 @@ int main(int argc, char** argv) {
                 command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
                 command_count ++;
                 break;
+            case UPPER_WALK:
+                if (last_state != state) {
+                    double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
+                    walk_gait.initialize(current_eta);
+                }//end if
+                eta_list = walk_gait.step();
+                command_count ++;
+                break;
             default:
                 break;
         }//end switch
@@ -300,6 +308,12 @@ int main(int argc, char** argv) {
                 break;
             case STAIR:
                 if (!stair_climb.if_any_stair()) {
+                    state = UPPER_WALK;
+                }//end if  
+                break;
+            case UPPER_WALK:
+                std::array<int, 4> step_count = walk_gait.get_step_count();
+                if (step_count[0] >= 2 && step_count[1] >= 2 && step_count[2] >= 2 && step_count[3] >= 2) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
                 break;

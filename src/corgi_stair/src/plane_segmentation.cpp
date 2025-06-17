@@ -101,7 +101,7 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     // }
 
 
-    return {h_plane_distances, v_plane_distances};
+    return {h_plane_distances, v_plane_distances, -centroid_x};
 }//end segment_planes
 
 

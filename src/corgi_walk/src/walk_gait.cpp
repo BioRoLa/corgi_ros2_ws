@@ -33,6 +33,7 @@ void WalkGait::initialize(double init_eta[8]) {
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
     int current_rim = 0;
+    step_count = {0, 0, 0, 0};
     for (int i=0; i<4; i++) {
         leg_model.contact_map(init_theta[i], init_beta[i]);
         current_rim = leg_model.rim;

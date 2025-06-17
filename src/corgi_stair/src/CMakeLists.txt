@@ -4,6 +4,9 @@ target_link_libraries(stair_main ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK
 add_executable(stair_main_vision stair_main_vision.cpp)
 target_link_libraries(stair_main_vision ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
 
+add_executable(stair_main_outdoor stair_main_outdoor.cpp)
+target_link_libraries(stair_main_outdoor ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
+
 # add_executable(normal_vector_plane_segmentation normal_vector_plane_segmentation.cpp)
 # target_link_libraries(normal_vector_plane_segmentation ${catkin_LIBRARIES} ${CORGI_UTILS} ${CORGI_WALK} corgi_stair)
 

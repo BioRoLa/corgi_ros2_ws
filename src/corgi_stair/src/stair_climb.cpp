@@ -138,6 +138,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
+                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
                         double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
                         front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else
@@ -153,6 +154,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
+                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
                         double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
                         hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else  
@@ -190,8 +192,13 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
             break;
         case SLOW_DOWN:
             if (finish_move) {
-                bool up_stair = determine_next_foothold();
-                state = up_stair? SWING_NEXT : SWING_SAME;
+                if (move_dir * (CoM[0] + CoM_offset[0]) > move_dir * ((leg_info[(swing_leg+1)%4].foothold[0] + leg_info[(swing_leg+3)%4].foothold[0]) / 2) + stability_margin) {
+                    bool up_stair = determine_next_foothold();
+                    state = up_stair? SWING_NEXT : SWING_SAME;
+                } else {
+                    state = MOVE_STABLE;
+                }
+
                 if (!this->if_any_stair()) {
                     state = END;
                 }//end if
@@ -685,12 +692,13 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                         std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
                         std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                         double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
-                        double tan_line_angle;
                         if (C1_P1_d < leg_model.R) {
-                            throw std::runtime_error("StairClimb::swing_next_step: P1 is inside the wheel.");
-                        } else {
-                            tan_line_angle = std::acos(leg_model.R / C1_P1_d);
-                        }//end if else
+                            std::cout << "StairClimb::swing_next_step: P1 is inside the wheel." << std::endl;
+                            P1 = {final_G[0], hip[i][1]-leg_model.R};
+                            C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
+                            C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
+                        } //end if
+                        double tan_line_angle = std::acos(leg_model.R / C1_P1_d);
                         double second_theta = is_clockwise? 17.0/180.0*M_PI : (final_theta + 17.0/180.0*M_PI) / 2.0;
                         double second_beta  = is_clockwise? std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI : final_beta;
                         para_traj[0] = LinearParaBlend({theta[i], second_theta             , second_theta}, {0.0, 0.5, 1.0}, 0.1, true, v_theta, false, 0.0);
