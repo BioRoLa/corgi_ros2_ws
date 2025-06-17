@@ -2,6 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <Eigen/Dense>
 
 #include "plane_segmentation.hpp"
 
@@ -35,9 +36,36 @@ struct TrackedPlane {
     }
 };
 
+struct TrackedNormal {
+    std::deque<Eigen::Vector3d> recent_normals;
+    // int no_update_count = 0;
+
+    void add_normal(const Eigen::Vector3d& n, size_t max_size = 5) {
+        recent_normals.push_back(n);
+        if (recent_normals.size() > max_size)
+            recent_normals.pop_front();
+        // no_update_count = 0;  // reset on update
+    }
+
+    // void increment_no_update() {
+    //     no_update_count++;
+    // }
+
+    Eigen::Vector3d average() const {
+        Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+        for (const auto& n : recent_normals) sum += n;
+        return sum.normalized();
+    }
+
+    // bool is_stable(size_t required_count = 5) const {
+    //     return recent_normals.size() >= required_count;
+    // }
+};
+
 struct PlaneTracker {
     std::vector<TrackedPlane> horizontal_planes;
     std::vector<TrackedPlane> vertical_planes;
+    TrackedNormal v_normal;
 
     void update_planes(const std::vector<double>& new_distances, std::vector<TrackedPlane>& tracked_planes, bool accept_if_larger) {
         std::vector<bool> updated_flags(tracked_planes.size(), false);
@@ -91,6 +119,9 @@ struct PlaneTracker {
     void update(const PlaneDistances& new_distances) {
         update_planes(new_distances.horizontal, horizontal_planes, true);
         update_planes(new_distances.vertical, vertical_planes, true);
+        if (!new_distances.vertical.empty()) {
+            v_normal.add_normal(new_distances.v_normal);
+        }
     }
 
     std::vector<double> get_horizontal_averages() const {
@@ -107,5 +138,9 @@ struct PlaneTracker {
             if (p.is_stable())
                 result.push_back(p.average());
         return result;
+    }
+    
+    Eigen::Vector3d get_vertical_normal() const {
+        return v_normal.average();
     }
 };
