@@ -113,6 +113,8 @@ namespace DataProcessor
     public:
         std::ofstream outFile;
 
+        bool init = false;
+
         CsvLogger() = default;
         
         // Destructor makes sure the file is closed.
@@ -147,6 +149,7 @@ namespace DataProcessor
             }
             outFile << "\n";
             outFile.flush();  // make sure header is written immediately
+            init = true;
             return true;
         }
         

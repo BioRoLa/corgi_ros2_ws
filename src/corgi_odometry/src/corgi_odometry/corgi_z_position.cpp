@@ -38,18 +38,26 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
             file_path_with_extension = output_file_path + "_" + std::to_string(index) + "_pos_z.csv";
             index++;
         }
-        if (index != 1) output_file_name += "_" + std::to_string(index-1);
-        output_file_name += "_pos_z.csv";
 
-        output_file_path = file_path_with_extension;
+        if (index != 1) {
+            output_file_name += "_" + std::to_string(index-1) + "_pos_z.csv";
+            output_file_path += "_" + std::to_string(index-1) + "_pos_z.csv";
+        }
+        else {
+            output_file_name += "_pos_z.csv";
+            output_file_path += "_pos_z.csv";
+        }
 
-        // Initialize the CSV file.
-        logger.initCSV(output_file_path, headers);
+        if (!logger.init) {
 
-        ROS_INFO("Saving data to %s\n", output_file_name.c_str());
+            // Initialize the CSV file.
+            logger.initCSV(output_file_path, headers);
+
+            ROS_INFO("Saving data to %s\n", output_file_name.c_str());
+        }
     }
-    else{
-        if(logger.outFile.is_open()){
+    else {
+        if(logger.init){
             logger.finalizeCSV();
             ROS_INFO("Saved data to %s", output_file_name.c_str());
         }
