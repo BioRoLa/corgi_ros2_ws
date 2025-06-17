@@ -13,7 +13,6 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <fstream>
 #include <Eigen/Dense>
-static_assert(EIGEN_VERSION_AT_LEAST(3,0,0), "Eigen not properly included");
 
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/TriggerStamped.h"
