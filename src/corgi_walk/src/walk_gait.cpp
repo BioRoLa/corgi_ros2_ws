@@ -27,13 +27,17 @@ WalkGait::WalkGait(bool sim, double CoM_bias, int rate, double BL, double BW, do
     incre_duty = dS / step_length;
 }//end WalkGait
 
-void WalkGait::initialize(double init_eta[8]) {
+void WalkGait::initialize(double init_eta[8], double step_length_) {
     double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
     double init_beta[4]  = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
     // Get foothold in hip coordinate from initial configuration
     double relative_foothold[4][2] = {};
     int current_rim = 0;
+    swing_phase = {0, 0, 0, 0};
     step_count = {0, 0, 0, 0};
+    step_length = step_length_;
+    new_step_length = step_length;
+    incre_duty = dS / step_length;
     for (int i=0; i<4; i++) {
         leg_model.contact_map(init_theta[i], init_beta[i]);
         current_rim = leg_model.rim;
@@ -78,6 +82,8 @@ void WalkGait::initialize(double init_eta[8]) {
     // Initial leg configuration
     for (int i=0; i<4; i++) {
         foothold[i] = {next_hip[i][0] + relative_foothold[i][0], next_hip[i][1] + relative_foothold[i][1]};
+        current_step_length[i] = step_length;
+        next_step_length[i]    = step_length;
     }//end for
     // Initial theta/beta
     for (int i=0; i<4; i++) {
