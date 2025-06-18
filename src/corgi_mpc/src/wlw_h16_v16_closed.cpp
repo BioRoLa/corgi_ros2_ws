@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Corgi MPC Starts");
 
     ModelPredictiveController mpc;
-    mpc.target_loop = 2250;
+    mpc.target_loop = 1600;
 
     ros::init(argc, argv, "corgi_mpc");
 
@@ -105,31 +105,38 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    double init_eta[8];
+    // Initialize gait
+    double CoM_bias = 0.0;
 
-    if (sim) {
-        double tmp[8] = {1.3313651941315507, 0.4032814817188362, 1.1847611807810603, 0.10626486289107877, 1.1847611807810603, -0.10626486289107877, 1.3313651941315507, -0.4032814817188362};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
-    } else {
-        double tmp[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
-    }
-
-    mpc.target_pos_z = 0.2;
+    auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, mpc.freq);
+    gait_selector->do_pub = 0;
+    gait_selector->stand_height = 0.16;
+    gait_selector->step_length = 0.4;
     
-    WalkGait walk_gait(sim, 0, mpc.freq);
-    double velocity = 0.1;
+    Hybrid hybrid_gait(gait_selector); 
 
-    walk_gait.stand_height = mpc.target_pos_z;
-    walk_gait.velocity = velocity;
-    walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
+    std::cout << "hybrid" << std::endl;
+    mpc.target_pos_z = 0.16;
 
-    walk_gait.initialize(init_eta);
-    walk_gait.set_velocity(mpc.target_vel_x);
 
+    double velocity = 0.16;
+    hybrid_gait.Initialize(1, 1);
+    hybrid_gait.change_Velocity(velocity);
+    hybrid_gait.change_Height(mpc.target_pos_z);
+    hybrid_gait.change_Step_length(0.4);
     bool touched[4] = {true, true, true, true};
     bool selection_matrix[4] = {true, true, true, true};
+
+    hybrid_gait.Step();
+
+    double init_eta[8];
+    for (int i=0; i<4; i++) {
+        init_eta[2*i] = gait_selector->eta[i][0];
+        init_eta[2*i+1] = gait_selector->eta[i][1];
+    }
+
+    init_eta[3] *= -1;
+    init_eta[5] *= -1;
 
     // Initialize impedance command
     for (auto& cmd : imp_cmd_modules){
@@ -169,7 +176,6 @@ int main(int argc, char **argv) {
 
     // stay
     for (int i=0; i<int(2*mpc.freq); i++) {
-        ros::spinOnce();
         imp_cmd.header.seq = -1;
         imp_cmd_pub.publish(imp_cmd);
         rate.sleep();
@@ -191,7 +197,7 @@ int main(int argc, char **argv) {
                 }
             }
             else {
-                for (int i=0; i<int(1*mpc.freq); i++) {
+                for (int i=0; i<mpc.freq; i++) {
                     for (auto& state: contact_state_modules) {
                         state->contact = true;
                     }
@@ -216,25 +222,30 @@ int main(int argc, char **argv) {
                 // update target vel and pos
                 if (loop_count < int(1*mpc.freq)) {
                     mpc.target_vel_x += velocity/(1*mpc.freq);
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                    hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
                 else if (loop_count > mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
                     mpc.target_vel_x -= velocity/(1*mpc.freq);
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                    hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
 
                 // mpc.target_vel_x = velocity;
-                // walk_gait.set_velocity(mpc.target_vel_x);
+                // hybrid_gait.change_Velocity(mpc.target_vel_x);
 
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt;
 
                 // get next eta
-                mpc.eta_list = walk_gait.step();
+                hybrid_gait.Step();
+
+                for (int i=0; i<4; i++) {
+                    mpc.eta_list[0][i] = gait_selector->eta[i][0];
+                    mpc.eta_list[1][i] = gait_selector->eta[i][1];
+                }
 
                 for (int i=0; i<4; i++) {
                     imp_cmd_modules[i]->theta = mpc.eta_list[0][i];
-                    imp_cmd_modules[i]->beta = (i == 1 || i == 2) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
-                    if (walk_gait.get_swing_phase()[i] == 1 && touched[i]) {
+                    imp_cmd_modules[i]->beta = (i == 0 || i == 3) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
+                    if (gait_selector->swing_phase[i] == 1 && touched[i]) {
                         selection_matrix[i] = false;
                         touched[i] = false;
                         imp_cmd_modules[i]->By = mpc.By_swing;
@@ -242,14 +253,14 @@ int main(int argc, char **argv) {
                         
                         // check_contact_state(i, contact_state_modules);
                     }
-                    else if (walk_gait.get_swing_phase()[i] == 0 && !touched[i]) {
+                    else if (gait_selector->swing_phase[i] == 0 && !touched[i]) {
                         selection_matrix[i] = true;
                         touched[i] = true;
                         imp_cmd_modules[i]->By = mpc.By_stance;
                         imp_cmd_modules[i]->Ky = mpc.Ky_stance;
                     }
 
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
+                    if (gait_selector->duty[i] < 0.7 && gait_selector->duty[i] > 0.1) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
@@ -302,7 +313,7 @@ int main(int argc, char **argv) {
                     x_ref.segment(i * mpc.n_x, mpc.n_x) << 0,                0,                0,
                                                            mpc.target_pos_x, 0, mpc.target_pos_z,
                                                            0,                0,                0,
-                                                           mpc.target_vel_x, 0,                0,
+                                                           mpc.target_vel_x, 0, mpc.target_vel_z,
                                                            -mpc.gravity;
                 }
 
@@ -350,7 +361,7 @@ int main(int argc, char **argv) {
                 imp_cmd_pub.publish(imp_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;

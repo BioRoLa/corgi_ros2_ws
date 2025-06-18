@@ -66,3 +66,21 @@ target_link_libraries(trot_h25_v60_open ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${C
 
 add_executable(trot_h25_v60_closed trot_h25_v60_closed.cpp mpc.cpp)
 target_link_libraries(trot_h25_v60_closed ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h16_v12_open wlw_h16_v12_open.cpp mpc.cpp)
+target_link_libraries(wlw_h16_v12_open ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h16_v12_closed wlw_h16_v12_closed.cpp mpc.cpp)
+target_link_libraries(wlw_h16_v12_closed ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h16_v16_open wlw_h16_v16_open.cpp mpc.cpp)
+target_link_libraries(wlw_h16_v16_open ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h16_v16_closed wlw_h16_v16_closed.cpp mpc.cpp)
+target_link_libraries(wlw_h16_v16_closed ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h18_v12_open wlw_h18_v12_open.cpp mpc.cpp)
+target_link_libraries(wlw_h18_v12_open ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)
+
+add_executable(wlw_h18_v12_closed wlw_h18_v12_closed.cpp mpc.cpp)
+target_link_libraries(wlw_h18_v12_closed ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen osqp::osqp OsqpEigen::OsqpEigen)

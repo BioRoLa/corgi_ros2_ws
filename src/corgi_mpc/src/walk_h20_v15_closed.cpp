@@ -190,7 +190,16 @@ int main(int argc, char **argv) {
                     rate.sleep();
                 }
             }
-            
+            else {
+                for (int i=0; i<int(1*mpc.freq); i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
+                    rate.sleep();
+                }
+            }
+
             for (auto& cmd : imp_cmd_modules){
                 cmd->Bx = mpc.Bx_stance;
                 cmd->By = mpc.By_stance;

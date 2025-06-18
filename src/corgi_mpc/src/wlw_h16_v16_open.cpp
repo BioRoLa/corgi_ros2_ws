@@ -14,12 +14,12 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
 
 
 int main(int argc, char **argv) {
-    ROS_INFO("Corgi Walk Starts");
+    ROS_INFO("Corgi WLW Starts");
 
     ModelPredictiveController mpc;
-    mpc.target_loop = 2250;
+    mpc.target_loop = 1600;
 
-    ros::init(argc, argv, "corgi_walk");
+    ros::init(argc, argv, "corgi_wlw");
 
     ros::NodeHandle nh;
     ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
@@ -53,27 +53,36 @@ int main(int argc, char **argv) {
         &force_state.module_d
     };
 
-    double init_eta[8];
+    // initialize gait
+    double CoM_bias = 0.0;
 
-    if (sim) {
-        double tmp[8] = {1.3313651941315507, 0.4032814817188362, 1.1847611807810603, 0.10626486289107877, 1.1847611807810603, -0.10626486289107877, 1.3313651941315507, -0.4032814817188362};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
-    } else {
-        double tmp[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
+    auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, 1000);
+    gait_selector->do_pub = 0;
+    gait_selector->stand_height = 0.16;
+    gait_selector->step_length = 0.4;
+    
+    Hybrid hybrid_gait(gait_selector); 
+
+    
+    std::cout << "hybrid" << std::endl;
+    double velocity = 0.16;
+    hybrid_gait.Initialize(1, 1);
+    hybrid_gait.change_Velocity(velocity);
+    hybrid_gait.change_Height(0.16);
+    hybrid_gait.change_Step_length(0.4);
+    
+    hybrid_gait.Step();
+    
+    double init_eta[8];
+    for (int i=0; i<4; i++) {
+        init_eta[2*i] = gait_selector->eta[i][0];
+        init_eta[2*i+1] = gait_selector->eta[i][1];
     }
 
-    WalkGait walk_gait(sim, 0, 1000);
-    double velocity = 0.1;
-    walk_gait.stand_height = 0.2;
-    walk_gait.velocity = velocity;
-    walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
-
-
-    walk_gait.initialize(init_eta);
-    walk_gait.set_velocity(mpc.target_vel_x);
-
+    init_eta[3] *= -1;
+    init_eta[5] *= -1;
+    
+    std::array<std::array<double, 4>, 2> eta_list = {{{17.0/180.0*M_PI, 17.0/180.0*M_PI, 17.0/180.0*M_PI, 17.0/180.0*M_PI}, {0, 0, 0, 0}}};
 
     // initialize motor command
     for (auto& cmd : motor_cmd_modules){
@@ -84,8 +93,8 @@ int main(int argc, char **argv) {
         cmd->ki_r = 0;
         cmd->ki_l = 0;
         if (sim) {
-            cmd->kd_r = 1;
-            cmd->kd_l = 1;
+            cmd->kd_r = 1.5;
+            cmd->kd_l = 1.5;
         }
         else {
             cmd->kd_r = 1.75;
@@ -118,7 +127,6 @@ int main(int argc, char **argv) {
 
     // stay
     for (int i=0; i<2000; i++) {
-        ros::spinOnce();
         motor_cmd.header.seq = -1;
         motor_cmd_pub.publish(motor_cmd);
         rate.sleep();
@@ -132,7 +140,6 @@ int main(int argc, char **argv) {
             // wait for odometry node
             if (!sim) {
                 for (int i=0; i<3000; i++) {
-                    ros::spinOnce();
                     for (auto& state: contact_state_modules) {
                         state->contact = true;
                     }
@@ -157,51 +164,58 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 for (int i=0; i<4; i++) {
-                    // if (walk_gait.get_swing_phase()[i] == 1) {
+                    // if (gait_selector->swing_phase[i] == 1) {
                     //     check_contact_state(i, contact_state_modules);
                     // }
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
+                    std::cout << gait_selector->duty[i] << ", ";
+                    if (gait_selector->duty[i] < 0.7 && gait_selector->duty[i] > 0.1) {
                         contact_state_modules[i]->contact = true;
                     }
                     else {
                         contact_state_modules[i]->contact = false;
                     }
                 }
+                std::cout << std::endl;
 
                 // update target vel and pos
                 if (loop_count < 1000) {
                     mpc.target_vel_x += velocity/1000.0;
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                    hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
                 if (loop_count > mpc.target_loop*10-1000 && loop_count < mpc.target_loop*10) {
                     mpc.target_vel_x -= velocity/1000.0;
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                    hybrid_gait.change_Velocity(mpc.target_vel_x);
                 }
 
                 // mpc.target_vel_x = velocity;
-                // walk_gait.set_velocity(mpc.target_vel_x);
+                // hybrid_gait.change_Velocity(mpc.target_vel_x);
 
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt / 10.0;
 
                 // get next eta
-                mpc.eta_list = walk_gait.step();
+                hybrid_gait.Step();
 
                 for (int i=0; i<4; i++) {
-                    if (mpc.eta_list[0][i] > M_PI*160.0/180.0) {
+                    eta_list[0][i] = gait_selector->eta[i][0];
+                    eta_list[1][i] = gait_selector->eta[i][1];
+                }
+
+                for (int i=0; i<4; i++) {
+                    if (eta_list[0][i] > M_PI*160.0/180.0) {
                         std::cout << "Exceed upper bound." << std::endl;
                     }
-                    if (mpc.eta_list[0][i] < M_PI*17.0/180.0) {
+                    if (eta_list[0][i] < M_PI*17.0/180.0) {
                         std::cout << "Exceed lower bound." << std::endl;
                     }
-                    motor_cmd_modules[i]->theta = mpc.eta_list[0][i];
-                    motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
+                    motor_cmd_modules[i]->theta = eta_list[0][i];
+                    motor_cmd_modules[i]->beta = (i == 0 || i == 3) ? eta_list[1][i] : -eta_list[1][i];
                 }
 
                 motor_cmd.header.seq = loop_count;
                 motor_cmd_pub.publish(motor_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;

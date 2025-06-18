@@ -83,6 +83,7 @@ class ModelPredictiveController {
         int fx_upper_bound = 0;
         int fx_lower_bound = -0;
         int fz_upper_bound = 200;
+        // int fz_lower_bound = -10;
         int fz_lower_bound = -100;
 
         double friction_coef = 1;

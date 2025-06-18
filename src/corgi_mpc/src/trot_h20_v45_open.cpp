@@ -140,6 +140,55 @@ int main(int argc, char **argv) {
                     rate.sleep();
                 }
             }
+            else {
+                for (int i=0; i<1000; i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
+                    rate.sleep();
+                }
+            }
+
+            std::array<double, 2> eta;
+
+            for (int i=0; i<2000; i++) {
+                for (int j=0; j<4; j++) {
+                    if (j == 0 || j == 3) {
+                        eta = legmodel.move(motor_cmd_modules[j]->theta, motor_cmd_modules[j]->beta, {velocity/15000.0, 0.0});
+                    }
+                    else {
+                        eta = legmodel.move(motor_cmd_modules[j]->theta, motor_cmd_modules[j]->beta, {-velocity/15000.0, 0.0});
+                    }
+                    motor_cmd_modules[j]->theta = eta[0];
+                    motor_cmd_modules[j]->beta = eta[1];
+                }
+                motor_cmd.header.seq = -1;
+                motor_cmd_pub.publish(motor_cmd);
+                rate.sleep();
+            }
+
+            for (int i=0; i<1000; i++) {
+                motor_cmd.header.seq = -1;
+                motor_cmd_pub.publish(motor_cmd);
+                rate.sleep();
+            }
+
+            for (int i=0; i<200; i++) {
+                for (int j=0; j<4; j++) {
+                    if (j == 0 || j == 3) {
+                        eta = legmodel.move(motor_cmd_modules[j]->theta, motor_cmd_modules[j]->beta, {-velocity/1000.0, 0.0});
+                    }
+                    else {
+                        eta = legmodel.move(motor_cmd_modules[j]->theta, motor_cmd_modules[j]->beta, {velocity/1000.0, 0.0});
+                    }
+                    motor_cmd_modules[j]->theta = eta[0];
+                    motor_cmd_modules[j]->beta = eta[1];
+                }
+                motor_cmd.header.seq = -1;
+                motor_cmd_pub.publish(motor_cmd);
+                rate.sleep();
+            }
 
             ROS_INFO("Controller Starts ...\n");
 

@@ -140,6 +140,15 @@ int main(int argc, char **argv) {
                     rate.sleep();
                 }
             }
+            else {
+                for (int i=0; i<1000; i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
+                    rate.sleep();
+                }
+            }
 
             ROS_INFO("Controller Starts ...\n");
 

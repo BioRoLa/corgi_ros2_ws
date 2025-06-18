@@ -28,10 +28,11 @@ int main(int argc, char **argv) {
     };
 
     double init_eta[8] = {0.29670597283903605,-0.0,0.29670597283903605,0.0,0.29670597283903605,0.0,0.29670597283903605};    
+    // double init_eta[8] = {18.0/180.0*M_PI,0.0,18.0/180.0*M_PI,0.0,18.0/180.0*M_PI,0.0,18.0/180.0*M_PI,0.0};    
     
     double velocity = 0.0;
 
-    int target_loop = 10000;
+    int target_loop = 8000;
 
     // initialize motor command
     for (auto& cmd : motor_cmd_modules){
@@ -83,16 +84,16 @@ int main(int argc, char **argv) {
                 ros::spinOnce();
 
                 if (loop_count < 500) {
-                    velocity += 0.3 / 500.0;
+                    velocity += 0.5 / 500.0;
                 }
                 else if (loop_count > target_loop - 500 && loop_count < target_loop) {
-                    velocity -= 0.3 / 500.0;
+                    velocity -= 0.5 / 500.0;
                 }
 
-                motor_cmd_modules[0]->beta += velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
-                motor_cmd_modules[1]->beta -= velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
-                motor_cmd_modules[2]->beta -= velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
-                motor_cmd_modules[3]->beta += velocity / 1000.0 / legmodel.radius / 2.0 / M_PI;
+                motor_cmd_modules[0]->beta += velocity / 1000.0 / legmodel.radius / 2.0;
+                motor_cmd_modules[1]->beta -= velocity / 1000.0 / legmodel.radius / 2.0;
+                motor_cmd_modules[2]->beta -= velocity / 1000.0 / legmodel.radius / 2.0;
+                motor_cmd_modules[3]->beta += velocity / 1000.0 / legmodel.radius / 2.0;
 
                 motor_cmd.header.seq = loop_count;
                 motor_cmd_pub.publish(motor_cmd);
