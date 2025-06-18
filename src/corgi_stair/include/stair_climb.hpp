@@ -30,6 +30,7 @@ class StairClimb {
         bool if_any_stair();
         bool any_no_stair();
         std::array<bool, 4> get_contact_edge_leg();
+        double get_optimal_foothold(double H, bool get_front=true);
         
     private:
         /* Private function */
@@ -79,7 +80,8 @@ class StairClimb {
         const double min_swing_time_cw   = 2.5, 
                      min_swing_time_ccw  = 1.0, 
                      min_swing_time_step = 1.0;
-        const std::vector<std::pair<double, double>> foothold_table = {
+        const double min_foothold_distance = 0.1;
+        const std::vector<std::pair<double, double>> foothold_table_hind = {
             {0.060, 0.07010}, {0.065, 0.11260}, {0.070, 0.12560},
             {0.075, 0.13540}, {0.080, 0.14340}, {0.085, 0.15020},
             {0.090, 0.15610}, {0.095, 0.16130}, {0.100, 0.16600},
@@ -90,7 +92,18 @@ class StairClimb {
             {0.165, 0.18460}, {0.170, 0.18320}, {0.175, 0.18120},
             {0.180, 0.17880}, {0.185, 0.17620}, {0.190, 0.16150}
         };
-
+        const std::vector<std::pair<double, double>> foothold_table_front = {
+            {0.060, 0.07010}, {0.065, 0.06720}, {0.070, 0.06360},
+            {0.075, 0.05950}, {0.080, 0.05490}, {0.085, 0.05120},
+            {0.090, 0.05520}, {0.095, 0.06500}, {0.100, 0.06960},
+            {0.105, 0.07580}, {0.110, 0.08380}, {0.115, 0.08540},
+            {0.120, 0.08970}, {0.125, 0.09420}, {0.130, 0.09700},
+            {0.135, 0.10330}, {0.140, 0.10350}, {0.145, 0.10530},
+            {0.150, 0.10750}, {0.155, 0.10940}, {0.160, 0.11170},
+            {0.165, 0.11380}, {0.170, 0.11560}, {0.175, 0.11530},
+            {0.180, 0.11670}, {0.185, 0.11720}, {0.190, 0.11690}
+        };
+        
         /* Variable */
         int rate;
         double dS;

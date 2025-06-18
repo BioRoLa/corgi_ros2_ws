@@ -64,13 +64,14 @@ int main(int argc, char** argv) {
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 2*sampling_rate; // 2s
-    // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
-    double velocity = 0.1; // velocity for walk gait
-    double stand_height = 0.25; // stand height for walk gait
-    double step_length = 0.3; // step length for walk gait
-    double step_height = 0.04; // step height for walk gait
+    // const double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
+    // const double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
+    const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
+    const double velocity = 0.1; // velocity for walk gait
+    const double stand_height = 0.25; // stand height for walk gait
+    const double step_length = 0.3; // step length for walk gait
+    const double step_height = 0.04; // step height for walk gait
+    double step_length_to_stair = step_length;
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
@@ -93,6 +94,7 @@ int main(int argc, char** argv) {
     double max_step_length_last;
     double exp_robot_x = -1.0 - D/2.0; // expected robot x position
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
+    double optimal_foothold;
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -141,18 +143,33 @@ int main(int argc, char** argv) {
                 // }//end if
 
                 /* No feedback for real robot */
+                optimal_foothold = stair_climb.get_optimal_foothold(H, true);
                 exp_robot_x += velocity / sampling_rate; // expected robot x position
                 hip_x = exp_robot_x + 0.222; // front hip
                 // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                 // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                max_step_length_last = (-D/2.0 - optimal_foothold - hip_x - 0.3*step_length_to_stair)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
+                int min_steps = static_cast<int>(std::ceil(max_step_length_last / 0.3));   // max step length = 30cm
+                int max_steps = static_cast<int>(std::floor(max_step_length_last / 0.1));  // min step length = 10cm
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
-                if ( max_step_length_last > 0.01 && step_length >= max_step_length_last ) {
-                    walk_gait.set_step_length(max_step_length_last); 
-                }//end if
+                bool change_step_length = false;
+                if (min_steps <= max_steps) {
+                    change_step_length = true;
+                    walk_gait.set_step_length(max_step_length_last / min_steps); 
+                } else {
+                    std::cout << "Not find feasible step length between 0.1~0.3。" << std::endl;
+                }
+                // if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
+                //     step_length_to_stair = max_step_length_last;
+                //     walk_gait.set_step_length(max_step_length_last); 
+                // }//end if
 
                 eta_list = walk_gait.step();
+                if (change_step_length && walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // walk_gait apply new step_length
+                    step_length_to_stair = max_step_length_last;
+                }
                 command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
                 command_count ++;
                 break;
@@ -196,7 +213,8 @@ int main(int argc, char** argv) {
                 // Entering stair climbing phase
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
-                    if (hip_x + 0.15 >= -D/2.0 - 0.10) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
+                    // if (hip_x + 0.15 >= -D/2.0 - 0.10) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
+                    if (hip_x + 0.15 >= -D/2.0 - optimal_foothold) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
                         state = STAIR;
                         std::cout << "Enter stair climbing phase." << std::endl;
                     }//end if

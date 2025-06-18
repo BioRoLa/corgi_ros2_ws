@@ -129,8 +129,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 if (swing_leg == 0 || swing_leg == 1) {
                     if (!stair_edge[0].empty() && !stair_edge[1].empty()) { // at most only one will be empty (edge of swing leg must not be empty)
                         if (stair_edge[0].front().count != stair_edge[1].front().count) {   // second swing leg
-                            // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
-                            double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
+                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
+                            // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
                             front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {    // first swing leg
@@ -138,15 +138,15 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
-                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
-                        double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
+                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
+                        // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
                         front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else
                 } else {
                     if (!stair_edge[2].empty() && !stair_edge[3].empty()) { // at most only one will be empty (edge of swing leg must not be empty)
                         if (stair_edge[2].front().count != stair_edge[3].front().count) {   // second swing leg
-                            // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                            double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
+                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
+                            // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
                             hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {    // first swing leg
@@ -154,8 +154,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
-                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                        double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
+                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
+                        // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
                         hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else  
                 }//end if else
@@ -301,6 +301,43 @@ std::array<bool, 4> StairClimb::get_contact_edge_leg() {
     }//end for
     return if_contact_edge;
 }//end get_stair_count
+
+double StairClimb::get_optimal_foothold(double H, bool get_front) {
+    if (get_front) {
+        if (H < foothold_table_front.front().first || H > foothold_table_front.back().first) {
+            throw std::out_of_range("H 超出查表範圍");
+        }
+        // 找到 H 介於哪兩個點之間
+        for (size_t i = 0; i < foothold_table_front.size() - 1; ++i) {
+            double H1 = foothold_table_front[i].first;
+            double V1 = foothold_table_front[i].second;
+            double H2 = foothold_table_front[i + 1].first;
+            double V2 = foothold_table_front[i + 1].second;
+            if (H >= H1 && H <= H2) {
+                // 線性內插公式
+                double ratio = (H - H1) / (H2 - H1);
+                return V1 + ratio * (V2 - V1);
+                break;
+            }//end if
+        }//end for 
+    } else {
+        if (H < foothold_table_hind.front().first || H > foothold_table_hind.back().first) {
+            throw std::out_of_range("H 超出查表範圍");
+        }
+        // 找到 H 介於哪兩個點之間
+        for (size_t i = 0; i < foothold_table_hind.size() - 1; ++i) {
+            double H1 = foothold_table_hind[i].first;
+            double V1 = foothold_table_hind[i].second;
+            double H2 = foothold_table_hind[i + 1].first;
+            double V2 = foothold_table_hind[i + 1].second;
+            if (H >= H1 && H <= H2) {
+                // 線性內插公式
+                double ratio = (H - H1) / (H2 - H1);
+                return V1 + ratio * (V2 - V1);
+            }//end if
+        }//end for 
+    }//end if else
+}//end get_optimal_foothold
 
 
 /* Private function */
@@ -929,30 +966,19 @@ bool StairClimb::determine_next_foothold() {
     int next_stair = 0;
     double keep_stair_d_max;
     double keep_stair_d_min;
-    if (swing_leg < 2) {
-        keep_stair_d_max = keep_stair_d_front_max;
-        keep_stair_d_min = keep_stair_d_front_min;
-    } else {    // hind leg
-        if (!stair_edge[swing_leg].empty()) {
-            double H = stair_edge[swing_leg].front().edge[1] - last_stair_edge[swing_leg].edge[1];
-            if (H < foothold_table.front().first || H > foothold_table.back().first) {
-                throw std::out_of_range("H 超出查表範圍");
-            }
-            // 找到 H 介於哪兩個點之間
-            for (size_t i = 0; i < foothold_table.size() - 1; ++i) {
-                double H1 = foothold_table[i].first;
-                double V1 = foothold_table[i].second;
-                double H2 = foothold_table[i + 1].first;
-                double V2 = foothold_table[i + 1].second;
-                if (H >= H1 && H <= H2) {
-                    // 線性內插公式
-                    double ratio = (H - H1) / (H2 - H1);
-                    keep_stair_d_max = V1 + ratio * (V2 - V1);
-                    keep_stair_d_min = V1 + ratio * (V2 - V1);
-                    break;
-                }//end if
-            }//end for 
+    if (!stair_edge[swing_leg].empty()) {
+        double H = stair_edge[swing_leg].front().edge[1] - last_stair_edge[swing_leg].edge[1];
+        double optimal_foothold;
+        if (swing_leg < 2) {
+            // keep_stair_d_max = keep_stair_d_front_max;
+            // keep_stair_d_min = keep_stair_d_front_min;
+            optimal_foothold = get_optimal_foothold(H, true);
+
+        } else {    // hind leg
+            optimal_foothold = get_optimal_foothold(H, false);
         }//end if
+        keep_stair_d_max = optimal_foothold;
+        keep_stair_d_min = optimal_foothold;
     }//end if else
 
     if (!stair_edge[swing_leg].empty()) {
@@ -963,29 +989,31 @@ bool StairClimb::determine_next_foothold() {
             if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
                 leg_info[swing_leg].one_step = false;
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
-                // if (swing_leg<2) {
-                //     leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
-                // } else {
-                //     leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d + 0.05, current_stair_edge[1]};
-                // }
             } else {    //second swing leg: the same as first swing leg unless the leg can not reach keep_stair_d_max (because change first swing leg at each stair)
                 #if CHANGE_FIRST_SWING_LEG
                 if (swing_leg < 2) {    // front leg: change first swing leg
+                    double deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min;
                     double min_deepest_x;
+                    double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                     if (stair_edge[swing_leg].size() >= 2) {
-                        min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
+                        // min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
+                        double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
+                        min_deepest_x = std::min({middle_foothold, next_max_foothold_x});
                     } else {
                         min_deepest_x = INFINITY;
                     }//end if else
-                    double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+0.2, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
-                    if (next_max_foothold_x >= min_deepest_x) {
-                        leg_info[swing_leg].one_step = false;
-                        // leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
-                        leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
-                    } else {
+                    // double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+min_foothold_distance, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
+                    // if (next_max_foothold_x >= min_deepest_x) {
+                    if (min_deepest_x >= stair_edge[swing_leg].front().edge[0]+keep_edge_d+min_foothold_distance) {
+                        // leg_info[swing_leg].one_step = false;
                         leg_info[swing_leg].one_step = true;
-                        leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
+                        // leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
+                    } else {
+                        // leg_info[swing_leg].one_step = true;
+                        leg_info[swing_leg].one_step = false;
+                        // leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                     }//end if else
+                    leg_info[swing_leg].next_foothold = {min_deepest_x, current_stair_edge[1]};
                 } else {    // hind leg: no change first swing leg
                     leg_info[swing_leg].one_step = true;
                     double deepest_x;
@@ -1026,7 +1054,10 @@ bool StairClimb::determine_next_foothold() {
             if (next_max_foothold_x >= deepest_x) {
                 leg_info[swing_leg].next_foothold = {deepest_x, leg_info[swing_leg].foothold[1]};
             } else {
-                leg_info[swing_leg].next_foothold = {next_max_foothold_x, leg_info[swing_leg].foothold[1]};
+                // leg_info[swing_leg].next_foothold = {next_max_foothold_x, leg_info[swing_leg].foothold[1]};
+                double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
+                double next_smaller_foothold = std::min({middle_foothold, next_max_foothold_x});
+                leg_info[swing_leg].next_foothold = {next_smaller_foothold, leg_info[swing_leg].foothold[1]};
             }//end if else
         }//end if
         // determine if next swing leg will swing up to next stair step
