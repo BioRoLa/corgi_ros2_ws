@@ -1020,9 +1020,9 @@ bool StairClimb::determine_next_foothold() {
                     //     leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                     // }//end if else
                     leg_info[swing_leg].next_foothold = {min_deepest_x, current_stair_edge[1]};
-                    if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance) {
-                        leg_info[swing_leg].one_step = true;
-                    }
+                    // if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance) {
+                    //     leg_info[swing_leg].one_step = true;
+                    // }
                 } else {    // hind leg: no change first swing leg
                     leg_info[swing_leg].one_step = true;
                     double deepest_x;
