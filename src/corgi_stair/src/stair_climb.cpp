@@ -984,7 +984,7 @@ bool StairClimb::determine_next_foothold() {
     if (!stair_edge[swing_leg].empty()) {
         current_stair_edge  = stair_edge[swing_leg].front().edge;
         if ((leg_info[swing_leg].next_up || leg_info[other_side_leg[swing_leg][1]].next_up) &&
-        (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
+        (swing_leg < 2 || leg_info[other_side_leg[swing_leg][0]].one_step || leg_info[other_side_leg[swing_leg][0]].contact_edge || current_stair_count + 1 < leg_info[other_side_leg[swing_leg][0]].stair_count)) {
             leg_info[swing_leg].next_up = false;
             if (current_stair_count == leg_info[other_side_leg[swing_leg][1]].stair_count) {    //first swing leg 
                 leg_info[swing_leg].one_step = false;

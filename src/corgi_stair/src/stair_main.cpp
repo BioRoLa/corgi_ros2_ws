@@ -154,15 +154,13 @@ int main(int argc, char** argv) {
                 // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 max_step_length_last = (-D/2.0 - optimal_foothold - hip_x - 0.3*step_length_to_stair)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
                 min_steps = static_cast<int>(std::ceil(max_step_length_last / 0.3));   // max step length = 30cm
-                max_steps = static_cast<int>(std::floor(max_step_length_last / 0.1));  // min step length = 10cm
+                max_steps = static_cast<int>(std::floor(max_step_length_last / 0.2));  // min step length = 20cm
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 change_step_length = false;
                 if (min_steps <= max_steps) {
                     change_step_length = true;
                     walk_gait.set_step_length(max_step_length_last / min_steps); 
-                } else {
-                    std::cout << "Not find feasible step length between 0.1~0.3。" << std::endl;
                 }
                 // if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
                 //     step_length_to_stair = max_step_length_last;
@@ -172,6 +170,7 @@ int main(int argc, char** argv) {
                 eta_list = walk_gait.step();
                 if (change_step_length && walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // walk_gait apply new step_length
                     step_length_to_stair = max_step_length_last;
+                    std::cout << "step_length_to_stair:" << step_length_to_stair << std::endl;
                 }
                 command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
                 command_count ++;
