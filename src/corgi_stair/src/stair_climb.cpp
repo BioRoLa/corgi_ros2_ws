@@ -95,6 +95,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     switch (this->state) {
         case MOVE_STABLE:
             if (last_state != state) {
+                swing_leg = swing_count % 4;
                 if (swing_leg >= 2 && leg_info[swing_leg].next_up && !leg_info[other_side_leg[swing_leg][0]].one_step) {
                     swing_count++;
                 }
