@@ -97,6 +97,7 @@ int main(int argc, char** argv) {
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
     double optimal_foothold;
     int min_steps, max_steps;
+    bool change_step_length;
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -156,7 +157,7 @@ int main(int argc, char** argv) {
                 max_steps = static_cast<int>(std::floor(max_step_length_last / 0.1));  // min step length = 10cm
                 // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
-                bool change_step_length = false;
+                change_step_length = false;
                 if (min_steps <= max_steps) {
                     change_step_length = true;
                     walk_gait.set_step_length(max_step_length_last / min_steps); 
