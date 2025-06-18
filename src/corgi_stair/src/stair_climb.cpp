@@ -133,8 +133,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 if (swing_leg == 0 || swing_leg == 1) {
                     if (!stair_edge[0].empty() && !stair_edge[1].empty()) { // at most only one will be empty (edge of swing leg must not be empty)
                         if (stair_edge[0].front().count != stair_edge[1].front().count) {   // second swing leg
-                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
-                            // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
+                            // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
+                            double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
                             front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {    // first swing leg
@@ -142,15 +142,15 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
-                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
-                        // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
+                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
+                        double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
                         front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else
                 } else {
                     if (!stair_edge[2].empty() && !stair_edge[3].empty()) { // at most only one will be empty (edge of swing leg must not be empty)
                         if (stair_edge[2].front().count != stair_edge[3].front().count) {   // second swing leg
-                            double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                            // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
+                            // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
+                            double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
                             hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
                         } else {    // first swing leg
@@ -158,8 +158,8 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         }//end if else
                     } else {    // second swing leg
                         this->is_clockwise = false;
-                        double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
-                        // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
+                        // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
+                        double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
                         hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else  
                 }//end if else
@@ -1001,30 +1001,30 @@ bool StairClimb::determine_next_foothold() {
                     double min_deepest_x;
                     double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                     if (stair_edge[swing_leg].size() >= 2) {
-                        // min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
-                        deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min;
-                        double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
-                        min_deepest_x = std::min({middle_foothold, next_max_foothold_x});
+                        min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
+                        // deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min;
+                        // double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
+                        // min_deepest_x = std::min({middle_foothold, next_max_foothold_x});
                     } else {
                         min_deepest_x = INFINITY;
-                        min_deepest_x = next_max_foothold_x;
+                        // min_deepest_x = next_max_foothold_x;
                     }//end if else
                     // double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+min_foothold_distance, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
-                    // if (next_max_foothold_x >= min_deepest_x) {
-                    //     // leg_info[swing_leg].one_step = false;
-                    //     // leg_info[swing_leg].one_step = true;
-                    //     leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
-                    // } else {
-                    //     // leg_info[swing_leg].one_step = true;
-                    //     // leg_info[swing_leg].one_step = false;
-                    //     leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
-                    // }//end if else
-                    leg_info[swing_leg].next_foothold = {min_deepest_x, current_stair_edge[1]};
-                    if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance) {
-                        leg_info[swing_leg].one_step = true;
-                    } else {
+                    if (next_max_foothold_x >= min_deepest_x) {
                         leg_info[swing_leg].one_step = false;
-                    }
+                        // leg_info[swing_leg].one_step = true;
+                        leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
+                    } else {
+                        leg_info[swing_leg].one_step = true;
+                        // leg_info[swing_leg].one_step = false;
+                        leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
+                    }//end if else
+                    // leg_info[swing_leg].next_foothold = {min_deepest_x, current_stair_edge[1]};
+                    // if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance) {
+                    //     leg_info[swing_leg].one_step = true;
+                    // } else {
+                    //     leg_info[swing_leg].one_step = false;
+                    // }
                 } else {    // hind leg: no change first swing leg
                     leg_info[swing_leg].one_step = true;
                     double deepest_x;
