@@ -72,7 +72,6 @@ int main(int argc, char** argv) {
     const double step_length = 0.3; // step length for walk gait
     const double step_height = 0.04; // step height for walk gait
     std::array<int, 4> step_count;
-    double step_length_to_stair = step_length;
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
@@ -163,14 +162,12 @@ int main(int argc, char** argv) {
                     walk_gait.set_step_length(max_step_length_last / (min_steps/2.0)); 
                 }
                 // if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
-                //     step_length_to_stair = max_step_length_last;
                 //     walk_gait.set_step_length(max_step_length_last); 
                 // }//end if
 
                 eta_list = walk_gait.step();
                 if (change_step_length && walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // walk_gait apply new step_length
-                    step_length_to_stair = max_step_length_last / (min_steps/2.0);
-                    std::cout << "step_length_to_stair:" << step_length_to_stair << std::endl;
+                    std::cout << "step_length:" << max_step_length_last / (min_steps/2.0) << std::endl;
                 }
                 command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
                 command_count ++;
