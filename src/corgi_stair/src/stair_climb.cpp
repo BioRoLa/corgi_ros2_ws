@@ -991,11 +991,11 @@ bool StairClimb::determine_next_foothold() {
                 leg_info[swing_leg].next_foothold = {current_stair_edge[0] + keep_edge_d, current_stair_edge[1]};
             } else {    //second swing leg: the same as first swing leg unless the leg can not reach keep_stair_d_max (because change first swing leg at each stair)
                 #if CHANGE_FIRST_SWING_LEG
-                // if (swing_leg < 2) {    // front leg: change first swing leg
-                if (true) {    // front leg: change first swing leg
+                if (swing_leg < 2) {    // front leg: change first swing leg
+                // if (true) {    // front leg: change first swing leg
                     double deepest_x;
                     double min_deepest_x;
-                    double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
+                    // double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                     if (stair_edge[swing_leg].size() >= 2) {
                         min_deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
                         // deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min;
@@ -1005,7 +1005,7 @@ bool StairClimb::determine_next_foothold() {
                         min_deepest_x = INFINITY;
                         // min_deepest_x = next_max_foothold_x;
                     }//end if else
-                    // double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+min_foothold_distance, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
+                    double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
                     if (next_max_foothold_x >= min_deepest_x) {
                         leg_info[swing_leg].one_step = false;
                         // leg_info[swing_leg].one_step = true;
@@ -1033,7 +1033,10 @@ bool StairClimb::determine_next_foothold() {
                     if (next_max_foothold_x >= deepest_x) {
                         leg_info[swing_leg].next_foothold = {deepest_x, current_stair_edge[1]};
                     } else {
-                        leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
+                        double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
+                        double next_smaller_foothold = std::min({middle_foothold, next_max_foothold_x});
+                        leg_info[swing_leg].next_foothold = {next_smaller_foothold, current_stair_edge[1]};
+                        // leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                     }//end if else
                 }//end if else
                 #else
