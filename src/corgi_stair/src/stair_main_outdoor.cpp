@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
             case UPPER_WALK:
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                    walk_gait.initialize(current_eta);
+                    walk_gait.initialize(current_eta, step_length);
                 }//end if
                 eta_list = walk_gait.step();
                 command_count ++;
@@ -331,7 +331,7 @@ int main(int argc, char** argv) {
                 break;
             case UPPER_WALK:
                 step_count = walk_gait.get_step_count();
-                if (step_count[0] >= 2 && step_count[1] >= 2 && step_count[2] >= 2 && step_count[3] >= 2) { // all legs have stepped at least twice
+                if (step_count[0] >= 1 && step_count[1] >= 1 && step_count[2] >= 1 && step_count[3] >= 1) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
                 break;
