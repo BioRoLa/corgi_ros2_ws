@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     /* Setting variable */
     double D=0.27, H=0.120;
     int stair_num = 3;
-    enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, END};
+    enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, UPPER_WALK, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 2*sampling_rate; // 2s
@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
     const double stand_height = 0.25; // stand height for walk gait
     const double step_length = 0.3; // step length for walk gait
     const double step_height = 0.04; // step height for walk gait
+    std::array<int, 4> step_count;
     double step_length_to_stair = step_length;
 
     /* Initial variable */
@@ -186,7 +187,14 @@ int main(int argc, char** argv) {
                 pitch = stair_climb.get_pitch();
                 CoM = stair_climb.get_CoM();
                 command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
-
+                command_count ++;
+                break;
+            case UPPER_WALK:
+                if (last_state != state) {
+                    double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
+                    walk_gait.initialize(current_eta, step_length);
+                }//end if
+                eta_list = walk_gait.step();
                 command_count ++;
                 break;
             default:
@@ -222,6 +230,12 @@ int main(int argc, char** argv) {
                 break;
             case STAIR:
                 if (!stair_climb.if_any_stair()) {
+                    state = UPPER_WALK;
+                }//end if  
+                break;
+            case UPPER_WALK:
+                step_count = walk_gait.get_step_count();
+                if (step_count[0] >= 1 && step_count[1] >= 1 && step_count[2] >= 1 && step_count[3] >= 1) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
                 break;
