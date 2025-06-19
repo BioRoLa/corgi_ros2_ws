@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Corgi MPC Starts");
 
     ModelPredictiveController mpc;
-    mpc.target_loop = 2000;
+    mpc.target_loop = 2100;
 
     ros::init(argc, argv, "corgi_mpc");
 
@@ -116,9 +116,9 @@ int main(int argc, char **argv) {
     Hybrid hybrid_gait(gait_selector); 
 
     std::cout << "hybrid" << std::endl;
+    mpc.target_pos_z = 0.18;
 
-
-    double velocity = 0.1;
+    double velocity = 0.12;
     hybrid_gait.Initialize(1, 1);
     hybrid_gait.change_Velocity(velocity);
     hybrid_gait.change_Height(mpc.target_pos_z);
