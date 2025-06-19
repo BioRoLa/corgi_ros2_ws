@@ -41,26 +41,24 @@ int cloud_seq = 0;
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
     cloud_seq = msg->header.seq;
     /* Convert the ROS PointCloud2 message to PCL point cloud */
-    if (trigger_msg.enable) {
-        pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
-        pcl::fromROSMsg(*msg, *cloud);
-        if (!cloud->isOrganized()) {
-            ROS_WARN("Point cloud is not organized. Skipping frame.");
-            return;
-        }
-
-        plane_distances = plane_segmentation->segment_planes(cloud);
-
-        /* Update & publish all planes */
-        plane_tracker.update(plane_distances);
-        plane_msg.horizontal = plane_tracker.get_horizontal_averages();
-        plane_msg.vertical = plane_tracker.get_vertical_averages();
-        Eigen::Vector3d v_normal = plane_tracker.get_vertical_normal();
-        plane_msg.v_normal.x = v_normal.x();
-        plane_msg.v_normal.y = v_normal.y();
-        plane_msg.v_normal.z = v_normal.z();
-        plane_pub.publish(plane_msg);
+    pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+    pcl::fromROSMsg(*msg, *cloud);
+    if (!cloud->isOrganized()) {
+        ROS_WARN("Point cloud is not organized. Skipping frame.");
+        return;
     }
+
+    plane_distances = plane_segmentation->segment_planes(cloud);
+
+    /* Update & publish all planes */
+    plane_tracker.update(plane_distances);
+    plane_msg.horizontal = plane_tracker.get_horizontal_averages();
+    plane_msg.vertical = plane_tracker.get_vertical_averages();
+    Eigen::Vector3d v_normal = plane_tracker.get_vertical_normal();
+    plane_msg.v_normal.x = v_normal.x();
+    plane_msg.v_normal.y = v_normal.y();
+    plane_msg.v_normal.z = v_normal.z();
+    plane_pub.publish(plane_msg);
 }//end cloud_cb
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg) {
