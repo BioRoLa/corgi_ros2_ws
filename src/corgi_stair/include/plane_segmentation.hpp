@@ -34,8 +34,9 @@ class PlaneSegmentation {
         void setInputCloud(pcl::PointCloud<PointT>::Ptr cloud);
         void computeNormals();
         void group_by_normals();
-        std::vector<double> segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices);
+        std::pair<std::vector<double>, std::vector<std::vector<int>>> segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices);
         Eigen::Vector3d computeCentroid(const std::vector<int>& indices);
+        std::vector<double> find_height_by_v_plane(const std::vector<std::vector<int>>& plane_indices);
 
         void visualize_planes();
         void visualize_normal();

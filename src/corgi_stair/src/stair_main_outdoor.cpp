@@ -175,12 +175,12 @@ int main(int argc, char** argv) {
                                 first_camera_pose = true;
                             }//end if
                         } else {
-                            if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
-                                && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
-                                && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
+                            // if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
+                            //     && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
+                            //     && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
                                 last_camera_transform = camera_transform; // update camera pose
                                 camera_transform = camera_transform_tmp; // update camera pose
-                            }//end if
+                            // }//end if
                         }//end if else
                     }
                     catch (tf2::TransformException &ex) {
@@ -243,12 +243,12 @@ int main(int argc, char** argv) {
                 if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
                     try {
                         camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
-                        if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
-                            && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
-                            && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
+                        // if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
+                        //     && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
+                        //     && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
                             last_camera_transform = camera_transform; // update camera pose
                             camera_transform = camera_transform_tmp; // update camera pose
-                        }//end if
+                        // }//end if
                     }
                     catch (tf2::TransformException &ex) {
                         ROS_WARN_THROTTLE(1.0, "TF lookup failed even after canTransform: %s", ex.what());

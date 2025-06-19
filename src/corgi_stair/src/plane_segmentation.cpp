@@ -58,9 +58,28 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     this->setInputCloud(cloud);
     this->computeNormals();
     this->group_by_normals();
-    std::vector<double> h_plane_distances = this->segment_by_distances(centroid_z, h_point_idx);
-    std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
-    // std::reverse(v_plane_distances.begin(), v_plane_distances.end());
+    // std::vector<double> h_plane_distances = this->segment_by_distances(centroid_z, h_point_idx);
+    // std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
+    auto [h_plane_distances, h_plane_point_indices] = segment_by_distances(centroid_z, h_point_idx);
+    auto [v_plane_distances, v_plane_point_indices] = segment_by_distances(-centroid_x, v_point_idx);
+    std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_point_indices);
+
+    size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "Index | h_plane_distances | h_plane_distances2\n";
+    std::cout << "-----------------------------------------------\n";
+
+    for (size_t i = 0; i < n; ++i) {
+        double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
+        double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
+
+        std::cout << std::setw(5) << i << " | "
+                  << std::setw(17) << v1 << " | "
+                  << std::setw(17) << v2 << "\n";
+    }
+
+// v_plane_point_indices[i] 是第 i 個垂直平面的點 index 集合
+
 
     /* Visualize in rviz */
     // this->visualize_planes();
@@ -156,7 +175,7 @@ void PlaneSegmentation::group_by_normals() {
 }//end group_by_normals
 
 
-std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices) {
+std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation::segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices) {
     const double bin_width = 0.001; // 1mm
     const int one_bin_point_threshold = 100;    // 100 points
     const int total_point_threshold   = 1000;    // 5000 points
@@ -164,6 +183,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
 
     /* Calculate distances */
     std::vector<double> distances;
+    std::vector<int> valid_indices;
     for (int i : indices) {
         const pcl::Normal& n = normals_->points[i];
         if (!std::isnan(n.normal_x) && !std::isnan(n.normal_y) && !std::isnan(n.normal_z)) {
@@ -172,6 +192,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
                                     cloud_->points[i].z);
             double d = centroid.dot(position);  // projective distance
             distances.push_back(d);
+            valid_indices.push_back(i);
         }//end if
     }//end for
     if (distances.empty()) return {};
@@ -184,21 +205,26 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
     int bin_count = static_cast<int>((max_val - min_val) / bin_width) + 1;
     std::vector<int> histogram(bin_count, 0);
     std::vector<double> bin_values(bin_count, 0);
+    std::vector<std::vector<int>> bin_point_indices(bin_count);
     // Histogram 
-    for (double d : distances) {
+    for (size_t i = 0; i < distances.size(); ++i) {
+        double d = distances[i];
         int bin = static_cast<int>((d - min_val) / bin_width);
         histogram[bin]++;
         bin_values[bin] += d;
+        bin_point_indices[bin].push_back(valid_indices[i]);
     }//end for
     
     /* 找出連續高密度 bin */
     bool in_range = false;
     std::vector<double> total_counts;
     std::vector<double> mean_distances;
+    std::vector<std::vector<int>> candidate_plane_indices;
     double sum_count;
     double sum_value;
     int max_bin_index;
     int max_bin_value;
+    std::vector<int> accumulated_indices;
 
     for (int i = 0; i < bin_count; ++i) {   // from smallest distance
         if (histogram[i] >= one_bin_point_threshold) {
@@ -208,6 +234,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
                 sum_value = bin_values[i];
                 max_bin_index = i;
                 max_bin_value = histogram[i];
+                accumulated_indices = bin_point_indices[i];
             } else {
                 sum_count += histogram[i];
                 sum_value += bin_values[i];
@@ -215,12 +242,14 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
                     max_bin_index = i;
                     max_bin_value = histogram[i];
                 }
+                accumulated_indices.insert(accumulated_indices.end(), bin_point_indices[i].begin(), bin_point_indices[i].end());
             }//end if else
         } else if (in_range) {
             if (sum_count >= total_point_threshold) {
                 total_counts.push_back(sum_count);
                 // mean_distances.push_back(sum_value / sum_count);
                 mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
+                candidate_plane_indices.push_back(accumulated_indices);
             }//end if
             in_range = false;
         }//end if else
@@ -230,6 +259,7 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
             total_counts.push_back(sum_count);
             // mean_distances.push_back(sum_value / sum_count);
             mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
+            candidate_plane_indices.push_back(accumulated_indices);
         }//end if
         in_range = false;
     }//end if
@@ -282,15 +312,33 @@ std::vector<double> PlaneSegmentation::segment_by_distances(Eigen::Vector3d cent
         }
     }
     std::vector<double> final_distances;
+    std::vector<std::vector<int>> final_indices;
     for (size_t i = 0; i < mean_distances.size(); i++) {
         if (keep[i]) {
             final_distances.push_back(mean_distances[i]);
+            final_indices.push_back(candidate_plane_indices[i]);
         }
     }
 
-    return final_distances; // from smalleset to largest
+    return {final_distances, final_indices}; // from smalleset to largest
 }//end segment_by_distances
 
+std::vector<double> PlaneSegmentation::find_height_by_v_plane(const std::vector<std::vector<int>>& plane_indices) {
+    std::vector<double> avg_heights;
+    for (const auto& indices : plane_indices) {
+        double sum_z = 0;
+        int count = 0;
+
+        for (int idx : indices) {
+            sum_z += cloud_->points[idx].z;
+            count++;
+        }
+
+        double avg_z = (count > 0) ? (sum_z / count) : std::numeric_limits<double>::quiet_NaN();
+        avg_heights.push_back(avg_z);
+    }
+    return avg_heights;
+}//end find_height_by_v_plane
 
 Eigen::Vector3d PlaneSegmentation::computeCentroid(const std::vector<int>& indices) {
     Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
