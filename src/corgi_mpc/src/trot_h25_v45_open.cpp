@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     trot_gait.stand_height = 0.25;
     trot_gait.velocity = velocity;
     trot_gait.step_length = 0.15;
-    trot_gait.step_height = 0.08;
+    trot_gait.step_height = 0.06;
 
 
     trot_gait.initialize(init_eta);
