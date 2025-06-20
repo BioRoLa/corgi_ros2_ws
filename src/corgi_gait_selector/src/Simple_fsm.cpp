@@ -20,6 +20,7 @@ GaitSelector::GaitSelector( ros::NodeHandle& nh,
     motor_state_sub_ = nh.subscribe("/motor/state", 1000, &GaitSelector::motor_state_cb, this);
     motor_cmd_pub_ = nh.advertise<corgi_msgs::MotorCmdStamped>("/motor/command", pub_rate);
     marker_pub_ = nh.advertise<visualization_msgs::Marker>("stable_triangle", pub_rate);
+    trigger_sub_ = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, &GaitSelector::trigger_cb, this);
     rate_ptr = new ros::Rate(pub_rate);
 
     // Initialize dS & incre_duty
@@ -96,12 +97,12 @@ void GaitSelector::motor_state_cb(const corgi_msgs::MotorStateStamped state){
     motor_state = state;
 }  
 
+void GaitSelector::trigger_cb(const corgi_msgs::TriggerStamped msg) {
+    trigger_msg = msg;
+}//end trigger_cb
 
 
-
-
-
-void GaitSelector::Transfer(int pub, int transfer_sec, int wait_sec){
+void GaitSelector::Transfer(int transfer_sec, int wait_sec){
     // next_eta = target and grep current_motor_pose -> devided to step until current_eta
     // transfer
     std::vector<std::vector<double>> theta_steps(4), beta_steps(4);
@@ -111,37 +112,17 @@ void GaitSelector::Transfer(int pub, int transfer_sec, int wait_sec){
     }
     for (int step_i = 0; step_i < transfer_sec*pub_rate; step_i++) {
         for  (int i=0; i<4; i++){
-            eta[i][0] = theta_steps[i][step_i];
-            eta[i][1] = beta_steps[i][step_i];
+            next_eta[i][0] = theta_steps[i][step_i];
+            next_eta[i][1] = beta_steps[i][step_i];
         }       
-        if (pub){
-            Send();
-        }
+        Send();
     }
 
     // wait
     for (int step_i = 0; step_i < wait_sec*pub_rate; step_i++) {
-        if (pub){
-            Send();
-        }
+        Send();
     }
 
-}
-
-void GaitSelector::Receive(){
-    // eta store the current motor pose
-    for (int i=0; i<4; i++){
-        eta[i][0] = motor_state_modules[i]->theta;
-        eta[i][1]  = motor_state_modules[i]->beta;
-        if (i==1 || i==2) {
-            eta[i][1] = -eta[i][1];
-        }
-    }
-    // for (int i = 0; i < 4; i++){
-    //     std::cout << i << ": " 
-    //               << eta[i][0] * 180 / M_PI << ", " 
-    //               << eta[i][1] * 180 / M_PI << std::endl;
-    // }
 }
 
 std::vector<double> GaitSelector::linspace(double start, double end, int num_steps) {
@@ -169,7 +150,7 @@ std::array<int, 4> GaitSelector::swing_phase = {0};
 double GaitSelector::swing_time = 0.2;   
 double GaitSelector::velocity = 0.05;  
 double GaitSelector::stand_height = 0.17;
-double GaitSelector::step_length = 0.3; 
+double GaitSelector::step_length = 0.5; 
 double GaitSelector::step_height = 0.03; 
 
 double GaitSelector::curvature = 0.0; // +: turn left, -:turn right, 0: straight
@@ -178,13 +159,10 @@ std::array<double, 4> GaitSelector::current_step_length = {step_length, step_len
 std::array<double, 4> GaitSelector::next_step_length    = {step_length, step_length, step_length, step_length};
 double GaitSelector::new_step_length = step_length;
 
-std::array<double, 4> GaitSelector::current_stand_height = {stand_height-0.01, stand_height-0.01, stand_height, stand_height};
-// std::array<double, 4> GaitSelector::current_stand_height = {stand_height, stand_height, stand_height, stand_height};
+std::array<double, 4> GaitSelector::current_stand_height = {stand_height, stand_height, stand_height, stand_height};
 std::array<double, 4> GaitSelector::next_stand_height    = {stand_height, stand_height, stand_height, stand_height};
-std::array<double, 4> GaitSelector::new_stand_height    = {stand_height, stand_height, stand_height, stand_height};
-// double GaitSelector::new_stand_height = stand_height;
+double GaitSelector::new_stand_height = stand_height;
 
-// std::array<double, 4> GaitSelector::current_shift = {0.05,0.05, -0.05, -0.05}; 
 std::array<double, 4> GaitSelector::current_shift = {0.0, 0.0, 0.0, 0.0}; 
 double GaitSelector::relative_foothold[4][2] = {0.0};
 double GaitSelector::eta[4][2] = {0.0};

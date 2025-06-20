@@ -69,7 +69,7 @@ add_library(${PROJECT_NAME}
 #   src/HybridToWheeled.cpp
   src/HybridToLegged.cpp
   src/WheeledToHybrid.cpp
-#   src/WheeledToLegged.cpp
+  src/WheeledToLegged.cpp
 #   src/LeggedToWheeled.cpp
 #   src/LeggedToHybrid.cpp
   src/transform_gen.cpp

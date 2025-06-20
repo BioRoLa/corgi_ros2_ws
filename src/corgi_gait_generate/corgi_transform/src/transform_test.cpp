@@ -24,9 +24,11 @@ int main(int argc, char** argv) {
 
     /*    Initialize of each mode   */ 
     auto hybrid = std::make_shared<Hybrid>(gaitSelector); 
-    Transform transformer(hybrid);
+    auto legged = std::make_shared<Legged>(gaitSelector);
+    Transform transformer(hybrid,legged);
     // transformer.GaitTransform(Gait::WHEELED, Gait::HYBRID);
-    transformer.GaitTransform(Gait::HYBRID, Gait::LEGGED);
+    // transformer.GaitTransform(Gait::HYBRID, Gait::LEGGED);
+    // transformer.GaitTransform(Gait::WHEELED, Gait::LEGGED);
     
     std::cout << "End of testing!" << std::endl;
     return 0;

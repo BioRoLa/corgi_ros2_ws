@@ -21,8 +21,9 @@ extern "C" {
 #endif
 
 // Factory function declarations with C linkage
-IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr);
-IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr);
+IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createWheeledToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
 
 #ifdef __cplusplus
 }
@@ -31,12 +32,13 @@ IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr);
 // Declaration of the Transform class
 class Transform {
     public:
-        Transform(std::shared_ptr<Hybrid> hybrid_ptr)
-            : hybrid_ptr_(hybrid_ptr) {}
+        Transform(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr)
+            : hybrid_ptr_(hybrid_ptr), legged_ptr_(legged_ptr){}
 
         void GaitTransform(Gait current, Gait next);
 
     private:
         std::shared_ptr<Hybrid> hybrid_ptr_;
+        std::shared_ptr<Legged> legged_ptr_;
 };
 #endif 

@@ -4,7 +4,7 @@
 class HybridToLegged : public IGaitTransform 
 {
     public:
-        HybridToLegged(std::shared_ptr<Hybrid> transform_hybrid_ptr)
+        HybridToLegged(std::shared_ptr<Hybrid> transform_hybrid_ptr,std::shared_ptr<Legged> transform_leg_ptr)
             : transform_hybrid(transform_hybrid_ptr),inherit(transform_hybrid_ptr->gaitSelector) {}
         ~HybridToLegged() override = default;
         // Inherit the gaitSelector from Hybrid
@@ -41,7 +41,6 @@ class HybridToLegged : public IGaitTransform
         std::shared_ptr<Hybrid> transform_hybrid;
         double expect_height = 0.1425;
 };     
-extern "C" IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr) {
-    return new HybridToLegged(hybrid_ptr);
+extern "C" IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr, std::shared_ptr<Legged> legged_ptr) {
+    return new HybridToLegged(hybrid_ptr, legged_ptr);
 }
-

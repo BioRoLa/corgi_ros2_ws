@@ -5,7 +5,7 @@
 class WheeledToHybrid : public IGaitTransform 
 {
     public:
-        WheeledToHybrid(std::shared_ptr<Hybrid> transform_hybrid_ptr)
+        WheeledToHybrid(std::shared_ptr<Hybrid> transform_hybrid_ptr,std::shared_ptr<Legged> transform_leg_ptr)
             : transform_hybrid(transform_hybrid_ptr),inherit(transform_hybrid_ptr->gaitSelector) {}
         ~WheeledToHybrid() override = default;
         // Inherit the gaitSelector from Hybrid
@@ -460,7 +460,7 @@ class WheeledToHybrid : public IGaitTransform
         
 };
 
-extern "C" IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr) {
-    return new WheeledToHybrid(hybrid_ptr);
+extern "C" IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr, std::shared_ptr<Legged> legged_ptr) {
+    return new WheeledToHybrid(hybrid_ptr, legged_ptr);
 }
 

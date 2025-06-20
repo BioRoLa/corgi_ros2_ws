@@ -22,7 +22,7 @@
 #include "ros/ros.h"
 #include "corgi_msgs/MotorCmdStamped.h"
 #include "corgi_msgs/MotorStateStamped.h"
-
+#include "corgi_msgs/TriggerStamped.h"
 #include "leg_model.hpp"
 
 enum class Gait {
@@ -48,12 +48,14 @@ class GaitSelector {
         ros::Subscriber motor_state_sub_;
         ros::Publisher motor_cmd_pub_; 
         ros::Publisher marker_pub_;
+        ros::Subscriber trigger_sub_;
         ros::Rate* rate_ptr;
         std::random_device rd;                     
         std::mt19937 rng;                          
         std::uniform_int_distribution<int> dist;
         /*    State or cmd messages      */ 
         corgi_msgs::MotorCmdStamped motor_cmd;
+        corgi_msgs::TriggerStamped trigger_msg;
         static corgi_msgs::MotorStateStamped motor_state;
         std::vector<corgi_msgs::MotorCmd*> motor_cmd_modules = {
             &motor_cmd.module_a,
@@ -63,6 +65,7 @@ class GaitSelector {
         };
         static std::vector<corgi_msgs::MotorState*> motor_state_modules;
         void motor_state_cb(const corgi_msgs::MotorStateStamped state);
+        void trigger_cb(const corgi_msgs::TriggerStamped msg) ;
         /*     Cooperate variables      */ 
         LegModel leg_model;
         int pub_rate;
@@ -85,7 +88,7 @@ class GaitSelector {
 
         static std::array<double, 4> current_stand_height;
         static std::array<double, 4> next_stand_height;
-        static std::array<double, 4> new_stand_height;
+        static double  new_stand_height;
 
         static std::array<double, 4> current_shift;
 
@@ -122,20 +125,9 @@ class GaitSelector {
         
         /*     Cooperate functions      */ 
         void Send();
-        void Transfer(int pub, int transfer_sec, int wait_sec);
+        void Transfer(int transfer_sec, int wait_sec);
         void Receive();
         // void changeGait(const std::string& command);
-        // void process_and_visualize();
-        // void publish_support_polygon(
-        //     const std::vector<Eigen::Vector3d>& pts,
-        //     const std::vector<int>& indices
-        // );
-        // void publish_com_marker();
-        // bool is_point_inside_polygon(
-        //     const std::vector<Eigen::Vector3d>& points,
-        //     const std::vector<int>& indices,
-        //     const Eigen::Vector2d& point_xy
-        // ) ;
     private:
         // void printCurrentGait() const;
         // void GaitTransform();

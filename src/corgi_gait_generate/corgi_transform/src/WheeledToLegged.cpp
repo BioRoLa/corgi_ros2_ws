@@ -2,38 +2,57 @@
 #include <iostream>
 #include "transform_gen.hpp"
 
-class WheeledToLegged : public IGaitTransform, public Legged 
+class WheeledToLegged : public IGaitTransform
 {
     public:
-        WheeledToLegged(ros::NodeHandle& nh) : Legged(nh){}
-        
-        void transform(double shift, int wait_step, bool transfer_state, double expect_height) override {
+        WheeledToLegged(std::shared_ptr<Hybrid> transform_hybrid_ptr,std::shared_ptr<Legged> transform_leg_ptr)
+            : transform_leg(transform_leg_ptr),inherit(transform_leg_ptr->gaitSelector) {}
+        ~WheeledToLegged() override = default;
+        std::shared_ptr<GaitSelector> inherit;
+        void transform() override {
             // std::cout << "Enter" << std::endl;
+             for (int i =0;i<10;i++){
+                for (int j=0;j<4;j++){
+                    inherit->next_eta[j][0] = 17 * PI/180;
+                    if (j==0){
+                        inherit->next_eta[j][1] = 50 * PI/180;
+                    }
+                    else if (j==1 ){
+                        inherit->next_eta[j][1] = 50 * PI/180;
+                    }
+                    else{
+                        inherit->next_eta[j][1] = 0;
+                    }
+                    
+                }
+                inherit->Send();
+            }
             for (int i=0; i<4; i++) {
-                curr_theta[i] = eta[i][0];
-                curr_beta[i] = -eta[i][1];
+                curr_theta[i] = inherit->eta[i][0];
+                curr_beta[i] = inherit->eta[i][1];
                 
             }
         
-            wheel_delta_beta = -velocity/leg_model.radius*dt;
+            wheel_delta_beta = inherit->velocity/inherit->leg_model.radius*dt;
             
             stage = 0;
             transform_finished = false;
-            stand_height = 0.18;
+            inherit->stand_height = 0.18;
 
             while(transform_finished != true){
                 keep_going();
                 for (int i=0; i<4; i++) {
-                    eta[i][0] = curr_theta[i];
-                    eta[i][1] = -curr_beta[i];
+                    inherit->next_eta[i][0] = curr_theta[i];
+                    inherit->next_eta[i][1] = curr_beta[i];
                     
                 }
-                Send(1);
+                inherit->Send();
             }
             
 
         }
     private:
+        std::shared_ptr<Legged> transform_leg;
         std::array<double, 4> curr_theta;
         std::array<double, 4> curr_beta;
         double wheel_delta_beta;
@@ -121,7 +140,7 @@ class WheeledToLegged : public IGaitTransform, public Legged
             
             for (int i=0; i<max_step_num; i++){
                 if ((int)step_num%2 == 1){
-                    step_length = abs(leg_model.radius * (RH_target_beta-RH_beta)) / step_num;
+                    step_length = abs(inherit->leg_model.radius * (RH_target_beta-RH_beta)) / step_num;
                     if (step_length < min_step_length){
                         RH_target_beta -= 2 * M_PI;
                     }
@@ -130,7 +149,7 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     }
                 }
                 else{
-                    step_length = abs(leg_model.radius * (LH_target_beta-LH_beta)) / step_num;
+                    step_length = abs(inherit->leg_model.radius * (LH_target_beta-LH_beta)) / step_num;
                     if (step_length < min_step_length){
                         LH_target_beta -= 2 * M_PI;
                     }
@@ -148,10 +167,11 @@ class WheeledToLegged : public IGaitTransform, public Legged
             switch (stage){
                 case 0:  // stay
                     if (step_count == stay_time_step) {
+                        inherit->step_length = 0.2;
                         RF_target_beta = 45/180.0*M_PI;
                         RF_target_beta = find_smaller_closest_beta(RF_target_beta, curr_beta[1]);
-                        body_move_dist = abs(leg_model.radius * (RF_target_beta-curr_beta[1]));
-                        delta_time_step = int(round_3(body_move_dist/velocity)/dt);
+                        body_move_dist = abs(inherit->leg_model.radius * (RF_target_beta-curr_beta[1]));
+                        delta_time_step = int(round_3(body_move_dist/inherit->velocity)/dt);
                         step_count = 0;
                         stage++;
                         // std::cout << std::endl << "Stage 0 Finished.\n= = = = =" << std::endl;
@@ -160,39 +180,46 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     
                 case 1:  // rotate until RF_beta ~= 45 deg
                     for (int i=0; i<4; i++){
-                        curr_beta[i] += wheel_delta_beta;
+                        curr_beta[i] -= wheel_delta_beta;
                     }
                     if (step_count == delta_time_step-1){
-                        body_angle = asin(((stand_height-leg_model.radius)/BL));
-                        RF_target_beta = -body_angle;
-                        RF_target_beta = find_smaller_closest_beta(RF_target_beta, curr_beta[1]);
+                        body_angle = asin(((inherit->stand_height-inherit->leg_model.radius)/inherit->BL));
+                        RF_target_beta = 0;// here -body_angle (body_angle)
+                        while(RF_target_beta>curr_beta[1]){
+                            RF_target_beta -= 2 * M_PI;
+                        }
+                        // RF_target_beta = find_smaller_closest_beta(RF_target_beta, curr_beta[1]);
+                        std::cout << curr_beta[1] << " , " << RF_target_beta << std::endl;
                         G_p[0] = 0;
-                        G_p[1] = -stand_height+leg_model.r;
-                        RF_target_theta = leg_model.inverse(G_p, "G")[0];
+                        G_p[1] = -inherit->stand_height+inherit->leg_model.r;
+                        RF_target_theta = inherit->leg_model.inverse(G_p, "G")[0];
 
-                        // std::cout << "Body Angle = " << round_3(body_angle) << std::endl;
-                        // std::cout << "RF Target Theta = " << round_3(RF_target_theta) << std::endl;
-                        // std::cout << "RF Target Beta = " << round_3(RF_target_beta) << std::endl;
+                        std::cout << "Body Angle = " << round_3(body_angle) << std::endl;
+                        std::cout << "RF Target Theta = " << round_3(RF_target_theta) << std::endl;
+                        std::cout << "RF Target Beta = " << round_3(RF_target_beta) << std::endl;
 
-                        body_move_dist = abs(leg_model.radius * (RF_target_beta-curr_beta[1]));
-                        delta_time_step = int(round_3(body_move_dist/velocity)/dt);
+                        body_move_dist = abs(inherit->leg_model.radius * (RF_target_beta-curr_beta[1]));
+                        delta_time_step = int(round_3(body_move_dist/inherit->velocity)/dt);
 
-                        RF_delta_beta = (RF_target_beta-curr_beta[1])/delta_time_step;
+                        RF_delta_beta = abs(RF_target_beta-curr_beta[1])/delta_time_step;
                         RF_delta_theta = (RF_target_theta-curr_theta[1])/delta_time_step;
 
                         // # determine the step length from hybrid mode
                         hybrid_steps = find_hybrid_steps(curr_beta[2]+wheel_delta_beta*delta_time_step,
                                                         curr_beta[3]+wheel_delta_beta*delta_time_step, body_angle);
                         step_num = (int)hybrid_steps[0];
-                        step_length = hybrid_steps[1];
+                        inherit->step_length = hybrid_steps[1];
 
-                        G_p[0] = step_length;
-                        G_p[1] = -stand_height+leg_model.r;
-                        LF_target_theta = leg_model.inverse(G_p, "G")[0];
-                        LF_target_beta = leg_model.inverse(G_p, "G")[1];
-                        LF_target_beta = find_smaller_closest_beta(LF_target_beta-body_angle, curr_beta[0]);
-
-                        LF_delta_beta = (LF_target_beta-curr_beta[0])/delta_time_step;
+                        G_p[0] = inherit->step_length;
+                        G_p[1] = -inherit->stand_height+inherit->leg_model.r;
+                        
+                        LF_target_theta = inherit->leg_model.inverse(G_p, "G")[0];
+                        LF_target_beta = inherit->leg_model.inverse(G_p, "G")[1];
+                        // LF_target_beta = find_smaller_closest_beta(LF_target_beta-body_angle, curr_beta[0]);
+                        while(LF_target_beta>curr_beta[0]){
+                            LF_target_beta -= 2 * M_PI;
+                        }   
+                        LF_delta_beta = abs(LF_target_beta-curr_beta[0])/delta_time_step;
                         LF_delta_theta = (LF_target_theta-curr_theta[0])/delta_time_step;
 
                         step_count = 0;
@@ -201,31 +228,28 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     }
                     break;
                 case 2:  // front transform
-                    if (step_count < delta_time_step/3.0) { curr_beta[0] += wheel_delta_beta; }
-                    else if (step_count < delta_time_step*2/3.0) { curr_beta[0] += LF_delta_beta*3 - wheel_delta_beta; }
+                    if (step_count < delta_time_step/3.0) { curr_beta[0] -= wheel_delta_beta; }
+                    else if (step_count < delta_time_step*2/3.0) { curr_beta[0] -= (LF_delta_beta*3 + wheel_delta_beta); }
                     else { curr_theta[0] += LF_delta_theta * 3; }
                     
                     curr_theta[1] += RF_delta_theta;
-                    curr_beta[1] += RF_delta_beta;
+                    curr_beta[1] -= RF_delta_beta;
                     
-                    curr_beta[2] += wheel_delta_beta;
-                    curr_beta[3] += wheel_delta_beta;
+                    curr_beta[2] -= wheel_delta_beta;
+                    curr_beta[3] -= wheel_delta_beta;
             
                     if (step_count == delta_time_step-1){
-                        delta_time_step_each = int(round_3(step_length/velocity)/dt);
+                        delta_time_step_each = int(round_3(inherit->step_length/inherit->velocity)/dt);
                         delta_time_step = delta_time_step_each * step_num;
             
-                        // std::cout << "Step Number = " << step_num << std::endl;
-                        // std::cout << "Step Length = " << round_3(step_length) << std::endl;
             
                         // swing phase trajectory
-                        p_lo = {0, -stand_height+leg_model.r};
-                        p_td = {step_length, -stand_height+leg_model.r};
-                        sp = SwingProfile(p_lo, p_td, step_height, 0);
+                        p_lo = {0, -inherit->stand_height+inherit->leg_model.r};
+                        p_td = {inherit->step_length, -inherit->stand_height+inherit->leg_model.r};
+                        sp = SwingProfile(p_lo, p_td, inherit->step_height, 0);
             
                         step_count = 0;
                         stage++;
-                        // std::cout << std::endl << "Stage 2 Finished.\n= = = = =" << std::endl << std::endl;
                     }
                     break;
             
@@ -235,13 +259,13 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     curve_point[0] = curve_point_temp[0];
                     curve_point[1] = curve_point_temp[1];
             
-                    swing_eta = leg_model.inverse(curve_point, "G");
+                    swing_eta = inherit->leg_model.inverse(curve_point, "G");
             
                     if ((step_count / delta_time_step_each) % 2 == 0){
                         curr_theta[1] = swing_eta[0];
                         curr_beta[1] = find_closest_beta(swing_eta[1]-body_angle, curr_beta[1]);
             
-                        stance_eta = leg_model.move(curr_theta[0], curr_beta[0]+body_angle, {step_length/(double)delta_time_step_each, 0});
+                        stance_eta = inherit->leg_model.move(curr_theta[0], curr_beta[0]+body_angle, {inherit->step_length/(double)delta_time_step_each, 0});
                         curr_theta[0] = stance_eta[0];
                         curr_beta[0] = find_closest_beta(stance_eta[1]-body_angle, curr_beta[0]);
                     }
@@ -249,16 +273,16 @@ class WheeledToLegged : public IGaitTransform, public Legged
                         curr_theta[0] = swing_eta[0];
                         curr_beta[0] = find_closest_beta(swing_eta[1]-body_angle, curr_beta[0]);
             
-                        stance_eta = leg_model.move(curr_theta[1], curr_beta[1]+body_angle, {step_length/(double)delta_time_step_each, 0});
+                        stance_eta = inherit->leg_model.move(curr_theta[1], curr_beta[1]+body_angle, {inherit->step_length/(double)delta_time_step_each, 0});
                         curr_theta[1] = stance_eta[0];
                         curr_beta[1] = find_closest_beta(stance_eta[1]-body_angle, curr_beta[1]);
                     }
-                    curr_beta[2] += wheel_delta_beta;
-                    curr_beta[3] += wheel_delta_beta;
+                    curr_beta[2] -= wheel_delta_beta;
+                    curr_beta[3] -= wheel_delta_beta;
             
                     if (step_count == delta_time_step-1){
-                        body_move_dist = leg_model.radius * 10/180.0*M_PI;
-                        delta_time_step = int(round_3(body_move_dist/velocity)/dt);
+                        body_move_dist = inherit->leg_model.radius * 10/180.0*M_PI;
+                        delta_time_step = int(round_3(body_move_dist/inherit->velocity)/dt);
             
                         step_count = 0;
                         stage++;
@@ -269,18 +293,18 @@ class WheeledToLegged : public IGaitTransform, public Legged
                 case 4:  // maintain stability
             
                     for (int i=0; i<2; i++){
-                        stance_eta = leg_model.move(curr_theta[i], curr_beta[i]+body_angle, {body_move_dist/delta_time_step, 0});
+                        stance_eta = inherit->leg_model.move(curr_theta[i], curr_beta[i]+body_angle, {body_move_dist/delta_time_step, 0});
                         curr_theta[i] = stance_eta[0];
                         curr_beta[i] = find_closest_beta(stance_eta[1]-body_angle, curr_beta[i]);
                     }
             
-                    curr_beta[2] += wheel_delta_beta;
-                    curr_beta[3] += wheel_delta_beta;
+                    curr_beta[2] -= wheel_delta_beta;
+                    curr_beta[3] -= wheel_delta_beta;
             
                     if (step_count == delta_time_step){
             
-                        body_move_dist = leg_model.radius * (45/180.0*M_PI - body_angle);
-                        delta_time_step = int(round_3(body_move_dist/velocity)/dt);
+                        body_move_dist = inherit->leg_model.radius * (45/180.0*M_PI - body_angle);
+                        delta_time_step = int(round_3(body_move_dist/inherit->velocity)/dt);
             
                         if (step_num%2 == 0) {
                             transform_start_beta = curr_beta[3];
@@ -293,10 +317,10 @@ class WheeledToLegged : public IGaitTransform, public Legged
             
                         transform_target_beta = find_smaller_closest_beta(0, transform_start_beta);
                         G_p[0] = 0;
-                        G_p[1] = -stand_height+leg_model.r;
-                        transform_target_theta = leg_model.inverse(G_p, "G")[0];
+                        G_p[1] = -inherit->stand_height+inherit->leg_model.r;
+                        transform_target_theta = inherit->leg_model.inverse(G_p, "G")[0];
             
-                        transform_delta_beta = (transform_target_beta-transform_start_beta)/delta_time_step;
+                        transform_delta_beta = abs(transform_target_beta-transform_start_beta)/delta_time_step;
                         transform_delta_theta = (transform_target_theta-transform_start_theta)/delta_time_step;
             
                         if (step_num%2 == 0) {
@@ -309,12 +333,12 @@ class WheeledToLegged : public IGaitTransform, public Legged
                         }
             
                         G_p[0] = last_transform_step_x;
-                        G_p[1] = -stand_height+leg_model.r;
-                        last_target_theta = leg_model.inverse(G_p, "G")[0];
-                        last_target_beta = leg_model.inverse(G_p, "G")[1];
+                        G_p[1] = -inherit->stand_height+inherit->leg_model.r;
+                        last_target_theta = inherit->leg_model.inverse(G_p, "G")[0];
+                        last_target_beta = inherit->leg_model.inverse(G_p, "G")[1];
                         last_target_beta = find_smaller_closest_beta(last_target_beta, last_start_beta);
             
-                        last_delta_beta = (last_target_beta-last_start_beta-wheel_delta_beta*delta_time_step*2/3.0)/(delta_time_step/3.0);
+                        last_delta_beta = abs(last_target_beta-last_start_beta-wheel_delta_beta*delta_time_step*2/3.0)/(delta_time_step/3.0);
                         last_delta_theta = (last_target_theta-last_start_theta)/delta_time_step;
             
                         step_count = 0;
@@ -324,35 +348,35 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     break;
             
                 case 5:  // hind transform
-                    leg_model.contact_map(transform_start_theta+transform_delta_theta*step_count,
+                    inherit->leg_model.contact_map(transform_start_theta+transform_delta_theta*step_count,
                                         transform_start_beta+transform_delta_beta*step_count+body_angle);
-                    leg_model.forward(transform_start_theta+transform_delta_theta*step_count,
+                    inherit->leg_model.forward(transform_start_theta+transform_delta_theta*step_count,
                                     transform_start_beta+transform_delta_beta*step_count+body_angle);
                     
-                    if (leg_model.rim == 2){
-                        hind_body_height = abs(leg_model.L_l[1] - leg_model.radius);
+                    if (inherit->leg_model.rim == 2){
+                        hind_body_height = abs(inherit->leg_model.L_l[1] - inherit->leg_model.radius);
                     }
-                    else if (leg_model.rim == 3){
-                        hind_body_height = abs(leg_model.G[1] - leg_model.r);
+                    else if (inherit->leg_model.rim == 3){
+                        hind_body_height = abs(inherit->leg_model.G[1] - inherit->leg_model.r);
                     }
             
-                    body_angle = asin(((stand_height-hind_body_height)/BL));
+                    body_angle = asin(((inherit->stand_height-hind_body_height)/inherit->BL));
             
-                    leg_model.forward(curr_theta[0], curr_beta[0]+body_angle);
-                    LF_target_pos[0] = leg_model.G[0]-body_move_dist/delta_time_step;
-                    LF_target_pos[1] = -stand_height+leg_model.r;
+                    inherit->leg_model.forward(curr_theta[0], curr_beta[0]+body_angle);
+                    LF_target_pos[0] = inherit->leg_model.G[0]-body_move_dist/delta_time_step;
+                    LF_target_pos[1] = -inherit->stand_height+inherit->leg_model.r;
             
-                    LF_target_theta = leg_model.inverse(LF_target_pos, "G")[0];
-                    LF_target_beta = leg_model.inverse(LF_target_pos, "G")[1];
+                    LF_target_theta = inherit->leg_model.inverse(LF_target_pos, "G")[0];
+                    LF_target_beta = inherit->leg_model.inverse(LF_target_pos, "G")[1];
                     LF_target_beta = find_smaller_closest_beta(LF_target_beta-body_angle, curr_beta[0]);
                     
             
-                    leg_model.forward(curr_theta[1], curr_beta[1]+body_angle);
-                    RF_target_pos[0] = leg_model.G[0]-body_move_dist/delta_time_step;
-                    RF_target_pos[1] = -stand_height+leg_model.r;
+                    inherit->leg_model.forward(curr_theta[1], curr_beta[1]+body_angle);
+                    RF_target_pos[0] = inherit->leg_model.G[0]-body_move_dist/delta_time_step;
+                    RF_target_pos[1] = -inherit->stand_height+inherit->leg_model.r;
             
-                    RF_target_theta = leg_model.inverse(RF_target_pos, "G")[0];
-                    RF_target_beta = leg_model.inverse(RF_target_pos, "G")[1];
+                    RF_target_theta = inherit->leg_model.inverse(RF_target_pos, "G")[0];
+                    RF_target_beta = inherit->leg_model.inverse(RF_target_pos, "G")[1];
                     RF_target_beta = find_smaller_closest_beta(RF_target_beta-body_angle, curr_beta[1]);
                     
                     curr_theta[0] = LF_target_theta;
@@ -363,40 +387,40 @@ class WheeledToLegged : public IGaitTransform, public Legged
                     
                     if (step_num%2 == 0){
                         curr_theta[3] += transform_delta_theta;
-                        curr_beta[3] += transform_delta_beta;
+                        curr_beta[3] -= transform_delta_beta;
                         
                         if (step_count < delta_time_step/3.0){
-                            curr_beta[2] += wheel_delta_beta;
+                            curr_beta[2] -= wheel_delta_beta;
                         }
                         else if (step_count < delta_time_step*2/3.0){
-                            curr_beta[2] += last_delta_beta;
+                            curr_beta[2] -= last_delta_beta;
                             curr_theta[2] += last_delta_theta * 3/2.0;
                         }
                         else {
-                            curr_beta[2] += wheel_delta_beta;
+                            curr_beta[2] -= wheel_delta_beta;
                             curr_theta[2] += last_delta_theta * 3/2.0;
                         }
                     }
                     else {
                         curr_theta[2] += transform_delta_theta;
-                        curr_beta[2] += transform_delta_beta;
+                        curr_beta[2] -= transform_delta_beta;
                         
                         if (step_count < delta_time_step/3.0){
-                            curr_beta[3] += wheel_delta_beta;
+                            curr_beta[3] -= wheel_delta_beta;
                         }
                         else if (step_count < delta_time_step*2/3.0){
-                            curr_beta[3] += last_delta_beta;
+                            curr_beta[3] -= last_delta_beta;
                             curr_theta[3] += last_delta_theta * 3/2.0;
                         }
                         else {
-                            curr_beta[3] += wheel_delta_beta;
+                            curr_beta[3] -= wheel_delta_beta;
                             curr_theta[3] += last_delta_theta * 3/2.0;
                         }
                     }
             
                     if (step_count == delta_time_step){
                         body_move_dist = 0.02;
-                        delta_time_step = int(round_3(body_move_dist/velocity)/dt);
+                        delta_time_step = int(round_3(body_move_dist/inherit->velocity)/dt);
             
                         step_count = 0;
                         stage++;
@@ -407,7 +431,7 @@ class WheeledToLegged : public IGaitTransform, public Legged
                 case 6:  // maintain stability
                     for (int i=0; i<4; i++){
                         // std::cout << i << std::endl;
-                        stance_eta = leg_model.move(curr_theta[i], curr_beta[i]+body_angle, {body_move_dist/delta_time_step, 0});
+                        stance_eta = inherit->leg_model.move(curr_theta[i], curr_beta[i]+body_angle, {body_move_dist/delta_time_step, 0});
                         // std::cout << "feed" << std::endl;
                         curr_theta[i] = stance_eta[0];
                         // std::cout << "beta" << std::endl;
@@ -432,8 +456,6 @@ class WheeledToLegged : public IGaitTransform, public Legged
         }
 };
 
-extern "C" IGaitTransform* createWheeledToLegged() {
-    ros::NodeHandle nh;
-    return new WheeledToLegged(nh);
+extern "C" IGaitTransform* createWheeledToLegged(std::shared_ptr<Hybrid> hybrid_ptr, std::shared_ptr<Legged> legged_ptr) {
+    return new WheeledToLegged(hybrid_ptr,legged_ptr);
 }
-
