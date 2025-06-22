@@ -272,7 +272,8 @@ int main(int argc, char** argv) {
                         double next_edge_x = plane_msg.vertical[stair_count] - camera_position.dot(normal_vec);     // relative to camera
                         // double next_edge_x = plane_msg.vertical[stair_count] - camera_transform.transform.translation.x;     // relative to camera
                         // double next_edge_z = plane_msg.horizontal[stair_count+1] - camera_transform.transform.translation.z; // relative to camera
-                        double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
+                        // double real_pitch = - (getPitchFromTransform(camera_transform) - getPitchFromTransform(initial_camera_transform));
+                        double real_pitch = pitch;
                         std::cout << "Pitch: " << real_pitch << " radians" << std::endl;
                         double CoM2camera_x = CoM2cemera[0] * std::cos(real_pitch) - CoM2cemera[1] * std::sin(real_pitch);
                         double CoM2camera_z = CoM2cemera[0] * std::sin(real_pitch) + CoM2cemera[1] * std::cos(real_pitch);
