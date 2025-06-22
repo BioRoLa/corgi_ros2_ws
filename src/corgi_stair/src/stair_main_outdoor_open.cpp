@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
     double optimal_foothold;
     int min_steps, max_steps;
     bool change_step_length;
+    double D_sum, H_sum;
+
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -121,6 +123,8 @@ int main(int argc, char** argv) {
                 transform_ratio = 0.0;
                 trigger = false;
                 command_count = 0;
+                D_sum = 0.0;
+                H_sum = 0.0;
                 break;
             case TRANSFORM:
                 transform_ratio += 1.0 / transform_count;
@@ -182,8 +186,9 @@ int main(int argc, char** argv) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
                     stair_climb.initialize(current_eta, velocity, exp_robot_x);
                     for (int i=0; i<stair_size.size(); i++) {
-                        // stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
-                        stair_climb.add_stair_edge(stair_size[i][0], stair_size[i][1]);
+                        D_sum += stair_size[i][0];
+                        H_sum += stair_size[i][1];
+                        stair_climb.add_stair_edge(D_sum, H_sum);
                     }//end for
                 }//end if
                 eta_list = stair_climb.step();
