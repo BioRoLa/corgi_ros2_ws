@@ -50,13 +50,11 @@ int main(int argc, char** argv) {
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 5*sampling_rate; // 5s
-    ros::Rate rate(sampling_rate);
     // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
     // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
     const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3, swing time 0.2
     // const double init_eta[8] = {1.8264141254935087, 0.45320412446525266, 1.6024917635870688, 0.12115692429841468, 1.6024917635870688, -0.12115692429841468, 1.8264141254935087, -0.45320412446525266};  // stand height 0.25, step length 0.3, swing time 0.25
     WalkGait walk_gait(true, CoM_bias, sampling_rate);
-    walk_gait.initialize(init_eta);
     std::array<std::array<double, 4>, 2> eta_list;
     double velocity     = 0.1;
     double stand_height = 0.25;
@@ -65,6 +63,7 @@ int main(int argc, char** argv) {
     double curvature = 0.0;
     int count = 0;
     std::array<int, 4> step_count;
+    double max_cal_time = 0.0;
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
@@ -157,7 +156,7 @@ int main(int argc, char** argv) {
                 eta_list[0][i] = M_PI*16.9/180.0;
             }//end if 
             motor_cmd_modules[i]->theta = eta_list[0][i];
-            motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]-pitch) : -(eta_list[1][i]-pitch);
+            motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]) : -(eta_list[1][i]);
         }//end for
         motor_pub.publish(motor_cmd);
         auto one_loop_end = std::chrono::high_resolution_clock::now();
