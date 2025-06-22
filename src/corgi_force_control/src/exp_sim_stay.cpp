@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    int exp_case = 0;  // G=0, L=1, U=2
+    int exp_case = 2;  // G=0, L=1, U=2
 
     double mg = -19.5*9.81;
     double F_init = mg/4.0;
@@ -129,10 +129,10 @@ int main(int argc, char **argv) {
             imp_cmd_modules[3]->beta += 25/2000.0/180.0*M_PI;
         }
         if (exp_case == 2) {
-            imp_cmd_modules[0]->theta += 33/2000.0/180.0*M_PI;
-            imp_cmd_modules[1]->theta += 33/2000.0/180.0*M_PI;
-            imp_cmd_modules[2]->theta += 33/2000.0/180.0*M_PI;
-            imp_cmd_modules[3]->theta += 33/2000.0/180.0*M_PI;
+            imp_cmd_modules[0]->theta += 43/2000.0/180.0*M_PI;
+            imp_cmd_modules[1]->theta += 43/2000.0/180.0*M_PI;
+            imp_cmd_modules[2]->theta += 43/2000.0/180.0*M_PI;
+            imp_cmd_modules[3]->theta += 43/2000.0/180.0*M_PI;
             imp_cmd_modules[0]->beta += 80/2000.0/180.0*M_PI;
             imp_cmd_modules[1]->beta -= 80/2000.0/180.0*M_PI;
             imp_cmd_modules[2]->beta -= 80/2000.0/180.0*M_PI;
@@ -240,12 +240,12 @@ int main(int argc, char **argv) {
                     imp_cmd_modules[i]->Fy = forces[i];
                 }
 
-                // if (loop_count > 2000 && loop_count < 13000) {
-                //     imp_cmd_modules[0]->Fx = 30 * sin(loop_count / 1000.0 * M_PI);
-                //     imp_cmd_modules[1]->Fx = 30 * sin(loop_count / 1000.0 * M_PI);
-                //     imp_cmd_modules[2]->Fx = -30 * sin(loop_count / 1000.0 * M_PI);
-                //     imp_cmd_modules[3]->Fx = -30 * sin(loop_count / 1000.0 * M_PI);
-                // }
+                if (loop_count > 2000 && loop_count < 13000) {
+                    imp_cmd_modules[0]->Fx = 30 * sin(loop_count / 1000.0 * M_PI);
+                    imp_cmd_modules[1]->Fx = 30 * sin(loop_count / 1000.0 * M_PI);
+                    imp_cmd_modules[2]->Fx = -30 * sin(loop_count / 1000.0 * M_PI);
+                    imp_cmd_modules[3]->Fx = -30 * sin(loop_count / 1000.0 * M_PI);
+                }
 
 
                 imp_cmd.header.seq = loop_count;
