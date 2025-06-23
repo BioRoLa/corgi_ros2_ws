@@ -5,41 +5,68 @@ class HybridToLegged : public IGaitTransform
 {
     public:
         HybridToLegged(std::shared_ptr<Hybrid> transform_hybrid_ptr,std::shared_ptr<Legged> transform_leg_ptr)
-            : transform_hybrid(transform_hybrid_ptr),inherit(transform_hybrid_ptr->gaitSelector) {}
+            : transform_hybrid(transform_hybrid_ptr),inherit(transform_hybrid_ptr->gaitSelector),transform_leg(transform_leg_ptr) {}
         ~HybridToLegged() override = default;
         // Inherit the gaitSelector from Hybrid
         std::shared_ptr<GaitSelector> inherit;
         void transform() override { 
-            inherit-> step_length = 0.5;
-            inherit-> duty = {1 - inherit->swing_time, 0.5 - inherit->swing_time, 0.5, 0.0};
-            inherit->current_shift = {0.0, 0.0, 0.0, 0.0}; // No shift in legged mode
-            for(int i =0; i<4;i++){
-                inherit->current_stand_height[i] = 0.159;
-                auto tmp0 = transform_hybrid->find_pose(inherit->current_stand_height[i], inherit->current_shift[i], (inherit->step_length/2) ,inherit-> duty[i], 0);
-                inherit->next_eta[i][0] = tmp0[0];
-                inherit->next_eta[i][1] = tmp0[1];
+            int count = 0;
+            // inherit->Receive();
+            inherit->step_length = 0.15;//
+            transform_hybrid->update_nextFrame();
+            inherit->body = inherit->next_body;
+            for (int i=0; i<4; i++) {
+                inherit->hip[i] = inherit->next_hip[i];
             }
-            for (int i =0;i<10;i++){
-                inherit->Send();
+            inherit->foothold = inherit->next_foothold;
+            inherit->dS = inherit->velocity / inherit->pub_rate;
+            inherit->incre_duty = inherit->dS / inherit->step_length;
+            inherit->stand_height = inherit->current_stand_height[0]-0.002; // use the first leg's height as the stand height
+            for (int i=0; i<4; i++) {
+                inherit->current_stand_height[i] = inherit->stand_height;
             }
-            // double height = ;
-            while(1) {
-                for(int i=0;i<4;i++){
-                   if(inherit->next_hip[i][0]>0.45 && inherit->next_hip[i][0]<0.95){
-                    inherit->current_stand_height[i] = 0.129;
-                   }
-                   if(inherit->next_hip[i][0]>0.95){
-                    inherit->current_stand_height[i] = 0.159;
-                   }
+            std::cout << "initial: "<<inherit->stand_height << std::endl;
+            // adjust height
+            count = 0;
+            while(inherit->stand_height < 0.18){
+                count = 0;
+                for (int i=0; i<4; i++) {
+                    if(inherit->swing_phase[i]==0){
+                        count++;
+                    }
                 }
-                
+                if(count==4){
+                    // std::cout << gaitSelector->stand_height << std::endl;
+                    transform_hybrid->change_Height_all(inherit->stand_height+0.0001);
+                }
                 transform_hybrid->Step();
                 inherit->Send();
+            
             }
-        }
+            // 直接接走看看應該可以
+            std::cout << "height ready" << std::endl;
+            transform_leg->Initial();
+            double moving_distance = inherit->step_length;
+            double step_count = moving_distance/ inherit->dS;
+            std::cout << "moving_distance" << moving_distance <<std::endl;
+            std::cout << "step_count" << step_count <<std::endl;
+            int leg_count =0;
+            for (leg_count;leg_count<step_count;leg_count++) {
+                std::cout << leg_count <<" / " << step_count <<std::endl;
+                transform_leg->set_step_length(0.2);
+                transform_leg->set_stand_height(0.18);
+                transform_leg->next_Step();
+                inherit->Send();
+            }
+    }
     private:
         std::shared_ptr<Hybrid> transform_hybrid;
-        double expect_height = 0.1425;
+        std::shared_ptr<Legged> transform_leg;
+        int check_point=0;
+        std::array<int, 4> walk_transform;
+        double temp_step_length;
+        std::array<double, 2> swing_pose_temp;
+        std::array<double, 2> swing_variation_temp;
 };     
 extern "C" IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr, std::shared_ptr<Legged> legged_ptr) {
     return new HybridToLegged(hybrid_ptr, legged_ptr);

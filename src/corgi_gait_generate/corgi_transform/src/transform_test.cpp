@@ -26,9 +26,35 @@ int main(int argc, char** argv) {
     auto hybrid = std::make_shared<Hybrid>(gaitSelector); 
     auto legged = std::make_shared<Legged>(gaitSelector);
     Transform transformer(hybrid,legged);
-    // transformer.GaitTransform(Gait::WHEELED, Gait::HYBRID);
-    // transformer.GaitTransform(Gait::HYBRID, Gait::LEGGED);
-    // transformer.GaitTransform(Gait::WHEELED, Gait::LEGGED);
+    for (int i =0;i<100;i++){
+        for (int j=0;j<4;j++){
+            gaitSelector->next_eta[j][0] = 17 * PI/180;
+            if (j==0){
+                gaitSelector->next_eta[j][1] = 100 * PI/180;
+            }
+            else if (j==1 ){
+                gaitSelector->next_eta[j][1] = 100 * PI/180;
+            }
+            else{
+                gaitSelector->next_eta[j][1] = 50 * PI/180;
+            }
+            
+        }
+        gaitSelector->Transfer(gaitSelector->transfer_sec, gaitSelector->wait_sec);
+    }
+    gaitSelector->Send();
+    while(1){
+        if((int)gaitSelector->trigger_msg.enable){  
+        transformer.GaitTransform(Gait::WHEELED, Gait::HYBRID);
+        transformer.GaitTransform(Gait::HYBRID, Gait::LEGGED);
+        // transformer.GaitTransform(Gait::WHEELED, Gait::LEGGED);
+        break;
+    }
+    else{
+            std::cout << "Waiting for trigger..." << std::endl;
+        }
+    }
+
     
     std::cout << "End of testing!" << std::endl;
     return 0;

@@ -150,7 +150,7 @@ void Hybrid::Swing(double relative[4][2], std::array<double, 2> &target, std::ar
     Eigen::Vector2d terrain = {cos(terrain_slope), sin(terrain_slope)};
     // Eigen::Vector2d terrain = {1,0};
     // 儲存一條完整 swing 軌跡
-    swing_traj[swing_leg] = HybridSwing::generate(gaitSelector->leg_model, swing_type, startX, endX, startY, endY, rim_id, alpha0, body_velocity, terrain, 100);
+    swing_traj[swing_leg] = HybridSwing::generate(gaitSelector->leg_model, swing_type, startX, endX, startY, endY, rim_id, alpha0, body_velocity, terrain, 500);
 
     variation[0] = endX - startX;
     variation[1] = endY - startY;
@@ -162,8 +162,8 @@ void Hybrid::Swing_step(std::array<double, 2> target, std::array<double, 2> vari
     double ratio = (duty_ratio - (1-gaitSelector->swing_time)) / gaitSelector->swing_time;
     ratio = clamp(ratio, 0.0, 1.0); 
 
-    int idx = static_cast<int>(ratio * 100);
-    if (idx >= 100) idx = 100;
+    int idx = static_cast<int>(ratio * 500);
+    if (idx >= 500) idx = 500;
 
     gaitSelector->next_eta[swing_leg][0] = swing_traj[swing_leg][idx].theta;
     gaitSelector->next_eta[swing_leg][1] = swing_traj[swing_leg][idx].beta;
@@ -225,7 +225,7 @@ void Hybrid::Step(){
         if (gaitSelector->swing_phase[i] == 0) { 
             gaitSelector->leg_model.forward(gaitSelector->eta[i][0], gaitSelector->eta[i][1],true);
             std::array<double, 2> result_eta;
-            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), gaitSelector->next_hip[i][2]-gaitSelector->hip[i][2]}, 0);
+            result_eta = gaitSelector->leg_model.move(gaitSelector->eta[i][0], gaitSelector->eta[i][1], {(gaitSelector->next_hip[i][0]-gaitSelector->hip[i][0]), (gaitSelector->next_hip[i][2]-gaitSelector->hip[i][2])}, 0);
             gaitSelector->next_eta[i][0] = result_eta[0];
             gaitSelector->next_eta[i][1] = result_eta[1];
         } 
@@ -252,6 +252,15 @@ void Hybrid::change_Height(double new_value, int leg_index){
     else{
         // gaitSelector->new_stand_height[leg_index] = new_value;
         gaitSelector->current_stand_height[leg_index] = new_value;
+    }
+    // add limitation
+}
+
+void Hybrid::change_Height_all(double new_value){
+    gaitSelector->stand_height  = new_value;
+    for (int i=0; i<4; i++) {
+        gaitSelector->next_hip[i][2] = gaitSelector->stand_height;
+        gaitSelector->current_stand_height[i] = gaitSelector->stand_height;
     }
     // add limitation
 }

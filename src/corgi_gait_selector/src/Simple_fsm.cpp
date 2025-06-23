@@ -51,16 +51,6 @@ GaitSelector::GaitSelector( ros::NodeHandle& nh,
     next_hip = hip;
     next_foothold = foothold;
 
-    // cout the above
-    // std::cout << "body: " << body[0] << ", " << body[1] << ", " << body[2] << std::endl;
-    // for (int i = 0; i < 4; ++i) {
-    //     std::cout << "---------------------------------------------------------------------------------" << std::endl;
-    //     std::cout << "leg: "<< i << std::endl;
-    //     std::cout << "relative_foothold: " << relative_foothold[i][0] << ", " << relative_foothold[i][1] << std::endl;
-    //     std::cout << "hip: " << hip[i][0] << ", " << hip[i][1] << ", " << hip[i][2] << std::endl;
-    //     std::cout << "foothold: " << foothold[i][0] << ", " << foothold[i][1] << ", " << foothold[i][2] << std::endl;
-    // }
-    // std::cout << "---------------------------------------------------------------------------------" << std::endl;
 
 }
 
@@ -125,6 +115,22 @@ void GaitSelector::Transfer(int transfer_sec, int wait_sec){
 
 }
 
+void GaitSelector::Receive(){
+    for (int i=0; i<4; i++){
+        std::cout << i << std::endl;
+        std::cout << motor_state_modules[i]->theta << std::endl;
+        std::cout << motor_state_modules[i]->beta << std::endl;
+        next_eta[i][0] = motor_state_modules[i]->theta;
+        if (i==0 || i==3) {
+            next_eta[i][1] = -motor_state_modules[i]->beta;   
+        } else {
+            next_eta[i][1] = motor_state_modules[i]->beta;
+        }   
+        
+    }
+    Send();
+}
+
 std::vector<double> GaitSelector::linspace(double start, double end, int num_steps) {
     std::vector<double> result;
     if (num_steps < 1) return result; 
@@ -148,7 +154,7 @@ std::array<double, 4> GaitSelector::duty = {0.0};
 std::array<int, 4> GaitSelector::swing_phase = {0};
 
 double GaitSelector::swing_time = 0.2;   
-double GaitSelector::velocity = 0.05;  
+double GaitSelector::velocity = 0.1;  
 double GaitSelector::stand_height = 0.17;
 double GaitSelector::step_length = 0.5; 
 double GaitSelector::step_height = 0.03; 
@@ -195,7 +201,7 @@ int GaitSelector::pub_time = 1;
 int GaitSelector::do_pub = 1;
 int GaitSelector::transfer_state = 0;
 int GaitSelector::transfer_sec = 5;
-int GaitSelector::wait_sec = 10;
+int GaitSelector::wait_sec = 3;
 
 int GaitSelector::direction = 1;
 
@@ -210,176 +216,5 @@ int GaitSelector::direction = 1;
 // double BH=0.2
 
 
-// wheel add pub rate
-// add Transfer
 
-
-// void GaitSelector::process_and_visualize() {
-//     std::vector<Eigen::Vector3d> contact_points;
-//     std::vector<int> support_indices;
-
-//     for (int i = 0; i < 4; ++i) {
-//         if (swing_phase[i] == 1) continue;  // In swing phase, skip
-
-//         double theta = motor_state_modules[i]->theta;
-//         double beta  = motor_state_modules[i]->beta;
-//         std::cout << i << ": " 
-//                   << theta * 180 / M_PI << ", " 
-//                   << beta * 180 / M_PI << std::endl;
-
-//         leg_model.contact_map(theta, beta, 0);
-//         leg_model.forward(theta, beta, true);
-
-//         double x_hip = leg_model.contact_p[0];
-//         double y_hip = leg_model.contact_p[1];
-
-//         std::cout << "x_hip: " << x_hip << ", y_hip: " << y_hip << std::endl;
-
-//         Eigen::Vector3d base_pos;
-//         switch (i) {
-//             case 0: base_pos = Eigen::Vector3d( BL/2,  BW/2, 0); break;
-//             case 1: base_pos = Eigen::Vector3d( BL/2, -BW/2, 0); break;
-//             case 2: base_pos = Eigen::Vector3d(-BL/2,  BW/2, 0); break;
-//             case 3: base_pos = Eigen::Vector3d(-BL/2, -BW/2, 0); break;
-//         }
-
-//         Eigen::Vector3d contact_robot;
-//         contact_robot[0] = base_pos[0] + x_hip;
-//         contact_robot[1] = base_pos[1];
-//         contact_robot[2] = base_pos[2] + y_hip;
-
-//         contact_points.push_back(contact_robot);
-//         support_indices.push_back(contact_points.size() - 1);  // Track which index
-//     }
-
-//     publish_support_polygon(contact_points, support_indices);
-//     publish_com_marker();
-// }
-
-// void GaitSelector::publish_support_polygon(
-//     const std::vector<Eigen::Vector3d>& pts,
-//     const std::vector<int>& indices
-// ) {
-//     // ---- LINE LIST (edges) ----
-//     visualization_msgs::Marker line_marker;
-//     line_marker.header.frame_id = "map";
-//     line_marker.header.stamp = ros::Time::now();
-//     line_marker.ns = "support_polygon";
-//     line_marker.id = 0;
-//     line_marker.type = visualization_msgs::Marker::LINE_LIST;
-//     line_marker.action = visualization_msgs::Marker::ADD;
-//     line_marker.scale.x = 0.01;
-//     line_marker.color.r = 0.0;
-//     line_marker.color.g = 1.0;
-//     line_marker.color.b = 1.0;
-//     line_marker.color.a = 1.0;
-
-//     for (size_t i = 0; i < indices.size(); ++i) {
-//         geometry_msgs::Point p1, p2;
-//         const auto& pt1 = pts[indices[i]];
-//         const auto& pt2 = pts[indices[(i + 1) % indices.size()]];
-//         p1.x = pt1[0]; p1.y = pt1[1]; p1.z = pt1[2];
-//         p2.x = pt2[0]; p2.y = pt2[1]; p2.z = pt2[2];
-//         line_marker.points.push_back(p1);
-//         line_marker.points.push_back(p2);
-//     }
-
-//     marker_pub_.publish(line_marker);
-
-//     // ---- TRIANGLE LIST (filled region) ----
-//     visualization_msgs::Marker fill_marker;
-//     fill_marker.header.frame_id = "map";
-//     fill_marker.header.stamp = ros::Time::now();
-//     fill_marker.ns = "support_polygon";
-//     fill_marker.id = 1;
-//     fill_marker.type = visualization_msgs::Marker::TRIANGLE_LIST;
-//     fill_marker.action = visualization_msgs::Marker::ADD;
-//     fill_marker.scale.x = 1.0;  // not used for triangles
-//     // fill_marker.color.r = 0.0;
-//     // fill_marker.color.g = 1.0;
-//     // fill_marker.color.b = 1.0;
-//     // fill_marker.color.a = 0.3;  // semi-transparent
-
-//     if (indices.size() == 3) {
-//         // One triangle
-//         for (int i = 0; i < 3; ++i) {
-//             geometry_msgs::Point pt;
-//             const auto& p = pts[indices[i]];
-//             pt.x = p[0]; pt.y = p[1]; pt.z = p[2];
-//             fill_marker.points.push_back(pt);
-//         }
-//     } else if (indices.size() == 4) {
-//         // Two triangles from quad: (0,1,2) and (0,2,3)
-//         geometry_msgs::Point quad[4];
-//         for (int i = 0; i < 4; ++i) {
-//             const auto& p = pts[indices[i]];
-//             quad[i].x = p[0]; quad[i].y = p[1]; quad[i].z = p[2];
-//         }
-//         fill_marker.points.push_back(quad[0]);
-//         fill_marker.points.push_back(quad[1]);
-//         fill_marker.points.push_back(quad[2]);
-
-//         fill_marker.points.push_back(quad[0]);
-//         fill_marker.points.push_back(quad[2]);
-//         fill_marker.points.push_back(quad[3]);
-//     }
-//     // Assume COM at center of body projected on XY
-//     Eigen::Vector2d com_xy(0.0, 0.0);
-//     bool com_inside = is_point_inside_polygon(pts, indices, com_xy);
-//     fill_marker.color.r = com_inside ? 0.0 : 1.0;
-//     fill_marker.color.g = com_inside ? 1.0 : 0.0;
-//     fill_marker.color.b = com_inside ? 1.0 : 0.0;
-//     fill_marker.color.a = 0.3;  // semi-transparent
-
-//     marker_pub_.publish(fill_marker);
-// }
-// void GaitSelector::publish_com_marker() {
-//     visualization_msgs::Marker com;
-//     com.header.frame_id = "map";
-//     com.header.stamp = ros::Time::now();
-//     com.ns = "com_marker";
-//     com.id = 1;
-//     com.type = visualization_msgs::Marker::SPHERE;
-//     com.action = visualization_msgs::Marker::ADD;
-//     com.scale.x = 0.03;
-//     com.scale.y = 0.03;
-//     com.scale.z = 0.03;
-//     com.color.r = 1.0;
-//     com.color.g = 0.0;
-//     com.color.b = 0.0;
-//     com.color.a = 1.0;
-
-//     // COM assumed to be center of base
-//     com.pose.position.x = 0.0;
-//     com.pose.position.y = 0.0;
-//     com.pose.position.z = - stand_height;
-//     com.pose.orientation.w = 1.0;
-
-//     marker_pub_.publish(com);
-// }
-
-
-// bool GaitSelector::is_point_inside_polygon(
-//     const std::vector<Eigen::Vector3d>& points,
-//     const std::vector<int>& indices,
-//     const Eigen::Vector2d& point_xy
-// ) {
-//     int crossings = 0;
-//     size_t n = indices.size();
-
-//     for (size_t i = 0; i < n; ++i) {
-//         const auto& a = points[indices[i]];
-//         const auto& b = points[indices[(i + 1) % n]];
-
-//         Eigen::Vector2d pa(a[0], a[1]);
-//         Eigen::Vector2d pb(b[0], b[1]);
-
-//         if (((pa[1] > point_xy[1]) != (pb[1] > point_xy[1])) &&
-//             (point_xy[0] < (pb[0] - pa[0]) * (point_xy[1] - pa[1]) / (pb[1] - pa[1] + 1e-6) + pa[0])) {
-//             crossings++;
-//         }
-//     }
-
-//     return (crossings % 2 == 1);
-// }
 

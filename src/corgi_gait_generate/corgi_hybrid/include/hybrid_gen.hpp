@@ -35,6 +35,7 @@ class Hybrid{
         void Step_wheel();
         // void change_Height(double new_value);
         void change_Height(double new_value, int leg_index);
+        void change_Height_all(double new_value);
         void change_Step_length(double new_value);
         void change_Velocity(double new_value);
         void csv_title(std::ofstream &file);

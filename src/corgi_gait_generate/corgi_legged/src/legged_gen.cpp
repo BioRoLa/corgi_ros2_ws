@@ -5,7 +5,7 @@ Legged::Legged(std::shared_ptr<GaitSelector> gait_selector_ptr)
 void Legged::Initial() 
 {
     double init_theta[4] = {gaitSelector->eta[0][0], gaitSelector->eta[1][0], gaitSelector->eta[2][0], gaitSelector->eta[3][0]};
-    double init_beta[4]  = {-gaitSelector->eta[0][1], -gaitSelector->eta[1][1], -gaitSelector->eta[2][1], -gaitSelector->eta[3][1]};
+    double init_beta[4]  = {gaitSelector->eta[0][1], gaitSelector->eta[1][1], gaitSelector->eta[2][1], gaitSelector->eta[3][1]};
       // Get foothold in hip coordinate from initial configuration
     gaitSelector->relative_foothold[4][2] = {0.0};
     int current_rim = 0;
@@ -172,9 +172,9 @@ void Legged::next_Step() {
     }//end for
     for(int i=0; i<4; i++){
         gaitSelector->next_eta[i][0] = theta[i]; 
-        gaitSelector->next_eta[i][1] = -beta[i];
+        gaitSelector->next_eta[i][1] = beta[i];
     }    
-    gaitSelector->Send();
+    
 }
 
 void Legged::set_velocity(double new_value){
