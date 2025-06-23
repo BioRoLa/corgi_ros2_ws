@@ -5,7 +5,7 @@ target_link_libraries(hybrid_test  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_
 # Single_leg_traj.cpp
 
 add_executable(single_leg_traj Single_leg_traj.cpp hybrid_swing.cpp)
-target_link_libraries(single_leg_traj ${NLOPT_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen )
+target_link_libraries(single_leg_traj  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen )
 
 
 # alpha_calculation.cpp
@@ -20,5 +20,5 @@ target_link_libraries(stability ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTI
 
 # Four_leg.cpp
 add_executable(four Four_leg.cpp)
-target_link_libraries(four ${NLOPT_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} Eigen3::Eigen )
+target_link_libraries(four ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} Eigen3::Eigen )
 

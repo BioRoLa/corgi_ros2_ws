@@ -16,7 +16,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
 set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
-find_package(NLopt REQUIRED)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS 
     roscpp 
@@ -49,7 +48,6 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
   ${EIGEN3_INCLUDE_DIR}
-  ${NLopt_INCLUDE_DIRS}
   include
 )
 
