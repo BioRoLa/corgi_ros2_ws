@@ -1,6 +1,27 @@
 #include "mpc.hpp"
 #include <stdexcept>
 
+void ModelPredictiveController::load_config() {
+    YAML::Node config;
+
+    const char* home_path = std::getenv("HOME");
+    if (!home_path) {
+        throw std::runtime_error("HOME environment variable not set");
+    }
+    std::string config_file_path = std::string(home_path) + "/corgi_ws/corgi_ros_ws/src/corgi_mpc/config/config.yaml";
+    config = YAML::LoadFile(config_file_path);
+
+    std::vector<double> diag = config["Q_diagonal"].as<std::vector<double>>();
+    if (diag.size() != n_x) {
+        throw std::runtime_error("Q_diagonal size mismatch with n_x");
+    }
+
+    Q = Eigen::MatrixXd::Zero(n_x, n_x);
+    for (int i = 0; i < n_x; ++i) {
+        Q(i, i) = diag[i];
+    }
+}
+
 void ModelPredictiveController::init_matrices(const double *ra, const double *rb, const double *rc, const double *rd) {
     // Dynamics matrices (Ac, Bc) initialization
     Ac.setZero();
@@ -47,12 +68,12 @@ void ModelPredictiveController::init_matrices(const double *ra, const double *rb
     Bd = expM.topRightCorner(n_x, n_u);
 
     // Cost matrices
-    Q = Eigen::MatrixXd::Zero(n_x, n_x);
-    Q.diagonal() << 30,    30,    0,     // roll, pitch, yaw
-                    0,     0,     300,   // x, y, z
-                    1e-1,  1e-1,  0,     // ω_x, ω_y, ω_z
-                    0,     0,     5,     // v_x, v_y, v_z
-                    0;                   // additional state
+    // Q = Eigen::MatrixXd::Zero(n_x, n_x);
+    // Q.diagonal() << 30,    30,    0,     // roll, pitch, yaw
+    //                 0,     0,     300,   // x, y, z
+    //                 1e-1,  1e-1,  0,     // ω_x, ω_y, ω_z
+    //                 0,     0,     5,     // v_x, v_y, v_z
+    //                 0;                   // additional state
 
     R = 1e-8 * Eigen::MatrixXd::Identity(n_u, n_u);
 }

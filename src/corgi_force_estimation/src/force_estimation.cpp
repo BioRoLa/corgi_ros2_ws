@@ -3,6 +3,7 @@
 
 corgi_msgs::MotorStateStamped motor_state;
 corgi_msgs::ForceStateStamped force_state;
+corgi_msgs::ContactStateStamped contact_state;
 sensor_msgs::Imu imu;
 
 
@@ -12,6 +13,10 @@ void motor_state_cb(const corgi_msgs::MotorStateStamped state){
 
 void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
     imu = *msg;
+}
+
+void contact_state_cb(const corgi_msgs::ContactStateStamped state) {
+    contact_state = state;
 }
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
@@ -159,6 +164,7 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh;
     ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
+    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", 1000, contact_state_cb);
     ros::Publisher force_state_pub = nh.advertise<corgi_msgs::ForceStateStamped>("force/state", 1000);
     ros::Rate rate(1000);
 
@@ -179,6 +185,13 @@ int main(int argc, char **argv) {
         &force_state.module_b,
         &force_state.module_c,
         &force_state.module_d
+    };
+
+    std::vector<corgi_msgs::ContactState*> contact_state_modules = {
+        &contact_state.module_a,
+        &contact_state.module_b,
+        &contact_state.module_c,
+        &contact_state.module_d
     };
 
     std::vector<Eigen::MatrixXd> phi_prev_modules = {
@@ -244,6 +257,11 @@ int main(int argc, char **argv) {
             else { force_state_modules[i]->Fx = force_est(0, 0); }
             
             force_state_modules[i]->Fy = -force_est(1, 0)+0.68*9.81;
+
+            if (!contact_state_modules[i]->contact) {
+                force_state_modules[i]->Fx = 0;
+                force_state_modules[i]->Fy = 0;
+            }
         }
 
         force_state.header.seq = motor_state.header.seq;

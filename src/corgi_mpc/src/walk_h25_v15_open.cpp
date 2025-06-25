@@ -17,6 +17,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Corgi Walk Starts");
 
     ModelPredictiveController mpc;
+    mpc.load_config();
     mpc.target_loop = 1500;
 
     ros::init(argc, argv, "corgi_walk");

@@ -21,6 +21,7 @@ set(OSQP_EIGEN_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/OsqpEigen")
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(osqp REQUIRED)
 find_package(OsqpEigen REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 find_package(catkin REQUIRED COMPONENTS 
   roscpp 

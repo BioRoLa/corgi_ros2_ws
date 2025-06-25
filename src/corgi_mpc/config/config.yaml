@@ -1,0 +1,7 @@
+Q_diagonal: [
+  30,   30,   0,     # roll, pitch, yaw
+  0,    0,    300,   # x, y, z
+  0.1,  0.1,  0,     # ω_x, ω_y, ω_z
+  0,    0,    5,     # v_x, v_y, v_z
+  0                  # additional state
+]

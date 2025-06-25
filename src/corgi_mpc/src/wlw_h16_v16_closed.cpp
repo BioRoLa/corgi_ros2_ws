@@ -56,6 +56,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Corgi MPC Starts");
 
     ModelPredictiveController mpc;
+    mpc.load_config();
     mpc.target_loop = 1600;
 
     ros::init(argc, argv, "corgi_mpc");

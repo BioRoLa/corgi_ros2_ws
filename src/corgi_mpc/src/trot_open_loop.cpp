@@ -17,6 +17,7 @@ int main(int argc, char **argv) {
     ROS_INFO("Corgi Trot Starts");
 
     ModelPredictiveController mpc;
+    mpc.load_config();
 
     ros::init(argc, argv, "corgi_trot");
 
