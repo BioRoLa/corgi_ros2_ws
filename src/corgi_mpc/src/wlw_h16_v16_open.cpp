@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
 
     ModelPredictiveController mpc;
     mpc.load_config();
-    mpc.target_loop = 1600;
+    mpc.target_loop = 1500;
 
     ros::init(argc, argv, "corgi_wlw");
 
@@ -57,27 +57,38 @@ int main(int argc, char **argv) {
     // initialize gait
     double CoM_bias = 0.0;
 
+    double velocity = 0.16;
+
     auto gait_selector = std::make_shared<GaitSelector>(nh, sim, CoM_bias, 1000);
     gait_selector->do_pub = 0;
     gait_selector->stand_height = 0.16;
     gait_selector->step_length = 0.4;
-    
+    gait_selector->velocity = 0;
+
+    for (int i=0; i<4; i++) {
+        gait_selector->current_shift[i] = 0;
+        gait_selector->current_stand_height[i] = gait_selector->stand_height;
+    }
+
     Hybrid hybrid_gait(gait_selector); 
 
-    
     std::cout << "hybrid" << std::endl;
-    double velocity = 0.16;
     hybrid_gait.Initialize(1, 1);
-    hybrid_gait.change_Velocity(velocity);
-    hybrid_gait.change_Height(0.16);
-    hybrid_gait.change_Step_length(0.4);
-    
-    hybrid_gait.Step();
-    
+
+    for(int i=0; i<4; i++){
+        gait_selector->eta[i][0] = gait_selector->next_eta[i][0]; 
+        gait_selector->eta[i][1] = gait_selector->next_eta[i][1];
+    }
+
+    hybrid_gait.update_nextFrame();
+    gait_selector->body = gait_selector->next_body;
+    gait_selector->hip = gait_selector->next_hip;
+    gait_selector->foothold = gait_selector->next_foothold;
+
     double init_eta[8];
     for (int i=0; i<4; i++) {
         init_eta[2*i] = gait_selector->eta[i][0];
-        init_eta[2*i+1] = gait_selector->eta[i][1];
+        init_eta[2*i+1] = -gait_selector->eta[i][1];
     }
 
     init_eta[3] *= -1;
@@ -194,11 +205,16 @@ int main(int argc, char **argv) {
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt / 10.0;
 
                 // get next eta
+                for(int i=0; i<4; i++){
+                    gait_selector->eta[i][0] = gait_selector->next_eta[i][0]; 
+                    gait_selector->eta[i][1] = gait_selector->next_eta[i][1];
+                }
+
                 hybrid_gait.Step();
 
                 for (int i=0; i<4; i++) {
-                    eta_list[0][i] = gait_selector->eta[i][0];
-                    eta_list[1][i] = gait_selector->eta[i][1];
+                    eta_list[0][i] = gait_selector->next_eta[i][0];
+                    eta_list[1][i] = -gait_selector->next_eta[i][1];
                 }
 
                 for (int i=0; i<4; i++) {

@@ -257,11 +257,6 @@ int main(int argc, char **argv) {
             else { force_state_modules[i]->Fx = force_est(0, 0); }
             
             force_state_modules[i]->Fy = -force_est(1, 0)+0.68*9.81;
-
-            if (!contact_state_modules[i]->contact) {
-                force_state_modules[i]->Fx = 0;
-                force_state_modules[i]->Fy = 0;
-            }
         }
 
         force_state.header.seq = motor_state.header.seq;
