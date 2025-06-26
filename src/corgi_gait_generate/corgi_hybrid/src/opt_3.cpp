@@ -34,16 +34,15 @@ public:
     }
 
     // 增加一段斜坡 (slope)：slope = tan(theta)，length 表示此段的“水平长度”
-    void addSlope(double slope_new, double length) {
-        std::cout<< "slope: "<< slope_new << std::endl;
+    void addSlope(double slope, double length) {
         if (segments.empty()) {
-            segments.push_back({ 0.0, length, slope_new, terrain_start_height });
+            segments.push_back({ 0.0, length, slope, terrain_start_height });
         }
         else{
             Segment &prev = segments.back();
             double new_x0 = prev.x0 + prev.length;
             double new_h0 = prev.h0 + prev.slope * prev.length; 
-            segments.push_back({ new_x0, length, slope_new, new_h0 });
+            segments.push_back({ new_x0, length, slope, new_h0 });
         }
     }
 
@@ -68,8 +67,6 @@ public:
                 }
                 return false;
             }
-            // std::cout << "6-0 "<< std::endl;
-            return false;
         }
     }
 
@@ -164,7 +161,7 @@ bool checkCollision(LegModel &leg,
     // 1) 前向運算更新所有關節點
     leg.forward(theta, beta, true);
 
-    const int N = 50;   // 每條弧線/線段取 N+1 個點檢查
+    const int N = 20;   // 每條弧線/線段取 N+1 個點檢查
     auto below = [&](double wx, double wy){
         // 僅檢查 hip_x ± stand_h 範圍內的地形
         if (wx < hip_x - stand_h || wx > hip_x + stand_h)
@@ -249,8 +246,8 @@ bool checkCollision(LegModel &leg,
 
 // ———— 全域參數 ————
 static const double clearence      = 0.001;    // min安全距離 (m)
-static const double clearence_M    = 0.01;    // MAX安全距離 (m)
-static const double step_len       = 0.5;      // 步長 (m)
+static const double clearence_M    = 0.005;    // MAX安全距離 (m)
+static const double step_len       = 0.15;      // 步長 (m)
 static const double swing_t        = 0.2;      // 擺動階段比例
 static const double vel            = 0.2;      // 速度 (m/s)
 static const double dS             = vel / 1000.0;  // 每步腳移動量 (m)
@@ -391,67 +388,70 @@ void generate_swing_trajectory(
     const Eigen::Vector2d &ground_tangent,
     std::vector<DataPoint> &data)
 {
+    // 中間節點（固定用 17° → 17°*π/180）
+    const double mid_theta   = 17.0 * M_PI / 180.0;
+    // 每次迭代 θ 最大只能改變 0.5° → 0.5°*π/180
+    const double max_dtheta  = 10  * M_PI / 180.0;
+
+    // 1) θ 插值函式： r ∈ [0,1]，如果 r<0.5 用前段從 theta_start → mid_theta，
+    //    否則用後段從 mid_theta → theta_end，兩段都用 quintic(u) 做 ease‐in‐out
+    auto theta_raw = [&](double r) {
+        if (r < 0.5) {
+            double u = r / 0.5;  // 前半段正規化到 [0,1]
+            return theta_start + (mid_theta - theta_start) * quintic(u);
+        } else {
+            double u = (r - 0.5) / 0.5;  // 後半段正規化到 [0,1]
+            return mid_theta    + (theta_end   - mid_theta)    * quintic(u);
+        }
+    };
+
+    // 2) β 插值函式： r ∈ [0,1]，直接用 quintic(r) 從 beta_start → beta_end
+    auto beta_raw = [&](double r) {
+        return beta_start + (beta_end - beta_start) * quintic(r);
+    };
+
+    // 清空並預留空間
     data.clear();
     data.reserve(N + 1);
-    Eigen::Vector2d P_end = pointOnRimByAlpha(leg, theta_end, beta_end, rim, alpha);
-    double raw_prev = double(N-1)/N;
-    double mid_theta = 17.0 * M_PI / 180.0;
-    auto compute_theta_raw = [&](double t){
-        if (t < 0.5)
-            return theta_start + (mid_theta - theta_start) * (2*t);
-        else
-            return mid_theta + (theta_end - mid_theta) * (2*(t - 0.5));
-    };
-    auto compute_beta_raw = [&](double t){ return beta_start + (beta_end - beta_start) * quintic(t); };
-    Eigen::Vector2d P_prev = pointOnRimByAlpha(
-        leg,
-        compute_theta_raw(raw_prev),
-        compute_beta_raw(raw_prev),
-        rim, alpha
-    );
-    Eigen::Vector2d dPdr = (P_end - P_prev) * N;
-    double denom = dPdr.dot(ground_tangent);
-    double vb_t  = body_vel.dot(ground_tangent);
-    double eps   = (std::abs(denom) > 1e-6 ? 1.0 - vb_t/denom : 0.0);
-    eps = clamp(eps, -0.5, 0.5);
 
-    // 2) warp for theta only
-    auto warp_theta = [&](double r){ return clamp(r + eps*r*(1-r), 0.0, 1.0); };
+    // prev_th 紀錄上一次迭代真正使用的 θ
+    double prev_th = theta_start;
 
-    // constraints
-    const double max_dtheta = 1.0 * M_PI/180.0; // max 1° per step
-    const double lambda     = 0.3;              // beta mix weight
-
-    double prev_theta = theta_start;
-
-    // 3) generate trajectory
+    // 主迴圈： i=0..N 共 N+1 個點
     for (int i = 0; i <= N; ++i) {
-        double raw = double(i) / N;
-        // theta: warped two-segment + clamp delta
-        double t_th    = warp_theta(raw);
-        double theta_uns = compute_theta_raw(t_th);
-        double dtheta_val = theta_uns - prev_theta;
-        double theta_cur  = prev_theta + std::copysign(std::min(std::abs(dtheta_val), max_dtheta), dtheta_val);
+        double r = double(i) / N;            // 從 0 到 1 等份
+        // 從插值函式取理想上的目標 θ
+        double target_th = theta_raw(r);
+        // 計算與前一次 θ 差距
+        double diff = target_th - prev_th;
+        // 如果差距太大，就以 max_dtheta 做限制
+        double limited_dth = std::copysign(
+            std::min(std::abs(diff), max_dtheta),
+            diff
+        );
+        // 真正這一筆用的 θ
+        double theta_cur = prev_th + limited_dth;
 
-        // beta: linear+quintic on raw (no warp)
-        double s_lin   = raw;
-        double s_quint = quintic(raw);
-        double s_beta  = lambda*s_lin + (1.0 - lambda)*s_quint;
-        double beta_cur = beta_start + (beta_end - beta_start) * s_beta;
+        // β 沒做限速，直接用五次插值
+        double beta_cur = beta_raw(r);
 
-        Eigen::Vector2d p = pointOnRimByAlpha(leg, theta_cur, beta_cur, rim, alpha);
-        
+        // 計算當前 (theta_cur, beta_cur) 對應到輪緣上 alpha 的 (x,y)
+        Eigen::Vector2d p = pointOnRimByAlpha(
+            leg, theta_cur, beta_cur, rim, alpha
+        );
+
+        // 存入 data (phase 一律設定為 "swing")
         data.push_back({theta_cur, beta_cur, p.x(), p.y(), "swing"});
-        prev_theta = theta_cur;
+
     }
 }
+
 // ———— 模擬一次 touchdown 回傳狀態碼 ————
 TouchdownStatus simulate_td_status(LegModel &leg, Terrain &terrain,double stand_h, double shift, double O_start_x) 
 {   
-    // std::cout << "Simulate touchdown with shift = " << shift << " m, O_start_x = " << O_start_x << std::endl;
     double hip_x = O_start_x;
     auto eta = leg.inverse({0.0, -stand_h + leg.r}, "G");
-    // std::cout << "1 "<< std::endl; 
+    
     // 1) 後退 shift
     for (double s1 = 0; s1 < shift; s1 += 0.001) {
         eta = leg.move(eta[0], eta[1], { -0.001, 0.0 }, 0.0);
@@ -459,7 +459,6 @@ TouchdownStatus simulate_td_status(LegModel &leg, Terrain &terrain,double stand_
             return THETA_VIOLATION;
         }
     }
-    // std::cout << "2 "<< std::endl;
     // 2) 前進半步長
     for (double s = 0; s < 0.5 * step_len; s += 0.001) {
         try {
@@ -472,45 +471,36 @@ TouchdownStatus simulate_td_status(LegModel &leg, Terrain &terrain,double stand_
             return THETA_VIOLATION;
         }
     }
-    // std::cout << "3 "<< std::endl;
+    
     // 3) 初始碰撞檢查
     leg.forward(eta[0], eta[1], true);
     if (checkCollision(leg,eta[0],eta[1],terrain,hip_x,stand_h)){
         return COLLISION;
     }
-    // std::cout << "4 "<< std::endl;
+    
     // 4) 初始接觸深度檢查
     // use leg.contact_map(eta[0], eta[1], 0.0); and leg.contact_map(eta[0], eta[1], atan(terrain.slopeAt(hip_x, true)));
     // 先測試 hip 所在的地形
     leg.contact_map(eta[0], eta[1], atan(terrain.slopeAt(hip_x, false)));
-    // std::cout << "5 "<< std::endl;
     if ((leg.contact_p[1] - terrain.height(hip_x + leg.contact_p[0]) )*cos(atan(terrain.slopeAt(hip_x, false))) < clearence){
-        // std::cout << "5-1 "<< std::endl;
         return PENETRATION;
     }
-    
     else if((leg.contact_p[1] - terrain.height(hip_x + leg.contact_p[0]) )*cos(atan(terrain.slopeAt(hip_x, false))) > clearence_M ){
-        // std::cout << "5-2 "<< std::endl;
         // 測試下一個地形
         leg.contact_map(eta[0], eta[1], atan(terrain.slopeAt(hip_x, true)));
-        // std::cout << "5-3 "<< std::endl;
         if(!terrain.check_position(hip_x + leg.contact_p[0])){
-            // std::cout << "5-4 "<< std::endl;
             if ((leg.contact_p[1] - terrain.height(hip_x + leg.contact_p[0]) )*cos(atan(terrain.slopeAt(hip_x, true)))< clearence ){
-                // std::cout << "5-5 "<< std::endl;
                 return PENETRATION;
             }
             else if((leg.contact_p[1] - terrain.height(hip_x + leg.contact_p[0]) )*cos(atan(terrain.slopeAt(hip_x, true))) > clearence_M ){
-                // std::cout << "5-6 "<< std::endl;
                 return FURTHER;
             }
         }
         else{
-            // std::cout << "5-7 "<< std::endl;
             return FURTHER;
         }
     }
-    // std::cout << "5-8 "<< std::endl;
+
     // else{
     //     // std::cout << "Initial pose Touching differ terrain at x = " << hip_x << std::endl;
     // }
@@ -570,7 +560,6 @@ TouchdownStatus simulate_td_status(LegModel &leg, Terrain &terrain,double stand_
                 
         }
     } 
-    // std::cout << "6 "<< std::endl;
     return LEGAL;
 }
 
@@ -579,8 +568,7 @@ TouchdownStatus simulate_status(LegModel &leg, Terrain &terrain,double stand_h, 
 {   
     // 1) swing phase
     // find the end pose
-    double hip_x_temp = O_start_x ;
-    // std::cout << "O_start_x = " << O_start_x << ", hip_x_temp = " << hip_x_temp << std::endl;
+    double hip_x_temp = O_start_x + (swing_t/(1-swing_t)) * step_len;
     double terrain_height_temp = terrain.height(hip_x_temp);
     auto eta_temp = leg.inverse({0.0, -stand_h + leg.r}, "G");
     // 後退 shift
@@ -704,14 +692,13 @@ TouchdownStatus simulate_status(LegModel &leg, Terrain &terrain,double stand_h, 
     std::cout << "Generating swing trajectory..." << std::endl;
     eta_temp[1] -= 2.0*M_PI;
     eta_temp_swing[1] -= 2.0*M_PI;
-    // std::cout << "eta_temp: " << eta_temp_swing[0] << ", " << eta_temp_swing[1] << std::endl;
+    std::cout << "eta_temp: " << eta_temp_swing[0] << ", " << eta_temp_swing[1] << std::endl;
     // cout stand_h, shift
     // std::cout << "stand_h: " << stand_h << ", shift: " << shift << std::endl;
-    int N = (swing_t/(1-swing_t))* step_len / dS;
     generate_swing_trajectory(
         leg, stand_h,
         eta_current[0], eta_current[1], eta_temp_swing[0], eta_temp_swing[1],
-        N, rim_id, alpha0,
+        200, rim_id, alpha0,
         Eigen::Vector2d(vel,0), Eigen::Vector2d(1,0), data_point
     );
 
@@ -722,7 +709,7 @@ TouchdownStatus simulate_status(LegModel &leg, Terrain &terrain,double stand_h, 
 std::array<double,2> write_touchdown_csv(LegModel &leg, Terrain &terrain, double stand_h, double shift, std::ofstream &file2, double O_x,int index) { 
     // how to store the above info?
     std::cout << "Writing touchdown trajectory to CSV..." << std::endl;
-    // std::cout << "stand_h: " << stand_h << ", shift: " << shift << std::endl;
+    std::cout << "stand_h: " << stand_h << ", shift: " << shift << std::endl;
     double hip_x_final = O_x; // O 點 x 座標
     double target_pose[2] = {0.0, -stand_h + leg.r};
     auto eta = leg.inverse(target_pose, "G");
@@ -733,7 +720,7 @@ std::array<double,2> write_touchdown_csv(LegModel &leg, Terrain &terrain, double
     for (double s = 0; s < 0.5 * step_len; s += 0.001){
         eta = leg.move(eta[0], eta[1], {-0.001, 0.0}, 0.0);
     }
-    // std::cout << "eta: " << eta[0] << ", " << eta[1]-index*2*M_PI  << std::endl;
+    std::cout << "eta: " << eta[0] << ", " << eta[1]-index*2*M_PI  << std::endl;
     bool check_csv = false;
     // if touching the same slope
     double contactA;
@@ -752,6 +739,7 @@ std::array<double,2> write_touchdown_csv(LegModel &leg, Terrain &terrain, double
         leg.contact_map(eta[0], eta[1], atan(terrain.slopeAt(hip_x_final, true)));
         
     }
+    std::cout << "eta12012012: " << eta[0] << ", " << eta[1] << std::endl;
     eta[1] = eta[1]-index*2*M_PI ;
     file2 << std::fixed << std::setprecision(6)
         << eta[0] << "," << eta[1] << ","
@@ -791,36 +779,28 @@ std::array<double,2> write_touchdown_csv(LegModel &leg, Terrain &terrain, double
 
 // ———— 主程式：手動巢狀搜尋 ————
 int main() {
-    std::ofstream file2("opt_6.csv");
+    std::ofstream file2("opt_1.csv");
     file2 << "theta,beta,x,y,phase\n";
     std::vector<DataPoint> data;
-    Terrain terrain(-0.150);
-    // terrain.addPlain(0.4);  
-    terrain.addSlope(0.2308, 0.27); 
-    terrain.addPlain(0.4); 
-    terrain.addSlope(-0.2593, 0.27);  
-    terrain.addPlain(0.4); 
-    terrain.addSlope(0.2593, 0.27); 
-    terrain.addPlain(0.4); 
-    terrain.addSlope(-0.2593, 0.27); 
+    Terrain terrain(-0.149);
+    terrain.addPlain(0.08);
+    double angle1 = 15.0 * M_PI/180.0;
+    terrain.addSlope(tan(angle1), 0.10);
     terrain.addPlain(5);
-    terrain.printAll();
-    double O_start_x= 0.222;
+    // terrain.printAll();
+    double O_start_x= 0.0;
     // double O_start_x= step_len+(swing_t/(1-swing_t))*step_len; // start at the beginning of the slope
     std::cout << "O_start_x: " << O_start_x << std::endl;
-    std::cout << "terrain height: " << terrain.height(O_start_x)<< std::endl;
     double stand_h  = 0.34;
 
     double best_h= stand_h, best_shift=-step_len;
     bool found = false;
     
 
-    // for (double h = best_h; h >= 0.120; h -= 0.0005) {
-    double h = 0.15;
+    for (double h = best_h; h >= 0.120; h -= 0.0005) {
         // std::cout << "Testing height: " << h << std::endl;
         bool theta_bound_reached = false;
         for (double sh = -step_len; sh <= step_len; sh += 0.01) {
-            // std::cout << "Testing shift: " << sh << std::endl;
             LegModel leg(true);
             TouchdownStatus status = simulate_td_status(leg, terrain, h, sh, O_start_x);
             if (status == LEGAL) {
@@ -853,80 +833,80 @@ int main() {
             }
         }
         // std::cout<<"Finish searching this Height: " << h << std::endl;
-        // if (found) {break;}
-        // if (theta_bound_reached) {continue;}
+        if (found) {break;}
+        if (theta_bound_reached) {continue;}
         
-    // }
+    }
     if (found) {
         std::cout << "Found pose: stand_h = " << best_h
                   << ", shift = " << best_shift << std::endl;
         found = false;
         LegModel leg_final(true);
         // return the final pose
-        // std::array<double,2> eta_final = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2, O_start_x,0);
-        // for (double h = stand_h; h >= 0.120; h -= 0.0005) {
-        //     // std::cout << "Testing height: " << h << std::endl;
-        //     bool theta_bound_reached = false;
-        //     for (double sh = -step_len; sh <= step_len; sh += 0.01) {
-        //         LegModel leg(true);
-        //         TouchdownStatus status = simulate_status(leg, terrain, h, sh, O_start_x+step_len+(swing_t/(1-swing_t))*step_len, eta_final, data);
-        //         if (status == LEGAL) {
-        //             std::cout << "Found LEGAL"<< std::endl;
-        //             best_h = h;
-        //             found = true;
-        //             best_shift = sh;
-        //             break;
-        //         }
-        //         else if (status == THETA_VIOLATION) {
-        //             theta_bound_reached = true;
-        //             // std::cout << status << std::endl;
-        //             break; 
-        //         }
-        //         else if (status == COLLISION) {
-        //             // std::cout << status << std::endl;
-        //             continue; 
-        //         }
-        //         else if (status == PENETRATION) {
-        //             // std::cout << status << std::endl;
-        //             continue; 
-        //         }
-        //         else if (status == UN_CONVERGED) {
-        //             // std::cout << status << std::endl;
-        //             break; 
-        //         }
-        //         else if (status == FURTHER){
-        //             // std::cout << status << std::endl;
-        //             continue; 
-        //         }
-        //     }
-        //     // std::cout<<"Finish searching this Height: " << h << std::endl;
-        //     if (found) {break;}
-        //     if (theta_bound_reached) {continue;}
+        std::array<double,2> eta_final = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2, O_start_x,0);
+        for (double h = stand_h; h >= 0.120; h -= 0.0005) {
+            // std::cout << "Testing height: " << h << std::endl;
+            bool theta_bound_reached = false;
+            for (double sh = -step_len; sh <= step_len; sh += 0.01) {
+                LegModel leg(true);
+                TouchdownStatus status = simulate_status(leg, terrain, h, sh, O_start_x+step_len+(swing_t/(1-swing_t))*step_len, eta_final, data);
+                if (status == LEGAL) {
+                    std::cout << "Found LEGAL"<< std::endl;
+                    best_h = h;
+                    found = true;
+                    best_shift = sh;
+                    break;
+                }
+                else if (status == THETA_VIOLATION) {
+                    theta_bound_reached = true;
+                    // std::cout << status << std::endl;
+                    break; 
+                }
+                else if (status == COLLISION) {
+                    // std::cout << status << std::endl;
+                    continue; 
+                }
+                else if (status == PENETRATION) {
+                    // std::cout << status << std::endl;
+                    continue; 
+                }
+                else if (status == UN_CONVERGED) {
+                    // std::cout << status << std::endl;
+                    break; 
+                }
+                else if (status == FURTHER){
+                    // std::cout << status << std::endl;
+                    continue; 
+                }
+            }
+            // std::cout<<"Finish searching this Height: " << h << std::endl;
+            if (found) {break;}
+            if (theta_bound_reached) {continue;}
             
-        // }
+        }
     } else {
         std::cout << "No legal pose found within bounds." << std::endl;
     }
 
-    // if (found) {
-    //     std::cout << "Found2 pose: stand_h = " << best_h
-    //               << ", shift = " << best_shift << std::endl;
-    //     LegModel leg_final(true);
-    //     // pushback all the lines in data to file2
-    //     // for every line in data
-    //     for (const auto& row : data) {
-    //         file2 << std::fixed << std::setprecision(6)
-    //             << row.theta << ','
-    //             << row.beta  << ','
-    //             << row.x     << ','
-    //             << row.y     << ','
-    //             << row.phase << '\n';
-    //     }
-    //     std::array<double,2> eta_final_2 = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2,  (O_start_x+step_len+(swing_t/(1-swing_t))*step_len), 1);
-    //     file2.close();
-    // } else {
-    //     std::cout << "end without a result" << std::endl;
-    // }
+    if (found) {
+        std::cout << "Found2 pose: stand_h = " << best_h
+                  << ", shift = " << best_shift << std::endl;
+        LegModel leg_final(true);
+        // pushback all the lines in data to file2
+        // for every line in data
+        for (const auto& row : data) {
+            file2 << std::fixed << std::setprecision(6)
+                << row.theta << ','
+                << row.beta  << ','
+                << row.x     << ','
+                << row.y     << ','
+                << row.phase << '\n';
+        }
+        std::array<double,2> eta_final_2 = write_touchdown_csv(leg_final, terrain, best_h, best_shift, file2,  O_start_x+step_len+(swing_t/(1-swing_t))*step_len, 1);
+        file2.close();
+    } else {
+        std::cout << "end without a result" << std::endl;
+    }
 
 
     return 0;

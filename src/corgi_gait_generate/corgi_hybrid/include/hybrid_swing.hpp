@@ -24,6 +24,7 @@ enum class SwingType {
     OPTIMIZE
 };
 
+
 class HybridSwing {
 public:
     static std::vector<SwingPoint> generate(LegModel& leg, SwingType type, 

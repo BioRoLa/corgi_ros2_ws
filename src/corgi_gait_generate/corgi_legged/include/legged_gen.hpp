@@ -14,10 +14,10 @@
 #include "bezier.hpp"
 #include "ros/ros.h"
 
-class Legged: public GaitSelector
-{
+class Legged{
     public:
-        Legged(ros::NodeHandle& nh);
+    std::shared_ptr<GaitSelector> gaitSelector;
+        Legged(std::shared_ptr<GaitSelector> gait_selector_ptr);
         ~Legged()= default;
 
         void Initial();
@@ -27,12 +27,7 @@ class Legged: public GaitSelector
         void set_step_length(double new_value);
         void set_step_height(double new_value);
         void set_curvature(double new_value);
-    //     void set_eta(std::array<std::array<double, 4>, 2> eta_);
-    //     void set_duty(std::array<double, 4> duty_);
-    //     std::array<int, 4> get_step_count();
-    //     std::array<int, 4> get_swing_phase();
-    //     std::array<double, 4> get_duty();
-    //     bool if_touchdown();
+        
 
     private:
         std::array<int, 4> step_count  = {0, 0, 0, 0};
@@ -53,13 +48,13 @@ class Legged: public GaitSelector
         std::array<double, 2> p_td;
         std::array<SwingProfile, 4> sp;
 
-    //     // For turning 
-    //     double outer_radius;
-    //     double inner_radius;
-    //     double diff_step_length = 0.0;  // Differential step length 
-    //     double new_diff_step_length = 0.0;  // New differential step length
-    //     double diff_dS = 0.0;   // Differential dS
-    //     int sign_diff[4];   // Differential sign
+        // // For turning 
+        // double outer_radius;
+        // double inner_radius;
+        // double diff_step_length = 0.0;  // Differential step length 
+        // double new_diff_step_length = 0.0;  // New differential step length
+        // double diff_dS = 0.0;   // Differential dS
+        // int sign_diff[4];   // Differential sign
 };
 
 #endif 

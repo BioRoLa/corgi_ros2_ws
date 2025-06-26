@@ -87,6 +87,20 @@ std::vector<SwingPoint> HybridSwing::generate(LegModel& leg, SwingType type, dou
         double t = static_cast<double>(i) / points;
         double theta = 0.0, beta = 0.0;
 
+
+        // double mid_theta = 30.0 * M_PI / 180.0;
+        // if (t < 0.3) {
+        //     theta = theta_start + (mid_theta - theta_start) * (2 * t);
+        // } else if(t>0.6) {
+        //     theta = mid_theta + (theta_end - mid_theta) * (2 * (t - 0.6));
+        // }
+        // if (t > 0.3) {
+        //     beta  = beta_start  + (beta_end - beta_start) * (10*t*t*t - 15*t*t*t*t + 6*t*t*t*t*t);
+        // }
+        // else{
+        //     beta  = beta_start;
+        // }
+    
         switch (type) {
             case SwingType::LINEAR:
                 theta = theta_start + (theta_end - theta_start) * t;

@@ -2,430 +2,448 @@
 #include <iostream>
 #include "transform_gen.hpp"
 
-class WheeledToHybrid : public IGaitTransform, public Hybrid 
+class WheeledToHybrid : public IGaitTransform 
 {
     public:
-        WheeledToHybrid(ros::NodeHandle& nh) : Hybrid(nh) , wheel_delta_beta(0.0), swing_dir(0){}
-        void transform(double shift, int wait_step, bool transfer_state, double expect_height) override {
-            Receive();         
-            stand_height = expect_height;
-            // Rotate in Wheel Mode until RF/LF_beta = 45 deg
-            wheel_delta_beta = velocity/(leg_model.radius * pub_rate);
-            check_beta[0] = closer_beta(-45*PI/180, 0);
-            check_beta[1] = closer_beta( 45*PI/180, 1);  
+        WheeledToHybrid(std::shared_ptr<Hybrid> transform_hybrid_ptr,std::shared_ptr<Legged> transform_leg_ptr)
+            : transform_hybrid(transform_hybrid_ptr),inherit(transform_hybrid_ptr->gaitSelector) {}
+        ~WheeledToHybrid() override = default;
+        // Inherit the gaitSelector from Hybrid
+        std::shared_ptr<GaitSelector> inherit;
+        void transform() override {
+            std::cout << "Enter transform" << std::endl;
             
-            if(check_beta[0]<= check_beta[1]){
-                state_index = false;
-            }
-            else{
-                state_index = true;
-            }
-            body_move_dist = (leg_model.radius * check_beta[state_index]);
-            delta_time_step = int(check_beta[state_index]/wheel_delta_beta);
-            for (int i =0;i<delta_time_step;i++){
-                for (int j=0;j<4;j++){
-                    eta[j][0] = 17 * PI/180;
-                    eta[j][1] = eta[j][1] +  wheel_delta_beta;
-                }
-                Send(1);
-            }
-
-            // Front Transform
-            body_angle = asin((stand_height - leg_model.radius) / BL);
-            if(state_index ==0){
-                check_beta[state_index] = closer_beta(body_angle, state_index);
-            }
-            else{
-                check_beta[state_index] = closer_beta(-body_angle, state_index);
-            }        
+           
+            inherit->Receive();
+            wheel_delta_beta = inherit->velocity/(inherit->leg_model.radius*inherit->pub_rate);
             
-            temp = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, -body_angle);
-            target_theta = temp[0];
-
-            if(state_index ==0){
-                check_beta[state_index] = closer_beta(temp[1], state_index);
+            stage = 0;
+            transform_finished = false;
+            inherit->stand_height = 0.16;
+            for (int i=0; i<4; i++) {
+                inherit->current_stand_height[i]  = inherit->stand_height;
             }
-            else{
-                check_beta[state_index] = closer_beta(-temp[1], state_index);
-            }    
-
-            body_move_dist = (leg_model.radius * check_beta[state_index]);
-
-            delta_time_step = int(check_beta[state_index] /wheel_delta_beta);
-            target_theta = (target_theta - eta[state_index][0])/delta_time_step;  
- 
-            temp = find_pose(stand_height, shift, (step_length/2), -body_angle); 
-
-            if (state_index ==0){
-                check_beta[!state_index] = closer_beta(-temp[1], !state_index);
+            while(transform_finished != true){
+                keep_going();
+                inherit->Send();
             }
-            else{
-                check_beta[!state_index] = closer_beta(temp[1], !state_index);
-            }       
-
-            delta_beta = (check_beta[!state_index]-wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-            delta_theta = (temp[0]-eta[!state_index][0])/(delta_time_step*2/3);            
-
-            for (int i =0;i<delta_time_step;i++){
-                for (int j=0;j<4;j++){
-                    if (j == state_index){
-                        eta[j][0] += target_theta;
-                        eta[j][1] = eta[j][1] +  wheel_delta_beta;
-                    }
-                    else if(j == !state_index && i>=(delta_time_step*1/3)){
-                        eta[j][0] += delta_theta;
-                        eta[j][1] = eta[j][1] +  delta_beta;
-                    }  
-                    else if(j == !state_index){
-                        eta[j][0] = 17 * PI/180;
-                        eta[j][1] = eta[j][1] +  wheel_delta_beta;
-                    }
-                    else{
-                        eta[j][0] = 17 * PI/180;
-                        eta[j][1] = eta[j][1] +  wheel_delta_beta;
-                    }
-                }
-                Send(1);
+        }           
+    
+    private:
+        std::shared_ptr<Hybrid> transform_hybrid;
+        int stage;
+        bool transform_finished;
+        double wheel_delta_beta;
+        double check_beta[2];
+        int which_leg;
+        int index ;
+        double terrain_slope;
+        double transform_angle = 45 * PI / 180.0; // 45 degrees in radians
+        double body_move_dist;
+        int delta_time_step;
+        double body_angle;
+        double target_theta[2];
+        double target_beta[2];
+        double delta_theta[2];
+        double delta_beta[2];
+        double hybrid_steps;
+        double closer_beta(double ref_rad, int leg_index)
+        {
+            double val0 = inherit->eta[leg_index][1];
+            double delta_beta;
+            while (val0 < ref_rad){
+                    ref_rad -= 2*PI;
             }
-            
-            // Hybrid mode 
-            // find the closest to the initial pose
-            if (state_index ==0){
-                duty = {0.5, 0, (0.5-swing_time)*2/3, 0.5+(0.5-swing_time)*2/3};   
-            }
-            else{
-                duty = {0, 0.5 ,0.5+(0.5-swing_time)*2/3, (0.5-swing_time)*2/3};
-            }
+            delta_beta = val0 - ref_rad ;
+            return delta_beta;
+        }
+        struct StepStrategyResult {
+            int step_num;
+            double step_length;
+            int last_leg;   // "RH" 或 "LH"
+        };
+        double adjust_beta(double target, double start){
+            double adjusted = target;
+            while (adjusted > start) {
+                adjusted -= 2*PI; // beta會越來越小
+            } 
+            return adjusted;
+        }
+        int step_count = 0;
+        int delta_time_step_each;    
+        int traj_idx;
+        int temp_leg ;
+        int clamp_index;
+        double phase_ratio ;
+        std::array<double, 2> variation;
+        std::array<double, 2> swing_eta;
+        std::array<double, 3> find_hybrid_steps(double RH_beta, double LH_beta, int which) {
+            // std::cout << "RH_beta" <<  RH_beta << " , LH_beta = " << LH_beta << std::endl;
+            // std::cout << "which leg = " << which << std::endl;
+            double step_num = 1;
+            double max_step_num = 6;
+            double min_step_length = 0.1;
+            double max_step_length = 0.2;
+            double step_length;
 
-            swing_phase_temp = {0,0,0,0};
-            state_index = false;
-            Get_index(false);
-            Get_index(true);
-            while(!state_index){
-                // std::cout << "still false" << std::endl;
-                for (int i=0; i<4; i++) {
-                    duty[i] += incre_duty;     
-                }        
-                for(int j =2; j<4; j++){
-                    if (duty[j] < 0.0){ duty[j] += 1.0; }
-                    if ((duty[j] >= (1 - swing_time)) && swing_phase_temp[j] == 0) {
-                        swing_phase_temp[j] = 1;
-                    } 
-                    else if ((duty[j] > 1.0)) {                  
-                        swing_phase_temp[j] = 0;
-                        duty[j] -= 1.0; 
-                    }
+            // target = 45 *pi/180 
+            double RH_target_beta = adjust_beta(transform_angle , RH_beta);
+            double LH_target_beta = adjust_beta(transform_angle , LH_beta);
+            // beta會越來越小
+            // 若偶數步 → which_leg同側 move, 異側swing
+            // 若奇數步 → which_leg異側 move, 同側swing
+            for (int i = 0; i < max_step_num; ++i) {
+                int leg_index = -1;
 
-                    eta[j][0] = 17 * PI/180;
-                    eta[j][1] = abs(eta[j][1]) +  wheel_delta_beta;                
-                }
-                for (int i=0; i<2; i++) {
-                    if (duty[i] < 0){ duty[i] += 1.0; }
-                    if ((duty[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
-                        swing_phase_temp[i] = 1;
-                        swing_pose = find_pose(stand_height, shift, (step_length*3/6), -body_angle);  
-                        Swing(eta, swing_pose, swing_variation, i);
-                    } 
-                    else if ((duty[i] > 1.0)) {                  
-                        swing_phase_temp[i] = 0;
-                        duty[i] -= 1.0; 
-                        
-                    }
-
-                    if (swing_phase_temp[i] == 0) { 
-                        leg_model.forward(eta[i][0], eta[i][1],true);
-                        std::array<double, 2> result_eta;
-                        result_eta = leg_model.move(eta[i][0], eta[i][1], {-dS, 0}, -body_angle);
-                        eta[i][0] = result_eta[0];
-                        eta[i][1] = result_eta[1];
-                    } 
-                    // read the next Swing phase traj
-                    else { 
-                        Swing_step(swing_pose, swing_variation, i, duty[i]);
-                    }
-                }
-                // add when the hear leg with extend
-                // 1. front legs both not in swing
-                // 2. see who reach the ideal one and the other one swing to the position 
-                if(swing_phase_temp[0] == 0 && swing_phase_temp[1] == 0 ){
-                    if(duty[2]>=duty[3]){
-                        // ideal hear pose
-                        auto tmp0 = find_pose(stand_height, shift, (step_length/2), 0);
-                        next_eta[2][0] = tmp0[0];
-                        next_eta[2][1] = tmp0[1];
-                        auto tmp1 = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
-                        next_eta[3][0] = tmp1[0];
-                        next_eta[3][1] = tmp1[1];
-                    }
-                    else{
-                        auto tmp0 = find_pose(stand_height, shift, (step_length/2), 0);
-                        next_eta[3][0] = tmp0[0];
-                        next_eta[3][1] = tmp0[1];
-                        auto tmp1 = find_pose(stand_height, shift, (step_length/2) - (0.5/(1-swing_time)) * step_length, 0);
-                        next_eta[2][0] = tmp1[0];
-                        next_eta[2][1] = tmp1[1];
-                    }                
-                    check_beta[2] = closer_beta(next_eta[2][1], 2);
-                    // std::cout << "check_beta[2] " << check_beta[2] * 180 / M_PI  << ", check_beta[3] " << check_beta[3] * 180 / M_PI  << std::endl;
-                    check_beta[3] = closer_beta(-next_eta[3][1], 3);
-                    // std::cout << "check_beta[3] " << check_beta[3] * 180 / M_PI  << std::endl;
-                    Get_index(false);
-                    // std::cout << "test state_index:  "<< other_index << std::endl;
-                    // std::cout << "check_beta(or): " << check_beta[other_index+2] * 180 / M_PI << std::endl;
-                    Get_index(true);
-                    // std::cout << "check_beta(!): " << check_beta[other_index+2] * 180 / M_PI << std::endl;
-
-                    // std::cout << "test state_index:  "<< state_index << std::endl;
-
-                    for (int i = 0; i<2;i++){
-                        if(duty[0]>=duty[1]){
-                            if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty[0])/incre_duty)){
-                                state_index = true;
-                            }
+                if ((int)step_num % 2 == 1) {  // 奇數：if which leg = 1, RH touchdown（對應 RF move）
+                    if (which==1){
+                        step_length = std::abs(inherit->leg_model.radius * (RH_target_beta - RH_beta)) / step_num;
+                        if (step_length < min_step_length) {
+                            RH_target_beta -= 2 * M_PI;
+                            step_length = std::abs(inherit->leg_model.radius * (RH_target_beta - RH_beta)) / step_num;
+                        } else if (step_length < max_step_length) {
+                            leg_index = 3;  // LH swing
+                            // std::cout << "RH_target_beta: " <<  RH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
                         }
-                        else{
-                            if ((leg_model.radius *check_beta[i+2]) < (dS*(0.8-duty[1])/incre_duty)){
-                                state_index = true;
-                            }
+                        if (step_length >= min_step_length && step_length < max_step_length) {
+                            leg_index = 3;  // LH swing
+                            // std::cout << "RH_target_beta: " <<  RH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
+                        }
+                    }
+                    else{
+                        step_length = std::abs(inherit->leg_model.radius * (LH_target_beta - LH_beta)) / step_num;
+                        if (step_length < min_step_length) {
+                            LH_target_beta -= 2 * M_PI;
+                            step_length = std::abs(inherit->leg_model.radius * (LH_target_beta - LH_beta)) / step_num;
+                        } else if (step_length < max_step_length) {
+                            leg_index = 2;  // RH swing
+                            // std::cout << "LH_target_beta: " <<  LH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
+                        }
+                        if (step_length >= min_step_length && step_length < max_step_length) {
+                            leg_index = 2;  // RH swing
+                            // std::cout << "LH_target_beta: " <<  LH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
                         }
                     }
                     
-                }          
-                Send(1);
-            }
-            // std::cout << "----------------------------------------- " << std::endl;
-            // find the one that is going to change -> decide the #step
-            // the other one swing to the ideal position
-            // the front leg walk as original
-            // calculate ( 30 the same side -)
-            if(check_beta[2]<= check_beta[3]){
-                state_index = false;
-            }
-            else{
-                state_index = true;
-            }
-            Get_index(false);
-            // the hear closer leg [state_index+2]
-            body_move_dist = (leg_model.radius * check_beta[other_index+2]);
-            // std::cout << "check_beta: " << check_beta[2] * 180 / M_PI << ", " 
-                            //   << check_beta[3] * 180 / M_PI << std::endl;
-            delta_time_step = int(check_beta[(other_index+2)]/wheel_delta_beta);
-            // std::cout << "delta_time_step:  "<< delta_time_step << std::endl;
-            target_theta = (next_eta[(other_index+2)][0] - eta[(other_index+2)][0])/delta_time_step;
-            // the hear further leg  [!state_index+2]
-            // 最終要到達的位置
-            Get_index(true);
-            if(check_beta[(other_index+2)] >= 2*PI - check_beta[(other_index+2)]){
-                swing_dir = 0;
-            }
-            else{
-                swing_dir = 1;
-            }
-
-           
-            if (swing_dir){
-                delta_beta = (check_beta[(other_index+2)] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-                delta_theta = (next_eta[(other_index+2)][0]-eta[(other_index+2)][0])/(delta_time_step*1/3);
-            }
-            else{
-                delta_beta = (2*PI - check_beta[(other_index+2)] -wheel_delta_beta*delta_time_step*1/3)/(delta_time_step*2/3);
-                delta_theta = (next_eta[(other_index+2)][0]-eta[(other_index+2)][0])/(delta_time_step*1/3);
-            }          
-            // std::cout << "delta_time_step:  "<< delta_time_step << std::endl;
-            Get_index(false);
-            for (int j =0;j<delta_time_step;j++){
-                // std::cout << "duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << std::endl; 
-                for (int i=0; i<4; i++) {
-                    duty[i] += incre_duty;     
-                }
-                for (int i=0; i<4; i++) {
-                    /* Keep duty in the range [0, 1] */
-                    if (duty[i] < 0){ duty[i] += 1.0; }
-                    /* Calculate next foothold if entering swing phase(1) */
-                    // Enter SW (calculate swing phase traj)
-                    if ((duty[i] >= (1 - swing_time)) && swing_phase_temp[i] == 0) {
-                        swing_phase_temp[i] = 1;                    
-                    } 
-                    // Enter TD
-                    else if ((duty[i] > 1.0)) {                  
-                        swing_phase_temp[i] = 0;
-                        duty[i] -= 1.0; 
-                    }
-                    // calculate the nest Stance phase traj
-                    // front leg  slope -> 0
-                    if (i == 0 || i == 1){
-                        leg_model.forward(eta[i][0], eta[i][1],true);
-                        std::array<double, 2> result_eta;
-                        result_eta = leg_model.move(eta[i][0], eta[i][1], {-dS, 0}, (-body_angle+body_angle*(j/delta_time_step)));
-                        eta[i][0] = result_eta[0];
-                        eta[i][1] = result_eta[1];
-                    }
-                    // hear leg 
-                    else if(i == (other_index+2)){
-                        // closer one
-                        eta[i][0] += target_theta;
-                        eta[i][1] = eta[i][1] +  wheel_delta_beta;
-                        // std::cout<<  i <<": "<<eta[i][1] * 180 / M_PI << std::endl; 
+                } else {  // 偶數：if which leg = 1; LH touchdown
+                    if(which==1){
+                        step_length = std::abs(inherit->leg_model.radius * (LH_target_beta - LH_beta)) / step_num;
+                        if (step_length < min_step_length) {
+                            LH_target_beta -= 2 * M_PI;
+                            step_length = std::abs(inherit->leg_model.radius * (LH_target_beta - LH_beta)) / step_num;
+                        } else if (step_length < max_step_length) {
+                            leg_index = 2;  // RH swing
+                            // std::cout << "LH_target_beta: " <<  LH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
+                        }
+                        if (step_length >= min_step_length && step_length < max_step_length) {
+                            leg_index = 2;  // RH swing
+                            // std::cout << "LH_target_beta: " <<  LH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
+                        }
                     }
                     else{
-                        // eta[i][0] = eta[i][0];
-                        // eta[i][1] = eta[i][1] +  delta_beta;
-                        if (swing_dir){
-                            if(j>=(delta_time_step*1/3) && j<=(delta_time_step*2/3)){
-                                eta[i][0] = 17 * PI/180;
-                                eta[i][1] = eta[i][1] +  delta_beta;
-                            }
-                            else if(j>(delta_time_step*2/3)){
-                                eta[i][0] += delta_theta;
-                                eta[i][1] = eta[i][1] +  delta_beta;
-                            }
-                            else{
-                                eta[i][0] = 17 * PI/180;
-                                eta[i][1] = eta[i][1] + wheel_delta_beta;
-                            }
+                        step_length = std::abs(inherit->leg_model.radius * (RH_target_beta - RH_beta)) / step_num;
+                        if (step_length < min_step_length) {
+                            RH_target_beta -= 2 * M_PI;
+                            step_length = std::abs(inherit->leg_model.radius * (RH_target_beta - RH_beta)) / step_num;
+                        } else if (step_length < max_step_length) {
+                            leg_index = 3;  // LH swing
+                            // std::cout << "RH_target_beta: " <<  RH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
                         }
-                        else{
-                            if(j>=(delta_time_step*1/3) && j<=(delta_time_step*2/3)){
-                                eta[i][0] = 17 * PI/180;
-                                eta[i][1] = eta[i][1] -  delta_beta;
-                            }
-                            else if(j>(delta_time_step*2/3)){
-                                eta[i][0] += delta_theta;
-                                eta[i][1] = eta[i][1] -  delta_beta;
-                            }
-                            else{
-                                eta[i][0] = 17 * PI/180;
-                                eta[i][1] = eta[i][1] - wheel_delta_beta;
-                            }
-                        }                        
+                        if (step_length >= min_step_length && step_length < max_step_length) {
+                            leg_index = 3;  // LH swing
+                            // std::cout << "RH_target_beta: " <<  RH_target_beta <<std::endl;
+                            return {step_num, step_length, static_cast<double>(leg_index)};
+                        }
                     }
-                
+                  
                 }
-                Send(1);
+
+                step_num += 1;
             }
-            
-            
-            // co-variable cout to check
-            // duty, swing_phase, next_hip, hip
-            // keep walk until all leg are on the ground 
-            
 
-            // // cout to check
-            // std::cout << "duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << std::endl;
-            // std::cout << "swing_phase: "<< swing_phase_temp[0] << " , " << swing_phase_temp[1] << " , " << swing_phase_temp[2] << " , " << swing_phase_temp[3] << std::endl;
-            // std::cout << "eta" << std::endl;
-            // for (int i = 0; i < 4; i++){
-            //     std::cout << i << ": " 
-            //               << eta[i][0] * 180 / M_PI << ", " 
-            //               << eta[i][1] * 180 / M_PI << std::endl;
-            // }
-            // std::cout << "next_hip" << std::endl;
-            // for (int i = 0; i < 4; i++){
-            //     std::cout << i << ": " 
-            //               << next_hip[i][0]  << ", " 
-            //               << next_hip[i][1]  << std::endl;
-            // }
-            // std::cout << "hip" << std::endl;
-            // for (int i = 0; i < 4; i++){
-            //     std::cout << i << ": " 
-            //               << hip[i][0]  << ", " 
-            //               << hip[i][1]  << std::endl;
-            // }
-
-            // // if swing phase - > swing to ground
-            // // else keep walk
-        
-            for (int i = 0;i<4 ;i++){
-                swing_phase[i] =  swing_phase_temp[i];
-                if (duty[i]>=(1-swing_time) ){
-                    // std::cout << "tune leg: " << i<< std::endl;
-                    swing_pose = find_pose(stand_height, shift, (step_length*3/6), 0);  
-                    Swing(eta, swing_pose, swing_variation, i);
-                }
-            }
-            next_hip = hip;
-            // std::cout << "duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << std::endl;
-            // std::cout << "swing_phase: "<< swing_phase[0] << " , " << swing_phase[1] << " , " << swing_phase[2] << " , " << swing_phase[3] << std::endl;
-            
-
-            // std::cout << "----------------------------------------- " << std::endl;
-            // for (int i=0;i<1000 ;i++){
-            //     Step(1,1,-0.03);
-            //     std::cout << "duty: "<< duty[0] << " , " << duty[1] << " , " << duty[2] << " , " << duty[3] << std::endl;
-            //     std::cout << "swing_phase: "<< swing_phase[0] << " , " << swing_phase[1] << " , " << swing_phase[2] << " , " << swing_phase[3] << std::endl;
-            //     std::cout << "eta" << std::endl;
-            //     for (int i = 0; i < 4; i++){
-            //         std::cout << i << ": " 
-            //                 << eta[i][0] * 180 / M_PI << ", " 
-            //                 << eta[i][1] * 180 / M_PI << std::endl;
-            //     }
-
-            // }
+            // 無合適結果
+            // std::cout << "RH_target_beta: " <<  RH_target_beta <<std::endl;
+            return {0.0, 0.0, 0.0};
         }
-    private:
-        double wheel_delta_beta;
-        double check_beta[4];
-        bool state_index;
-        int other_index;
-        double body_move_dist;
-        int delta_time_step;
+        StepStrategyResult result;
+        double transform_start_beta, transform_start_theta,transform_target_beta,transform_target_theta,last_start_beta, last_start_theta;
+        double transform_delta_beta ;
+        double transform_delta_theta ;
+        double last_delta_beta ;
+        double last_delta_theta;
+        void keep_going(){
+            switch (stage){
+                case 0:  // cal
+                    if (step_count == 0) {
+                        inherit->step_length = 0.2;
+                        inherit->dS = inherit->velocity / inherit->pub_rate;
+                        inherit->incre_duty = inherit->dS / inherit->step_length;
+                        check_beta[0] = closer_beta( transform_angle, 0);
+                        check_beta[1] = closer_beta( transform_angle, 1);  
+                        if(check_beta[0]<= check_beta[1]){ which_leg = 0;}
+                        else{which_leg = 1;}
+                        body_move_dist = (inherit->leg_model.radius * check_beta[which_leg]);
+                        delta_time_step = int(check_beta[which_leg]/wheel_delta_beta);
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 0 Finished = = = = =" << std::endl;
+                    }
+                    break;
+                case 1: // rotate until the closest front leg beta ~= 45 deg
+                    for (int j=0;j<4;j++){
+                        inherit->next_eta[j][0] = 17 * PI/180;
+                        inherit->next_eta[j][1] = inherit->eta[j][1] -  wheel_delta_beta;
+                    }
+                    if(step_count==delta_time_step-1){
+                        terrain_slope  = atan(inherit->stand_height-inherit->leg_model.radius/inherit->BL);
+                        auto temp = transform_hybrid->find_pose(inherit->stand_height, 0, inherit->step_length/2, 0.4 , -terrain_slope);
+                        // std::cout << "Target Theta(which_leg) = " << temp[0] *180/PI <<" , " << temp[1] *180/PI  << std::endl;
+                        target_theta[which_leg] = temp[0];
+                        target_beta[which_leg] = temp[1];
+                        check_beta[which_leg] = closer_beta(target_beta[which_leg], which_leg);
+                        body_move_dist = abs(inherit->leg_model.radius * check_beta[which_leg]);
+                        delta_time_step = int(check_beta[which_leg]/wheel_delta_beta);
 
-        double body_angle ;
-        std::array<double, 2> temp;
-        double target_theta;
-        double delta_beta;
-        double delta_theta;
+                        delta_beta[which_leg] = check_beta[which_leg]/delta_time_step;
+                        delta_theta[which_leg] = (target_theta[which_leg] - inherit->eta[which_leg][0]) / delta_time_step;
+                        index = (which_leg == 0) ? 1 : 0; 
 
-        // std::array<double, 4> duty;
-        std::array<int, 4> swing_phase_temp = {0, 0, 0, 0}; 
-        bool swing_dir;
+                        // determine the step length from hybrid mode and decide the land pose of index leg
+                        auto hybrid_steps = find_hybrid_steps(inherit->next_eta[2][1]-wheel_delta_beta*delta_time_step,
+                                                              inherit->next_eta[3][1]-wheel_delta_beta*delta_time_step, which_leg);
+                        
+                        result.step_num = (int)hybrid_steps[0];
+                        result.step_length = hybrid_steps[1];
+                        result.last_leg  = (int)hybrid_steps[2];
+                        std::cout << "step_num = " << result.step_num << ", step_length = " << result.step_length << ", last_leg = " << result.last_leg << std::endl;
+                        temp_leg =  (result.last_leg == 3) ? 2 : 3; 
+                        inherit->step_length = result.step_length;
+                        inherit->incre_duty = inherit->dS / inherit->step_length;
+                        
+                        // auto pose = transform_hybrid->find_pose(inherit->stand_height, 0, inherit->step_length/2, 0.0 , -terrain_slope);
+                        auto pose = temp;
+                        for (double t = 0.0; t <= inherit->step_length; t += inherit->dS) {
+                            pose = inherit->leg_model.move(pose[0], pose[1], {-inherit->dS, 0},terrain_slope);
+                            
+                        }
+                        target_theta[index]= pose[0];
+                        target_beta[index] = pose[1];
+                        swing_eta = {target_theta[index], target_beta[index]};
+                        check_beta[index] = closer_beta(target_beta[index], index);
+                        delta_beta[index] = check_beta[index]/delta_time_step;
+                        delta_theta[index] = (target_theta[index] - inherit->eta[index][0]) / delta_time_step; 
 
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 1 Finished = = = = =" << std::endl;
+                    }
+                   
+                    break;
+                case 2:  // front transform
+                    if (step_count < delta_time_step/3.0) { 
+                        inherit->next_eta[index][1] -= wheel_delta_beta; 
+                    }
+                    else if (step_count < delta_time_step*2/3.0) { 
+                        inherit->next_eta[index][1] -= (delta_beta[index]*3 - wheel_delta_beta); 
+                    }
+                    else { 
+                        inherit->next_eta[index][0] += delta_theta[index] * 3; 
 
-        void Get_index(bool inve){
-            if (inve){
-                other_index = (state_index == true)? 0 : 1;
-            }
-            else{
-                other_index = (state_index == true)? 1 : 0;
-            }
-            // std::cout << "other_index:  "<< other_index << std::endl;
+                    }
+                        
+                    inherit->next_eta[which_leg][0] += delta_theta[which_leg];
+                    inherit->next_eta[which_leg][1] -= delta_beta[which_leg];
             
-        }
+                    inherit->next_eta[2][1] -= wheel_delta_beta;
+                    inherit->next_eta[3][1] -= wheel_delta_beta;
+            
+                    if (step_count == delta_time_step-1){ 
+                        // 若偶數步 → which_leg同側 擺動(which_leg)
+                        // 若奇數步 → which_leg異側 擺動  
+                        delta_time_step_each = int(inherit->step_length/inherit->dS);
+                        // std::cout << "delta_time_step_each = " << delta_time_step_each << std::endl;
+                        delta_time_step = delta_time_step_each * result.step_num;
+                        // swing phase trajectory of first leg
+                        auto swing_end = transform_hybrid->find_pose(inherit->stand_height, 0, inherit->step_length/2, 0.4 , -terrain_slope);
+                        for (double t = 0.0; t <= inherit->step_length; t += inherit->dS) {
+                            swing_end = inherit->leg_model.move(swing_end[0], swing_end[1], {-inherit->dS, 0},terrain_slope);
+                            
+                        }
+                        transform_hybrid->Swing(inherit->eta, swing_end, transform_hybrid->swing_variation, which_leg);
+                        transform_hybrid->swing_traj[index] = transform_hybrid->swing_traj[which_leg];
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 2 Finished = = = = =" << std::endl;
+                    }
+                    break;
+                case 3: // hybrid mode
+                    traj_idx = step_count % delta_time_step_each;
+                    
+                    phase_ratio = static_cast<double>(traj_idx) / delta_time_step_each;
+                    clamp_index = static_cast<int>(phase_ratio * 500);
+                    if ((step_count / delta_time_step_each) % 2 == 0){
+                        inherit->next_eta[which_leg][0] = transform_hybrid->swing_traj[which_leg][clamp_index].theta;
+                        inherit->next_eta[which_leg][1] = adjust_beta(transform_hybrid->swing_traj[which_leg][clamp_index].beta, inherit->eta[which_leg][1]);
+            
+                        auto stance_eta = inherit->leg_model.move(inherit->next_eta[index][0], inherit->next_eta[index][1], {inherit->dS, 0}, -terrain_slope);
+                        inherit->next_eta[index][0] = stance_eta[0];
+                        inherit->next_eta[index][1] = adjust_beta(stance_eta[1], inherit->next_eta[index][1]);
+                    }
+                    else{
+                        inherit->next_eta[index][0] = transform_hybrid->swing_traj[index][clamp_index].theta;
+                        inherit->next_eta[index][1] = adjust_beta(transform_hybrid->swing_traj[index][clamp_index].beta, inherit->eta[index][1]);
+            
+                        auto stance_eta = inherit->leg_model.move(inherit->next_eta[which_leg][0], inherit->next_eta[which_leg][1], {inherit->dS, 0}, -terrain_slope);
+                        inherit->next_eta[which_leg][0] = stance_eta[0];
+                        inherit->next_eta[which_leg][1] = adjust_beta(stance_eta[1], inherit->next_eta[which_leg][1]);
+                    
+                    }
+                    inherit->next_eta[2][1] -= wheel_delta_beta;
+                    inherit->next_eta[3][1] -= wheel_delta_beta;
+            
+                    if (step_count == delta_time_step-1){  
+                        // 若偶數步 → which_leg同側 擺動(which_leg)
+                        // 若奇數步 → which_leg異側 擺動          
+                        transform_start_theta = inherit->next_eta[temp_leg][0];
+                        transform_start_beta = inherit->next_eta[temp_leg][1];  
+                        auto temp = transform_hybrid->find_pose(inherit->stand_height, 0, inherit->step_length, 0.4 , 0);
+                        transform_target_theta = temp[0];
+                        transform_target_beta = temp[1];
+                        transform_target_beta = adjust_beta(transform_target_beta,transform_start_beta);
 
-        double closer_beta(double ref_rad, int leg_index)
-        {
-            double val0 = motor_state_modules[leg_index]->beta;
-            // std::cout << leg_index << ",beta = " << val0 * 180 / PI << std::endl;
-            double delta_beta;
-            // eta[leg_index][1];
-            if (leg_index ==1 | leg_index ==2){
-                while (val0 < ref_rad){
-                    ref_rad -= 2*PI;
-                }
-                delta_beta = val0 - ref_rad ;
-            }
-            else{
-                while (val0 > ref_rad){
-                    ref_rad += 2*PI;
-                }
-                delta_beta = ref_rad - val0;
-            }
-            return delta_beta;
-        }
+                        body_move_dist = abs(inherit->leg_model.radius * (transform_target_beta-transform_start_beta));
+                        delta_time_step = body_move_dist*inherit->pub_rate/inherit->velocity;
+                        
 
+                        transform_delta_beta = abs(transform_target_beta-transform_start_beta)/delta_time_step;
+                        transform_delta_theta = (transform_target_theta-transform_start_theta)/delta_time_step;
+                        
+                        last_start_beta = inherit->next_eta[result.last_leg][1];
+                        last_start_theta = inherit->next_eta[result.last_leg][0];
+                        auto pose = transform_hybrid->find_pose(inherit->stand_height, 0, inherit->step_length, 0.4 , 0);
+                        for (double t = 0.0; t <= inherit->step_length; t += inherit->dS) {
+                            pose = inherit->leg_model.move(pose[0], pose[1], {-inherit->dS, 0},0);
+                            
+                        }
+                        double last_target_theta = pose[0];
+                        double last_target_beta = pose[1];
+                        last_target_beta = adjust_beta(last_target_beta, last_start_beta);
+
+                        last_delta_beta = abs(last_target_beta-last_start_beta)/(delta_time_step);
+                        last_delta_theta = (last_target_theta-last_start_theta)/delta_time_step;
+
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 3 Finished = = = = =" << std::endl;
+                    }
+                    break;
+                case 4: // hind transform
+                    // for front leg the front one: duty = 0.0 keep move with  slope = 0
+                    if (result.step_num %2 ==0){
+                        // even step -> the front = index leg
+                        auto stance_eta = inherit->leg_model.move(inherit->next_eta[index][0], inherit->next_eta[index][1], {inherit->dS, 0},0);
+                        inherit->next_eta[index][0] = stance_eta[0];
+                        inherit->next_eta[index][1] = adjust_beta(stance_eta[1], inherit->next_eta[index][1]);
+
+                        stance_eta = inherit->leg_model.move(inherit->next_eta[which_leg][0], inherit->next_eta[which_leg][1], {inherit->dS, 0},terrain_slope);
+                        inherit->next_eta[which_leg][0] = stance_eta[0];
+                        inherit->next_eta[which_leg][1] = adjust_beta(stance_eta[1], inherit->next_eta[which_leg][1]);
+
+                    }
+                    else{
+                        // odds step -> the front = which leg
+                        auto stance_eta = inherit->leg_model.move(inherit->next_eta[which_leg][0], inherit->next_eta[which_leg][1], {inherit->dS, 0},0);
+                        inherit->next_eta[which_leg][0] = stance_eta[0];
+                        inherit->next_eta[which_leg][1] = adjust_beta(stance_eta[1], inherit->next_eta[which_leg][1]);
+
+                        stance_eta = inherit->leg_model.move(inherit->next_eta[index][0], inherit->next_eta[index][1], {inherit->dS, 0},terrain_slope);
+                        inherit->next_eta[index][0] = stance_eta[0];
+                        inherit->next_eta[index][1] = adjust_beta(stance_eta[1], inherit->next_eta[index][1]);
+
+                    }
+
+                    inherit->next_eta[temp_leg][0] += transform_delta_theta;
+                    inherit->next_eta[temp_leg][1] -= transform_delta_beta;
+                    if (step_count < delta_time_step/3.0){
+                        inherit->next_eta[result.last_leg][1] -= wheel_delta_beta;
+                    }
+                    else if (step_count < delta_time_step*2/3.0){
+                        inherit->next_eta[result.last_leg][1] -= (last_delta_beta*3 - wheel_delta_beta);
+                    }
+                    else {
+                        inherit->next_eta[result.last_leg][0] += last_delta_theta * 3;
+                    }
+                    if (step_count == delta_time_step){
+                        body_move_dist = 0.02;
+                        delta_time_step = (int)body_move_dist/inherit->dS;
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 4 Finished = = = = =" << std::endl;
+                    }
+                    break;
+                case 5: // maintain and connect to hybrid mode
+                    inherit->leg_model.contact_map(inherit->next_eta[temp_leg][0], inherit->next_eta[temp_leg][1],0);
+                    inherit->stand_height = -inherit->leg_model.contact_p[1];
+                    // swing a leg and stop before four leg td
+                    for(int i=0; i<4; i++){
+                        inherit->current_stand_height[i] = inherit->stand_height;
+                    }
+                    // set duty for all leg 
+                    if (result.step_num %2 ==0){
+                        // the back one is which leg
+                        inherit->duty = {1.0-inherit->swing_time, 0.5- inherit->swing_time, 0.5, 0.0};
+                    }
+                    else{
+                        // the back one is index leg
+                        inherit->duty = {0.5-inherit->swing_time, 1- inherit->swing_time, 0.0, 0.5};
+                    }
+
+                    transform_hybrid->update_nextFrame();
+                    inherit->body = inherit->next_body;
+                    inherit->hip = inherit->next_hip;
+                    inherit->foothold = inherit->next_foothold;
+                    inherit->step_length = 0.2;
+                    inherit->incre_duty = inherit->dS / inherit->step_length;
+                    body_move_dist = 0.1;
+                    delta_time_step = int(body_move_dist/inherit->dS);
+                    std::cout<< "delta_time_step" << delta_time_step << std::endl;
+                    step_count = 0;
+                    stage++;
+                    std::cout << std::endl << "= = = = = Stage 5 Finished = = = = =" << std::endl;
+                    break;
+                case 6: // hybrid mode
+                    for (int i=0; i<4; i++) {
+                        auto stance_eta = inherit->leg_model.move(inherit->next_eta[i][0], inherit->next_eta[i][1], {inherit->dS, 0},0);
+                        inherit->next_eta[i][0] = stance_eta[0];
+                        inherit->next_eta[i][1] = adjust_beta(stance_eta[1], inherit->next_eta[i][1]);
+                    }
+                    if (step_count == delta_time_step){  
+                        step_count = 0;
+                        stage++;
+                        std::cout << std::endl << "= = = = = Stage 6 Finished = = = = =" << std::endl;
+                    }
+                    break;
+                // case 7: // end
+                //     // transform_hybrid->Step();
+                //     break;
+                default:
+                    transform_finished = true;
+                    break;
+            }
+            step_count++;
+        }
+                    
         
 };
 
-extern "C" IGaitTransform* createWheeledToHybrid() {
-    ros::NodeHandle nh;
-    return new WheeledToHybrid(nh);
+extern "C" IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr, std::shared_ptr<Legged> legged_ptr) {
+    return new WheeledToHybrid(hybrid_ptr, legged_ptr);
 }
-
-
-
-
-
-
-
-
 

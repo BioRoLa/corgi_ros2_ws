@@ -12,7 +12,7 @@ const double PI = M_PI;
 // Interface for gait transformation strategies
 class IGaitTransform {
 public:
-    virtual void transform(double shift, int wait_step, bool transfer_state, double expect_height) = 0;
+    virtual void transform()= 0 ;
     virtual ~IGaitTransform() {}
 };
 
@@ -21,12 +21,9 @@ extern "C" {
 #endif
 
 // Factory function declarations with C linkage
-IGaitTransform* createHybridToWheeled();
-IGaitTransform* createHybridToLegged();
-IGaitTransform* createWheeledToHybrid();
-IGaitTransform* createWheeledToLegged();
-IGaitTransform* createLeggedToWheeled();
-IGaitTransform* createLeggedToHybrid();
+IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createWheeledToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
 
 #ifdef __cplusplus
 }
@@ -34,9 +31,14 @@ IGaitTransform* createLeggedToHybrid();
 
 // Declaration of the Transform class
 class Transform {
-public:
-    // Selects and executes the appropriate transformation based on current and next gait.
-    void GaitTransform(Gait current, Gait next);
-};
+    public:
+        Transform(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr)
+            : hybrid_ptr_(hybrid_ptr), legged_ptr_(legged_ptr){}
 
+        void GaitTransform(Gait current, Gait next);
+
+    private:
+        std::shared_ptr<Hybrid> hybrid_ptr_;
+        std::shared_ptr<Legged> legged_ptr_;
+};
 #endif 

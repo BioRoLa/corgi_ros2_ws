@@ -2,33 +2,25 @@
 #include <memory>
 #include "transform_gen.hpp"
 
-// Declare factory functions with C linkage.
-extern "C" IGaitTransform* createHybridToWheeled();
-extern "C" IGaitTransform* createHybridToLegged();
-extern "C" IGaitTransform* createWheeledToHybrid();
-extern "C" IGaitTransform* createWheeledToLegged();
-extern "C" IGaitTransform* createLeggedToWheeled();
-extern "C" IGaitTransform* createLeggedToHybrid();
+IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
+IGaitTransform* createWheeledToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
 
 void Transform::GaitTransform(Gait current, Gait next) {
     std::unique_ptr<IGaitTransform> strategy;
-    if (current == Gait::HYBRID && next == Gait::WHEELED) {
-        strategy.reset(createHybridToWheeled());
-    } else if (current == Gait::HYBRID && next == Gait::LEGGED) {
-        strategy.reset(createHybridToLegged());
-    } else if (current == Gait::WHEELED && next == Gait::HYBRID) {
-        strategy.reset(createWheeledToHybrid());
-    } else if (current == Gait::WHEELED && next == Gait::LEGGED) {
-        strategy.reset(createWheeledToLegged());
-    } else if (current == Gait::LEGGED && next == Gait::WHEELED) {
-        strategy.reset(createLeggedToWheeled());
-    } else if (current == Gait::LEGGED && next == Gait::HYBRID) {
-        strategy.reset(createLeggedToHybrid());
+    if (current == Gait::WHEELED && next == Gait::HYBRID) {
+        strategy.reset(createWheeledToHybrid(hybrid_ptr_,legged_ptr_));
+    } 
+    else if (current == Gait::HYBRID && next == Gait::LEGGED) {
+        strategy.reset(createHybridToLegged(hybrid_ptr_,legged_ptr_));
     }
-
+    else if (current == Gait::WHEELED && next == Gait::LEGGED) {
+        strategy.reset(createWheeledToLegged(hybrid_ptr_,legged_ptr_));
+    }
     if (strategy){
-        strategy->transform(-0.03,0,0,0.14);
+        strategy->transform();
         std::cout << "Transformation finished." << std::endl;
-    }else
+    } else {
         std::cout << "Invalid Transform Selection" << std::endl;
+    }
 }
