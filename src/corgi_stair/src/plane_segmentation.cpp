@@ -632,47 +632,36 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
 }
 
 void PlaneSegmentation::visualize_normal_in_space() {
-    visualization_msgs::Marker marker;
-    marker.header.frame_id = "map";  // 根據你的 tf 架構決定
-    marker.header.stamp = ros::Time::now();
-    marker.ns = "normals";
-    marker.id = 0;
-    marker.type = visualization_msgs::Marker::POINTS;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = 0.03;  // 點大小
-    marker.scale.y = 0.03;
-
-    // 顏色為灰色 (預設)
-    std_msgs::ColorRGBA gray;
-    gray.r = 0.5; gray.g = 0.5; gray.b = 0.5; gray.a = 1.0;
-    std_msgs::ColorRGBA red;
-    red.r = 1.0; red.g = 0.0; red.b = 0.0; red.a = 1.0;
-    std_msgs::ColorRGBA blue;
-    blue.r = 0.0; blue.g = 0.0; blue.b = 1.0; blue.a = 1.0;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_msg(new pcl::PointCloud<pcl::PointXYZRGB>);
+    cloud_msg->header.frame_id = "map";  // 或使用你自己的 frame
+    cloud_msg->height = 1;
+    cloud_msg->is_dense = false;
 
     std::set<int> h_idx_set(h_point_idx.begin(), h_point_idx.end());
     std::set<int> v_idx_set(v_point_idx.begin(), v_point_idx.end());
 
-    for (size_t i = 0; i < normals_->size(); ++i)
-    {
-        const auto& n = normals_->points[i];
+    for (size_t i = 0; i < normals->size(); ++i) {
+        const auto& n = normals->points[i];
         if (!pcl::isFinite(n)) continue;
 
-        geometry_msgs::Point p;
-        p.x = n.normal_x;
-        p.y = n.normal_y;
-        p.z = n.normal_z;
-        marker.points.push_back(p);
+        pcl::PointXYZRGB pt;
+        pt.x = n.normal_x;
+        pt.y = n.normal_y;
+        pt.z = n.normal_z;
 
-        // 設定顏色
         if (h_idx_set.count(i)) {
-            marker.colors.push_back(red);
+            pt.r = 0; pt.g = 0; pt.b = 255;  // 藍
         } else if (v_idx_set.count(i)) {
-            marker.colors.push_back(blue);
+            pt.r = 255; pt.g = 0; pt.b = 0;  // 紅
         } else {
-            marker.colors.push_back(gray);
+            pt.r = 128; pt.g = 128; pt.b = 128;  // 灰
         }
+
+        cloud_msg->points.push_back(pt);
     }
 
-    normal_pub2.publish(marker);
+    cloud_msg->width = cloud_msg->points.size();
+    pcl_conversions::toPCL(ros::Time::now(), cloud_msg->header.stamp);
+
+    normal_pub2.publish(cloud_msg);
 }
