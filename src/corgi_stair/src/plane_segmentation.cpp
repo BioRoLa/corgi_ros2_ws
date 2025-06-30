@@ -50,6 +50,7 @@ void PlaneSegmentation::init_tf() {
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
+    normal_pub2 = nh.advertise<visualization_msgs::Marker>("normal_points", 1);
     plane_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_plane", 1);
 }//end init_tf
 
@@ -62,28 +63,29 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     // std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
     auto [h_plane_distances, h_plane_point_indices] = segment_by_distances(centroid_z, h_point_idx);
     auto [v_plane_distances, v_plane_point_indices] = segment_by_distances(-centroid_x, v_point_idx);
-    std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_point_indices);
+    // std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_point_indices);
 
-    size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
-    std::cout << std::fixed << std::setprecision(4);
-    std::cout << "Index | h_plane_distances | h_plane_distances2\n";
-    std::cout << "-----------------------------------------------\n";
+    // size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
+    // std::cout << std::fixed << std::setprecision(4);
+    // std::cout << "Index | h_plane_distances | h_plane_distances2\n";
+    // std::cout << "-----------------------------------------------\n";
 
-    for (size_t i = 0; i < n; ++i) {
-        double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
-        double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
+    // for (size_t i = 0; i < n; ++i) {
+    //     double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
+    //     double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
 
-        std::cout << std::setw(5) << i << " | "
-                  << std::setw(17) << v1 << " | "
-                  << std::setw(17) << v2 << "\n";
-    }
+    //     std::cout << std::setw(5) << i << " | "
+    //               << std::setw(17) << v1 << " | "
+    //               << std::setw(17) << v2 << "\n";
+    // }
 
 // v_plane_point_indices[i] 是第 i 個垂直平面的點 index 集合
 
 
     /* Visualize in rviz */
-    // this->visualize_planes();
-    // this->visualize_normal();
+    this->visualize_planes();
+    this->visualize_normal();
+    this->visualize_normal_in_space();
     // this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
     
@@ -627,4 +629,50 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
     }
 
     plane_pub.publish(marker_array);
+}
+
+void PlaneSegmentation::visualize_normal_in_space() {
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = "map";  // 根據你的 tf 架構決定
+    marker.header.stamp = ros::Time::now();
+    marker.ns = "normals";
+    marker.id = 0;
+    marker.type = visualization_msgs::Marker::POINTS;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.scale.x = 0.03;  // 點大小
+    marker.scale.y = 0.03;
+
+    // 顏色為灰色 (預設)
+    std_msgs::ColorRGBA gray;
+    gray.r = 0.5; gray.g = 0.5; gray.b = 0.5; gray.a = 1.0;
+    std_msgs::ColorRGBA red;
+    red.r = 1.0; red.g = 0.0; red.b = 0.0; red.a = 1.0;
+    std_msgs::ColorRGBA blue;
+    blue.r = 0.0; blue.g = 0.0; blue.b = 1.0; blue.a = 1.0;
+
+    std::set<int> h_idx_set(h_point_idx.begin(), h_point_idx.end());
+    std::set<int> v_idx_set(v_point_idx.begin(), v_point_idx.end());
+
+    for (size_t i = 0; i < normals_->size(); ++i)
+    {
+        const auto& n = normals_->points[i];
+        if (!pcl::isFinite(n)) continue;
+
+        geometry_msgs::Point p;
+        p.x = n.normal_x;
+        p.y = n.normal_y;
+        p.z = n.normal_z;
+        marker.points.push_back(p);
+
+        // 設定顏色
+        if (h_idx_set.count(i)) {
+            marker.colors.push_back(red);
+        } else if (v_idx_set.count(i)) {
+            marker.colors.push_back(blue);
+        } else {
+            marker.colors.push_back(gray);
+        }
+    }
+
+    normal_pub2.publish(marker);
 }

@@ -41,7 +41,8 @@ class PlaneSegmentation {
         void visualize_planes();
         void visualize_normal();
         void visualize_CubePlanes(const std::vector<double>& h_plane_distances, const std::vector<double>& v_plane_distances);
-
+        void visualize_normal_in_space();
+        
     private:
         tf2_ros::Buffer tf_buffer_;
         tf2_ros::TransformListener* tf_listener_;
@@ -58,6 +59,7 @@ class PlaneSegmentation {
 
         ros::Publisher pub;
         ros::Publisher normal_pub;
+        ros::Publisher normal_pub2;
         ros::Publisher plane_pub;
         ros::NodeHandle nh;
 
