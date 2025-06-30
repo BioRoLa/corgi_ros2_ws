@@ -43,6 +43,9 @@ PlaneSegmentation::PlaneSegmentation() :
     normal_estimator_.setMaxDepthChangeFactor(0.01f);
     normal_estimator_.setNormalSmoothingSize(10.0f);
 
+    histogram_csv.open("histogram.csv");
+    histogram_csv << "idx,bin,value\n";
+
 }//end PlaneSegmentation
 
 
@@ -83,9 +86,9 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
 
 
     /* Visualize in rviz */
-    this->visualize_planes();
-    this->visualize_normal();
-    this->visualize_normal_in_space();
+    // this->visualize_planes();
+    // this->visualize_normal();
+    // this->visualize_normal_in_space();
     // this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
     
@@ -265,6 +268,10 @@ std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation:
         }//end if
         in_range = false;
     }//end if
+
+    for (int i = 0; i < histogram.size(); ++i) {
+        histogram_csv << i << "," << bin_values[i] << "," << histogram[i] << "\n";
+    }
 
     // std::vector<Eigen::Vector3d> points;
     // Eigen::Vector3d p_centroid(0, 0, 0);

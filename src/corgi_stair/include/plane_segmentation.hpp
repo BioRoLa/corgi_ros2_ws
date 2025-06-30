@@ -64,6 +64,8 @@ class PlaneSegmentation {
         ros::NodeHandle nh;
 
         int last_marker_count_ = 0; // 用於記錄上次發佈的 marker 數量
+
+        std::ofstream histopgram_csv;
 };
 
 #endif // PLANESEG_HPP
