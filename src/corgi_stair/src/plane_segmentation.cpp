@@ -50,7 +50,7 @@ void PlaneSegmentation::init_tf() {
     tf_listener_ = new tf2_ros::TransformListener(tf_buffer_);
     pub = nh.advertise<sensor_msgs::PointCloud2>("plane_segmentation", 1);
     normal_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_normals", 1);
-    normal_pub2 = nh.advertise<visualization_msgs::Marker>("normal_points", 1);
+    normal_pub2 = nh.advertise<sensor_msgs::PointCloud2>("normal_points", 1);
     plane_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_plane", 1);
 }//end init_tf
 
@@ -632,7 +632,7 @@ void PlaneSegmentation::visualize_CubePlanes(const std::vector<double>& h_plane_
 }
 
 void PlaneSegmentation::visualize_normal_in_space() {
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_msg(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<PointT>::Ptr cloud_msg(new pcl::PointCloud<PointT>);
     cloud_msg->header.frame_id = "map";  // 或使用你自己的 frame
     cloud_msg->height = 1;
     cloud_msg->is_dense = false;
@@ -644,7 +644,7 @@ void PlaneSegmentation::visualize_normal_in_space() {
         const auto& n = normals_->points[i];
         if (!pcl::isFinite(n)) continue;
 
-        pcl::PointXYZRGB pt;
+        PointT pt;
         pt.x = n.normal_x;
         pt.y = n.normal_y;
         pt.z = n.normal_z;
