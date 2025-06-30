@@ -665,5 +665,5 @@ void PlaneSegmentation::visualize_normal_in_space() {
 
     sensor_msgs::PointCloud2 output;
     pcl::toROSMsg(*cloud_msg, output);
-    normal_pub2.publish(cloud_msg);
+    normal_pub2.publish(output);
 }
