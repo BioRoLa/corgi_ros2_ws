@@ -663,5 +663,7 @@ void PlaneSegmentation::visualize_normal_in_space() {
     cloud_msg->width = cloud_msg->points.size();
     pcl_conversions::toPCL(ros::Time::now(), cloud_msg->header.stamp);
 
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*cloud_msg, output);
     normal_pub2.publish(cloud_msg);
 }
