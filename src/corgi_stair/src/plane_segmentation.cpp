@@ -640,8 +640,8 @@ void PlaneSegmentation::visualize_normal_in_space() {
     std::set<int> h_idx_set(h_point_idx.begin(), h_point_idx.end());
     std::set<int> v_idx_set(v_point_idx.begin(), v_point_idx.end());
 
-    for (size_t i = 0; i < normals->size(); ++i) {
-        const auto& n = normals->points[i];
+    for (size_t i = 0; i < normals_->size(); ++i) {
+        const auto& n = normals_->points[i];
         if (!pcl::isFinite(n)) continue;
 
         pcl::PointXYZRGB pt;
