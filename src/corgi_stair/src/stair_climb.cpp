@@ -970,7 +970,7 @@ bool StairClimb::determine_next_foothold() {
         double H = stair_edge[swing_leg].front().edge[1] - last_stair_edge[swing_leg].edge[1];
         double optimal_foothold;
         if (swing_leg < 2) {
-            optimal_foothold = get_optimal_foothold(H, true);
+            optimal_foothold = get_optimal_foothold(H, false);
 
         } else {    // hind leg
             optimal_foothold = get_optimal_foothold(H, false);
