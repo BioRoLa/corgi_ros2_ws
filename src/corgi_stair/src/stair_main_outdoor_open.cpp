@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 
     std::ofstream command_pitch_CoM("command_pitch_CoM.csv");
-    command_pitch_CoM << "command_seq," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
+    command_pitch_CoM << "Time," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
     const std::vector<std::array<double, 2>> stair_size = {{0.5+0.222, 0.129}, 
@@ -94,9 +94,7 @@ int main(int argc, char** argv) {
     std::array<double, 2> CoM;
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
-    double min_keep_stair_d;
-    double hip_x;
-    double max_step_length_last;
+    double hip_x, to_enter_d;
     double exp_robot_x = 0.0; // expected robot x position
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
     double optimal_foothold;
@@ -141,44 +139,26 @@ int main(int argc, char** argv) {
                 }//end if
                 break;
             case WALK:
-                /* Position feedback in Webots */
-                // min_keep_stair_d = 0.15; // 15cm to the first stair edge
-                // hip_x = sim_data.position.x + 0.222; // front hip
-                // // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
-                // // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
-                // std::cout << "hip: " << hip_x << std::endl;
-                // if ( max_step_length_last > 0 && step_length >= max_step_length_last ) {
-                //     walk_gait.set_step_length(max_step_length_last); 
-                // }//end if
-
-                /* No feedback for real robot */
+                /* Adjust step length of walk gait */
                 optimal_foothold = stair_climb.get_optimal_foothold(stair_size[0][1], true);
                 exp_robot_x += velocity / sampling_rate; // expected robot x position
                 hip_x = exp_robot_x + 0.222; // front hip
-                // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
-                // max_step_length_last = ((-D/2.0 - min_keep_stair_d) - hip_x) / (0.2+0.4); // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                // max_step_length_last = (-D/2.0 - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                max_step_length_last = stair_size[0][0] - optimal_foothold -0.15 - hip_x; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                min_steps = static_cast<int>(std::ceil(max_step_length_last / 0.15));   // max step length = 30cm
-                max_steps = static_cast<int>(std::floor(max_step_length_last / 0.10));  // min step length = 20cm
-                // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
+                to_enter_d = stair_size[0][0] - optimal_foothold -0.15 - hip_x; // Remaining distance to the gait change point
+                min_steps = static_cast<int>(std::ceil(to_enter_d / 0.15));   // max step length = 30cm
+                max_steps = static_cast<int>(std::floor(to_enter_d / 0.10));  // min step length = 20cm
+                // std::cout << "to_enter_d: " << to_enter_d << std::endl;
                 // std::cout << "hip: " << hip_x << std::endl;
                 change_step_length = false;
                 if (min_steps <= max_steps) {
                     change_step_length = true;
-                    walk_gait.set_step_length(max_step_length_last / (min_steps/2.0)); 
+                    walk_gait.set_step_length(to_enter_d / (min_steps/2.0)); 
                 }
-                // if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
-                //     walk_gait.set_step_length(max_step_length_last); 
-                // }//end if
 
                 eta_list = walk_gait.step();
                 if (change_step_length && walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // walk_gait apply new step_length
-                    std::cout << "step_length:" << max_step_length_last / (min_steps/2.0) << std::endl;
+                    std::cout << "step_length:" << to_enter_d / (min_steps/2.0) << std::endl;
                 }
-                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
+                command_pitch_CoM << ros::Time::now() << "," << (int)trigger_msg.enable << "," << 0.0 << "," << exp_robot_x << "," << stand_height << "\n";
                 command_count ++;
                 break;
             case STAIR:
@@ -194,7 +174,7 @@ int main(int argc, char** argv) {
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
                 CoM = stair_climb.get_CoM();
-                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
+                command_pitch_CoM << ros::Time::now() << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
                 command_count ++;
                 break;
             case UPPER_WALK:
@@ -242,7 +222,7 @@ int main(int argc, char** argv) {
                 break;
             case UPPER_WALK:
                 step_count = walk_gait.get_step_count();
-                if (step_count[0] >= 1 && step_count[1] >= 1 && step_count[2] >= 1 && step_count[3] >= 1) { // all legs have stepped at least twice
+                if (step_count[0] >= 2 && step_count[1] >= 2 && step_count[2] >= 2 && step_count[3] >= 2) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
                 break;

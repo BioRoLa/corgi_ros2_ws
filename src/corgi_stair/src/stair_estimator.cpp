@@ -84,13 +84,13 @@ int main(int argc, char** argv) {
     ros::Rate rate(10);
 
     std::ofstream plane_csv("plane_distances.csv");
-    plane_csv << "cloud_seq,";
+    plane_csv << "Time,";
     plane_csv << "Trigger,";
     plane_csv << "Horizontal0,"; for (int i = 1; i < 10; ++i) plane_csv << "Horizontal" << i << ",";
     plane_csv << "Vertical0,";  for (int i = 1; i < 10; ++i) plane_csv << "Vertical"   << i << ",";
     plane_csv << "\n";
     std::ofstream stair_csv("stair_planes.csv");
-    stair_csv << "cloud_seq,";
+    stair_csv << "Time,";
     stair_csv << "Trigger," ;
     stair_csv << "Camera_x,";
     stair_csv << "Camera_z,";
@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
         }
 
         /* plane_csv */
-        plane_csv << cloud_seq << ",";
+        plane_csv << ros::Time::now() << ",";
         plane_csv << (int)trigger_msg.enable << ",";
         for (int i=0; i<10; i++) {
             if (i < plane_distances.horizontal.size())
@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
         plane_csv << "\n";
 
         /* stair_csv */
-        stair_csv << cloud_seq << ",";
+        stair_csv << ros::Time::now() << ",";
         stair_csv << (int)trigger_msg.enable << ",";
         stair_csv << camera_transform.transform.translation.x << ",";
         stair_csv << camera_transform.transform.translation.z << ",";

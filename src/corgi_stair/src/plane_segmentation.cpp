@@ -252,8 +252,8 @@ std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation:
         } else if (in_range) {
             if (sum_count >= total_point_threshold) {
                 total_counts.push_back(sum_count);
-                // mean_distances.push_back(sum_value / sum_count);
-                mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
+                mean_distances.push_back(sum_value / sum_count);
+                // mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
                 candidate_plane_indices.push_back(accumulated_indices);
             }//end if
             in_range = false;
@@ -262,8 +262,8 @@ std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation:
     if (in_range) {
         if (sum_count >= total_point_threshold) {
             total_counts.push_back(sum_count);
-            // mean_distances.push_back(sum_value / sum_count);
-            mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
+            mean_distances.push_back(sum_value / sum_count);
+            // mean_distances.push_back(bin_values[max_bin_index] / histogram[max_bin_index]);
             candidate_plane_indices.push_back(accumulated_indices);
         }//end if
         in_range = false;

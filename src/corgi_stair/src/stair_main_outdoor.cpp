@@ -78,9 +78,9 @@ int main(int argc, char** argv) {
         motor_cmd_modules[i]->torque_l = 0;
     }//end for 
     std::ofstream stair_size_csv("stair_size.csv");
-    stair_size_csv << "command_seq," << "Trigger," << "D," << "H," << "\n";
+    stair_size_csv << "Time," << "Trigger," << "D," << "H," << "\n";
     std::ofstream command_pitch_CoM("command_pitch_CoM.csv");
-    command_pitch_CoM << "command_seq," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
+    command_pitch_CoM << "Time," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, UPPER_WALK, END};
@@ -114,9 +114,7 @@ int main(int argc, char** argv) {
     std::array<double, 2> CoM = {0.0, 0.0}; // CoM position in map frame
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
-    double min_keep_stair_d;
-    double hip_x, to_stair_d;
-    double max_step_length_last;
+    double hip_x, to_stair_d, to_enter_d;
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
     geometry_msgs::TransformStamped initial_camera_transform, camera_transform, last_camera_transform, camera_transform_tmp;
     double D_sum, H_sum, last_D_sum;
@@ -189,8 +187,7 @@ int main(int argc, char** argv) {
                 } else {
                     ROS_WARN_THROTTLE(1.0, "TF not available at this moment");
                 }
-                /* Vision feedback for real robot */
-                // hip_x = camera_transform.transform.translation.x - CoM2cemera[0] + 0.222; // front hip
+                /* Adjust last step length of walk gait */
                 change_step_length = false;
                 hip_x = 0.222; // front hip
                 to_stair_d = hip_x + 100;  // set far from hip if not detect stair
@@ -207,30 +204,25 @@ int main(int argc, char** argv) {
                         plane_msg.v_normal.z
                     );
 
-                    // Adjust last step length of walk gait, foothold of last walk step should not exceed min_keep_stair_d.
                     double H = plane_msg.horizontal[1] - plane_msg.horizontal[0];
                     optimal_foothold = stair_climb.get_optimal_foothold(H, true);
                     to_stair_d = plane_msg.vertical[0] - camera_position.dot(normal_vec) + CoM2cemera[0]; // distance from robot center to stair edge
                     // to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
-                    // max_step_length_last = (to_stair_d - 0.20 - hip_x - 0.3*step_length)*5; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                    max_step_length_last = to_stair_d - hip_x - optimal_foothold - 0.15; // step length if from current pos to min_keep_stair_d, step_length*(swing_phase + (1-swing_phase)/2) = foothold_x - hip_x
-                    min_steps = static_cast<int>(std::ceil(max_step_length_last / 0.15));   // max step length = 30cm
-                    max_steps = static_cast<int>(std::floor(max_step_length_last / 0.10));  // min step length = 20cm
-                    // std::cout << "max_step_length_last: " << max_step_length_last << std::endl;
-                    // if ( max_step_length_last > 0.05 && step_length >= max_step_length_last ) {
-                    //     walk_gait.set_step_length(max_step_length_last); 
-                    // }//end if
+                    to_enter_d = to_stair_d - hip_x - optimal_foothold - 0.15; // Remaining distance to the gait change point
+                    min_steps = static_cast<int>(std::ceil(to_enter_d / 0.15));   // max step length = 30cm
+                    max_steps = static_cast<int>(std::floor(to_enter_d / 0.10));  // min step length = 20cm
+                    // std::cout << "to_enter_d: " << to_enter_d << std::endl;
                     if (min_steps <= max_steps) {
                         change_step_length = true;
-                        walk_gait.set_step_length(max_step_length_last / (min_steps/2.0)); 
+                        walk_gait.set_step_length(to_enter_d / (min_steps/2.0)); 
                     }
                 }//end if
                 eta_list = walk_gait.step();
                 if (change_step_length && walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // walk_gait apply new step_length
-                    std::cout << "step_length:" << max_step_length_last / (min_steps/2.0) << std::endl;
+                    std::cout << "step_length:" << to_enter_d / (min_steps/2.0) << std::endl;
                 }
                 CoM[0] += velocity / sampling_rate; // expected CoM x position
-                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << 0.0 << "," << CoM[0] << "," << stand_height << "\n";
+                command_pitch_CoM << ros::Time::now() << "," << (int)trigger_msg.enable << "," << 0.0 << "," << CoM[0] << "," << stand_height << "\n";
                 command_count ++;
                 break;
             case STAIR:
@@ -295,14 +287,14 @@ int main(int argc, char** argv) {
                         double D = D_sum - last_D_sum;
                         std::cout << "camera_pose x: " << camera_transform.transform.translation.x << std::endl;
                         std::cout << "Stair H: " << H << " m, D: " << D << " m." << std::endl;
-                        stair_size_csv << command_count << "," << (int)trigger_msg.enable << "," << D << "," << H << "\n";
+                        stair_size_csv << ros::Time::now() << "," << (int)trigger_msg.enable << "," << D << "," << H << "\n";
                         stair_count++;
                     }//end if
                 }//end if
                 eta_list = stair_climb.step();
                 pitch = stair_climb.get_pitch();
                 CoM = stair_climb.get_CoM();
-                command_pitch_CoM << command_count << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
+                command_pitch_CoM << ros::Time::now() << "," << (int)trigger_msg.enable << "," << pitch << "," << CoM[0] << "," << CoM[1] << "\n";
                 command_count ++;
                 break;
             case UPPER_WALK:
@@ -350,7 +342,7 @@ int main(int argc, char** argv) {
                 break;
             case UPPER_WALK:
                 step_count = walk_gait.get_step_count();
-                if (step_count[0] >= 1 && step_count[1] >= 1 && step_count[2] >= 1 && step_count[3] >= 1) { // all legs have stepped at least twice
+                if (step_count[0] >= 2 && step_count[1] >= 2 && step_count[2] >= 2 && step_count[3] >= 2) { // all legs have stepped at least twice
                     state = END;
                 }//end if  
                 break;
