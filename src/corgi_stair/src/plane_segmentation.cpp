@@ -398,7 +398,7 @@ void PlaneSegmentation::visualize_normal() {
     marker_template.header.frame_id = "map";
     marker_template.type = visualization_msgs::Marker::ARROW;
     marker_template.action = visualization_msgs::Marker::ADD;
-    marker_template.scale.x = 0.01;
+    marker_template.scale.x = 0.001;
     marker_template.scale.y = 0.002;
     marker_template.scale.z = 0.002;
     marker_template.color.r = 0.0;
@@ -443,9 +443,9 @@ void PlaneSegmentation::visualize_normal() {
         start.x = pt.x;
         start.y = pt.y;
         start.z = pt.z;
-        end.x = pt.x + 0.05 * pt.normal_x;
-        end.y = pt.y + 0.05 * pt.normal_y;
-        end.z = pt.z + 0.05 * pt.normal_z;
+        end.x = pt.x + 0.03 * pt.normal_x;
+        end.y = pt.y + 0.03 * pt.normal_y;
+        end.z = pt.z + 0.03 * pt.normal_z;
         arrow.points.push_back(start);
         arrow.points.push_back(end);
 
