@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     command_pitch_CoM << "Time," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
-    const std::vector<std::array<double, 2>> stair_size = {{0.5+0.222, 0.129}, 
+    const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.129}, 
                                                             {0.543, 0.134}, 
                                                             {0.325, 0.130}, 
                                                             {0.324, 0.130}, 

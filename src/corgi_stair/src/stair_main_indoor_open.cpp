@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     double max_cal_time = 0.0;
     std::array<int, 4> swing_phase;
     double hip_x, to_enter_d;
-    double exp_robot_x = -0.5 - D/2.0; // expected robot x position
+    double exp_robot_x = -1.0 - D/2.0; // expected robot x position
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
     double optimal_foothold;
     int min_steps, max_steps;
