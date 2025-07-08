@@ -1002,24 +1002,19 @@ bool StairClimb::determine_next_foothold() {
                         deepest_x = INFINITY;
                         // deepest_x = next_max_foothold_x;
                     }//end if else
-                    // double next_max_foothold_x = std::min({stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance, leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2});
                     if (next_max_foothold_x >= deepest_x) {
-                        leg_info[swing_leg].one_step = false;
-                        // leg_info[swing_leg].one_step = true;
                         // leg_info[swing_leg].next_foothold =  leg_info[other_side_leg[swing_leg][1]].foothold;
                         double next_larger_foothold = std::max({deepest_x, leg_info[other_side_leg[swing_leg][1]].foothold[0]});
                         leg_info[swing_leg].next_foothold =  {next_larger_foothold, current_stair_edge[1]};
                     } else {
-                        leg_info[swing_leg].one_step = true;
-                        // leg_info[swing_leg].one_step = false;
                         leg_info[swing_leg].next_foothold = {next_max_foothold_x, current_stair_edge[1]};
                     }//end if else
-                    // leg_info[swing_leg].next_foothold = {deepest_x, current_stair_edge[1]};
-                    // if (leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][0].edge[0]+keep_edge_d+min_foothold_distance) {
-                    //     leg_info[swing_leg].one_step = true;
-                    // } else {
-                    //     leg_info[swing_leg].one_step = false;
-                    // }
+                    if (leg_info[swing_leg].next_foothold[0] > current_stair_edge[0] + step_length_up_stair / 2) {
+                        leg_info[swing_leg].one_step = true;
+                    } else {
+                        leg_info[swing_leg].one_step = false;
+                    }//end if else
+
                 } else {    // hind leg: no change first swing leg
                     leg_info[swing_leg].one_step = true;
                     double deepest_x;

@@ -76,7 +76,6 @@ class StairClimb {
         const double min_swing_time_cw   = 2.5, 
                      min_swing_time_ccw  = 1.0, 
                      min_swing_time_step = 1.0;
-        const double min_foothold_distance = 0.1;
         const std::vector<std::pair<double, double>> foothold_table_hind = {
             {0.060, 0.07010}, {0.065, 0.11260}, {0.070, 0.12560},
             {0.075, 0.13540}, {0.080, 0.14340}, {0.085, 0.15020},
