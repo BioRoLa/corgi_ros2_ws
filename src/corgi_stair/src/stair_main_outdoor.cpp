@@ -93,8 +93,10 @@ int main(int argc, char** argv) {
     double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915};  // stand height 0.25, step length 0.3
     double velocity = 0.1; // velocity for walk gait
     double stand_height = 0.25; // stand height for walk gait
-    double step_length = 0.3; // step length for walk gait
-    double step_height = 0.04; // step height for walk gait
+    const double step_length = 0.3; // step length for walk gait and stair gait
+    const double step_height = 0.04; // step height for walk gait
+    const double max_step_length = 0.3;
+    const double min_step_length = 0.2;
 
     /* Initial variable */
     ros::Rate rate(sampling_rate);
@@ -205,12 +207,12 @@ int main(int argc, char** argv) {
                     );
 
                     double H = plane_msg.horizontal[1] - plane_msg.horizontal[0];
-                    optimal_foothold = stair_climb.get_optimal_foothold(H, true);
+                    optimal_foothold = stair_climb.get_optimal_foothold(H, false);
                     to_stair_d = plane_msg.vertical[0] - camera_position.dot(normal_vec) + CoM2cemera[0]; // distance from robot center to stair edge
                     // to_stair_d = plane_msg.vertical[0] - camera_transform.transform.translation.x + CoM2cemera[0]; // distance from robot center to stair edge
-                    to_enter_d = to_stair_d - hip_x - optimal_foothold - 0.15; // Remaining distance to the gait change point
-                    min_steps = static_cast<int>(std::ceil(to_enter_d / 0.15));   // max step length = 30cm
-                    max_steps = static_cast<int>(std::floor(to_enter_d / 0.10));  // min step length = 20cm
+                    to_enter_d = to_stair_d - hip_x - optimal_foothold -(max_step_length/2); // Remaining distance to the gait change point
+                    min_steps = static_cast<int>(std::ceil(to_enter_d / (max_step_length/2)));   // max step length = 30cm
+                    max_steps = static_cast<int>(std::floor(to_enter_d / (min_step_length/2)));  // min step length = 20cm 
                     // std::cout << "to_enter_d: " << to_enter_d << std::endl;
                     if (min_steps <= max_steps) {
                         change_step_length = true;
@@ -329,7 +331,7 @@ int main(int argc, char** argv) {
                 // Entering stair climbing phase
                 swing_phase = walk_gait.get_swing_phase();
                 if (walk_gait.if_touchdown() && (swing_phase[0]==1 || swing_phase[1]==1)) { // hind leg touched down (front leg start to swing)
-                    if (hip_x + 0.15 >= to_stair_d - optimal_foothold) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
+                    if (hip_x + (max_step_length/2) >= to_stair_d - optimal_foothold) {   // max next foothold >= keep_stair_d_front_max, to swing up stair
                         state = STAIR;
                         std::cout << "Enter stair climbing phase." << std::endl;
                     }//end if

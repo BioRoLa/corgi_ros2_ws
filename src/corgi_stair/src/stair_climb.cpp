@@ -303,40 +303,31 @@ std::array<bool, 4> StairClimb::get_contact_edge_leg() {
 }//end get_stair_count
 
 double StairClimb::get_optimal_foothold(double H, bool get_front) {
+    std::vector<std::pair<double, double>> foothold_table;
     if (get_front) {
-        if (H < foothold_table_front.front().first || H > foothold_table_front.back().first) {
-            throw std::out_of_range("H 超出查表範圍");
-        }
-        // 找到 H 介於哪兩個點之間
-        for (size_t i = 0; i < foothold_table_front.size() - 1; ++i) {
-            double H1 = foothold_table_front[i].first;
-            double V1 = foothold_table_front[i].second;
-            double H2 = foothold_table_front[i + 1].first;
-            double V2 = foothold_table_front[i + 1].second;
-            if (H >= H1 && H <= H2) {
-                // 線性內插公式
-                double ratio = (H - H1) / (H2 - H1);
-                return V1 + ratio * (V2 - V1);
-                break;
-            }//end if
-        }//end for 
+        foothold_table = foothold_table_front;
     } else {
-        if (H < foothold_table_hind.front().first || H > foothold_table_hind.back().first) {
-            throw std::out_of_range("H 超出查表範圍");
-        }
-        // 找到 H 介於哪兩個點之間
-        for (size_t i = 0; i < foothold_table_hind.size() - 1; ++i) {
-            double H1 = foothold_table_hind[i].first;
-            double V1 = foothold_table_hind[i].second;
-            double H2 = foothold_table_hind[i + 1].first;
-            double V2 = foothold_table_hind[i + 1].second;
-            if (H >= H1 && H <= H2) {
-                // 線性內插公式
-                double ratio = (H - H1) / (H2 - H1);
-                return V1 + ratio * (V2 - V1);
-            }//end if
-        }//end for 
+        foothold_table = foothold_table_hind;
     }//end if else
+
+    if (H < foothold_table.front().first) {
+        return foothold_table.front().second;
+    } else if (H > foothold_table.back().first) {
+        throw std::out_of_range("H 超出查表範圍");
+    }//end if else
+
+    // 找到 H 介於哪兩個點之間
+    for (size_t i = 0; i < foothold_table.size() - 1; ++i) {
+        double H1 = foothold_table[i].first;
+        double V1 = foothold_table[i].second;
+        double H2 = foothold_table[i + 1].first;
+        double V2 = foothold_table[i + 1].second;
+        if (H >= H1 && H <= H2) {
+            // 線性內插公式
+            double ratio = (H - H1) / (H2 - H1);
+            return V1 + ratio * (V2 - V1);
+        }//end if
+    }//end for 
 }//end get_optimal_foothold
 
 
