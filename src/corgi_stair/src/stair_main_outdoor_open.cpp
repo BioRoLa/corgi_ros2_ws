@@ -58,13 +58,35 @@ int main(int argc, char** argv) {
     command_pitch_CoM << "Time," << "Trigger," << "pitch," << "CoM_x," << "CoM_z," << "\n";
 
     /* Setting variable */
-    const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.129}, 
-                                                            {0.543, 0.134}, 
-                                                            {0.325, 0.130}, 
-                                                            {0.324, 0.130}, 
-                                                            {0.338, 0.132},
-                                                            {0.340, 0.135},
-                                                            {0.339, 0.117}};
+    const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.078}, 
+                                                            {0.399, 0.089}, 
+                                                            {0.401, 0.092}};    // 工博館
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.129}, 
+    //                                                         {0.543, 0.134}, 
+    //                                                         {0.325, 0.130}, 
+    //                                                         {0.324, 0.130}, 
+    //                                                         {0.338, 0.132},
+    //                                                         {0.340, 0.135},
+    //                                                         {0.339, 0.117}};    // 繡山演講廳
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.112}, 
+    //                                                         {0.285, 0.112}, 
+    //                                                         {0.288, 0.115}, 
+    //                                                         {0.313, 0.131}, 
+    //                                                         {0.315, 0.135},
+    //                                                         {0.312, 0.130},
+    //                                                         {0.315, 0.133},
+    //                                                         {0.312, 0.134},
+    //                                                         {0.312, 0.121}};    // 系館側門
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.109}, 
+    //                                                         {0.449, 0.098}, 
+    //                                                         {0.458, 0.100}};    // 化學系館
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.140}, 
+    //                                                         {0.364, 0.131}, 
+    //                                                         {0.358, 0.095}};    // 舊體
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.119}, 
+    //                                                         {0.505, 0.112}, 
+    //                                                         {0.486, 0.111}};    // 新體
+
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, UPPER_WALK, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
