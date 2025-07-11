@@ -85,6 +85,7 @@ void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
         theta[i] = init_theta[i];
         beta[i]  = init_beta[i];
         enter_wheel_mode[i] = false;
+        last_stair_edge[i].edge[0] = -100;
     }//end for
     init_move_CoM_stable(swing_sequence[swing_count % 4]);
 }//end initialize
