@@ -714,7 +714,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     result_eta = leg_model.inverse(pos, "G");
                 } else {
                     // result_eta = move_consider_edge(i, {hip[i][0]-last_hip[i][0], 0});
-                    result_eta = move_consider_edge(i, {0, 0});
+                    result_eta = {theta[i], beta[i]};
                 }//end if else
                 last_theta[i] = theta[i];
                 last_beta[i]  = beta[i];
