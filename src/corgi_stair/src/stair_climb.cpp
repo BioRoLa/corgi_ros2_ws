@@ -1056,6 +1056,10 @@ bool StairClimb::determine_next_foothold() {
                 double next_smaller_foothold = std::min({middle_foothold, next_max_foothold_x});
                 leg_info[swing_leg].next_foothold = {next_smaller_foothold, leg_info[swing_leg].foothold[1]};
             }//end if else
+            if (swing_leg < 2) {
+                double at_least_foothold = std::max({leg_info[swing_leg].next_foothold[0], last_stair_edge[swing_leg].edge[0] + keep_edge_d + min_foothold_distance})
+                leg_info[swing_leg].next_foothold[0] = at_least_foothold;
+            }//end if 
         }//end if
         // determine if next swing leg will swing up to next stair step
         if (stair_edge[swing_leg].size() > next_stair && leg_info[swing_leg].next_foothold[0] >= stair_edge[swing_leg][next_stair].edge[0] - keep_stair_d_max) {
