@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
                 motor_cmd_pub.publish(motor_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;

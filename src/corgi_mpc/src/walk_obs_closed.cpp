@@ -360,7 +360,7 @@ int main(int argc, char **argv) {
                 imp_cmd_pub.publish(imp_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;

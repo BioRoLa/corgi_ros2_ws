@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 
     ModelPredictiveController mpc;
     mpc.load_config();
-    mpc.target_loop = 1500;
+    mpc.target_loop = 2600;
 
     ros::init(argc, argv, "corgi_mpc");
 
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     walk_gait.stand_height = mpc.target_pos_z;
     walk_gait.velocity = velocity;
     walk_gait.step_length = 0.3;
-    walk_gait.step_height = 0.08;
+    walk_gait.step_height = 0.12;
 
     walk_gait.initialize(init_eta);
     walk_gait.set_velocity(mpc.target_vel_x);
@@ -191,6 +191,15 @@ int main(int argc, char **argv) {
                     rate.sleep();
                 }
             }
+            else {
+                for (int i=0; i<int(1*mpc.freq); i++) {
+                    for (auto& state: contact_state_modules) {
+                        state->contact = true;
+                    }
+                    contact_pub.publish(contact_state);
+                    rate.sleep();
+                }
+            }
             
             for (auto& cmd : imp_cmd_modules){
                 cmd->Bx = mpc.Bx_stance;
@@ -250,22 +259,22 @@ int main(int argc, char **argv) {
                 }
 
                 // update state
-                mpc.robot_vel[0] = odom_vel.x;
-                mpc.robot_vel[1] = odom_vel.y;
-                mpc.robot_vel[2] = odom_vel.z;
+                // mpc.robot_vel[0] = odom_vel.x;
+                // mpc.robot_vel[1] = odom_vel.y;
+                // mpc.robot_vel[2] = odom_vel.z;
                 
-                mpc.robot_pos[0] = odom_pos.x;
-                mpc.robot_pos[1] = odom_pos.y;
-                // mpc.robot_pos[2] = odom_pos.z;
-                mpc.robot_pos[2] = odom_z;
+                // mpc.robot_pos[0] = odom_pos.x;
+                // mpc.robot_pos[1] = odom_pos.y;
+                // // mpc.robot_pos[2] = odom_pos.z;
+                // mpc.robot_pos[2] = odom_z;
 
-                // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
-                // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
-                // mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
+                mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
+                mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
+                mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
                 
-                // mpc.robot_pos[0] = sim_data.position.x;
-                // mpc.robot_pos[1] = sim_data.position.y;
-                // mpc.robot_pos[2] = sim_data.position.z;
+                mpc.robot_pos[0] = sim_data.position.x;
+                mpc.robot_pos[1] = sim_data.position.y;
+                mpc.robot_pos[2] = sim_data.position.z;
 
                 mpc.robot_ang.x() = imu.orientation.x;
                 mpc.robot_ang.y() = imu.orientation.y;
@@ -342,7 +351,7 @@ int main(int argc, char **argv) {
                 imp_cmd_pub.publish(imp_cmd);
 
                 contact_state.header.seq = loop_count;
-                contact_pub.publish(contact_state);
+                // contact_pub.publish(contact_state);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Ref Pos = [" << x_ref[3] << ", " << x_ref[4] << ", " << x_ref[5] << "]" << std::endl << std::endl;
