@@ -128,12 +128,13 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 // front_height = hip[0][1];
                 // hind_height  = hip[3][1];
                 this->is_clockwise = true;
+                int other_leg = other_side_leg[swing_leg][1];
                 if (swing_leg == 0 || swing_leg == 1) {
                     if (!stair_edge[0].empty() && !stair_edge[1].empty()) { // at most only one will be empty (edge of swing leg must not be empty)
                         if (stair_edge[0].front().count != stair_edge[1].front().count) {   // second swing leg
                             // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
                             // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
-                            double D = stair_edge[swing_leg].front().edge[0] - last_stair_edge[swing_leg].edge[0];
+                            double D = stair_edge[other_leg].front().edge[0] - last_stair_edge[other_leg].edge[0];
                             double stand_height_on_stair = D<0.3? stand_height_on_stair_front : stand_height;
                             front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
@@ -144,7 +145,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         this->is_clockwise = false;
                         // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
                         // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
-                        double D = stair_edge[swing_leg].front().edge[0] - last_stair_edge[swing_leg].edge[0];
+                        double D = stair_edge[other_leg].front().edge[0] - last_stair_edge[other_leg].edge[0];
                         double stand_height_on_stair = D<0.3? stand_height_on_stair_front : stand_height;
                         front_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else
@@ -153,7 +154,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         if (stair_edge[2].front().count != stair_edge[3].front().count) {   // second swing leg
                             // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
                             // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
-                            double D = stair_edge[swing_leg].front().edge[0] - last_stair_edge[swing_leg].edge[0];
+                            double D = stair_edge[other_leg].front().edge[0] - last_stair_edge[other_leg].edge[0];
                             double stand_height_on_stair = D<0.3? stand_height_on_stair_hind : stand_height;
                             hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                             this->is_clockwise = false;
@@ -164,7 +165,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         this->is_clockwise = false;
                         // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
                         // double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
-                        double D = stair_edge[swing_leg].front().edge[0] - last_stair_edge[swing_leg].edge[0];
+                        double D = stair_edge[other_leg].front().edge[0] - last_stair_edge[other_leg].edge[0];
                         double stand_height_on_stair = D<0.3? stand_height_on_stair_hind : stand_height;
                         hind_height = stair_edge[swing_leg].front().edge[1] + stand_height_on_stair;
                     }//end if else  
