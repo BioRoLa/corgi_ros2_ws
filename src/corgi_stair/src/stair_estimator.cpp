@@ -30,7 +30,7 @@
 #include "plane_tracker.hpp"
 
 
-static tf2_ros::TransformBroadcaster tf_broadcaster;
+// static tf2_ros::TransformBroadcaster tf_broadcaster;
 
 PlaneSegmentation* plane_segmentation;
 PlaneDistances plane_distances;
