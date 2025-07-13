@@ -106,8 +106,6 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         case SWING_SAME:
             if (last_state != state) {
                 swing_leg = swing_sequence[swing_count % 4];
-                // front_height = hip[0][1];
-                // hind_height  = hip[3][1];
                 if (!stair_edge[swing_leg].empty()) {
                     if (leg_info[swing_leg].next_up) {
                     // if (true) {
@@ -125,8 +123,6 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         case SWING_NEXT:
             if (last_state != state) {
                 swing_leg = swing_sequence[swing_count % 4];
-                // front_height = hip[0][1];
-                // hind_height  = hip[3][1];
                 this->is_clockwise = true;
                 int other_leg = other_side_leg[swing_leg][1];
                 if (swing_leg == 0 || swing_leg == 1) {
@@ -141,7 +137,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         } else {    // first swing leg
                             // front_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                         }//end if else
-                    } else {    // second swing leg
+                    } else {    // second swing leg, first swing leg is on the upper ground
                         this->is_clockwise = false;
                         // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_front : stand_height;
                         double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_front : stand_height;
@@ -159,7 +155,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                         } else {    // first swing leg
                             // hind_height = stair_edge[swing_leg].front().edge[1] + stand_height;
                         }//end if else
-                    } else {    // second swing leg
+                    } else {    // second swing leg, first swing leg is on the upper ground
                         this->is_clockwise = false;
                         // double stand_height_on_stair = stair_edge[swing_leg].size() >= 2? stand_height_on_stair_hind : stand_height;
                         double stand_height_on_stair = leg_info[swing_leg].next_up? stand_height_on_stair_hind : stand_height;
@@ -175,7 +171,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
     }//end switch
     if (last_state != state && (state == SWING_SAME || state == SWING_NEXT)) {
         // std::cout << "State " << this->state << std::endl;
-        std::cout << "Leg " << swing_leg << " next_foothold: " << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
+        // std::cout << "Leg " << swing_leg << " next_foothold: " << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
         // std::cout << "front_height:" << this->front_height << std::endl;
         // std::cout << "hind_height:" << this->hind_height << std::endl;
     }
@@ -829,13 +825,18 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
                 result_eta[0] = theta[leg_ID];
                 result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
                 relative_foothold = {0.0, -leg_model.radius};
-            } else {
+            } else {    // upper rim 
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
-                relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], 5);
+                relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], true, false);
             }//end if else
-        } else {
-            result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
-            relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
+        } else {    // lower rim
+            if (beta[leg_ID] < 0.0) {   // may contact using right upper rim
+                result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0);
+                relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID]);
+            } else {    // lower rim / G
+                result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, false);
+                relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], false);
+            }//end if else
         }//end if else
         leg_info[leg_ID].foothold = {hip[leg_ID][0] + relative_foothold[0], hip[leg_ID][1] + relative_foothold[1]};
     }//end if else
@@ -1082,38 +1083,41 @@ bool StairClimb::determine_next_foothold() {
     return up_stair;
 }//end determine_next_foothold
 
-std::array<double, 2> StairClimb::get_foothold(double theta, double beta, int contact_rim) {
-    leg_model.contact_map(theta, beta);
-    if (contact_rim == -1) {
+std::array<double, 2> StairClimb::get_foothold(double theta, double beta, bool contact_upper, bool contact_lower) {
+    leg_model.contact_map(theta, beta, 0.0, contact_upper, contact_lower);
+    if (leg_model.rim != 0) {
         return leg_model.contact_p;
-    }//end if
+    } else {
+        std::cerr << "StairClimb::get_foothold: the leg doesn't contact ground." << std::endl;
+        return {0, 0};
+    }//end if else
 
-    double radius = leg_model.radius;
-    std::complex<double> center_beta0;
-    switch (contact_rim) {
-        case 1: // left upper rim
-            center_beta0 = std::complex<double>(U_l_poly[0](theta), U_l_poly[1](theta));
-            break;
-        case 2: // left lower rim
-            center_beta0 = std::complex<double>(L_l_poly[0](theta), L_l_poly[1](theta));
-            break;
-        case 3: // G
-            center_beta0 = std::complex<double>(0.0, G_poly[1](theta));
-            radius = leg_model.r;
-            break;
-        case 4: // right lower rim
-            center_beta0 = std::complex<double>(L_r_poly[0](theta), L_r_poly[1](theta));
-            break;
-        case 5: // right upper rim
-            center_beta0 = std::complex<double>(U_r_poly[0](theta), U_r_poly[1](theta));
-            break;
-        default:
-            std::cerr << "ERROR IN get_foothold, contact_rim should be 1~5." << std::endl;
-            return {0, 0};
-    }//end switch
+    // double radius = leg_model.radius;
+    // std::complex<double> center_beta0;
+    // switch (contact_rim) {
+    //     case 1: // left upper rim
+    //         center_beta0 = std::complex<double>(U_l_poly[0](theta), U_l_poly[1](theta));
+    //         break;
+    //     case 2: // left lower rim
+    //         center_beta0 = std::complex<double>(L_l_poly[0](theta), L_l_poly[1](theta));
+    //         break;
+    //     case 3: // G
+    //         center_beta0 = std::complex<double>(0.0, G_poly[1](theta));
+    //         radius = leg_model.r;
+    //         break;
+    //     case 4: // right lower rim
+    //         center_beta0 = std::complex<double>(L_r_poly[0](theta), L_r_poly[1](theta));
+    //         break;
+    //     case 5: // right upper rim
+    //         center_beta0 = std::complex<double>(U_r_poly[0](theta), U_r_poly[1](theta));
+    //         break;
+    //     default:
+    //         std::cerr << "ERROR IN get_foothold, contact_rim should be 1~5." << std::endl;
+    //         return {0, 0};
+    // }//end switch
 
-    std::complex<double> center_exp = center_beta0 * std::exp(std::complex<double>(0, beta));
-    return {center_exp.real(), center_exp.imag() - radius};
+    // std::complex<double> center_exp = center_beta0 * std::exp(std::complex<double>(0, beta));
+    // return {center_exp.real(), center_exp.imag() - radius};
 }//end get_foothold
 
 void StairClimb::update_hip() { // set last hip position as current hip position

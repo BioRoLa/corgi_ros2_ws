@@ -47,7 +47,7 @@ class StairClimb {
         // double objective_edge(double d_x, std::array<double, 2> init_U, std::array<double, 2> contact_p, double contact_alpha);
         std::array<double, 2> objective_edge(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, std::array<double, 2> contact_p, double contact_alpha);
         bool determine_next_foothold();
-        std::array<double, 2> get_foothold(double theta, double beta, int contact_rim = -1);
+        std::array<double, 2> get_foothold(double theta, double beta, bool contact_upper=true, bool contact_lower=true);
         void update_hip();
 
         /* Class*/
