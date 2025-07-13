@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
     double velocity = 0.1; // velocity for walk gait
     double stand_height = 0.25; // stand height for walk gait
     const double step_length = 0.3; // step length for walk gait and stair gait
-    const double step_height = 0.04; // step height for walk gait
+    const double step_height = 0.06; // step height for walk gait
     const double max_step_length = 0.3;
     const double min_step_length = 0.2;
 
@@ -303,7 +303,9 @@ int main(int argc, char** argv) {
                 if (last_state != state) {
                     double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
                     walk_gait.initialize(current_eta, step_length);
+                    walk_gait.set_step_height(0.04);
                 }//end if
+                pitch = 0.0;
                 eta_list = walk_gait.step();
                 command_count ++;
                 break;

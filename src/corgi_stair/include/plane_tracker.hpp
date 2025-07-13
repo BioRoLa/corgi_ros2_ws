@@ -65,6 +65,7 @@ struct TrackedNormal {
 struct PlaneTracker {
     std::vector<TrackedPlane> horizontal_planes;
     std::vector<TrackedPlane> vertical_planes;
+    TrackedNormal h_normal;
     TrackedNormal v_normal;
 
     void update_planes(const std::vector<double>& new_distances, std::vector<TrackedPlane>& tracked_planes, bool accept_if_larger) {
@@ -122,6 +123,9 @@ struct PlaneTracker {
         if (!new_distances.vertical.empty()) {
             v_normal.add_normal(new_distances.v_normal);
         }
+        if (!new_distances.horizontal.empty()) {
+            h_normal.add_normal(new_distances.h_normal);
+        }
     }
 
     std::vector<double> get_horizontal_averages() const {
@@ -142,5 +146,9 @@ struct PlaneTracker {
     
     Eigen::Vector3d get_vertical_normal() const {
         return v_normal.average();
+    }
+
+    Eigen::Vector3d get_horizontal_normal() const {
+        return h_normal.average();
     }
 };

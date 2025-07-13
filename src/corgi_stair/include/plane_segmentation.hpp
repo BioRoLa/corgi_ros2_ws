@@ -22,6 +22,7 @@ typedef pcl::PointXYZ PointT_no_color;
 struct PlaneDistances {
     std::vector<double> horizontal;
     std::vector<double> vertical;
+    Eigen::Vector3d h_normal;
     Eigen::Vector3d v_normal;
 };
 

@@ -29,6 +29,9 @@
 #include "plane_segmentation.hpp"
 #include "plane_tracker.hpp"
 
+
+static tf2_ros::TransformBroadcaster tf_broadcaster;
+
 PlaneSegmentation* plane_segmentation;
 PlaneDistances plane_distances;
 PlaneTracker plane_tracker;
@@ -36,7 +39,7 @@ corgi_msgs::TriggerStamped trigger_msg;
 ros::Publisher plane_pub;
 corgi_msgs::StairPlanes plane_msg;
 int cloud_seq = 0;
-
+Eigen::Vector3d h_normal;
 
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
     cloud_seq = msg->header.seq;
@@ -59,6 +62,28 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& msg) {
     plane_msg.v_normal.y = v_normal.y();
     plane_msg.v_normal.z = v_normal.z();
     plane_pub.publish(plane_msg);
+
+    // /* Correct Z axis */
+    // // 這個四元數就是：把 h_normal 轉回 z 軸 的旋轉（姿態偏差）
+    // h_normal = plane_distances.h_normal;
+    // Eigen::Vector3d z_axis = Eigen::Vector3d::UnitZ();
+    // Eigen::Quaterniond q_corr = Eigen::Quaterniond::FromTwoVectors(h_normal, z_axis);
+
+    // geometry_msgs::TransformStamped tf_corr;
+    // tf_corr.header.stamp = ros::Time::now();
+    // tf_corr.header.frame_id = "zedxm_left_camera_frame";
+    // tf_corr.child_frame_id = "zedxm_camera_correct";
+
+    // // 此旋轉會「轉正」camera 的姿態，使其對齊地面方向
+    // tf_corr.transform.translation.x = 0.0;
+    // tf_corr.transform.translation.y = 0.0;
+    // tf_corr.transform.translation.z = 0.0;
+    // tf_corr.transform.rotation.x = q_corr.x();
+    // tf_corr.transform.rotation.y = q_corr.y();
+    // tf_corr.transform.rotation.z = q_corr.z();
+    // tf_corr.transform.rotation.w = q_corr.w();
+
+    // tf_broadcaster.sendTransform(tf_corr);
 }//end cloud_cb
 
 void trigger_cb(const corgi_msgs::TriggerStamped msg) {
