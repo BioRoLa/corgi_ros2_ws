@@ -269,6 +269,17 @@ double StairClimb::add_stair_edge_CoMx(double x, double y) {  // only x relative
     return x;  // return x in world coordinate
 }//end add_stair_edge_CoM
 
+void StairClimb::modify_last_edge_H(double y) {
+    for (int i = 0; i < 4; i++) {
+        if (!stair_edge[i].empty()) {
+            stair_edge[i].back().edge[1] = y;
+        } else {
+            std::cout << "StairClimb::modify_last_edge_H: stair edge is empty." << std::endl;
+            return -1.0; // indicate no edge to modify
+        }//end if else
+    }//end for
+}//end modify_last_edge_H
+
 double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch
@@ -964,20 +975,8 @@ bool StairClimb::determine_next_foothold() {
     std::array<double, 2> current_stair_edge;
     int current_stair_count = leg_info[swing_leg].stair_count;
     int next_stair = 0;
-    double keep_stair_d_max;
-    double keep_stair_d_min;
-    if (!stair_edge[swing_leg].empty()) {
-        double H = stair_edge[swing_leg].front().edge[1] - last_stair_edge[swing_leg].edge[1];
-        double optimal_foothold;
-        if (swing_leg < 2) {
-            optimal_foothold = get_optimal_foothold(H, false);
-
-        } else {    // hind leg
-            optimal_foothold = get_optimal_foothold(H, false);
-        }//end if
-        keep_stair_d_max = optimal_foothold;
-        keep_stair_d_min = optimal_foothold;
-    }//end if else
+    double keep_stair_d_max = 0.0;
+    double keep_stair_d_min = 0.18680;
 
     if (!stair_edge[swing_leg].empty()) {
         current_stair_edge  = stair_edge[swing_leg].front().edge;
@@ -996,6 +995,13 @@ bool StairClimb::determine_next_foothold() {
                     double deepest_x;
                     double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length_up_stair / 2;
                     if (stair_edge[swing_leg].size() >= 2) {
+                        std::array<double, 2> next_stair_edge = stair_edge[swing_leg][1].edge;
+                        double H = next_stair_edge[1] - current_stair_edge[1];
+                        if (H > 0.01) {
+                            double optimal_foothold = get_optimal_foothold(H, false);
+                            keep_stair_d_max = optimal_foothold;
+                            keep_stair_d_min = optimal_foothold;
+                        }//end if
                         deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min - step_length_up_stair / 2;
                         // deepest_x = stair_edge[swing_leg][1].edge[0] - keep_stair_d_min;
                         // double middle_foothold = (deepest_x + leg_info[other_side_leg[swing_leg][1]].foothold[0]) / 2;
@@ -1054,6 +1060,10 @@ bool StairClimb::determine_next_foothold() {
             up_stair = true;
             next_stair = 1;
         } else {    // move on the same stair step
+            double H = current_stair_edge[1] - last_stair_edge[swing_leg].edge[1];
+            double optimal_foothold = get_optimal_foothold(H, false);
+            keep_stair_d_max = optimal_foothold;
+            keep_stair_d_min = optimal_foothold;
             leg_info[swing_leg].one_step = true;
             double deepest_x = current_stair_edge[0] - keep_stair_d_min;
             double next_max_foothold_x = leg_info[swing_leg].get_hip_position(CoM, pitch)[0] + step_length / 2;
