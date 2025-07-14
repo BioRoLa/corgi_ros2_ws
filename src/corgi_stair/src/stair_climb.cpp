@@ -400,14 +400,14 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_y = leg_info[1].foothold[1] - hip[1][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
             // if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
-            //     double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
-            //     if (max_down > - velocity[1] / rate) {
-            //         front_height += velocity[1] / rate;
-            //     } else if (max_down < velocity[1] / rate) {
-            //         front_height -= velocity[1] / rate;
-            //     } else {
-            //         front_height -= max_down;
-            //     }//end if else
+                double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
+                if (max_down > - velocity[1] / rate) {
+                    front_height += velocity[1] / rate;
+                // } else if (max_down < velocity[1] / rate) {
+                    // front_height -= velocity[1] / rate;
+                } else {
+                    front_height -= max_down;
+                }//end if else
             // }
         } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
             enter_wheel_mode[1] = true; // enter wheel mode
@@ -415,17 +415,17 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_y = leg_info[0].foothold[1] - hip[0][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
             // if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
-            //     double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
-            //     if (max_down > - velocity[1] / rate) {
-            //         front_height += velocity[1] / rate;
-            //     } else if (max_down < velocity[1] / rate) {
-            //         front_height -= velocity[1] / rate;
-            //     } else {
-            //         front_height -= max_down;
-            //     }//end if else
+                double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
+                if (max_down > - velocity[1] / rate) {
+                    front_height += velocity[1] / rate;
+                // } else if (max_down < velocity[1] / rate) {
+                    // front_height -= velocity[1] / rate;
+                } else {
+                    front_height -= max_down;
+                }//end if else
             // }
         }
-        front_height += velocity[1] / rate;
+        // front_height += velocity[1] / rate;
     }
 
     velocity[1] = 0;
@@ -441,14 +441,14 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_y = leg_info[3].foothold[1] - hip[3][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
             // if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
-            //     double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
-            //     if (max_down > - velocity[1] / rate) {
-            //         hind_height += velocity[1] / rate;
-            //     } else if (max_down < velocity[1] / rate) {
-            //         hind_height -= velocity[1] / rate;
-            //     } else {
-            //         hind_height -= max_down;
-            //     }//end if else
+                double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
+                if (max_down > - velocity[1] / rate) {
+                    hind_height += velocity[1] / rate;
+                // } else if (max_down < velocity[1] / rate) {
+                    // hind_height -= velocity[1] / rate;
+                } else {
+                    hind_height -= max_down;
+                }//end if else
             // }
         } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
             enter_wheel_mode[3] = true; // enter wheel mode
@@ -456,17 +456,17 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_y = leg_info[2].foothold[1] - hip[2][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
             // if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
-            //     double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
-            //     if (max_down > - velocity[1] / rate) {
-            //         hind_height += velocity[1] / rate;
-            //     } else if (max_down < velocity[1] / rate) {
-            //         hind_height -= velocity[1] / rate;
-            //     } else {
-            //         hind_height -= max_down;
-            //     }//end if else
+                double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
+                if (max_down > - velocity[1] / rate) {
+                    hind_height += velocity[1] / rate;
+                // } else if (max_down < velocity[1] / rate) {
+                    // hind_height -= velocity[1] / rate;
+                } else {
+                    hind_height -= max_down;
+                }//end if else
             // }
         }
-        hind_height += velocity[1] / rate;
+        // hind_height += velocity[1] / rate;
     }
     }
     CoM[1] = (front_height + hind_height) / 2; // update CoM height
