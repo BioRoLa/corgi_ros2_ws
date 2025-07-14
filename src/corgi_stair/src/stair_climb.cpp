@@ -407,6 +407,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // front_height -= velocity[1] / rate;
                 } else {
                     front_height -= max_down;
+                    wheel_mode[0] = true;
                 }//end if else
             // }
         } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
@@ -422,6 +423,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // front_height -= velocity[1] / rate;
                 } else {
                     front_height -= max_down;
+                    wheel_mode[1] = true;
                 }//end if else
             // }
         }
@@ -448,6 +450,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // hind_height -= velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
+                    wheel_mode[2] = true;
                 }//end if else
             // }
         } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
@@ -463,6 +466,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // hind_height -= velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
+                    wheel_mode[3] = true;
                 }//end if else
             // }
         }
@@ -851,7 +855,8 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
     } else {
         std::array<double, 2> relative_foothold;
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
-            if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
+            // if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
+            if (wheel_mode[leg_ID]) {    // wheel mode
                 result_eta[0] = theta[leg_ID];
                 result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
                 relative_foothold = {0.0, -leg_model.radius};

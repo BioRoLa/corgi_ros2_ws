@@ -125,6 +125,7 @@ class StairClimb {
         std::array<double, 4> beta;
         std::array<double, 2> CoM;
         std::array<bool, 4> enter_wheel_mode;
+        std::array<bool, 4> wheel_mode;
         std::array<std::array<double, 2>, 4> hip;
         std::array<std::array<double, 2>, 4> last_hip;
         double pitch;
