@@ -275,7 +275,6 @@ void StairClimb::modify_last_edge_H(double y) {
             stair_edge[i].back().edge[1] = y;
         } else {
             std::cout << "StairClimb::modify_last_edge_H: stair edge is empty." << std::endl;
-            return -1.0; // indicate no edge to modify
         }//end if else
     }//end for
 }//end modify_last_edge_H
