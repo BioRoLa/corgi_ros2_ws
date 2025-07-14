@@ -947,7 +947,7 @@ std::array<double, 2> StairClimb::move_edge(int leg_ID, std::array<double, 2> co
         }//end if
     }//end for
 
-    if (guess_dq[0]>0.02 || guess_dq[1]>0.02) {
+    if (std::abs(guess_dq[0])>0.02 || std::abs(guess_dq[1])>0.02) {
         guess_dq[0] = 0.0;
         guess_dq[1] = 0.0;
     }
