@@ -776,7 +776,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double v_beta  = (beta[i]  - last_beta[i])  * rate * ((second_ratio-first_ratio)*total_steps/rate);
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
-                    if (is_clockwise || wheel_mode[i]) {
+                    if (is_clockwise) {
                         std::array<double, 2> C1 = hip[i];
                         std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
                         std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
