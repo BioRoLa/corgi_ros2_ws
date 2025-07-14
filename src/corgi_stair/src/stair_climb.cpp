@@ -402,6 +402,10 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_x = leg_info[1].foothold[0] - hip[1][0];   // x dir of hip to contact point
             double p_y = leg_info[1].foothold[1] - hip[1][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
+            if (std::abs(velocity[1]) > max_velocity) {
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
+                velocity[1] = sign_vel * max_velocity;
+            }//end if
             // if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
@@ -418,6 +422,10 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_x = leg_info[0].foothold[0] - hip[0][0];   // x dir of hip to contact point
             double p_y = leg_info[0].foothold[1] - hip[0][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
+            if (std::abs(velocity[1]) > max_velocity) {
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
+                velocity[1] = sign_vel * max_velocity;
+            }//end if
             // if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
@@ -445,6 +453,10 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_x = leg_info[3].foothold[0] - hip[3][0];   // x dir of hip to contact point
             double p_y = leg_info[3].foothold[1] - hip[3][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
+            if (std::abs(velocity[1]) > max_velocity) {
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
+                velocity[1] = sign_vel * max_velocity;
+            }//end if
             // if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
@@ -461,6 +473,10 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
             double p_x = leg_info[2].foothold[0] - hip[2][0];   // x dir of hip to contact point
             double p_y = leg_info[2].foothold[1] - hip[2][1] + leg_model.radius;   // y dir of hip to contact point + radius
             velocity[1] = velocity[0] / p_x * p_y;
+            if (std::abs(velocity[1]) > max_velocity) {
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
+                velocity[1] = sign_vel * max_velocity;
+            }//end if
             // if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
@@ -756,7 +772,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     double v_beta  = (beta[i]  - last_beta[i])  * rate * ((second_ratio-first_ratio)*total_steps/rate);
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
-                    if (is_clockwise) {
+                    if (is_clockwise || wheel_mode[i]) {
                         std::array<double, 2> C1 = hip[i];
                         std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
                         std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
