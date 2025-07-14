@@ -397,7 +397,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         //     have_change_velocity = true;
         // } 
 
-        if (leg_info[0].contact_edge || enter_wheel_mode[0]) {
+        // if (leg_info[0].contact_edge || enter_wheel_mode[0]) {
+        if (leg_info[0].contact_edge) {
             enter_wheel_mode[0] = true; // enter wheel mode
             double p_x = leg_info[1].foothold[0] - hip[1][0];   // x dir of hip to contact point
             double p_y = leg_info[1].foothold[1] - hip[1][1] + leg_model.radius;   // y dir of hip to contact point + radius
@@ -417,7 +418,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     wheel_mode[0] = true;
                 }//end if else
             // }
-        } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
+        // } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
+        } else if (leg_info[1].contact_edge) {
             enter_wheel_mode[1] = true; // enter wheel mode
             double p_x = leg_info[0].foothold[0] - hip[0][0];   // x dir of hip to contact point
             double p_y = leg_info[0].foothold[1] - hip[0][1] + leg_model.radius;   // y dir of hip to contact point + radius
@@ -448,7 +450,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         //     velocity[1] -= vel_incre;
         // } 
 
-        if (leg_info[2].contact_edge || enter_wheel_mode[2]) {
+        // if (leg_info[2].contact_edge || enter_wheel_mode[2]) {
+        if (leg_info[2].contact_edge) {
             enter_wheel_mode[2] = true; // enter wheel mode
             double p_x = leg_info[3].foothold[0] - hip[3][0];   // x dir of hip to contact point
             double p_y = leg_info[3].foothold[1] - hip[3][1] + leg_model.radius;   // y dir of hip to contact point + radius
@@ -468,7 +471,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     wheel_mode[2] = true;
                 }//end if else
             // }
-        } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
+        // } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
+        } else if (leg_info[3].contact_edge) {
             enter_wheel_mode[3] = true; // enter wheel mode
             double p_x = leg_info[2].foothold[0] - hip[2][0];   // x dir of hip to contact point
             double p_y = leg_info[2].foothold[1] - hip[2][1] + leg_model.radius;   // y dir of hip to contact point + radius
