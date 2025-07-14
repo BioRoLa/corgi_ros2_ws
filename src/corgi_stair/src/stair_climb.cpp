@@ -85,6 +85,7 @@ void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
         theta[i] = init_theta[i];
         beta[i]  = init_beta[i];
         enter_wheel_mode[i] = false;
+        wheel_mode[i] = false;
         last_stair_edge[i].edge[0] = -100;
     }//end for
     init_move_CoM_stable(swing_sequence[swing_count % 4]);
@@ -213,6 +214,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
                 enter_wheel_mode[swing_leg] = false; // exit wheel mode
+                wheel_mode[swing_leg] = false;
                 swing_count ++;
             }//end if
             break;
@@ -223,6 +225,7 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
                 leg_info[swing_leg].foothold = leg_info[swing_leg].next_foothold;
                 leg_info[swing_leg].contact_edge = false;
                 enter_wheel_mode[swing_leg] = false; // exit wheel mode
+                wheel_mode[swing_leg] = false;
                 last_stair_edge[swing_leg] = stair_edge[swing_leg].front();
                 stair_edge[swing_leg].erase(stair_edge[swing_leg].begin());
                 swing_count ++;
