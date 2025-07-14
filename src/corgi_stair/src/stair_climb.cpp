@@ -384,9 +384,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
     //     }//end if else
     // }//end if
 
-    velocity[1] = 0;
     if (move_dir == 1) {
     bool have_change_velocity = false;
+    velocity[1] = 0;
     if (leg_info[0].stair_count != leg_info[1].stair_count) {
         // velocity[1] = -velocity[0];
         // if (velocity[1] > -max_velocity) {
@@ -428,6 +428,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
         front_height += velocity[1] / rate;
     }
 
+    velocity[1] = 0;
     if (leg_info[2].stair_count != leg_info[3].stair_count) {
         // velocity[1] = -velocity[0];
         // if (!have_change_velocity && velocity[1] > -max_velocity) { // only change once
