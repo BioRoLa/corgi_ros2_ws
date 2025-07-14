@@ -407,7 +407,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            // if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
+            if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     front_height += velocity[1] / rate;
@@ -417,7 +417,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height -= max_down;
                     wheel_mode[0] = true;
                 }//end if else
-            // }
+            }
         // } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
         } else if (leg_info[1].contact_edge) {
             enter_wheel_mode[1] = true; // enter wheel mode
@@ -428,7 +428,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            // if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
+            if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     front_height += velocity[1] / rate;
@@ -438,7 +438,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height -= max_down;
                     wheel_mode[1] = true;
                 }//end if else
-            // }
+            }
         }
         // front_height += velocity[1] / rate;
     }
@@ -460,7 +460,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            // if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
+            if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     hind_height += velocity[1] / rate;
@@ -470,7 +470,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height -= max_down;
                     wheel_mode[2] = true;
                 }//end if else
-            // }
+            }
         // } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
         } else if (leg_info[3].contact_edge) {
             enter_wheel_mode[3] = true; // enter wheel mode
@@ -481,7 +481,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            // if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
+            if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     hind_height += velocity[1] / rate;
@@ -491,7 +491,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height -= max_down;
                     wheel_mode[3] = true;
                 }//end if else
-            // }
+            }
         }
         // hind_height += velocity[1] / rate;
     }
