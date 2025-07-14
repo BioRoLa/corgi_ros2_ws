@@ -66,21 +66,21 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     // std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
     auto [h_plane_distances, h_plane_point_indices] = segment_by_distances(centroid_z, h_point_idx);
     auto [v_plane_distances, v_plane_point_indices] = segment_by_distances(-centroid_x, v_point_idx);
-    // std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_point_indices);
+    std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_distances, v_plane_point_indices);
 
-    // size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
-    // std::cout << std::fixed << std::setprecision(4);
-    // std::cout << "Index | h_plane_distances | h_plane_distances2\n";
-    // std::cout << "-----------------------------------------------\n";
+    size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "Index | h_plane_distances | h_plane_distances2\n";
+    std::cout << "-----------------------------------------------\n";
 
-    // for (size_t i = 0; i < n; ++i) {
-    //     double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
-    //     double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
+    for (size_t i = 0; i < n; ++i) {
+        double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
+        double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
 
-    //     std::cout << std::setw(5) << i << " | "
-    //               << std::setw(17) << v1 << " | "
-    //               << std::setw(17) << v2 << "\n";
-    // }
+        std::cout << std::setw(5) << i << " | "
+                  << std::setw(17) << v1 << " | "
+                  << std::setw(17) << v2 << "\n";
+    }
 
 // v_plane_point_indices[i] 是第 i 個垂直平面的點 index 集合
 
@@ -332,20 +332,39 @@ std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation:
     return {final_distances, final_indices}; // from smalleset to largest
 }//end segment_by_distances
 
-std::vector<double> PlaneSegmentation::find_height_by_v_plane(const std::vector<std::vector<int>>& plane_indices) {
+std::vector<double> PlaneSegmentation::find_height_by_v_plane(const std::vector<double>& plane_distances, const std::vector<std::vector<int>>& plane_indices) {
     std::vector<double> avg_heights;
-    for (const auto& indices : plane_indices) {
-        double sum_z = 0;
-        int count = 0;
 
+    for (int i=0; i<plane_indices.size(); i++) {
+        double plane_distance = plane_distances[i];
+        double lower = plane_distance - 0.03;
+        double upper = plane_distance + 0.03;
+
+        const std::vector<int>& indices = plane_indices[i];
+        std::vector<double> highest_values(cloud_->width, -INFINITY);
         for (int idx : indices) {
-            sum_z += cloud_->points[idx].z;
-            count++;
-        }
+            int col = idx % cloud_->width; // col index in organized point cloud
+            const PointT& point = cloud_->points[idx];
+            double distance = -centroid_x.dot(Eigen::Vector3d(point.x, point.y, point.z));
+            if (distance >= lower && distance <= upper) {
+                if (point.z > highest_values[col]) {
+                    highest_values[col] = point.z;
+                }//end if
+            }//end if
+        }//end for
 
-        double avg_z = (count > 0) ? (sum_z / count) : std::numeric_limits<double>::quiet_NaN();
-        avg_heights.push_back(avg_z);
-    }
+        // Compute average of valid highest_values
+        double sum = 0.0;
+        int count = 0;
+        for (double val : highest_values) {
+            if (val != -INFINITY) {
+                sum += val;
+                ++count;
+            }
+        }
+        avg_heights.push_back((count > 0) ? (sum / count) : std::numeric_limits<double>::quiet_NaN());
+    }//end for
+
     return avg_heights;
 }//end find_height_by_v_plane
 
