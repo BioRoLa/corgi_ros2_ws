@@ -86,8 +86,8 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
 
 
     /* Visualize in rviz */
-    // this->visualize_planes();
-    // this->visualize_normal();
+    this->visualize_planes();
+    this->visualize_normal();
     // this->visualize_normal_in_space();
     // this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
@@ -347,8 +347,9 @@ std::vector<double> PlaneSegmentation::find_height_by_v_plane(const std::vector<
             const PointT& point = cloud_->points[idx];
             double distance = -centroid_x.dot(Eigen::Vector3d(point.x, point.y, point.z));
             if (distance >= lower && distance <= upper) {
-                if (point.z > highest_values[col]) {
-                    highest_values[col] = point.z;
+                double height = centroid_z.dot(Eigen::Vector3d(point.x, point.y, point.z));
+                if (height > highest_values[col]) {
+                    highest_values[col] = height;
                 }//end if
             }//end if
         }//end for
