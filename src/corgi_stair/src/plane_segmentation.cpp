@@ -503,7 +503,6 @@ void PlaneSegmentation::visualize_normal() {
     if (h_point_idx.size() > 0) {
         visualization_msgs::Marker arrow = marker_template;
         arrow.id = id++;
-
         geometry_msgs::Point start, end;
         start.x = 0.0;
         start.y = 0.0;
@@ -523,8 +522,8 @@ void PlaneSegmentation::visualize_normal() {
     }//end if
     // 垂直面法向量：centroid_x
     if (v_point_idx.size() > 0) {
-        arrow.id = id++;
         visualization_msgs::Marker arrow = marker_template;
+        arrow.id = id++;
         geometry_msgs::Point start, end;
         start.x = 0.0;
         start.y = 0.0;
