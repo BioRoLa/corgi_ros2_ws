@@ -66,21 +66,21 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
     // std::vector<double> v_plane_distances = this->segment_by_distances(-centroid_x, v_point_idx);   // align to +x direction in world frame
     auto [h_plane_distances, h_plane_point_indices] = segment_by_distances(centroid_z, h_point_idx);
     auto [v_plane_distances, v_plane_point_indices] = segment_by_distances(-centroid_x, v_point_idx);
-    std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_distances, v_plane_point_indices);
+    // std::vector<double> h_plane_distances2 = find_height_by_v_plane(v_plane_distances, v_plane_point_indices);
 
-    size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
-    std::cout << std::fixed << std::setprecision(4);
-    std::cout << "Index | h_plane_distances | h_plane_distances2\n";
-    std::cout << "-----------------------------------------------\n";
+    // size_t n = std::max(h_plane_distances.size(), h_plane_distances2.size());
+    // std::cout << std::fixed << std::setprecision(4);
+    // std::cout << "Index | h_plane_distances | h_plane_distances2\n";
+    // std::cout << "-----------------------------------------------\n";
 
-    for (size_t i = 0; i < n; ++i) {
-        double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
-        double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
+    // for (size_t i = 0; i < n; ++i) {
+    //     double v1 = (i < h_plane_distances.size()) ? h_plane_distances[i] : std::numeric_limits<double>::quiet_NaN();
+    //     double v2 = (i < h_plane_distances2.size()) ? h_plane_distances2[i] : std::numeric_limits<double>::quiet_NaN();
 
-        std::cout << std::setw(5) << i << " | "
-                  << std::setw(17) << v1 << " | "
-                  << std::setw(17) << v2 << "\n";
-    }
+    //     std::cout << std::setw(5) << i << " | "
+    //               << std::setw(17) << v1 << " | "
+    //               << std::setw(17) << v2 << "\n";
+    // }
 
 // v_plane_point_indices[i] 是第 i 個垂直平面的點 index 集合
 
@@ -151,6 +151,29 @@ void PlaneSegmentation::setInputCloud(pcl::PointCloud<PointT>::Ptr cloud) {
 
 void PlaneSegmentation::computeNormals() {
     normal_estimator_.compute(*normals_);
+    for (auto& normal : normals_->points) {
+        double nx = normal.normal_x;
+        double ny = normal.normal_y;
+        double nz = normal.normal_z;
+
+        double abs_nx = std::abs(nx);
+        double abs_ny = std::abs(ny);
+        double abs_nz = std::abs(nz);
+
+        if (abs_nz >= abs_nx) { // z為主方向
+            if (nz < 0) {   // 翻轉為 +z
+                normal.normal_x *= -1;
+                normal.normal_y *= -1;
+                normal.normal_z *= -1;
+            }//end if
+        } else {    // x為主方向
+            if (nx > 0) {   // 翻轉為 -x
+                normal.normal_x *= -1;
+                normal.normal_y *= -1;
+                normal.normal_z *= -1;
+            }//end if
+        }//end if else
+    }//end for
 }//end computeNormals
 
 
@@ -418,9 +441,9 @@ void PlaneSegmentation::visualize_normal() {
     marker_template.header.frame_id = "map";
     marker_template.type = visualization_msgs::Marker::ARROW;
     marker_template.action = visualization_msgs::Marker::ADD;
-    marker_template.scale.x = 0.001;
-    marker_template.scale.y = 0.002;
-    marker_template.scale.z = 0.002;
+    marker_template.scale.x = 0.005;
+    marker_template.scale.y = 0.010;
+    marker_template.scale.z = 0.010;
     marker_template.color.r = 0.0;
     marker_template.color.g = 1.0;
     marker_template.color.b = 0.0;
@@ -432,7 +455,7 @@ void PlaneSegmentation::visualize_normal() {
     // marker_template.lifetime = ros::Duration(0.1);
 
     // 空間分格子平均
-    float grid_size = 0.10f;
+    float grid_size = 0.05;
     std::unordered_map<std::tuple<int, int, int>, pcl::PointNormal, boost::hash<std::tuple<int, int, int>>> grid_map;
     for (size_t i = 0; i < cloud_->size(); ++i) {
         const auto& pt = cloud_->points[i];
@@ -473,7 +496,10 @@ void PlaneSegmentation::visualize_normal() {
     }
 
     /* Plane normal */
-    marker_template.scale.y = 0.001;
+    grid_size = 0.25;
+    marker_template.scale.x = 0.025;
+    marker_template.scale.y = 0.050;
+    marker_template.scale.z = 0.050;
     // 水平面法向量：centroid_z
     std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> h_grid_map;
     for (int idx : h_point_idx) {
