@@ -496,7 +496,6 @@ void PlaneSegmentation::visualize_normal() {
     }
 
     /* Plane normal */
-    grid_size = 0.25;
     marker_template.scale.x = 0.025;
     marker_template.scale.y = 0.050;
     marker_template.scale.z = 0.050;
@@ -504,83 +503,52 @@ void PlaneSegmentation::visualize_normal() {
     std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> h_grid_map;
     for (int idx : h_point_idx) {
         const auto& pt = cloud_->points[idx];
-        if (!pcl::isFinite(pt)) continue;
+        if (!pcl::isFinite(pt)) {
+            visualization_msgs::Marker arrow = marker_template;
+            arrow.id = id++;
 
-        int gx = static_cast<int>(std::floor(pt.x / grid_size));
-        int gy = static_cast<int>(std::floor(pt.y / grid_size));
-        int gz = static_cast<int>(std::floor(pt.z / grid_size));
-        auto key = std::make_tuple(gx, gy, gz);
+            geometry_msgs::Point start, end;
+            start = pt;
+            end.x = pt.x + 0.15 * centroid_z.x();
+            end.y = pt.y + 0.15 * centroid_z.y();
+            end.z = pt.z + 0.15 * centroid_z.z();
+            arrow.points.push_back(start);
+            arrow.points.push_back(end);
 
-        if (h_grid_map.find(key) == h_grid_map.end()) {
-            geometry_msgs::Point p;
-            p.x = pt.x;
-            p.y = pt.y;
-            p.z = pt.z;
-            h_grid_map[key] = p;
-        }
-    }
-    for (const auto& kv : h_grid_map) {
-        const auto& pt = kv.second;
+            // 用藍色表示水平面 normal
+            arrow.color.r = 0.0;
+            arrow.color.g = 0.0;
+            arrow.color.b = 1.0;
 
-        visualization_msgs::Marker arrow = marker_template;
-        arrow.id = id++;
-
-        geometry_msgs::Point start, end;
-        start = pt;
-        end.x = pt.x + 0.15 * centroid_z.x();
-        end.y = pt.y + 0.15 * centroid_z.y();
-        end.z = pt.z + 0.15 * centroid_z.z();
-        arrow.points.push_back(start);
-        arrow.points.push_back(end);
-
-        // 用藍色表示水平面 normal
-        arrow.color.r = 0.0;
-        arrow.color.g = 0.0;
-        arrow.color.b = 1.0;
-
-        marker_array.markers.push_back(arrow);
-    }
+            marker_array.markers.push_back(arrow);
+            break;
+        }//end if
+    }//end for
     // 垂直面法向量：centroid_x
-    std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> v_grid_map;
     for (int idx : v_point_idx) {
         const auto& pt = cloud_->points[idx];
-        if (!pcl::isFinite(pt)) continue;
+        if (!pcl::isFinite(pt)) {
+            visualization_msgs::Marker arrow = marker_template;
+            arrow.id = id++;
 
-        int gx = static_cast<int>(std::floor(pt.x / grid_size));
-        int gy = static_cast<int>(std::floor(pt.y / grid_size));
-        int gz = static_cast<int>(std::floor(pt.z / grid_size));
-        auto key = std::make_tuple(gx, gy, gz);
+            geometry_msgs::Point start, end;
+            start = pt;
+            end.x = pt.x + 0.15 * centroid_z.x();
+            end.y = pt.y + 0.15 * centroid_z.y();
+            end.z = pt.z + 0.15 * centroid_z.z();
+            arrow.points.push_back(start);
+            arrow.points.push_back(end);
 
-        if (v_grid_map.find(key) == v_grid_map.end()) {
-            geometry_msgs::Point p;
-            p.x = pt.x;
-            p.y = pt.y;
-            p.z = pt.z;
-            v_grid_map[key] = p;
-        }
-    }
-    for (const auto& kv : v_grid_map) {
-        const auto& pt = kv.second;
+            // 用藍色表示水平面 normal
+            arrow.color.r = 0.0;
+            arrow.color.g = 0.0;
+            arrow.color.b = 1.0;
 
-        visualization_msgs::Marker arrow = marker_template;
-        arrow.id = id++;
-
-        geometry_msgs::Point start, end;
-        start = pt;
-        end.x = pt.x + 0.15 * centroid_x.x();
-        end.y = pt.y + 0.15 * centroid_x.y();
-        end.z = pt.z + 0.15 * centroid_x.z();
-        arrow.points.push_back(start);
-        arrow.points.push_back(end);
-
-        // 用紅色表示垂直面 normal
-        arrow.color.r = 1.0;
-        arrow.color.g = 0.0;
-        arrow.color.b = 0.0;
-
-        marker_array.markers.push_back(arrow);
-    }
-
+            marker_array.markers.push_back(arrow);
+            break;
+        }//end if
+    }//end for 
+    
     // 刪除多餘的舊 marker
     visualization_msgs::Marker delete_marker;
     delete_marker.action = visualization_msgs::Marker::DELETE;
