@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
     // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.140}, 
     //                                                         {0.364, 0.131}, 
     //                                                         {0.358, 0.095}};    // 舊體
-    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.119}, 
-    //                                                         {0.505, 0.112}, 
-    //                                                         {0.486, 0.111}};    // 新體
+    // const std::vector<std::array<double, 2>> stair_size = {{1.0, 0.112}, 
+    //                                                         {0.505, 0.102}, 
+    //                                                         {0.486, 0.113}};    // 新體
 
     enum STATES {INIT, TRANSFORM, WAIT, WALK, STAIR, UPPER_WALK, END};
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
