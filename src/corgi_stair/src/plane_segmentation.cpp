@@ -500,7 +500,6 @@ void PlaneSegmentation::visualize_normal() {
     marker_template.scale.y = 0.050;
     marker_template.scale.z = 0.050;
     // 水平面法向量：centroid_z
-    std::unordered_map<std::tuple<int, int, int>, geometry_msgs::Point, boost::hash<std::tuple<int, int, int>>> h_grid_map;
     for (int idx : h_point_idx) {
         const auto& pt = cloud_->points[idx];
         if (!pcl::isFinite(pt)) {
@@ -508,7 +507,9 @@ void PlaneSegmentation::visualize_normal() {
             arrow.id = id++;
 
             geometry_msgs::Point start, end;
-            start = pt;
+            start.x = pt.x;
+            start.y = pt.y;
+            start.z = pt.z;
             end.x = pt.x + 0.15 * centroid_z.x();
             end.y = pt.y + 0.15 * centroid_z.y();
             end.z = pt.z + 0.15 * centroid_z.z();
@@ -532,7 +533,9 @@ void PlaneSegmentation::visualize_normal() {
             arrow.id = id++;
 
             geometry_msgs::Point start, end;
-            start = pt;
+            start.x = pt.x;
+            start.y = pt.y;
+            start.z = pt.z;
             end.x = pt.x + 0.15 * centroid_z.x();
             end.y = pt.y + 0.15 * centroid_z.y();
             end.z = pt.z + 0.15 * centroid_z.z();
@@ -548,7 +551,7 @@ void PlaneSegmentation::visualize_normal() {
             break;
         }//end if
     }//end for 
-    
+
     // 刪除多餘的舊 marker
     visualization_msgs::Marker delete_marker;
     delete_marker.action = visualization_msgs::Marker::DELETE;
