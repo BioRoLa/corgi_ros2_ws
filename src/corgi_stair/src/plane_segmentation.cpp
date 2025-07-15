@@ -500,57 +500,48 @@ void PlaneSegmentation::visualize_normal() {
     marker_template.scale.y = 0.050;
     marker_template.scale.z = 0.050;
     // 水平面法向量：centroid_z
-    for (int idx : h_point_idx) {
-        const auto& pt = cloud_->points[idx];
-        if (pcl::isFinite(pt)) {
-            visualization_msgs::Marker arrow = marker_template;
-            arrow.id = id++;
+    if (h_point_idx.size() > 0) {
+        visualization_msgs::Marker arrow = marker_template;
+        arrow.id = id++;
 
-            geometry_msgs::Point start, end;
-            start.x = pt.x;
-            start.y = pt.y;
-            start.z = pt.z;
-            end.x = pt.x + 0.15 * centroid_z.x();
-            end.y = pt.y + 0.15 * centroid_z.y();
-            end.z = pt.z + 0.15 * centroid_z.z();
-            arrow.points.push_back(start);
-            arrow.points.push_back(end);
+        geometry_msgs::Point start, end;
+        start.x = 0.0;
+        start.y = 0.0;
+        start.z = 0.0;
+        end.x = 0.15 * centroid_z.x();
+        end.y = 0.15 * centroid_z.y();
+        end.z = 0.15 * centroid_z.z();
+        arrow.points.push_back(start);
+        arrow.points.push_back(end);
 
-            // 用藍色表示水平面 normal
-            arrow.color.r = 0.0;
-            arrow.color.g = 0.0;
-            arrow.color.b = 1.0;
+        // 用藍色表示水平面 normal
+        arrow.color.r = 0.0;
+        arrow.color.g = 0.0;
+        arrow.color.b = 1.0;
 
-            marker_array.markers.push_back(arrow);
-            break;
-        }//end if
-    }//end for
+        marker_array.markers.push_back(arrow);
+    }//end if
     // 垂直面法向量：centroid_x
-    for (int idx : v_point_idx) {
-        const auto& pt = cloud_->points[idx];
-        if (pcl::isFinite(pt)) {
-            visualization_msgs::Marker arrow = marker_template;
-            arrow.id = id++;
+    if (v_point_idx.size() > 0) {
+        arrow.id = id++;
+        visualization_msgs::Marker arrow = marker_template;
+        geometry_msgs::Point start, end;
+        start.x = 0.0;
+        start.y = 0.0;
+        start.z = 0.0;
+        end.x = 0.15 * centroid_x.x();
+        end.y = 0.15 * centroid_x.y();
+        end.z = 0.15 * centroid_x.z();
+        arrow.points.push_back(start);
+        arrow.points.push_back(end);
 
-            geometry_msgs::Point start, end;
-            start.x = pt.x;
-            start.y = pt.y;
-            start.z = pt.z;
-            end.x = pt.x + 0.15 * centroid_z.x();
-            end.y = pt.y + 0.15 * centroid_z.y();
-            end.z = pt.z + 0.15 * centroid_z.z();
-            arrow.points.push_back(start);
-            arrow.points.push_back(end);
+        // 用紅色表示垂直面 normal
+        arrow.color.r = 1.0;
+        arrow.color.g = 0.0;
+        arrow.color.b = 0.0;
 
-            // 用藍色表示水平面 normal
-            arrow.color.r = 0.0;
-            arrow.color.g = 0.0;
-            arrow.color.b = 1.0;
-
-            marker_array.markers.push_back(arrow);
-            break;
-        }//end if
-    }//end for 
+        marker_array.markers.push_back(arrow);
+    }//end if
 
     // 刪除多餘的舊 marker
     visualization_msgs::Marker delete_marker;
