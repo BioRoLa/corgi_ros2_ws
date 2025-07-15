@@ -502,7 +502,7 @@ void PlaneSegmentation::visualize_normal() {
     // 水平面法向量：centroid_z
     for (int idx : h_point_idx) {
         const auto& pt = cloud_->points[idx];
-        if (!pcl::isFinite(pt)) {
+        if (pcl::isFinite(pt)) {
             visualization_msgs::Marker arrow = marker_template;
             arrow.id = id++;
 
@@ -528,7 +528,7 @@ void PlaneSegmentation::visualize_normal() {
     // 垂直面法向量：centroid_x
     for (int idx : v_point_idx) {
         const auto& pt = cloud_->points[idx];
-        if (!pcl::isFinite(pt)) {
+        if (pcl::isFinite(pt)) {
             visualization_msgs::Marker arrow = marker_template;
             arrow.id = id++;
 
