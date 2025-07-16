@@ -386,7 +386,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    if (theta[0]*180/M_PI < 17.1) {
+                    // if (theta[0]*180/M_PI < 17.1) {
+                    if (true) {
                         wheel_mode[0] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -405,7 +406,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    if (theta[1]*180/M_PI < 17.1) {
+                    // if (theta[1]*180/M_PI < 17.1) {
+                    if (true) {
                         wheel_mode[1] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -429,7 +431,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    if (theta[2]*180/M_PI < 17.1) {
+                    // if (theta[2]*180/M_PI < 17.1) {
+                    if (true) {
                         wheel_mode[2] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -448,7 +451,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    if (theta[3]*180/M_PI < 17.1) {
+                    // if (theta[3]*180/M_PI < 17.1) {
+                    if (true) {
                         wheel_mode[3] = true; // enter wheel mode
                     }//end if
                 }//end if else
