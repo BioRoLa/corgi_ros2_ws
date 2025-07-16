@@ -471,9 +471,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 // } else if (max_down < velocity[1] / rate) {
                     // hind_height -= velocity[1] / rate;
                 } else {
-                    throw std::runtime_error("Check: leg 2.");
                     hind_height -= max_down;
                     if (theta[2]*180/M_PI < 17.1) {
+                    throw std::runtime_error("Check: leg 2.");
                         wheel_mode[2] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -496,7 +496,6 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // hind_height -= velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    throw std::runtime_error("Check: leg 3.");
                     if (theta[3]*180/M_PI < 17.1) {
                         wheel_mode[3] = true; // enter wheel mode
                     }//end if
