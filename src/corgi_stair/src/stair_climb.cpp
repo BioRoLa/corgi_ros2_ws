@@ -727,11 +727,6 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
     CoM[0] += velocity[0] / rate;
     CoM[1] += velocity[1] / rate;
     /* Calculate pitch */
-    // if (swing_leg == 0 || swing_leg == 1) {
-    //     pitch = std::asin((CoM[1]-hind_height) / (BL/2));
-    // } else {
-    //     pitch = std::asin((front_height-CoM[1]) / (BL/2));
-    // }//end if else
     double CoM_up_ratio = final_CoM[1]==init_CoM[1]? 0 : (CoM[1] - init_CoM[1]) / (final_CoM[1] - init_CoM[1]);
     double current_front_height = init_front_height + CoM_up_ratio*(front_height - init_front_height);
     double current_hind_height  = init_hind_height  + CoM_up_ratio*(hind_height - init_hind_height);
@@ -795,6 +790,9 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                             C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                             C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                         } //end if
+                        if (wheel_mode[i]) {
+                            throw std::runtime_error("Stop: Start to swing.");
+                        }
                         double tan_line_angle = std::acos(leg_model.R / C1_P1_d);
                         double second_theta = 17.0/180.0*M_PI;
                         double second_beta  = std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI;
@@ -888,7 +886,7 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
             // if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
             if (wheel_mode[leg_ID]) {    // wheel mode
-                result_eta[0] = theta[leg_ID];
+                result_eta[0] = 17.0/180.0*M_PI;
                 result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
                 relative_foothold = {0.0, -leg_model.radius};
             } else {    // upper rim 
