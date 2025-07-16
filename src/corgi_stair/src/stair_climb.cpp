@@ -376,13 +376,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 double p_x = leg_info[1].foothold[0] - hip[1][0];   // x dir of hip to contact point
                 double p_y = leg_info[1].foothold[1] - hip[1][1] + leg_model.radius;   // y dir of hip to contact point + radius
                 velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
                 if (std::abs(velocity[1]) > max_velocity) {
-                    int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
                 }//end if
 
                 double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
-                if (max_down > - velocity[1] / rate) {
+                if (max_down > sign_vel*max_velocity / rate) {
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
@@ -396,13 +396,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 double p_x = leg_info[0].foothold[0] - hip[0][0];   // x dir of hip to contact point
                 double p_y = leg_info[0].foothold[1] - hip[0][1] + leg_model.radius;   // y dir of hip to contact point + radius
                 velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
                 if (std::abs(velocity[1]) > max_velocity) {
-                    int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
                 }//end if
 
                 double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
-                if (max_down > - velocity[1] / rate) {
+                if (max_down > sign_vel*max_velocity / rate) {
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
@@ -421,13 +421,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 double p_x = leg_info[3].foothold[0] - hip[3][0];   // x dir of hip to contact point
                 double p_y = leg_info[3].foothold[1] - hip[3][1] + leg_model.radius;   // y dir of hip to contact point + radius
                 velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
                 if (std::abs(velocity[1]) > max_velocity) {
-                    int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
                 }//end if
 
                 double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
-                if (max_down > - velocity[1] / rate) {
+                if (max_down > sign_vel*max_velocity / rate) {
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
@@ -441,13 +441,13 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 double p_x = leg_info[2].foothold[0] - hip[2][0];   // x dir of hip to contact point
                 double p_y = leg_info[2].foothold[1] - hip[2][1] + leg_model.radius;   // y dir of hip to contact point + radius
                 velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
+                int sign_vel = velocity[1]>=0.0? 1 : -1;
                 if (std::abs(velocity[1]) > max_velocity) {
-                    int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
                 }//end if
 
                 double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
-                if (max_down > - velocity[1] / rate) {
+                if (max_down > sign_vel*max_velocity / rate) {
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
