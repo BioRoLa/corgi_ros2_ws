@@ -54,19 +54,23 @@ int main(int argc, char **argv) {
     }
 
     for (int i=0; i<2000; i++){
-        motor_cmd_modules[0]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[1]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[2]->theta += 83/2000.0/180.0*M_PI;
-        motor_cmd_modules[3]->theta += 83/2000.0/180.0*M_PI;
-        // motor_cmd_modules[0]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[1]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[2]->beta += 20/2000.0/180.0*M_PI;
-        // motor_cmd_modules[3]->beta += 20/2000.0/180.0*M_PI;
+        motor_cmd_modules[0]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[1]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[2]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[3]->theta += 13/2000.0/180.0*M_PI;
+        motor_cmd_modules[0]->beta += 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[1]->beta -= 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[2]->beta -= 40/2000.0/180.0*M_PI;
+        motor_cmd_modules[3]->beta += 40/2000.0/180.0*M_PI;
 
         motor_cmd.header.seq = -1;
 
         motor_cmd_pub.publish(motor_cmd);
 
+        rate.sleep();
+    }
+
+    for (int i=0; i<1000; i++){
         rate.sleep();
     }
 
