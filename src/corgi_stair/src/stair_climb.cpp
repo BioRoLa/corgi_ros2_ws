@@ -375,7 +375,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 enter_wheel_mode[0] = true; // enter wheel mode
                 double p_x = leg_info[1].foothold[0] - hip[1][0];   // x dir of hip to contact point
                 double p_y = leg_info[1].foothold[1] - hip[1][1] + leg_model.radius;   // y dir of hip to contact point + radius
-                velocity[1] = std::abs(p_x)>1e-6? velocity[0] / p_x * p_y : 0.0;
+                velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
                 if (std::abs(velocity[1]) > max_velocity) {
                     int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
@@ -386,8 +386,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    // if (theta[0]*180/M_PI < 17.1) {
-                    if (true) {
+                    if (theta[0]*180/M_PI < 17.1) {
+                    // if (true) {
                         wheel_mode[0] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -395,7 +395,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 enter_wheel_mode[1] = true; // enter wheel mode
                 double p_x = leg_info[0].foothold[0] - hip[0][0];   // x dir of hip to contact point
                 double p_y = leg_info[0].foothold[1] - hip[0][1] + leg_model.radius;   // y dir of hip to contact point + radius
-                velocity[1] = std::abs(p_x)>1e-6? velocity[0] / p_x * p_y : 0.0;
+                velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
                 if (std::abs(velocity[1]) > max_velocity) {
                     int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
@@ -406,8 +406,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height += velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    // if (theta[1]*180/M_PI < 17.1) {
-                    if (true) {
+                    if (theta[1]*180/M_PI < 17.1) {
+                    // if (true) {
                         wheel_mode[1] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -420,7 +420,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 enter_wheel_mode[2] = true; // enter wheel mode
                 double p_x = leg_info[3].foothold[0] - hip[3][0];   // x dir of hip to contact point
                 double p_y = leg_info[3].foothold[1] - hip[3][1] + leg_model.radius;   // y dir of hip to contact point + radius
-                velocity[1] = std::abs(p_x)>1e-6? velocity[0] / p_x * p_y : 0.0;
+                velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
                 if (std::abs(velocity[1]) > max_velocity) {
                     int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
@@ -431,8 +431,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    // if (theta[2]*180/M_PI < 17.1) {
-                    if (true) {
+                    if (theta[2]*180/M_PI < 17.1) {
+                    // if (true) {
                         wheel_mode[2] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -440,7 +440,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 enter_wheel_mode[3] = true; // enter wheel mode
                 double p_x = leg_info[2].foothold[0] - hip[2][0];   // x dir of hip to contact point
                 double p_y = leg_info[2].foothold[1] - hip[2][1] + leg_model.radius;   // y dir of hip to contact point + radius
-                velocity[1] = std::abs(p_x)>1e-6? velocity[0] / p_x * p_y : 0.0;
+                velocity[1] = std::abs(p_x)>1e-4? velocity[0] / p_x * p_y : 0.0;
                 if (std::abs(velocity[1]) > max_velocity) {
                     int sign_vel = velocity[1]>=0.0? 1 : -1;
                     velocity[1] = sign_vel * max_velocity;
@@ -451,8 +451,8 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    // if (theta[3]*180/M_PI < 17.1) {
-                    if (true) {
+                    if (theta[3]*180/M_PI < 17.1) {
+                    // if (true) {
                         wheel_mode[3] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -472,7 +472,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                         front_height -= velocity[1] / rate;
                     } else {
                         front_height -= max_down;
-                        wheel_mode[0] = true;
+                        if (theta[0]*180/M_PI < 17.1) {
+                            wheel_mode[0] = true; // enter wheel mode
+                        }//end if
                     }//end if else
                 }//end if
             } else if (leg_info[1].contact_edge) {
@@ -484,7 +486,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                         front_height -= velocity[1] / rate;
                     } else {
                         front_height -= max_down;
-                        wheel_mode[1] = true;
+                        if (theta[1]*180/M_PI < 17.1) {
+                            wheel_mode[1] = true; // enter wheel mode
+                        }//end if
                     }//end if else
                 }//end if
             }//end if else
@@ -502,7 +506,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                         hind_height -= velocity[1] / rate;
                     } else {
                         hind_height -= max_down;
-                        wheel_mode[2] = true;
+                        if (theta[2]*180/M_PI < 17.1) {
+                            wheel_mode[2] = true; // enter wheel mode
+                        }//end if
                     }//end if else
                 }//end if
             } else if (leg_info[3].contact_edge) {
@@ -514,7 +520,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                         hind_height -= velocity[1] / rate;
                     } else {
                         hind_height -= max_down;
-                        wheel_mode[3] = true;
+                        if (theta[3]*180/M_PI < 17.1) {
+                            wheel_mode[3] = true; // enter wheel mode
+                        }//end if
                     }//end if else
                 }//end if
             }//end if else
@@ -698,8 +706,8 @@ void StairClimb::init_swing_next_step(int swing_leg, double front_height, double
     final_theta = result_eta[0];
     final_beta  = result_eta[1];
 
-    this->first_ratio  = is_clockwise? 0.1 : 0.2;  // 0 ~ first_ratio by G vertical up
-    this->second_ratio = is_clockwise? 0.7 : 0.7;    // first_ratio ~ mid_ratio by theta and beta
+    this->first_ratio  = is_clockwise? 0.1 : 0.2;   // 0 ~ first_ratio by G vertical up
+    this->second_ratio = is_clockwise? 0.7 : 0.7;   // first_ratio ~ mid_ratio by theta and beta
     this->first_in  = true;
     this->second_in = true;
     this->third_in  = true;
