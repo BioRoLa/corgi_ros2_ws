@@ -473,7 +473,6 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 } else {
                     hind_height -= max_down;
                     if (theta[2]*180/M_PI < 17.1) {
-                    throw std::runtime_error("Check: leg 2.");
                         wheel_mode[2] = true; // enter wheel mode
                     }//end if
                 }//end if else
@@ -791,9 +790,6 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                             C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                             C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                         } //end if
-                        if (wheel_mode[i]) {
-                            throw std::runtime_error("Stop: Start to swing.");
-                        }
                         double tan_line_angle = std::acos(leg_model.R / C1_P1_d);
                         double second_theta = 17.0/180.0*M_PI;
                         double second_beta  = std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI;
