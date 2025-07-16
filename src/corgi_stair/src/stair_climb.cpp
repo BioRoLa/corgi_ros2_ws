@@ -32,6 +32,7 @@ StairClimb::StairClimb(bool sim, std::array<double, 2> CoM_bias, int rate, doubl
     stair_count = 0;
 }//end StairClimb
 
+int stop_count = 0;
 void StairClimb::initialize(double init_eta[8], double init_vel, double CoM_x) {
     double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};
     double init_beta[4]  = {-init_eta[1], init_eta[3], init_eta[5], -init_eta[7]};
@@ -451,10 +452,14 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height += velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
+                    stop_count ++;
                     // if (theta[3]*180/M_PI < 17.1) {
                     if (true) {
                         wheel_mode[3] = true; // enter wheel mode
                     }//end if
+                    if (stop_count==2) {
+                        throw std::runtime_error("StairClimb::move_CoM_stable: stop_count == 2, wheel mode is not working.");
+                    }
                 }//end if else
             }//end if else
         }//end if
