@@ -44,7 +44,6 @@ PlaneSegmentation::PlaneSegmentation() :
     normal_estimator_.setNormalSmoothingSize(10.0f);
 
     histogram_csv.open("histogram.csv");
-    histogram_csv << "idx,bin,value\n";
 
 }//end PlaneSegmentation
 
@@ -292,9 +291,16 @@ std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation:
         in_range = false;
     }//end if
 
+    /* Write to histogram csv */
     for (int i = 0; i < histogram.size(); ++i) {
-        histogram_csv << i << "," << bin_values[i] << "," << histogram[i] << "\n";
+        histogram_csv << histogram[i] << ",";
     }
+    histogram_csv << "\n";
+    for (int i = 0; i < histogram.size(); ++i) {
+        histogram_csv << min_val+bin_width*i << ",";
+    }
+    histogram_csv << "\n";
+
 
     // std::vector<Eigen::Vector3d> points;
     // Eigen::Vector3d p_centroid(0, 0, 0);
