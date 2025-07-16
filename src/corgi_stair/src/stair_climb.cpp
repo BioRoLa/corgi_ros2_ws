@@ -452,7 +452,6 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 } else {
                     hind_height -= max_down;
                     // if (theta[3]*180/M_PI < 17.1) {
-                    std::cout << "Enter wheel mode for hind leg 3." << std::endl;
                     if (true) {
                         wheel_mode[3] = true; // enter wheel mode
                     }//end if
