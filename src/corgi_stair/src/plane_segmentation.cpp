@@ -85,8 +85,8 @@ PlaneDistances PlaneSegmentation::segment_planes(pcl::PointCloud<PointT>::Ptr cl
 
 
     /* Visualize in rviz */
-    this->visualize_planes();
-    this->visualize_normal();
+    // this->visualize_planes();
+    // this->visualize_normal();
     // this->visualize_normal_in_space();
     // this->visualize_CubePlanes(h_plane_distances, v_plane_distances);
 
