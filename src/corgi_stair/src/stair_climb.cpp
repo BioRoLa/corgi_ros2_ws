@@ -882,16 +882,17 @@ std::array<double, 2> StairClimb::move_consider_edge(int leg_ID, std::array<doub
         leg_info[leg_ID].foothold = {current_stair_edge[0], current_stair_edge[1]};
     } else {
         std::array<double, 2> relative_foothold;
-        if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
-            // if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
-            if (wheel_mode[leg_ID]) {    // wheel mode
+        if (wheel_mode[leg_ID]) {    // wheel mode
                 result_eta[0] = 17.0/180.0*M_PI;
                 result_eta[1] = beta[leg_ID] - move_vec[0]/leg_model.radius;
                 relative_foothold = {0.0, -leg_model.radius};
-            } else {    // upper rim 
+        }else if (hip[leg_ID][0] + leg_model.U_r[0] > current_stair_edge[0]) {
+            // if (theta[leg_ID]*180/M_PI < 17.1 && move_vec[1]==0.0) {    // wheel mode
+
+            // } else {    // upper rim 
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0, true, false);
                 relative_foothold = get_foothold(theta[leg_ID], beta[leg_ID], true, false);
-            }//end if else
+            // }//end if else
         } else {    // lower rim
             if (beta[leg_ID] < 0.0) {   // may contact using right upper rim
                 result_eta = leg_model.move(theta[leg_ID], beta[leg_ID], move_vec, 0.0);
