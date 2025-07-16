@@ -415,7 +415,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 //     front_height -= velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    wheel_mode[0] = theta[0]*180/M_PI < 17.1? true: false;
+                    if (theta[0]*180/M_PI < 17.1) {
+                        wheel_mode[0] = true; // enter wheel mode
+                    }//end if
                 }//end if else
             // }
         } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
@@ -436,7 +438,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 //     front_height -= velocity[1] / rate;
                 } else {
                     front_height -= max_down;
-                    wheel_mode[1] = theta[1]*180/M_PI < 17.1? true: false;
+                    if (theta[1]*180/M_PI < 17.1) {
+                        wheel_mode[1] = true; // enter wheel mode
+                    }//end if
                 }//end if else
             // }
         }
@@ -468,7 +472,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // hind_height -= velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    wheel_mode[2] = theta[2]*180/M_PI < 17.1? true: false;
+                    if (theta[2]*180/M_PI < 17.1) {
+                        wheel_mode[2] = true; // enter wheel mode
+                    }//end if
                 }//end if else
             // }
         } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
@@ -489,7 +495,9 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     // hind_height -= velocity[1] / rate;
                 } else {
                     hind_height -= max_down;
-                    wheel_mode[3] = theta[3]*180/M_PI < 17.1? true: false;
+                    if (theta[3]*180/M_PI < 17.1) {
+                        wheel_mode[3] = true; // enter wheel mode
+                    }//end if
                 }//end if else
             // }
         }
