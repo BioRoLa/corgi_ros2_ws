@@ -211,7 +211,7 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
             bias_alpha = M_PI / 3.6; // 50 degrees
         }//end if else
 
-        double cal_err = 1e-9;
+        double cal_err = 1e-4;
         bool in_range = ((p2 - O).real() >= -cal_err) && ((p1 - O).real() <= cal_err);
 
         if (in_range) {
