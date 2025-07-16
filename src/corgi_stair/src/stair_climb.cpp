@@ -170,12 +170,12 @@ std::array<std::array<double, 4>, 2> StairClimb::step() {
         default:
             break;
     }//end switch
-    if (last_state != state && (state == SWING_SAME || state == SWING_NEXT)) {
+    // if (last_state != state && (state == SWING_SAME || state == SWING_NEXT)) {
         // std::cout << "State " << this->state << std::endl;
         // std::cout << "Leg " << swing_leg << " next_foothold: " << leg_info[swing_leg].next_foothold[0] << ", " << leg_info[swing_leg].next_foothold[1] << std::endl;
         // std::cout << "front_height:" << this->front_height << std::endl;
         // std::cout << "hind_height:" << this->hind_height << std::endl;
-    }
+    // }
     last_state = state;
 
     // next state
@@ -407,7 +407,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
+            // if (last_hip[0][0] > stair_edge[0].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[0][1] - (stair_edge[0].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     front_height += velocity[1] / rate;
@@ -417,7 +417,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height -= max_down;
                     wheel_mode[0] = theta[0]*180/M_PI < 17.1? true: false;
                 }//end if else
-            }
+            // }
         } else if (leg_info[1].contact_edge || enter_wheel_mode[1]) {
         // } else if (leg_info[1].contact_edge) {
             enter_wheel_mode[1] = true; // enter wheel mode
@@ -428,7 +428,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
+            // if (last_hip[1][0] > stair_edge[1].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[1][1] - (stair_edge[1].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     front_height += velocity[1] / rate;
@@ -438,7 +438,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     front_height -= max_down;
                     wheel_mode[1] = theta[1]*180/M_PI < 17.1? true: false;
                 }//end if else
-            }
+            // }
         }
         // front_height += velocity[1] / rate;
     }
@@ -460,7 +460,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
+            // if (last_hip[2][0] > stair_edge[2].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[2][1] - (stair_edge[2].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     hind_height += velocity[1] / rate;
@@ -470,7 +470,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height -= max_down;
                     wheel_mode[2] = theta[2]*180/M_PI < 17.1? true: false;
                 }//end if else
-            }
+            // }
         } else if (leg_info[3].contact_edge || enter_wheel_mode[3]) {
         // } else if (leg_info[3].contact_edge) {
             enter_wheel_mode[3] = true; // enter wheel mode
@@ -481,7 +481,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                 int sign_vel = velocity[1]>=0.0? 1 : -1;
                 velocity[1] = sign_vel * max_velocity;
             }//end if
-            if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
+            // if (last_hip[3][0] > stair_edge[3].front().edge[0]) { // front leg is further than edge
                 double max_down = last_hip[3][1] - (stair_edge[3].front().edge[1] + leg_model.radius);
                 if (max_down > - velocity[1] / rate) {
                     hind_height += velocity[1] / rate;
@@ -491,7 +491,7 @@ bool StairClimb::move_CoM_stable() {    // return true if stable, false if not
                     hind_height -= max_down;
                     wheel_mode[3] = theta[3]*180/M_PI < 17.1? true: false;
                 }//end if else
-            }
+            // }
         }
         // hind_height += velocity[1] / rate;
     }
@@ -697,7 +697,7 @@ void StairClimb::init_swing_next_step(int swing_leg, double front_height, double
     final_beta  = result_eta[1];
 
     this->first_ratio  = is_clockwise? 0.1 : 0.2;  // 0 ~ first_ratio by G vertical up
-    this->second_ratio = is_clockwise? 0.7 : 0.8;    // first_ratio ~ mid_ratio by theta and beta
+    this->second_ratio = is_clockwise? 0.7 : 0.7;    // first_ratio ~ mid_ratio by theta and beta
     this->first_in  = true;
     this->second_in = true;
     this->third_in  = true;
@@ -777,19 +777,19 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                     leg_model.forward(final_theta, final_beta);
                     std::array<double, 2> final_G = {final_hip[0] + leg_model.G[0], final_hip[1] + leg_model.G[1]};
                     if (is_clockwise || wheel_mode[i]) {
-                        std::array<double, 2> C1 = hip[i];
+                        std::array<double, 2> C1 = final_hip;
                         std::array<double, 2> P1 = {final_G[0], final_G[1] + step_height};
                         std::array<double, 2> C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                         double C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                         if (C1_P1_d < leg_model.R) {
                             std::cout << "StairClimb::swing_next_step: P1 is inside the wheel." << std::endl;
-                            P1 = {final_G[0], hip[i][1]-leg_model.R};
+                            P1 = {final_G[0], final_hip[1]-leg_model.R};
                             C1_P1 = {P1[0]-C1[0], P1[1]-C1[1]};
                             C1_P1_d = std::hypot(C1_P1[0], C1_P1[1]);
                         } //end if
                         double tan_line_angle = std::acos(leg_model.R / C1_P1_d);
-                        double second_theta = is_clockwise? 17.0/180.0*M_PI : (final_theta + 17.0/180.0*M_PI) / 2.0;
-                        double second_beta  = is_clockwise? std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI : final_beta;
+                        double second_theta = 17.0/180.0*M_PI;
+                        double second_beta  = std::atan2(C1_P1[1], C1_P1[0]) + tan_line_angle + M_PI/2 - 2*M_PI;
                         para_traj[0] = LinearParaBlend({theta[i], second_theta             , second_theta}, {0.0, 0.5, 1.0}, 0.1, true, v_theta, false, 0.0);
                         para_traj[1] = LinearParaBlend({beta[i] , (beta[i]+second_beta)/2.0, second_beta }, {0.0, 0.5, 1.0}, 0.1, true, v_beta , false, 0.0);
                     } else {
@@ -798,7 +798,7 @@ bool StairClimb::swing_next_step() {  // return true if finish swinging, false i
                         this->sp[i] = SwingProfile(current_G, final_G, final_G[1]-current_G[1]+2*step_height, 1);
                     }//end if else
                 }//end if
-                if (is_clockwise) {
+                if (is_clockwise || wheel_mode[i]) {
                     swing_phase_ratio = (swing_phase_ratio - first_ratio) / (second_ratio - first_ratio);
                     result_eta[0] = para_traj[0].get_point(swing_phase_ratio);
                     result_eta[1] = para_traj[1].get_point(swing_phase_ratio);
