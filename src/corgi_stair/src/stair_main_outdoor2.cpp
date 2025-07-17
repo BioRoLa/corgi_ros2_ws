@@ -125,6 +125,7 @@ int main(int argc, char** argv) {
     int min_steps, max_steps;
     bool change_step_length;
     bool need_new_H;
+    bool add_stair_edge = true; // flag to add stair edge
 
     /* Behavior loop */
     auto start = std::chrono::high_resolution_clock::now();
@@ -150,6 +151,7 @@ int main(int argc, char** argv) {
                 D_sum = 0.0;
                 H_sum = 0.0;
                 need_new_H = false;
+                add_stair_edge = true;
                 break;
             case TRANSFORM:
                 transform_ratio += 1.0 / transform_count;
@@ -254,7 +256,7 @@ int main(int argc, char** argv) {
                 }
                 /* Add stair edge */
                 if (stair_climb.any_no_stair()) {
-                    if (plane_msg.vertical.size() >= stair_count+1) {
+                    if (plane_msg.vertical.size() >= stair_count+1 && add_stair_edge) {
                         Eigen::Vector3d camera_position(
                             camera_transform.transform.translation.x,
                             camera_transform.transform.translation.y,
@@ -279,7 +281,9 @@ int main(int argc, char** argv) {
                         stair_size_csv << ros::Time::now() << "," << (int)trigger_msg.enable << "," << D << ",";
                         stair_count++;
                         need_new_H = true; // need to add new stair edge height
-                    }//end if
+                    } else {
+                        add_stair_edge = false; // no more stair edge to add
+                    }//end if else
                 }//end if
                 if (need_new_H) {
                     if (plane_msg.horizontal.size() >= stair_count+1) {
