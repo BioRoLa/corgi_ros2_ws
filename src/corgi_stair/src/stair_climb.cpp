@@ -283,6 +283,19 @@ void StairClimb::modify_last_edge_H(double y) {
     }//end for
 }//end modify_last_edge_H
 
+void StairClimb::delete_last_edge() {
+    for (int i = 0; i < 4; ++i) {
+        if (!stair_edge[i].empty()) {
+            stair_edge[i].pop_back();
+        } else {
+            std::cout << "Leg " << i << ": No stair edge to delete." << std::endl;
+        }//end if else
+    }//end for 
+
+    stair_count--;
+    std::cout << "Deleted last stair edge. Current count: " << stair_count << std::endl;
+}//end delete_last_edge
+
 double StairClimb::get_pitch() {
     return this->pitch;
 }//end get_pitch

@@ -26,6 +26,7 @@ class StairClimb {
         void add_stair_edge_CoM(double x, double y);
         double add_stair_edge_CoMx(double x, double y);
         void modify_last_edge_H(double y);
+        void delete_last_edge();
         double get_pitch();
         std::array<double, 2> get_CoM();
         bool if_any_stair();
