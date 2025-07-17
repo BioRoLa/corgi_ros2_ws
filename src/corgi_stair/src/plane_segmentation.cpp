@@ -132,13 +132,13 @@ void PlaneSegmentation::setInputCloud(pcl::PointCloud<PointT>::Ptr cloud) {
     /* Apply ROI filtering */
     pass_.setInputCloud(cloud);
     pass_.setFilterFieldName("x");
-    pass_.setFilterLimits(0.20, 1.5);
+    pass_.setFilterLimits(0.20, 1.0);
     pass_.filter(*cloud);
     pass_.setFilterFieldName("y");
     pass_.setFilterLimits(-0.4, 0.4);
     pass_.filter(*cloud);
     pass_.setFilterFieldName("z");
-    pass_.setFilterLimits(-0.5, 1.5);
+    pass_.setFilterLimits(-0.5, 1.0);
     pass_.filter(*cloud);
     /* Transform from camera coord to world coord */
     pcl_ros::transformPointCloud("map", *cloud, *cloud, tf_buffer_);
