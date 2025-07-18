@@ -204,8 +204,8 @@ void PlaneSegmentation::group_by_normals() {
 
 std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation::segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices) {
     const double bin_width = 0.001; // 1mm
-    const int one_bin_point_threshold = 200;    // 100 points
-    const int total_point_threshold   = 5000;    // 5000 points
+    const int one_bin_point_threshold = 100;    // 100 points
+    const int total_point_threshold   = 1000;    // 5000 points
     const double merge_threshold = 0.03;    // 5cm
 
     /* Calculate distances */
