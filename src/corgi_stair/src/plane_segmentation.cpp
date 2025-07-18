@@ -132,7 +132,7 @@ void PlaneSegmentation::setInputCloud(pcl::PointCloud<PointT>::Ptr cloud) {
     /* Apply ROI filtering */
     pass_.setInputCloud(cloud);
     pass_.setFilterFieldName("x");
-    pass_.setFilterLimits(0.20, 1.0);
+    pass_.setFilterLimits(0.10, 1.0);
     pass_.filter(*cloud);
     pass_.setFilterFieldName("y");
     pass_.setFilterLimits(-0.4, 0.4);
@@ -204,8 +204,8 @@ void PlaneSegmentation::group_by_normals() {
 
 std::pair<std::vector<double>, std::vector<std::vector<int>>> PlaneSegmentation::segment_by_distances(Eigen::Vector3d centroid, const std::vector<int>& indices) {
     const double bin_width = 0.001; // 1mm
-    const int one_bin_point_threshold = 100;    // 100 points
-    const int total_point_threshold   = 1000;    // 5000 points
+    const int one_bin_point_threshold = 200;    // 100 points
+    const int total_point_threshold   = 5000;    // 5000 points
     const double merge_threshold = 0.03;    // 5cm
 
     /* Calculate distances */
