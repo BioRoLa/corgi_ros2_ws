@@ -1,7 +1,15 @@
 Q_diagonal: [
-  30,   30,   0,     # roll, pitch, yaw
-  10,   0,    300,   # x, y, z
-  0.1,  0.1,  0,     # ω_x, ω_y, ω_z
-  1,    0,    5,     # v_x, v_y, v_z
+  40,   40,   0,     # roll, pitch, yaw
+  0,    0,    100,   # x, y, z
+  0.01, 0.01, 0,     # ω_x, ω_y, ω_z
+  3,    0,    1,     # v_x, v_y, v_z
   0                  # additional state
 ]
+
+# Q_diagonal: [
+#   40,  40,  0,   # roll, pitch, yaw
+#   0,   0,   100,  # x, y, z
+#   0.1, 0.1, 0,   # ω_x, ω_y, ω_z
+#   0,   0,   2,   # v_x, v_y, v_z
+#   0              # additional state
+# ]

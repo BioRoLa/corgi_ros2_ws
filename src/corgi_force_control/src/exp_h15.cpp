@@ -41,9 +41,9 @@ int main(int argc, char **argv) {
         cmd->My = 0;
         if (sim) {
             cmd->Bx = 200;
-            cmd->By = 100;
+            cmd->By = 200;
             cmd->Kx = 2000;
-            cmd->Ky = 1000;
+            cmd->Ky = 2000;
         }
         else {
             cmd->Bx = 80;

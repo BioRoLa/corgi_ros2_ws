@@ -34,13 +34,14 @@ class ModelPredictiveController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 100;
-        double By_swing = 100;
-        double Bx_stance = 100;
+        double Bx_swing = 80;
+        double By_swing = 80;
+        double Bx_stance = 80;
+        // double Bx_stance = 50;
         double By_stance = 10;
-        double Kx_swing = 4000;
-        double Ky_swing = 4000;
-        double Kx_stance = 4000;
+        double Kx_swing = 2000;
+        double Ky_swing = 2000;
+        double Kx_stance = 2000;
         double Ky_stance = 200;
 
 

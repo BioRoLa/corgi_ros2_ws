@@ -39,10 +39,18 @@ int main(int argc, char **argv) {
         cmd->Fy = 0;
         cmd->Mx = 0;
         cmd->My = 0;
-        cmd->Bx = 80;
-        cmd->By = 10;
-        cmd->Kx = 2000;
-        cmd->Ky = 1000;
+        if (sim) {
+            cmd->Bx = 200;
+            cmd->By = 200;
+            cmd->Kx = 2000;
+            cmd->Ky = 2000;
+        }
+        else {
+            cmd->Bx = 80;
+            cmd->By = 10;
+            cmd->Kx = 2000;
+            cmd->Ky = 100;
+        }
     }
 
     std::array<double, 2> eta;
