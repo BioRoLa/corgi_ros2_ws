@@ -26,6 +26,7 @@ add_message_files(
   SteeringCmdStamped.msg
   SteeringStateStamped.msg
   WheelCmd.msg
+  SimContactPoint.msg
   SimDataStamped.msg
   IMUStamped.msg
   FsmCmdStamped.msg
