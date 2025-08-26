@@ -33,6 +33,7 @@ add_message_files(
   FsmStateStamped.msg
   ContactState.msg
   ContactStateStamped.msg
+  StairPlanes.msg
 )
 
 add_service_files(

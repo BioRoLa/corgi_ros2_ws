@@ -10,7 +10,7 @@
 LegModel::LegModel(bool sim) : 
     /* Initializer List */
     max_theta(M_PI * 160.0 / 180.0),
-    min_theta(M_PI * 17.0 / 180.0),
+    min_theta(M_PI * 16.9 / 180.0), // 17.0, set 16.9 to alllow floating point error
     theta0(M_PI * 17.0 / 180.0),
     beta0(M_PI * 90.0 / 180.0),
     // Wheel radius
@@ -211,7 +211,7 @@ std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const st
             bias_alpha = M_PI / 3.6; // 50 degrees
         }//end if else
 
-        double cal_err = 1e-9;
+        double cal_err = 1e-4;
         bool in_range = ((p2 - O).real() >= -cal_err) && ((p1 - O).real() <= cal_err);
 
         if (in_range) {
@@ -326,7 +326,8 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
         guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
-            throw std::runtime_error("Newton solver did not converge.");
+            // throw std::runtime_error("Newton solver did not converge.");
+            std::cout << "LegModel::move: Newton solver cost " << norm_cost << std::endl;
         }//end if
     }//end for
 
