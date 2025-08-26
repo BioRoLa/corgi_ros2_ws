@@ -1,9 +1,11 @@
 #include <iostream>
 #include <cmath>
 #include <stdexcept>
+#include <fstream>
 #include <vector>
+#include <array>
 #include <Eigen/Dense>
-
+#include <string>
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
 
@@ -401,3 +403,5 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     // Return the result of the objective function
     return {guessed_hip[0] - move_vec[0], guessed_hip[1] - move_vec[1]};
 }//end objective
+
+// 

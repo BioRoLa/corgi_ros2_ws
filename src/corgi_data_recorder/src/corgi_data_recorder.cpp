@@ -18,6 +18,7 @@
 #include "corgi_msgs/SimDataStamped.h"
 #include "geometry_msgs/Vector3.h"
 #include "std_msgs/Float64.h"
+#include <std_msgs/Float32MultiArray.h>
 
 
 bool trigger = false;
@@ -36,6 +37,8 @@ double odom_z;
 std::ofstream output_file;
 std::string output_file_name = "";
 std::string output_file_path = "";
+
+std_msgs::Float32MultiArray camera;
 
 
 bool file_exists(const std::string &filename) {
@@ -143,7 +146,10 @@ void trigger_cb(const corgi_msgs::TriggerStamped msg){
                         << "v_8" << "," << "i_8" << ","
                         << "v_9" << "," << "i_9" << ","
                         << "v_10" << "," << "i_10" << ","
-                        << "v_11" << "," << "i_11"
+                        << "v_11" << "," << "i_11"<< ","
+
+                        
+                        << "camera_dist" << "," << "camera_yaw" 
                         << "\n";
 
             ROS_INFO("Recording data to %s\n", output_file_name.c_str());
@@ -203,6 +209,16 @@ void odom_vel_cb(const geometry_msgs::Vector3::ConstPtr &msg){
 
 void odom_z_cb(const std_msgs::Float64::ConstPtr &msg){
     odom_z = msg->data;
+}
+
+void stair_info_cb(const std_msgs::Float32MultiArray::ConstPtr &msg){
+    // Process stair information if needed
+    // camera
+    // camera.data.resize(msg->data.size());
+    camera.data = msg->data;
+
+    // float dist = msg->data[0];
+    // float yaw  = msg->data[1];
 }
 
 void write_data() {
@@ -276,10 +292,20 @@ void write_data() {
                 << power_state.v_8 << "," << power_state.i_8 << ","
                 << power_state.v_9 << "," << power_state.i_9 << ","
                 << power_state.v_10 << "," << power_state.i_10 << ","
-                << power_state.v_11 << "," << power_state.i_11
-                << "\n";
+                << power_state.v_11 << "," << power_state.i_11 ;
+
+                // camera 資訊
+                if (camera.data.size() >= 2) {
+                    output_file << "," << camera.data[0] << "," << camera.data[1];
+                } else {
+                    output_file << ",NaN,NaN";
+                }
+
+                // 換行 & flush
+                output_file << "\n";
+                output_file.flush();
                 
-    output_file.flush();
+    // output_file.flush();
 }
 
 
@@ -301,6 +327,7 @@ int main(int argc, char **argv) {
     ros::Subscriber odom_pos_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/position", 1000, odom_pos_cb);
     ros::Subscriber odom_vel_sub = nh.subscribe<geometry_msgs::Vector3>("odometry/velocity", 1000, odom_vel_cb);
     ros::Subscriber odom_z_sub = nh.subscribe<std_msgs::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
+    ros::Subscriber stair_info_sub   = nh.subscribe<std_msgs::Float32MultiArray>("stair_plane_info", 1000, stair_info_cb);
     ros::Rate rate(1000);
 
     signal(SIGINT, signal_handler);

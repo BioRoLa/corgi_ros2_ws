@@ -8,9 +8,9 @@
 #include <chrono>
 #include <array>
 #include <string>
-
 #include "leg_model.hpp"
 #include "bezier.hpp"
+
 class WalkGait {
     public:
         WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);

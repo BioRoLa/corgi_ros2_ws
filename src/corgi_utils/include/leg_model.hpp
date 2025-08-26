@@ -44,6 +44,11 @@ class LegModel {
                         // U_l -> L_l -> G -> L_r -> U_r -> None
         double alpha;
         std::array<double, 2> contact_p;
+        // Eigen::Vector2d pointOnRimByGamma(
+        //     double theta, double beta,
+        //     int rim,     // 1=left upper,2=left lower,3=G,4=right lower,5=right upper
+        //     double gamma // 參考等同 alpha，弧段參數化角度
+        // );
     private:
 
         // Constants
