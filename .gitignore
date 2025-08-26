@@ -2,19 +2,13 @@ build
 devel
 logs
 .*
-*TEST*
-
-src/corgi_odometry/data/*
-!src/corgi_odometry/data/data01.csv
 
 input_csv/*
+!input_csv/README.md
 !input_csv/demo_transform_sim.csv
 !input_csv/demo_transform_real.csv
 !input_csv/demo_walk_sim.csv
-!input_csv/demo_walk_real.csv
+!input_csv/demo_walk_real.
 
 output_data/*
-!output_data/demo_transform_sim.csv
-!output_data/demo_transform_real.csv
-!output_data/demo_walk_sim.csv
-!output_data/demo_walk_real.csv
+!output_data/README.md
