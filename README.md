@@ -60,9 +60,9 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
         * [**osqp (v0.6.3)**](https://github.com/osqp/osqp/tree/v0.6.3)
         * [**osqp-eigen**](https://github.com/robotology/osqp-eigen)
 
->> ***CRITICAL INSTALLATION NOTE***
->>
->> To avoid build errors, it is **strongly recommended** to install all C++ dependencies listed above into the `~/corgi_ws/install/` directory. If you install them elsewhere, you **must** manually update the compile commands or the paths in the `CMakeLists.txt` files.
+> ***CRITICAL INSTALLATION NOTE***
+> 
+> To avoid build errors, it is **strongly recommended** to install all C++ dependencies listed above into the `~/corgi_ws/install/` directory. If you install them elsewhere, you **must** manually update the compile commands or the paths in the `CMakeLists.txt` files.
 
 
 ## Installation and Build Instructions
@@ -73,20 +73,20 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
 
     ```
     mkdir ~/corgi_ws/
-    cd ~/corgi_ws/
     ```
 
 2.  **Clone the Repository**
 
     ```
+    cd ~/corgi_ws/
     git clone https://github.com/yisyuanshen/corgi_ros_ws.git
-    cd corgi_ros_ws/
     ```
 
 3.  **Install All Dependencies**
 
     Follow the list in the [***Software***](#software) section to install all required libraries.
     ```
+    cd ~/corgi_ws/
     mkdir install/
     ```
 
@@ -95,6 +95,7 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
     If you installed C++ dependencies to the recommended path, use the following command.
 
     ```
+    cd ~/corgi_ws/corgi_ros_ws/
     catkin build -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
     source devel/setup.bash
     ```
@@ -130,7 +131,7 @@ After launching the simulation, you can run other nodes to interact with the sim
 
 2.  **Launch ROS Control Panel**
 
-    On the Jetson/PC, run the main launch file. This will start the **panel**, **data recorder**, **force estimation**, and **IMU** nodes.
+    On the Jetson/PC, run the main launch file. This will start the ***panel***, ***data recorder***, ***force estimation***, and ***IMU*** nodes.
 
     ```
     roslaunch corgi_panel corgi_control_panel.launch
@@ -164,27 +165,27 @@ For more details on a specific package, please see its respective `README.md` fi
     * [`corgi_virtual_agent`](src/corgi_virtual_agent): A mock FPGA driver for testing the `corgi_ros_bridge` without hardware.
     * [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
     * [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
-    * [*`corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
+    * [`*corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
 
 * **Simulation**
     * [`corgi_sim`](src/corgi_sim): Contains Webots models, worlds, and controllers for simulation.
 
 * **Sensing & Estimation**
-    * [*`corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+    * [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
     * [`corgi_force_estimation`](src/corgi_force_estimation): Estimates contact forces from motor currents.
-    * [*`corgi_odometry`](src/corgi_odometry): Robot odometry estimation.
-    * [*`corgi_camera`](src/corgi_camera): Integrates ZED camera for visual perception.
+    * [`*corgi_odometry`](src/corgi_odometry): Robot odometry estimation.
+    * [`*corgi_camera`](src/corgi_camera): Integrates ZED camera for visual perception.
 
 * **Control & Planning**
     * [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
     * [`corgi_rt_control`](src/corgi_rt_control): Handles real-time trajectory commands.
-    * [*`corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
-    * [*`corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
+    * [`*corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
+    * [`*corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
     * [`corgi_force_control`](src/corgi_force_control): Foot contact force control algorithms.
     * [`corgi_mpc`](src/corgi_mpc): Model Predictive Control implementation.
-    * [*`corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
-    * [*`corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
-    * [*`corgi_algo`](src/corgi_algo): Contains various core algorithms for control.
+    * [`*corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
+    * [`*corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
+    * [`*corgi_algo`](src/corgi_algo): Contains various core algorithms for control.
 
 
 ## Notes

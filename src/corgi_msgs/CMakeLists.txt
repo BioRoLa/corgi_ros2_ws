@@ -28,7 +28,6 @@ add_message_files(
   WheelCmd.msg
   SimContactPoint.msg
   SimDataStamped.msg
-  IMUStamped.msg
   FsmCmdStamped.msg
   FsmStateStamped.msg
   ContactState.msg
