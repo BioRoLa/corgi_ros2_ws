@@ -12,3 +12,7 @@ input_csv/*
 
 output_data/*
 !output_data/README.md
+
+/log
+/install
+/build

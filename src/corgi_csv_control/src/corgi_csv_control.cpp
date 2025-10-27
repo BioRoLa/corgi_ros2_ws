@@ -2,28 +2,43 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 
-#include "corgi_msgs/MotorCmdStamped.h"
-#include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/msg/motor_cmd_stamped.hpp"
+#include "corgi_msgs/msg/trigger_stamped.hpp"
 
 bool trigger = false;
 
-void trigger_cb(const corgi_msgs::TriggerStamped msg){
-    trigger = msg.enable;
+void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
+    trigger = msg->enable;
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "corgi_csv_control");
+    //ros::init(argc, argv, "corgi_csv_control");
 
-    ros::NodeHandle nh;
-    ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
-    ros::Rate rate(1000);
+    //ros::NodeHandle nh;
+    //ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
+    //ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
+    //ros::Rate rate(1000);
+    
 
-    corgi_msgs::MotorCmdStamped motor_cmd;
+    // Initialize the ROS 2 system.
+    rclcpp::init(argc, argv);
 
-    std::vector<corgi_msgs::MotorCmd*> motor_cmds = {
+    // Create a ROS 2 node.
+    auto node = std::make_shared<rclcpp::Node>("corgi_csv_control");
+
+    // Create a ROS 2 publisher for motor command messages.
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
+
+    // Create a ROS 2 subscriber for trigger messages.
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
+
+    rclcpp::Rate rate(1000);
+
+    corgi_msgs::msg::MotorCmdStamped motor_cmd;
+
+    std::vector<corgi_msgs::msg::MotorCmd*> motor_cmds = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
         &motor_cmd.module_c,
@@ -31,7 +46,7 @@ int main(int argc, char **argv) {
     };
 
     if (argc < 2){
-        ROS_INFO("Please input csv file path\n");
+        RCLCPP_INFO(node->get_logger(), "Please input csv file path\n");
         return 1;
     }
     
@@ -44,14 +59,14 @@ int main(int argc, char **argv) {
 
     std::ifstream csv_file(csv_file_path);
     if (!csv_file.is_open()) {
-        ROS_INFO("Failed to open the CSV file\n");
+        RCLCPP_INFO(node->get_logger(), "Failed to open the CSV file\n");
         return 1;
     }
 
     std::string line;
     
 
-    ROS_INFO("Leg Transform Starts\n");
+    RCLCPP_INFO(node->get_logger(), "Leg Transform Starts\n");
     
     for (int i=0; i<5000; i++){
         std::getline(csv_file, line);
@@ -76,22 +91,22 @@ int main(int argc, char **argv) {
 
         motor_cmd.header.seq = -1;
 
-        motor_cmd_pub.publish(motor_cmd);
+        motor_cmd_pub->publish(motor_cmd);
 
         rate.sleep();
     }
 
-    ROS_INFO("Leg Transform Finished\n");
+    RCLCPP_INFO(node->get_logger(), "Leg Transform Finished\n");
 
     
-    while (ros::ok()){
-        ros::spinOnce();
+    while (rclcpp::ok()){
+        rclcpp::spin_some(node);
 
         if (trigger){
-            ROS_INFO("CSV Trajectory Starts\n");
+            RCLCPP_INFO(node->get_logger(), "CSV Trajectory Starts\n");
 
             int seq = 0;
-            while (ros::ok() && std::getline(csv_file, line)) {
+            while (rclcpp::ok() && std::getline(csv_file, line)) {
                 std::vector<double> columns;
                 std::stringstream ss(line);
                 std::string item;
@@ -113,7 +128,7 @@ int main(int argc, char **argv) {
 
                 motor_cmd.header.seq = seq;
 
-                motor_cmd_pub.publish(motor_cmd);
+                motor_cmd_pub->publish(motor_cmd);
 
                 seq++;
 
@@ -123,9 +138,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    ROS_INFO("CSV Trajectory Finished\n");
+    RCLCPP_INFO(node->get_logger(), "CSV Trajectory Finished\n");
 
-    ros::shutdown();
+    rclcpp::shutdown();
     
     return 0;
 }
