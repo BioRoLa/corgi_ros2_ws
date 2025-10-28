@@ -14,26 +14,11 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
 }
 
 int main(int argc, char **argv) {
-    //ros::init(argc, argv, "corgi_csv_control");
-
-    //ros::NodeHandle nh;
-    //ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
-    //ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
-    //ros::Rate rate(1000);
-    
-
-    // Initialize the ROS 2 system.
     rclcpp::init(argc, argv);
 
-    // Create a ROS 2 node.
     auto node = std::make_shared<rclcpp::Node>("corgi_csv_control");
-
-    // Create a ROS 2 publisher for motor command messages.
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
-
-    // Create a ROS 2 subscriber for trigger messages.
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-
     rclcpp::Rate rate(1000);
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
