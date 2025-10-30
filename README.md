@@ -46,8 +46,8 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
     * [**grpc_core**](https://github.com/kyle1548/grpc_core)
 
 * **PC / Nvidia Jetson**
-    * **OS**: Ubuntu 20.04
-    * **ROS**: [**ROS Noetic**](http://wiki.ros.org/noetic/Installation/Ubuntu) (with `catkin_tools`)
+    * **OS**: Ubuntu 22.04
+    * **ROS**: [**ROS Humble**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
     * **Simulator**: [**Webots**](https://cyberbotics.com/) (for simulation only)
     * **Python Dependencies**:
         * `pip install numpy`
