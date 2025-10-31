@@ -4,6 +4,10 @@ project(corgi_csv_control)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -23,12 +27,6 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
-
-set(LOCAL_PACKAGE_PATH ${CMAKE_PREFIX_PATH} CACHE STRING "Path to grpc and core installation")
-set(CORE_PREFIX_PATH ${LOCAL_PACKAGE_PATH})
-set(CMAKE_PREFIX_PATH "/opt/ros/humble;${LOCAL_PACKAGE_PATH}")
-
-#include(${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake)
 
 add_subdirectory(src)
 
