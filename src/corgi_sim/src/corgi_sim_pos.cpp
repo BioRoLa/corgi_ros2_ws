@@ -19,7 +19,6 @@
 #include <corgi_msgs/msg/trigger_stamped.hpp>
 #include <corgi_msgs/msg/sim_data_stamped.hpp>
 
-
 corgi_msgs::msg::MotorCmdStamped motor_cmd;
 corgi_msgs::msg::MotorStateStamped motor_state;
 corgi_msgs::msg::TriggerStamped trigger;
@@ -54,15 +53,15 @@ corgi_sim::srv::MotorSetControlPid CL_motor_pid_srv;
 corgi_sim::srv::MotorSetControlPid DR_motor_pid_srv;
 corgi_sim::srv::MotorSetControlPid DL_motor_pid_srv;
 
-corgi_sim::srv::set_int time_step_srv;
+corgi_sim::srv::SetInt time_step_srv;
 
-corgi_sim::srv::get_uint64 node_value_srv;
+corgi_sim::srv::GetUint64 node_value_srv;
 corgi_sim::srv::NodeGetPosition node_pos_srv;
 corgi_sim::srv::NodeGetOrientation node_orien_srv;
 
 rosgraph_msgs::msg::Clock simulationClock;
 
-void motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd) {motor_cmd = cmd;}
+void motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd) { motor_cmd = cmd; }
 
 void AR_encoder_cb(corgi_sim::msg::Float64Stamped phi) { AR_phi = phi.data; }
 void AL_encoder_cb(corgi_sim::msg::Float64Stamped phi) { AL_phi = phi.data; }
@@ -86,126 +85,140 @@ void gyro_cb(sensor_msgs::msg::Imu values) { imu.orientation = values.orientatio
 void ang_vel_cb(sensor_msgs::msg::Imu values) { imu.angular_velocity = values.angular_velocity; }
 void imu_cb(sensor_msgs::msg::Imu values) { imu.linear_acceleration = values.linear_acceleration; }
 
-void update_motor_pid(corgi_sim::srv::MotorSetControlPid &R_motor_pid_srv, corgi_sim::srv::MotorSetControlPid &L_motor_pid_srv, double kp, double ki, double kd){
-    R_motor_pid_srv.request.controlp = kp;
-    R_motor_pid_srv.request.controli = ki;
-    R_motor_pid_srv.request.controld = kd;
+void update_motor_pid(corgi_sim::srv::MotorSetControlPid &R_motor_pid_srv, corgi_sim::srv::MotorSetControlPid &L_motor_pid_srv, double kp, double ki, double kd)
+{
+    R_motor_pid_srv.Request.controlp = kp;
+    R_motor_pid_srv.Request.controli = ki;
+    R_motor_pid_srv.Request.controld = kd;
 
-    L_motor_pid_srv.request.controlp = kp;
-    L_motor_pid_srv.request.controli = ki;
-    L_motor_pid_srv.request.controld = kd;
+    L_motor_pid_srv.Request.controlp = kp;
+    L_motor_pid_srv.Request.controli = ki;
+    L_motor_pid_srv.Request.controld = kd;
 }
 
-double find_closest_phi(double phi_ref, double phi_fb) {
+double find_closest_phi(double phi_ref, double phi_fb)
+{
     double diff = fmod(phi_ref - phi_fb + M_PI, 2 * M_PI);
-    if (diff < 0) diff += 2 * M_PI;
+    if (diff < 0)
+        diff += 2 * M_PI;
     return phi_fb + diff - M_PI;
 }
 
-void phi2tb(double phi_r, double phi_l, double &theta, double &beta){
+void phi2tb(double phi_r, double phi_l, double &theta, double &beta)
+{
     theta = (phi_l - phi_r) / 2.0 + 17 / 180.0 * M_PI;
-    beta  = (phi_l + phi_r) / 2.0;
+    beta = (phi_l + phi_r) / 2.0;
 }
 
-void tb2phi(double theta, double beta, double &phi_r, double &phi_l, double phi_r_fb, double phi_l_fb){
+void tb2phi(double theta, double beta, double &phi_r, double &phi_l, double phi_r_fb, double phi_l_fb)
+{
     double theta_0 = 17 / 180.0 * M_PI;
-    if (theta < theta_0) {theta = theta_0;}
+    if (theta < theta_0)
+    {
+        theta = theta_0;
+    }
     phi_r = find_closest_phi(beta - theta + theta_0, phi_r_fb);
     phi_l = find_closest_phi(beta + theta - theta_0, phi_l_fb);
 }
 
-std::string get_lastest_input() {
+std::string get_lastest_input()
+{
     std::string input;
     auto start = std::chrono::steady_clock::now();
-    while (true) {
+    while (true)
+    {
         std::getline(std::cin, input);
         auto elapsed = std::chrono::steady_clock::now() - start;
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= 100) { return input; }
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= 100)
+        {
+            return input;
+        }
     }
 }
 
-void signal_handler(int signum) {
+void signal_handler(int signum)
+{
     RCLCPP_INFO(rclcpp::get_logger("CorgiSim"), "Interrupt received.");
-    ros::shutdown();
+    rclcpp::shutdown();
     exit(signum);
 }
 
-
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     RCLCPP_INFO(rclcpp::get_logger("CorgiSim"), "Corgi Simulation Starts\n");
 
     rclcpp::init(argc, argv);
 
     auto nh = rclcpp::Node::make_shared("corgi_sim");
 
-    auto clock_pub = nh.advertise<rosgraph_msgs::msg::Clock>("/clock", 1);
-    
-    ros::service::waitForService("/robot/time_step");
+    auto clock_pub = nh->create_publisher<rosgraph_msgs::msg::Clock>("/clock", 1);
+
+    rclcpp::service::waitForService("/robot/time_step");
     rclcpp::spin_some(node);
 
-    ros::ServiceClient time_step_client = nh.serviceClient<corgi_sim::srv::set_int>("robot/time_step");
+    rclcpp::ServiceClient time_step_client = nh->create_client<corgi_sim::srv::SetInt>("robot/time_step");
 
-    ros::ServiceClient node_pos_client = nh.serviceClient<corgi_sim::srv::NodeGetPosition>("supervisor/node/get_position");
-    ros::ServiceClient node_orient_client = nh.serviceClient<corgi_sim::srv::NodeGetOrientation>("supervisor/node/get_orientation");
+    rclcpp::ServiceClient node_pos_client = nh->create_client<corgi_sim::srv::NodeGetPosition>("supervisor/node/get_position");
+    rclcpp::ServiceClient node_orient_client = nh->create_client<corgi_sim::srv::NodeGetOrientation>("supervisor/node/get_orientation");
 
-    ros::ServiceClient AR_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("lf_left_motor/set_position");
-    ros::ServiceClient AL_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("lf_right_motor/set_position");
-    ros::ServiceClient BR_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("rf_left_motor/set_position");
-    ros::ServiceClient BL_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("rf_right_motor/set_position");
-    ros::ServiceClient CR_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("rh_left_motor/set_position");
-    ros::ServiceClient CL_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("rh_right_motor/set_position");
-    ros::ServiceClient DR_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("lh_left_motor/set_position");
-    ros::ServiceClient DL_motor_pos_client = nh.serviceClient<corgi_sim::srv::SetFloat>("lh_right_motor/set_position");
+    rclcpp::ServiceClient AR_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("lf_left_motor/set_position");
+    rclcpp::ServiceClient AL_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("lf_right_motor/set_position");
+    rclcpp::ServiceClient BR_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("rf_left_motor/set_position");
+    rclcpp::ServiceClient BL_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("rf_right_motor/set_position");
+    rclcpp::ServiceClient CR_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("rh_left_motor/set_position");
+    rclcpp::ServiceClient CL_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("rh_right_motor/set_position");
+    rclcpp::ServiceClient DR_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("lh_left_motor/set_position");
+    rclcpp::ServiceClient DL_motor_pos_client = nh->create_client<corgi_sim::srv::SetFloat>("lh_right_motor/set_position");
 
-    ros::ServiceClient AR_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("lf_left_motor/set_control_pid");
-    ros::ServiceClient AL_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("lf_right_motor/set_control_pid");
-    ros::ServiceClient BR_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("rf_left_motor/set_control_pid");
-    ros::ServiceClient BL_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("rf_right_motor/set_control_pid");
-    ros::ServiceClient CR_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("rh_left_motor/set_control_pid");
-    ros::ServiceClient CL_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("rh_right_motor/set_control_pid");
-    ros::ServiceClient DR_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("lh_left_motor/set_control_pid");
-    ros::ServiceClient DL_motor_pid_client = nh.serviceClient<corgi_sim::srv::MotorSetControlPid>("lh_right_motor/set_control_pid");
-    
-    auto AR_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lf_left_motor_sensor/value", 1, AR_encoder_cb);
-    auto AL_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lf_right_motor_sensor/value" , 1, AL_encoder_cb);
-    auto BR_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rf_left_motor_sensor/value", 1, BR_encoder_cb);
-    auto BL_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rf_right_motor_sensor/value" , 1, BL_encoder_cb);
-    auto CR_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rh_left_motor_sensor/value", 1, CR_encoder_cb);
-    auto CL_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rh_right_motor_sensor/value" , 1, CL_encoder_cb);
-    auto DR_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lh_left_motor_sensor/value", 1, DR_encoder_cb);
-    auto DL_encoder_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lh_right_motor_sensor/value" , 1, DL_encoder_cb);
-    
-    auto AR_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lf_left_motor/torque_feedback", 1, AR_torque_cb);
-    auto AL_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lf_right_motor/torque_feedback" , 1, AL_torque_cb);
-    auto BR_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rf_left_motor/torque_feedback", 1, BR_torque_cb);
-    auto BL_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rf_right_motor/torque_feedback" , 1, BL_torque_cb);
-    auto CR_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rh_left_motor/torque_feedback", 1, CR_torque_cb);
-    auto CL_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("rh_right_motor/torque_feedback" , 1, CL_torque_cb);
-    auto DR_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lh_left_motor/torque_feedback", 1, DR_torque_cb);
-    auto DL_torque_sub = nh.subscribe<corgi_sim::msg::Float64Stamped>("lh_right_motor/torque_feedback" , 1, DL_torque_cb);
-    
-    auto gyro_sub = nh.subscribe<sensor_msgs::msg::Imu>("gyro/quaternion" , 1, gyro_cb);
-    auto ang_vel_sub = nh.subscribe<sensor_msgs::msg::Imu>("ang_vel/values" , 1, ang_vel_cb);
-    auto imu_sub = nh.subscribe<sensor_msgs::msg::Imu>("imu/values" , 1, imu_cb);
+    rclcpp::ServiceClient AR_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("lf_left_motor/set_control_pid");
+    rclcpp::ServiceClient AL_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("lf_right_motor/set_control_pid");
+    rclcpp::ServiceClient BR_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("rf_left_motor/set_control_pid");
+    rclcpp::ServiceClient BL_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("rf_right_motor/set_control_pid");
+    rclcpp::ServiceClient CR_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("rh_left_motor/set_control_pid");
+    rclcpp::ServiceClient CL_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("rh_right_motor/set_control_pid");
+    rclcpp::ServiceClient DR_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("lh_left_motor/set_control_pid");
+    rclcpp::ServiceClient DL_motor_pid_client = nh->create_client<corgi_sim::srv::MotorSetControlPid>("lh_right_motor/set_control_pid");
 
-    auto motor_cmd_sub = nh.subscribe<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1, motor_cmd_cb);
-    auto motor_state_pub = nh.advertise<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000);
-    auto imu_pub = nh.advertise<sensor_msgs::msg::Imu>("imu", 1000);
-    auto trigger_pub = nh.advertise<corgi_msgs::msg::TriggerStamped>("trigger", 1000);
-    auto sim_data_pub = nh.advertise<corgi_msgs::msg::SimDataStamped>("sim/data", 1000);
-    
-    ros::WallRate rate(1000);
+    auto AR_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lf_left_motor_sensor/value", 1, AR_encoder_cb);
+    auto AL_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lf_right_motor_sensor/value", 1, AL_encoder_cb);
+    auto BR_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rf_left_motor_sensor/value", 1, BR_encoder_cb);
+    auto BL_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rf_right_motor_sensor/value", 1, BL_encoder_cb);
+    auto CR_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rh_left_motor_sensor/value", 1, CR_encoder_cb);
+    auto CL_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rh_right_motor_sensor/value", 1, CL_encoder_cb);
+    auto DR_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lh_left_motor_sensor/value", 1, DR_encoder_cb);
+    auto DL_encoder_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lh_right_motor_sensor/value", 1, DL_encoder_cb);
 
-    node_value_srv.request.ask = true;
-    ros::service::call("/supervisor/get_self", node_value_srv);
+    auto AR_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lf_left_motor/torque_feedback", 1, AR_torque_cb);
+    auto AL_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lf_right_motor/torque_feedback", 1, AL_torque_cb);
+    auto BR_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rf_left_motor/torque_feedback", 1, BR_torque_cb);
+    auto BL_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rf_right_motor/torque_feedback", 1, BL_torque_cb);
+    auto CR_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rh_left_motor/torque_feedback", 1, CR_torque_cb);
+    auto CL_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("rh_right_motor/torque_feedback", 1, CL_torque_cb);
+    auto DR_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lh_left_motor/torque_feedback", 1, DR_torque_cb);
+    auto DL_torque_sub = nh->create_subscription<corgi_sim::msg::Float64Stamped>("lh_right_motor/torque_feedback", 1, DL_torque_cb);
 
-    node_pos_srv.request.node = node_value_srv.response.value;
-    node_orien_srv.request.node = node_value_srv.response.value;
-    
+    auto gyro_sub = nh->create_subscription<sensor_msgs::msg::Imu>("gyro/quaternion", 1, gyro_cb);
+    auto ang_vel_sub = nh->create_subscription<sensor_msgs::msg::Imu>("ang_vel/values", 1, ang_vel_cb);
+    auto imu_sub = nh->create_subscription<sensor_msgs::msg::Imu>("imu/values", 1, imu_cb);
+
+    auto motor_cmd_sub = nh->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1, motor_cmd_cb);
+    auto motor_state_pub = nh->create_publisher<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000);
+    auto imu_pub = nh->create_publisher<sensor_msgs::msg::Imu>("imu", 1000);
+    auto trigger_pub = nh->create_publisher<corgi_msgs::msg::TriggerStamped>("trigger", 1000);
+    auto sim_data_pub = nh->create_publisher<corgi_msgs::msg::SimDataStamped>("sim/data", 1000);
+
+    rclcpp::WallRate rate(1000);
+
+    node_value_srv.Request.ask = true;
+    rclcpp::service::call("/supervisor/get_self", node_value_srv);
+
+    node_pos_srv.Request.node = node_value_srv.Response.value;
+    node_orien_srv.Request.node = node_value_srv.Response.value;
+
     signal(SIGINT, signal_handler);
 
     trigger.enable = true;
-    time_step_srv.request.value = 1;
+    time_step_srv.Request.value = 1;
 
     std::cout << "\nInput the output filename and press Enter to start the simulation: ";
     trigger.output_filename = get_lastest_input();
@@ -214,7 +227,7 @@ int main(int argc, char **argv) {
     update_motor_pid(BR_motor_pid_srv, BL_motor_pid_srv, 30, 0, 0.1);
     update_motor_pid(CR_motor_pid_srv, CL_motor_pid_srv, 30, 0, 0.1);
     update_motor_pid(DR_motor_pid_srv, DL_motor_pid_srv, 30, 0, 0.1);
-    
+
     AR_motor_pid_client.call(AR_motor_pid_srv);
     AL_motor_pid_client.call(AL_motor_pid_srv);
     BR_motor_pid_client.call(BR_motor_pid_srv);
@@ -225,20 +238,21 @@ int main(int argc, char **argv) {
     DL_motor_pid_client.call(DL_motor_pid_srv);
 
     int loop_counter = 0;
-    while (rclcpp::ok() && time_step_client.call(time_step_srv)){
+    while (rclcpp::ok() && time_step_client.call(time_step_srv))
+    {
         rclcpp::spin_some(node);
 
         node_pos_client.call(node_pos_srv);
         node_orient_client.call(node_orien_srv);
 
         sim_data.header.seq = loop_counter;
-        sim_data.position = node_pos_srv.response.position;
-        sim_data.orientation = node_orien_srv.response.orientation;
+        sim_data.position = node_pos_srv.Response.position;
+        sim_data.orientation = node_orien_srv.Response.orientation;
 
-        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.request.value, AL_motor_pos_srv.request.value, AR_phi, AL_phi);
-        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.request.value, BL_motor_pos_srv.request.value, BR_phi, BL_phi);
-        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.request.value, CL_motor_pos_srv.request.value, CR_phi, CL_phi);
-        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.request.value, DL_motor_pos_srv.request.value, DR_phi, DL_phi);
+        tb2phi(motor_cmd.module_a.theta, motor_cmd.module_a.beta, AR_motor_pos_srv.Request.value, AL_motor_pos_srv.Request.value, AR_phi, AL_phi);
+        tb2phi(motor_cmd.module_b.theta, motor_cmd.module_b.beta, BR_motor_pos_srv.Request.value, BL_motor_pos_srv.Request.value, BR_phi, BL_phi);
+        tb2phi(motor_cmd.module_c.theta, motor_cmd.module_c.beta, CR_motor_pos_srv.Request.value, CL_motor_pos_srv.Request.value, CR_phi, CL_phi);
+        tb2phi(motor_cmd.module_d.theta, motor_cmd.module_d.beta, DR_motor_pos_srv.Request.value, DL_motor_pos_srv.Request.value, DR_phi, DL_phi);
 
         AR_motor_pos_client.call(AR_motor_pos_srv);
         AL_motor_pos_client.call(AL_motor_pos_srv);
@@ -262,7 +276,7 @@ int main(int argc, char **argv) {
         Eigen::Vector3d gravity_body = orientation.inverse() * gravity_global;
 
         linear_acceleration -= gravity_body;
-        
+
         imu_filtered.header.seq = loop_counter;
         imu_filtered.orientation.w = imu.orientation.w;
         imu_filtered.orientation.x = imu.orientation.x;
@@ -270,7 +284,7 @@ int main(int argc, char **argv) {
         imu_filtered.orientation.z = imu.orientation.z;
         imu_filtered.angular_velocity.x = imu.angular_velocity.x;
         imu_filtered.angular_velocity.y = imu.angular_velocity.y;
-        imu_filtered.angular_velocity.z = imu.angular_velocity.z; 
+        imu_filtered.angular_velocity.z = imu.angular_velocity.z;
         imu_filtered.linear_acceleration.x = linear_acceleration(0);
         imu_filtered.linear_acceleration.y = linear_acceleration(1);
         imu_filtered.linear_acceleration.z = linear_acceleration(2);
@@ -280,9 +294,9 @@ int main(int argc, char **argv) {
         imu_pub.publish(imu_filtered);
         sim_data_pub.publish(sim_data);
 
-        double clock = loop_counter*0.001;
+        double clock = loop_counter * 0.001;
         simulationClock.clock.sec = (int)clock;
-        simulationClock.clock.nsec = round(1000 * (clock - simulationClock.clock.sec)) * 1.0e+6;
+        simulationClock.clock.nanosec = round(1000 * (clock - simulationClock.clock.sec)) * 1.0e+6;
         clock_pub.publish(simulationClock);
 
         loop_counter++;
@@ -293,7 +307,7 @@ int main(int argc, char **argv) {
     trigger.enable = false;
     trigger_pub.publish(trigger);
 
-    ros::shutdown();
+    rclcpp::shutdown();
 
     return 0;
 }
