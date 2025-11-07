@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright 1996-2023 Cyberbotics Ltd.
 #
@@ -16,8 +16,7 @@
 
 """
 This launcher simply starts Webots.
-Sets the environment variable WEBOTS_EXTRA_PROJECT_PATH if finds ROS packages
-being exported as '<webots_ros webots_extra_project_path="${prefix}"/>'
+ROS2 version - updated for ament/colcon packages.
 """
 
 import optparse
@@ -26,33 +25,10 @@ import sys
 import subprocess
 
 
-def get_plugin_paths(package, attrib):
-    """
-    Given a package name and an attribute to search for, uses rospack to find packages
-    being exported.
-    For a package to be found by this method, the package.xml should have:
-
-    <export>
-        <package attrib="${prefix}"/>
-    </export>
-
-    Returns:
-        Path to the found packages joined by a ':'
-    """
-    command = ["rospack", "plugins", f"--attrib={attrib}", f"{package}"]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, _ = process.communicate()
-    stdout = stdout.decode("utf-8").replace("\n", "")
-    found_paths = stdout.split(" ")
-    return ":".join(found_paths[1::2])
-
-webots_extra_project_path = get_plugin_paths("webots_ros", "webots_extra_project_path")
-
-if webots_extra_project_path:
-    if 'WEBOTS_EXTRA_PROJECT_PATH' not in os.environ:
-        os.environ['WEBOTS_EXTRA_PROJECT_PATH'] = webots_extra_project_path
-    else:
-        os.environ['WEBOTS_EXTRA_PROJECT_PATH'] += f":{webots_extra_project_path}"
+# For ROS2, we don't need to search for webots_ros packages
+# Just set WEBOTS_EXTRA_PROJECT_PATH if needed
+# if 'WEBOTS_EXTRA_PROJECT_PATH' not in os.environ:
+#     os.environ['WEBOTS_EXTRA_PROJECT_PATH'] = ''
 
 optParser = optparse.OptionParser()
 optParser.add_option("--world", dest="world", default="", help="Path to the world to load.")

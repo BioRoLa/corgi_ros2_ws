@@ -94,6 +94,10 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(DIRECTORY worlds
+  DESTINATION share/${PROJECT_NAME}
+)
+
 install(PROGRAMS
   scripts/webots_launcher.py
   DESTINATION lib/${PROJECT_NAME}
