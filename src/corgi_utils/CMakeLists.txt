@@ -8,12 +8,6 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Set up local package path if provided
-if(DEFINED LOCAL_PACKAGE_PATH)
-  set(CMAKE_PREFIX_PATH "${LOCAL_PACKAGE_PATH};${CMAKE_PREFIX_PATH}")
-  set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
-endif()
-
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
