@@ -10,6 +10,22 @@ import os
 
 
 def generate_launch_description():
+    # Set WEBOTS_HOME if not already set
+    if 'WEBOTS_HOME' not in os.environ:
+        os.environ['WEBOTS_HOME'] = '/usr/local/webots'
+    
+    # Set ROS2 middleware configuration for better local discovery
+    os.environ['ROS_DOMAIN_ID'] = '0'
+    os.environ['ROS_LOCALHOST_ONLY'] = '0'
+    os.environ['RMW_IMPLEMENTATION'] = 'rmw_fastrtps_cpp'
+    
+    # Set Fast-DDS profile for localhost discovery
+    fastdds_profile = os.path.join(os.path.dirname(os.path.dirname(get_package_share_directory('corgi_sim'))), 
+                                   'fastdds_localhost.xml')
+    if os.path.exists(fastdds_profile):
+        os.environ['FASTRTPS_DEFAULT_PROFILES_FILE'] = fastdds_profile
+        print(f"Using Fast-DDS profile: {fastdds_profile}")
+    
     # Get package directories
     pkg_share = get_package_share_directory('corgi_sim')
     pkg_prefix = get_package_prefix('corgi_sim')

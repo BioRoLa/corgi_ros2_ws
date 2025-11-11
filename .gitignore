@@ -3,6 +3,8 @@ devel
 logs
 .*
 
+fastdds_localhost.xml
+ROS2_MIGRATION_STATUS.md
 input_csv/*
 !input_csv/README.md
 !input_csv/demo_transform_sim.csv

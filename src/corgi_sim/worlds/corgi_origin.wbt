@@ -2917,11 +2917,7 @@ DEF CORGI Robot {
       -0.02 0 0
     ]
   }
-  controller "ros"
-  controllerArgs [
-    "--synchronize"
-    "--auto-publish"
-  ]
+  controller "corgi_ros2_controller"
   supervisor TRUE
 }
 SolidBox {

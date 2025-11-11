@@ -88,7 +88,7 @@ rosidl_target_interfaces(corgi_sim_trq
 target_link_libraries(corgi_sim_trq Eigen3::Eigen ${CMAKE_DL_LIBS})
 
 # ----------------------------------------------------------------------
-# 7. Install launch files, python scripts, executables
+# 7. Install launch files, python scripts, executables, controllers
 # ----------------------------------------------------------------------
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
@@ -96,6 +96,11 @@ install(DIRECTORY launch
 
 install(DIRECTORY worlds
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY controllers
+  DESTINATION share/${PROJECT_NAME}
+  USE_SOURCE_PERMISSIONS  # Preserve executable permissions
 )
 
 install(PROGRAMS
