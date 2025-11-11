@@ -87,6 +87,7 @@ rosidl_get_typesupport_target(cpp_typesupport_target_trq
 target_link_libraries(corgi_sim_trq "${cpp_typesupport_target_trq}" Eigen3::Eigen ${CMAKE_DL_LIBS})
 
 # ----------------------------------------------------------------------
+<<<<<<< HEAD
 # 7. Install
 # ----------------------------------------------------------------------
 install(DIRECTORY 
@@ -96,6 +97,28 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+<<<<<<< HEAD
+=======
+install(DIRECTORY worlds
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY controllers
+  DESTINATION share/${PROJECT_NAME}
+  USE_SOURCE_PERMISSIONS  # Preserve executable permissions
+)
+
+install(PROGRAMS
+  scripts/webots_launcher.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS
+  corgi_sim_pos 
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+>>>>>>> 4c41e95 (debugging corgi_sim webots runtime issues)
 install(TARGETS
   corgi_sim_pos
   corgi_sim_trq 
