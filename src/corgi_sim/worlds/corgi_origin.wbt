@@ -2917,7 +2917,8 @@ DEF CORGI Robot {
       -0.02 0 0
     ]
   }
-  controller "corgi_ros2_controller"
+  name "CORGI"
+  controller "corgi_ros2"
   supervisor TRUE
 }
 SolidBox {
