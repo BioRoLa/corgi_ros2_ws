@@ -2918,11 +2918,16 @@ DEF CORGI Robot {
     ]
   }
 <<<<<<< HEAD
+<<<<<<< HEAD
   name "CORGI"
   controller "corgi_ros2"
 =======
   controller "corgi_ros2_controller"
 >>>>>>> 4c41e95 (debugging corgi_sim webots runtime issues)
+=======
+  name "CORGI"
+  controller "corgi_ros2"
+>>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
   supervisor TRUE
 }
 SolidBox {

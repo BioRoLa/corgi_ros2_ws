@@ -20,7 +20,10 @@
   <depend>geometry_msgs</depend>
   <depend>corgi_msgs</depend>
 
+<<<<<<< HEAD
   <member_of_group>rosidl_interface_packages</member_of_group>
+=======
+>>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
   <export>
     <build_type>ament_cmake</build_type>
   </export>

@@ -88,12 +88,16 @@ target_link_libraries(corgi_sim_trq "${cpp_typesupport_target_trq}" Eigen3::Eige
 
 # ----------------------------------------------------------------------
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
 # 7. Install
 # ----------------------------------------------------------------------
 install(DIRECTORY 
   launch
   worlds
   controllers
+<<<<<<< HEAD
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -119,6 +123,12 @@ install(TARGETS
 )
 
 >>>>>>> 4c41e95 (debugging corgi_sim webots runtime issues)
+=======
+  resource
+  DESTINATION share/${PROJECT_NAME}
+)
+
+>>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
 install(TARGETS
   corgi_sim_pos
   corgi_sim_trq 

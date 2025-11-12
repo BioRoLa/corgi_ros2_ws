@@ -16,6 +16,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 <<<<<<< HEAD
+<<<<<<< HEAD
     package_dir = get_package_share_directory('corgi_sim')
     world = os.path.join(package_dir, 'worlds', 'corgi_origin.wbt')
 =======
@@ -52,6 +53,10 @@ def generate_launch_description():
         description='Webots simulation mode: realtime, pause, or fast'
     )
 >>>>>>> 4c41e95 (debugging corgi_sim webots runtime issues)
+=======
+    package_dir = get_package_share_directory('corgi_sim')
+    world = os.path.join(package_dir, 'worlds', 'corgi_origin.wbt')
+>>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
 
     # Start Webots simulator
     webots_process = ExecuteProcess(
