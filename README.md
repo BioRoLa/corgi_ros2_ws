@@ -1,10 +1,10 @@
-# Corgi Robot ROS Workspace
+# Corgi Robot ROS 2 Workspace
 
-![ROS Version](https://img.shields.io/badge/ROS-Noetic-blue)
-![Platform](https://img.shields.io/badge/Platform-Ubuntu%2020.04-orange)
+![ROS Version](https://img.shields.io/badge/ROS2-Humble-blue)
+![Platform](https://img.shields.io/badge/Platform-Ubuntu%2022.04-orange)
 ![Language](https://img.shields.io/badge/Language-C%2B%2B%20%7C%20Python-yellowgreen)
 
-This is the central ROS workspace for the Corgi quadruped robot, developed at the Bio-Inspired Robotic Laboratory (BioRoLa), NTU. It contains all necessary packages for control, simulation, and hardware interfacing.
+This is the central ROS 2 workspace for the Corgi quadruped robot, developed at the Bio-Inspired Robotics Laboratory (BioRoLa), NTU. It contains all necessary packages for control, simulation, and hardware interfacing.
 
 <!-- <p align="center">
   <img src="[INSERT_IMAGE_OR_GIF_URL_HERE]" alt="Corgi Robot Demo" width="600"/>
@@ -25,17 +25,17 @@ This is the central ROS workspace for the Corgi quadruped robot, developed at th
 
 ## System Architecture
 
-The system uses ROS on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
+The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 
 ## System Requirements & Dependencies
 
 ### Hardware
 
-- **Main Controller:**
-  - Real Robot: NVIDIA Jetson AGX Orin
-  - Panel/Simulation/Dev: PC with Ubuntu 20.04
-- **Low-Level Controller:**
-  - NI sbRIO-9629
+* **Main Controller:**
+    * Real Robot: NVIDIA Jetson AGX Orin
+    * Panel/Simulation/Dev: PC with Ubuntu 22.04
+* **Low-Level Controller:**
+    * NI sbRIO-9629
 
 ### Software
 
