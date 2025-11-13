@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 import os
 import sys
-import rospy
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from corgi_msgs.msg import *
+import threading
 import subprocess
 import signal
 import numpy as np
+
+import rclpy
+from rclpy.executors import SingleThreadedExecutor
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtCore import pyqtSignal
+from corgi_msgs.msg import (
+    PowerCmdStamped,
+    PowerStateStamped,
+    MotorCmdStamped,
+    MotorStateStamped,
+    SteeringStateStamped,
+    TriggerStamped,
+)
 
 GPIO_defined = True
 try: import Jetson.GPIO as GPIO 
@@ -15,6 +26,10 @@ except: GPIO_defined = False
 
 
 class CorgiControlPanel(QWidget):
+    # Qt signals for thread-safe communication from ROS callbacks to GUI thread
+    power_state_signal = pyqtSignal(object)
+    motor_state_signal = pyqtSignal(object)
+    steer_state_signal = pyqtSignal(object)
     def __init__(self):
         super(CorgiControlPanel, self).__init__()
         
@@ -26,6 +41,12 @@ class CorgiControlPanel(QWidget):
         
         self.init_ui()
         self.init_ros()
+        
+        # Connect signals to slots for thread-safe GUI updates
+        self.power_state_signal.connect(self._handle_power_state_update)
+        self.motor_state_signal.connect(self._handle_motor_state_update)
+        self.steer_state_signal.connect(self._handle_steer_state_update)
+        
         self.reset()
 
 
@@ -328,17 +349,25 @@ class CorgiControlPanel(QWidget):
         
 
     def init_ros(self):
-        rospy.init_node('corgi_control_panel')
-        
-        self.power_cmd_pub = rospy.Publisher('power/command', PowerCmdStamped, queue_size=10)
-        self.motor_cmd_pub = rospy.Publisher('motor/command', MotorCmdStamped, queue_size=10)
-        self.trigger_pub = rospy.Publisher('trigger', TriggerStamped, queue_size=10)
-        self.sensor_enable_pub = rospy.Publisher('sensor_enable', SensorEnableStamped, queue_size=10)
-        
-        self.power_state_sub = rospy.Subscriber('power/state', PowerStateStamped, self.power_state_cb)
-        self.motor_state_sub = rospy.Subscriber('motor/state', MotorStateStamped, self.motor_state_cb)
-        self.steer_state_sub = rospy.Subscriber('steer/state', SteeringStateStamped, self.steer_state_cb)
-        
+        # Initialize ROS 2 and create a node with a background executor thread
+        rclpy.init(args=None)
+        self.node = rclpy.create_node('corgi_control_panel')
+        self.executor = SingleThreadedExecutor()
+        self.executor.add_node(self.node)
+        self._executor_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self._executor_thread.start()
+
+        # Publishers
+        self.power_cmd_pub = self.node.create_publisher(PowerCmdStamped, 'power/command', 10)
+        self.motor_cmd_pub = self.node.create_publisher(MotorCmdStamped, 'motor/command', 10)
+        self.trigger_pub = self.node.create_publisher(TriggerStamped, 'trigger', 10)
+
+        # Subscribers
+        self.power_state_sub = self.node.create_subscription(PowerStateStamped, 'power/state', self.power_state_cb, 10)
+        self.motor_state_sub = self.node.create_subscription(MotorStateStamped, 'motor/state', self.motor_state_cb, 10)
+        self.steer_state_sub = self.node.create_subscription(SteeringStateStamped, 'steer/state', self.steer_state_cb, 10)
+
+        # Local state mirrors
         self.power_state = PowerStateStamped()
         self.motor_state = MotorCmdStamped()
         self.steer_state = SteeringStateStamped()
@@ -362,7 +391,11 @@ class CorgiControlPanel(QWidget):
     def ros_bridge_cmd(self):        
         if self.btn_ros_bridge.isChecked():
             self.btn_ros_bridge.setText('Stop Bridge')
-            self.process_bridge = subprocess.Popen(['rosrun', 'corgi_ros_bridge', 'corgi_ros_bridge.sh'])
+            # Prefer ROS 2 if available; fall back to ROS 1 rosrun if needed
+            try:
+                self.process_bridge = subprocess.Popen(['ros2', 'run', 'corgi_ros_bridge', 'corgi_ros_bridge.sh'])
+            except FileNotFoundError:
+                self.process_bridge = subprocess.Popen(['rosrun', 'corgi_ros_bridge', 'corgi_ros_bridge.sh'])
         else:
             self.btn_ros_bridge.setText('Run Bridge')
             if hasattr(self, 'process_bridge'):
@@ -375,7 +408,8 @@ class CorgiControlPanel(QWidget):
     def csv_control_cmd(self):        
         if self.btn_csv_run.isChecked():
             self.btn_csv_run.setText('Stop')
-            self.process_csv = subprocess.Popen(['rosrun', 'corgi_csv_control', 'corgi_csv_control', self.edit_csv.text()])
+            # corgi_csv_control is ROS 2 in this workspace; use ros2 run
+            self.process_csv = subprocess.Popen(['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', self.edit_csv.text()])
 
         else:
             self.btn_csv_run.setText('Run')
@@ -389,8 +423,8 @@ class CorgiControlPanel(QWidget):
     def publish_power_cmd(self):
         power_cmd = PowerCmdStamped()
         
-        power_cmd.header.seq = 9999
-        power_cmd.header.stamp = rospy.Time.now()
+        # ROS 2 Header doesn't use seq; only stamp and frame_id
+        power_cmd.header.stamp = self.node.get_clock().now().to_msg()
         power_cmd.digital = self.btn_digital_on.isChecked()
         power_cmd.signal = self.btn_signal_on.isChecked()
         power_cmd.power = self.btn_power_on.isChecked()
@@ -400,7 +434,8 @@ class CorgiControlPanel(QWidget):
         
         self.power_cmd_pub.publish(power_cmd)
         
-        if self.sender() != self.btn_motor_mode: self.publish_motor_zero_cmd(kp=0, ki=0, kd=0)
+        if self.sender() != self.btn_motor_mode:
+            self.publish_motor_zero_cmd(kp=0, ki=0, kd=0)
         # elif self.power_state.robot_mode != 4: self.publish_motor_zero_cmd(kp=90, ki=0, kd=1.75)
         
         self.set_btn_enable()
@@ -409,18 +444,19 @@ class CorgiControlPanel(QWidget):
     def publish_motor_zero_cmd(self, kp, ki, kd):
         motor_cmd = MotorCmdStamped()
         
-        motor_cmd.header.seq = 9999
-        motor_cmd.header.stamp = rospy.Time.now()
+        motor_cmd.header.stamp = self.node.get_clock().now().to_msg()
         
         for cmd in [motor_cmd.module_a, motor_cmd.module_b, motor_cmd.module_c, motor_cmd.module_d]:
-            cmd.theta = np.deg2rad(17)
-            cmd.beta = 0
-            cmd.kp_r = kp
-            cmd.kp_l = kp
-            cmd.ki_r = ki
-            cmd.ki_l = ki
-            cmd.kd_r = kd
-            cmd.kd_l = kd
+            cmd.theta = float(np.deg2rad(17))
+            cmd.beta = 0.0
+            cmd.kp_r = float(kp)
+            cmd.kp_l = float(kp)
+            cmd.ki_r = float(ki)
+            cmd.ki_l = float(ki)
+            cmd.kd_r = float(kd)
+            cmd.kd_l = float(kd)
+            cmd.torque_r = 0.0
+            cmd.torque_l = 0.0
             
         self.motor_cmd_pub.publish(motor_cmd)
         
@@ -430,13 +466,14 @@ class CorgiControlPanel(QWidget):
     def publish_trigger_cmd(self):
         trigger_cmd = TriggerStamped()
         
-        trigger_cmd.header.stamp = rospy.Time.now()
+        trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
         trigger_cmd.enable = self.btn_trigger.isChecked()
         trigger_cmd.output_filename = self.edit_output.text()
         
         self.trigger_pub.publish(trigger_cmd)
         
-        if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW)
+        if GPIO_defined:
+            GPIO.output(self.trigger_pin, GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW)
         
         self.set_btn_enable()
         
@@ -477,18 +514,31 @@ class CorgiControlPanel(QWidget):
     
     
     def power_state_cb(self, state):
+        # ROS callback - emit signal to handle in GUI thread
+        self.power_state_signal.emit(state)
+        
+    def motor_state_cb(self, state):
+        # ROS callback - emit signal to handle in GUI thread
+        self.motor_state_signal.emit(state)
+        
+    def steer_state_cb(self, state):
+        # ROS callback - emit signal to handle in GUI thread
+        self.steer_state_signal.emit(state)
+    
+    def _handle_power_state_update(self, state):
+        # Slot - runs in GUI thread, safe to update widgets
         if (self.power_state.digital, self.power_state.power, self.power_state.signal, self.power_state.robot_mode) != (state.digital, state.power, state.signal, state.robot_mode):
             self.power_state = state
             self.update_power_status()
         else:
             self.power_state = state
-            
-        
-    def motor_state_cb(self, state):
+    
+    def _handle_motor_state_update(self, state):
+        # Slot - runs in GUI thread, safe to update widgets
         self.motor_state = state
         
-        
-    def steer_state_cb(self, state):
+    def _handle_steer_state_update(self, state):
+        # Slot - runs in GUI thread, safe to update widgets
         self.steer_state = state
         self.update_steer_status()
     
@@ -525,16 +575,40 @@ class CorgiControlPanel(QWidget):
         
     
     def closeEvent(self, event):
-        self.power_state_sub.unregister()
-        self.motor_state_sub.unregister()
-        super(CorgiControlPanel, self).closeEvent(event)
-        
+        # Clean up ROS 2 subscriptions and node/executor
+        try:
+            self.node.destroy_subscription(self.power_state_sub)
+            self.node.destroy_subscription(self.motor_state_sub)
+            self.node.destroy_subscription(self.steer_state_sub)
+        except Exception:
+            pass
+
         self.reset()
         self.btn_ros_bridge.setChecked(False)
         self.ros_bridge_cmd()
+
+        # Tear down executor and node
+        try:
+            self.executor.shutdown()
+        except Exception:
+            pass
+        try:
+            self.node.destroy_node()
+        except Exception:
+            pass
+        try:
+            rclpy.try_shutdown()
+        except Exception:
+            pass
+
+        # Best-effort cleanup of ROS 1 node if running; ignore if rosnode is unavailable
+        try:
+            subprocess.run(['rosnode', 'kill', 'corgi_data_recorder'], 
+                         timeout=1.0, capture_output=True)
+        except Exception:
+            pass  # Silently ignore - ROS 1 may not be available
         
-        try: subprocess.run(['rosnode', 'kill', 'corgi_data_recorder'], check=True)
-        except subprocess.CalledProcessError as e: print(f'Failed to kill corgi_data_recorder: {e}')
+        super(CorgiControlPanel, self).closeEvent(event)
         
         
 if __name__ == '__main__':

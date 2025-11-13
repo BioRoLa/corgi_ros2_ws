@@ -2,28 +2,20 @@ cmake_minimum_required(VERSION 3.8)
 
 project(corgi_panel)
 
-find_package(catkin REQUIRED COMPONENTS
-  rospy
-  std_msgs
-  rosgraph_msgs
-  geometry_msgs
-  corgi_msgs
-)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
+find_package(corgi_msgs REQUIRED)
 
-catkin_package(
-  CATKIN_DEPENDS
-    rospy
-    std_msgs
-    rosgraph_msgs
-    geometry_msgs
-    corgi_msgs
-)
-
-catkin_install_python(PROGRAMS
+# Install Python script as an executable
+install(PROGRAMS
   scripts/corgi_control_panel.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
+# Install launch files
 install(DIRECTORY launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
+
+ament_package()
