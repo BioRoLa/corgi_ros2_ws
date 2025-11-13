@@ -99,7 +99,6 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
     ```
 
 5.  **Source the Environment (ROS 2)**
-
     Run this once to append auto-source lines to your `~/.bashrc`:
 
     ```
@@ -111,7 +110,6 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
     EOF
     source ~/.bashrc
     ```
-
 ## Usage Guide
 
 ### Running the Simulation
