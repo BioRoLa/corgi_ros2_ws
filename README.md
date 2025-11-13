@@ -30,7 +30,6 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
 ## System Requirements & Dependencies
 
 ### Hardware
-
 * **Main Controller:**
     * Real Robot: NVIDIA Jetson AGX Orin
     * Panel/Simulation/Dev: PC with Ubuntu 22.04
