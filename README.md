@@ -10,60 +10,58 @@ This is the central ROS workspace for the Corgi quadruped robot, developed at th
   <img src="[INSERT_IMAGE_OR_GIF_URL_HERE]" alt="Corgi Robot Demo" width="600"/>
 </p> -->
 
-
 ## Table of Contents
 
-- [***System Architecture***](#system-architecture)
-- [***System Requirements & Dependencies***](#system-requirements--dependencies)
-  - [*Hardware*](#hardware)
-  - [*Software*](#software)
-- [***Installation and Build Instructions***](#installation-and-build-instructions)
-- [***Usage Guide***](#usage-guide)
-  - [*Running the Simulation*](#running-the-simulation)
-  - [*Running on the Real Robot*](#running-on-the-real-robot)
-- [***Workspace Structure & Key Packages***](#workspace-structure--key-packages)
-- [***Notes & Contact***](#notes--contact)
-
+- [**_System Architecture_**](#system-architecture)
+- [**_System Requirements & Dependencies_**](#system-requirements--dependencies)
+  - [_Hardware_](#hardware)
+  - [_Software_](#software)
+- [**_Installation and Build Instructions_**](#installation-and-build-instructions)
+- [**_Usage Guide_**](#usage-guide)
+  - [_Running the Simulation_](#running-the-simulation)
+  - [_Running on the Real Robot_](#running-on-the-real-robot)
+- [**_Workspace Structure & Key Packages_**](#workspace-structure--key-packages)
+- [**_Notes & Contact_**](#notes--contact)
 
 ## System Architecture
 
 The system uses ROS on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 
-
 ## System Requirements & Dependencies
 
 ### Hardware
-* **Main Controller:**
-    * Real Robot: NVIDIA Jetson AGX Orin
-    * Panel/Simulation/Dev: PC with Ubuntu 20.04
-* **Low-Level Controller:**
-    * NI sbRIO-9629
+
+- **Main Controller:**
+  - Real Robot: NVIDIA Jetson AGX Orin
+  - Panel/Simulation/Dev: PC with Ubuntu 20.04
+- **Low-Level Controller:**
+  - NI sbRIO-9629
 
 ### Software
 
-* **NI sbRIO-9629**
-    * [**fpga_driver**](https://github.com/Yatinghsu000627/fpga_driver)
-    * [**grpc_core**](https://github.com/kyle1548/grpc_core)
+- **NI sbRIO-9629**
 
-* **PC / Nvidia Jetson**
-    * **OS**: Ubuntu 22.04
-    * **ROS**: [**ROS Humble**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
-    * **Simulator**: [**Webots**](https://cyberbotics.com/) (for simulation only)
-    * **Python Dependencies**:
-        * `pip install numpy`
-        * `pip install PyQt5`
-        * `pip install Jetson.GPIO`
-    * **C++ Dependencies**:
-        * [**Eigen 3.4.0**](https://eigen.tuxfamily.org/index.php?title=Main_Page)
-        * [**yaml-cpp**](https://github.com/jbeder/yaml-cpp)
-        * [**mip_sdk (v2.0.0)**](https://github.com/LORD-MicroStrain/mip_sdk/tree/v2.0.0) (***Important:*** You must modify its `CMakeLists.txt` at line 241, changing `src` to `include`.)
-        * [**osqp (v0.6.3)**](https://github.com/osqp/osqp/tree/v0.6.3)
-        * [**osqp-eigen**](https://github.com/robotology/osqp-eigen)
+  - [**fpga_driver**](https://github.com/Yatinghsu000627/fpga_driver)
+  - [**grpc_core**](https://github.com/kyle1548/grpc_core)
 
-> ***CRITICAL INSTALLATION NOTE***
-> 
+- **PC / Nvidia Jetson**
+  - **OS**: Ubuntu 22.04
+  - **ROS**: [**ROS Humble**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+  - **Simulator**: [**Webots**](https://cyberbotics.com/) (for simulation only)
+  - **Python Dependencies**:
+    - `pip install numpy`
+    - `pip install PyQt5`
+    - `pip install Jetson.GPIO`
+  - **C++ Dependencies**:
+    - [**Eigen 3.4.0**](https://eigen.tuxfamily.org/index.php?title=Main_Page)
+    - [**yaml-cpp**](https://github.com/jbeder/yaml-cpp)
+    - [**mip_sdk (v2.0.0)**](https://github.com/LORD-MicroStrain/mip_sdk/tree/v2.0.0) (**_Important:_** You must modify its `CMakeLists.txt` at line 241, changing `src` to `include`.)
+    - [**osqp (v0.6.3)**](https://github.com/osqp/osqp/tree/v0.6.3)
+    - [**osqp-eigen**](https://github.com/robotology/osqp-eigen)
+
+> **_CRITICAL INSTALLATION NOTE_**
+>
 > To avoid build errors, it is **strongly recommended** to install all C++ dependencies listed above into the `~/corgi_ws/install/` directory. If you install them elsewhere, you **must** manually update the compile commands or the paths in the `CMakeLists.txt` files.
-
 
 ## Installation and Build Instructions
 
@@ -84,7 +82,8 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
 
 3.  **Install All Dependencies**
 
-    Follow the list in the [***Software***](#software) section to install all required libraries.
+    Follow the list in the [**_Software_**](#software) section to install all required libraries.
+
     ```
     cd ~/corgi_ws/
     mkdir install/
@@ -102,24 +101,37 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
 
 5.  **Source the Environment**
 
-    Add the following command to your `~/.bashrc` to source it automatically in new terminals.
+        Add one of the following to your `~/.bashrc` to auto-source in new terminals.
 
-    ```
-    source ~/corgi_ws/corgi_ros_ws/devel/setup.bash
-    ```
+        - ROS 1 (Noetic / catkin):
 
+            ```bash
+            # ROS 1 base
+            [ -f /opt/ros/noetic/setup.bash ] && source /opt/ros/noetic/setup.bash
+            # Corgi workspace (ROS 1 overlay)
+            [ -f "$HOME/corgi_ws/corgi_ros_ws/devel/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/devel/setup.bash"
+            ```
+
+        - ROS 2 (Humble / colcon):
+
+            ```bash
+            # ROS 2 base
+            [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
+            # Corgi workspace (ROS 2 overlay)
+            [ -f "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash"
+            ```
 
 ## Usage Guide
 
 ### Running the Simulation
+
 To launch the Corgi robot in the Webots simulator:
 
 ```
 roslaunch corgi_sim run_simulation.launch
 ```
 
-After launching the simulation, you can run other nodes to interact with the simulated robot. Press ***Enter*** to start the simulation, and the data will be recorded in `output_data/` if the output file name are not empty.
-
+After launching the simulation, you can run other nodes to interact with the simulated robot. Press **_Enter_** to start the simulation, and the data will be recorded in `output_data/` if the output file name are not empty.
 
 ### Running on the Real Robot
 
@@ -131,7 +143,7 @@ After launching the simulation, you can run other nodes to interact with the sim
 
 2.  **Launch ROS Control Panel**
 
-    On the Jetson/PC, run the main launch file. This will start the ***panel***, ***data recorder***, ***force estimation***, and ***IMU*** nodes.
+    On the Jetson/PC, run the main launch file. This will start the **_panel_**, **_data recorder_**, **_force estimation_**, and **_IMU_** nodes.
 
     ```
     roslaunch corgi_panel corgi_control_panel.launch
@@ -140,18 +152,18 @@ After launching the simulation, you can run other nodes to interact with the sim
 3.  **Control Panel Operation Sequence**
 
     Follow these steps **in order** on the GUI to safely start the robot:
+
     1.  **Power On**: Click `Digital` -> `Signal` -> `Power`.
     2.  **Set Zero Position**: Press `Set Zero` to define the motor's home position.
     3.  **Calibrate & Enable**:
-        * If legs are fully extended, press `Hall Calibration`.
-        * If legs are already in wheeled mode, press `Motor Mode` to enable motors.
+        - If legs are fully extended, press `Hall Calibration`.
+        - If legs are already in wheeled mode, press `Motor Mode` to enable motors.
     4.  **Steer Calibration (Optional)**: If you will use wheeled steering, press `Steer Calibration`.
     5.  **Select Control Mode**: After entering `Motor Mode`, PID gains will be zeroed. Choose either `RT` (Real-Time) or `CSV` (from `input_csv/`) mode.
     6.  **Trigger Motion & Recording**:
-        * Fill in a filename in the `Output File Name` field to enable data logging, or data will not be recorded.
-        * Press `Trigger` to start the motion trajectory, and data will be saved to `output_data/`.
+        - Fill in a filename in the `Output File Name` field to enable data logging, or data will not be recorded.
+        - Press `Trigger` to start the motion trajectory, and data will be saved to `output_data/`.
     7.  **Powery Reset**: Pressing `Reset` will **cut all power** to the motors. Ensure the robot is secure before using this.
-
 
 ## Workspace Structure & Key Packages
 
@@ -159,34 +171,35 @@ After launching the simulation, you can run other nodes to interact with the sim
 
 For more details on a specific package, please see its respective `README.md` file.
 
-* **Core**
-    * [`corgi_msgs`](src/corgi_msgs): Defines all custom ROS messages used in the project.
-    * [`corgi_ros_bridge`](src/corgi_ros_bridge): The gRPC client/server that connects ROS to the FPGA driver.
-    * [`corgi_virtual_agent`](src/corgi_virtual_agent): A mock FPGA driver for testing the `corgi_ros_bridge` without hardware.
-    * [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
-    * [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
-    * [`*corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
+- **Core**
 
-* **Simulation**
-    * [`corgi_sim`](src/corgi_sim): Contains Webots models, worlds, and controllers for simulation.
+  - [`corgi_msgs`](src/corgi_msgs): Defines all custom ROS messages used in the project.
+  - [`corgi_ros_bridge`](src/corgi_ros_bridge): The gRPC client/server that connects ROS to the FPGA driver.
+  - [`corgi_virtual_agent`](src/corgi_virtual_agent): A mock FPGA driver for testing the `corgi_ros_bridge` without hardware.
+  - [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
+  - [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
+  - [`*corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
 
-* **Sensing & Estimation**
-    * [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
-    * [`corgi_force_estimation`](src/corgi_force_estimation): Estimates contact forces from motor currents.
-    * [`*corgi_odometry`](src/corgi_odometry): Robot odometry estimation.
-    * [`*corgi_camera`](src/corgi_camera): Integrates ZED camera for visual perception.
+- **Simulation**
 
-* **Control & Planning**
-    * [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
-    * [`corgi_rt_control`](src/corgi_rt_control): Handles real-time trajectory commands.
-    * [`*corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
-    * [`*corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
-    * [`corgi_force_control`](src/corgi_force_control): Foot contact force control algorithms.
-    * [`corgi_mpc`](src/corgi_mpc): Model Predictive Control implementation.
-    * [`*corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
-    * [`*corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
-    * [`*corgi_algo`](src/corgi_algo): Contains various core algorithms for control.
+  - [`corgi_sim`](src/corgi_sim): Contains Webots models, worlds, and controllers for simulation.
 
+- **Sensing & Estimation**
+
+  - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`corgi_force_estimation`](src/corgi_force_estimation): Estimates contact forces from motor currents.
+  - [`*corgi_odometry`](src/corgi_odometry): Robot odometry estimation.
+  - [`*corgi_camera`](src/corgi_camera): Integrates ZED camera for visual perception.
+
+- **Control & Planning**
+  - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
+  - [`corgi_rt_control`](src/corgi_rt_control): Handles real-time trajectory commands.
+  - [`*corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
+  - [`*corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
+  - [`corgi_force_control`](src/corgi_force_control): Foot contact force control algorithms.
+  - [`corgi_mpc`](src/corgi_mpc): Model Predictive Control implementation.
+  - [`*corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
+  - [`*corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
+  - [`*corgi_algo`](src/corgi_algo): Contains various core algorithms for control.
 
 ## Notes
-
