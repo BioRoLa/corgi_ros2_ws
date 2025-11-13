@@ -99,27 +99,19 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
     source devel/setup.bash
     ```
 
-5.  **Source the Environment**
+5.  **Source the Environment (ROS 2)**
 
-        Add one of the following to your `~/.bashrc` to auto-source in new terminals.
+    Run this once to append auto-source lines to your `~/.bashrc`:
 
-        - ROS 1 (Noetic / catkin):
-
-            ```bash
-            # ROS 1 base
-            [ -f /opt/ros/noetic/setup.bash ] && source /opt/ros/noetic/setup.bash
-            # Corgi workspace (ROS 1 overlay)
-            [ -f "$HOME/corgi_ws/corgi_ros_ws/devel/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/devel/setup.bash"
-            ```
-
-        - ROS 2 (Humble / colcon):
-
-            ```bash
-            # ROS 2 base
-            [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
-            # Corgi workspace (ROS 2 overlay)
-            [ -f "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash"
-            ```
+    ```
+    cat <<'EOF' >> ~/.bashrc
+    # ROS 2 base
+    [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
+    # Corgi workspace (ROS 2 overlay)
+    [ -f "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash"
+    EOF
+    source ~/.bashrc
+    ```
 
 ## Usage Guide
 
