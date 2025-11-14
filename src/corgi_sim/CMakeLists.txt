@@ -73,17 +73,17 @@ add_executable(corgi_sim_pos src/corgi_sim_pos.cpp)
 ament_target_dependencies(corgi_sim_pos
   rclcpp corgi_msgs geometry_msgs std_msgs rosgraph_msgs)
 add_dependencies(corgi_sim_pos ${PROJECT_NAME}__rosidl_generator_cpp)
-rosidl_target_interfaces(corgi_sim_pos
+rosidl_get_typesupport_target(cpp_typesupport_target
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(corgi_sim_pos Eigen3::Eigen ${CMAKE_DL_LIBS})
+target_link_libraries(corgi_sim_pos "${cpp_typesupport_target}" Eigen3::Eigen ${CMAKE_DL_LIBS})
 
 add_executable(corgi_sim_trq src/corgi_sim_trq.cpp)
 ament_target_dependencies(corgi_sim_trq
   rclcpp corgi_msgs geometry_msgs std_msgs rosgraph_msgs)
 add_dependencies(corgi_sim_trq ${PROJECT_NAME}__rosidl_generator_cpp)
-rosidl_target_interfaces(corgi_sim_trq
+rosidl_get_typesupport_target(cpp_typesupport_target_trq
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(corgi_sim_trq Eigen3::Eigen ${CMAKE_DL_LIBS})
+target_link_libraries(corgi_sim_trq "${cpp_typesupport_target_trq}" Eigen3::Eigen ${CMAKE_DL_LIBS})
 
 # ----------------------------------------------------------------------
 # 7. Install
@@ -92,7 +92,6 @@ install(DIRECTORY
   launch
   worlds
   controllers
-  resource
   DESTINATION share/${PROJECT_NAME}
 )
 
