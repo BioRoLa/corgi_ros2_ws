@@ -10,24 +10,24 @@ RobotConfig load_config()
     if (!home_path) {
         throw std::runtime_error("HOME environment variable not set");
     }
-    std::string config_file_path = std::string(home) + "/corgi_ws/corgi_ros_ws/config/config.yaml";
+    std::string config_file_path = std::string(home_path) + "/corgi_ws/corgi_ros_ws/config/config.yaml";
     YAML::Node yaml_node = YAML::LoadFile(config_file_path);
 
     const bool sim = yaml_node["sim"].as<bool>();
     double CoM_x = yaml_node["CoM"]["x"].as<double>();
     double CoM_y = yaml_node["CoM"]["y"].as<double>();
     double CoM_z = yaml_node["CoM"]["z"].as<double>();
-    const CoM CoM{CoM_x, CoM_y, CoM_z};
+    const CenterOfMass CoM{CoM_x, CoM_y, CoM_z};
 
     auto load_motor_module = [&](const YAML::Node& module_node) {
         double motor_l_kt = module_node["motor_l"]["kt"].as<double>();
         double motor_r_kt = module_node["motor_r"]["kt"].as<double>();
         return MotorModule{Motor{motor_l_kt}, Motor{motor_r_kt}};
     };
-    MotorModule module_a = load_motor_module(yaml_config["module_a"]);
-    MotorModule module_b = load_motor_module(yaml_config["module_b"]);
-    MotorModule module_c = load_motor_module(yaml_config["module_c"]);
-    MotorModule module_d = load_motor_module(yaml_config["module_d"]);
+    MotorModule module_a = load_motor_module(yaml_node["module_a"]);
+    MotorModule module_b = load_motor_module(yaml_node["module_b"]);
+    MotorModule module_c = load_motor_module(yaml_node["module_c"]);
+    MotorModule module_d = load_motor_module(yaml_node["module_d"]);
 
     // double module_a_motor_l_kt = yaml_node["module_a"]["motor_l"]["kt"].as<double>();
     // double module_a_motor_r_kt = yaml_node["module_a"]["motor_r"]["kt"].as<double>();
