@@ -1,13 +1,14 @@
 #include <yaml.h>
-#include <cstdlib> 
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include "config.hpp"
 
 RobotConfig load_config()
 {
-    const char* home_path = std::getenv("HOME");
-    if (!home_path) {
+    const char *home_path = std::getenv("HOME");
+    if (!home_path)
+    {
         throw std::runtime_error("HOME environment variable not set");
     }
     std::string config_file_path = std::string(home_path) + "/corgi_ws/corgi_ros_ws/config/config.yaml";
@@ -19,7 +20,8 @@ RobotConfig load_config()
     double CoM_z = yaml_node["CoM"]["z"].as<double>();
     const CenterOfMass CoM{CoM_x, CoM_y, CoM_z};
 
-    auto load_motor_module = [&](const YAML::Node& module_node) {
+    auto load_motor_module = [&](const YAML::Node &module_node)
+    {
         double motor_l_kt = module_node["motor_l"]["kt"].as<double>();
         double motor_r_kt = module_node["motor_r"]["kt"].as<double>();
         return MotorModule{Motor{motor_l_kt}, Motor{motor_r_kt}};
@@ -41,6 +43,6 @@ RobotConfig load_config()
     // MotorModule module_b{Motor{module_b_motor_l_kt}, Motor{module_b_motor_r_kt}};
     // MotorModule module_c{Motor{module_c_motor_l_kt}, Motor{module_c_motor_r_kt}};
     // MotorModule module_d{Motor{module_d_motor_l_kt}, Motor{module_d_motor_r_kt}};
-    
+
     return RobotConfig(sim, CoM, module_a, module_b, module_c, module_d);
-}//end load_config
+} // end load_config
