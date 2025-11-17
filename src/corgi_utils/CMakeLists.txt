@@ -1,46 +1,24 @@
 cmake_minimum_required(VERSION 3.8)
+project(corgi_utils)
 
-set(CMAKE_C_COMPILER "/usr/bin/gcc")
-set(CMAKE_CXX_COMPILER "/usr/bin/g++")
-
-project(corgi_utils LANGUAGES C CXX)
-
-set (CMAKE_EXE_LINKER_FLAGS)
-set (CMAKE_CXX_STANDARD 17)
-set (CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
-set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
-if(NOT DEFINED LOCAL_PACKAGE_PATH)
-  if(DEFINED ENV{LOCAL_PACKAGE_PATH})
-    set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}")
-  else()
-    set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
-  endif()
-endif()
-set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(corgi_msgs REQUIRED)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs)
-
-catkin_package(
-  INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs
-)
 
 include_directories(
-  ${catkin_INCLUDE_DIRS}
-  ${CMAKE_CURRENT_LIST_DIR}
-  ${EIGEN3_INCLUDE_DIR}
   include
+  ${EIGEN3_INCLUDE_DIR}
 )
-
-add_subdirectory(src)
 
 add_library(${PROJECT_NAME}
   src/leg_model.cpp
@@ -48,3 +26,33 @@ add_library(${PROJECT_NAME}
   src/trajectory_plan.cpp
 )
 
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  std_msgs
+  geometry_msgs
+  corgi_msgs
+)
+
+install(TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(DIRECTORY include/
+  DESTINATION include
+)
+
+ament_export_include_directories(include)
+ament_export_libraries(${PROJECT_NAME})
+ament_export_dependencies(
+  rclcpp
+  std_msgs
+  geometry_msgs
+  corgi_msgs
+  Eigen3
+)
+
+add_subdirectory(src)
+
+ament_package()
