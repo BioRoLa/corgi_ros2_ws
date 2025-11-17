@@ -3,15 +3,13 @@ devel
 logs
 .*
 
-fastdds_localhost.xml
-ROS2_MIGRATION_STATUS.md
 input_csv/*
 !input_csv/README.md
 !input_csv/demo_transform_sim.csv
 !input_csv/demo_transform_real.csv
 !input_csv/demo_walk_sim.csv
 !input_csv/demo_walk_real.
-
+/*.md
 output_data/*
 !output_data/README.md
 

@@ -95,8 +95,7 @@ The system uses ROS on a high-level computer (PC/Jetson) to communicate with a l
 
     ```
     cd ~/corgi_ws/corgi_ros_ws/
-    catkin build -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
-    source devel/setup.bash
+    colcon build
     ```
 
 5.  **Source the Environment (ROS 2)**
