@@ -23,11 +23,11 @@ if(NOT DEFINED LOCAL_PACKAGE_PATH)
     set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
   endif()
 endif()
-set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 set(OSQP_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/osqp")
 set(OSQP_EIGEN_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/OsqpEigen")
 
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(osqp REQUIRED)
 find_package(OsqpEigen REQUIRED)
 find_package(yaml-cpp REQUIRED)
@@ -65,7 +65,6 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
-  ${EIGEN3_INCLUDE_DIR}
   ${OSQP_INCLUDE_DIRS}
   ${OSQP_EIGEN_INCLUDE_DIRS}
   include

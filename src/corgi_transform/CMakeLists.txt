@@ -15,32 +15,30 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
-set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
-if(NOT DEFINED LOCAL_PACKAGE_PATH)
-  if(DEFINED ENV{LOCAL_PACKAGE_PATH})
-    set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}")
-  else()
-    set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
-  endif()
-endif()
-set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
-
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(catkin REQUIRED COMPONENTS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils)
-
-catkin_package(
-  INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils
-)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(corgi_msgs REQUIRED)
 
 include_directories(
-  ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
-  ${EIGEN3_INCLUDE_DIR}
   include
+  ${CMAKE_CURRENT_LIST_DIR}/../corgi_utils/include
 )
 
-find_library(CORGI_UTILS corgi_utils)
+find_library(CORGI_UTILS corgi_utils
+  PATHS
+    ${CMAKE_CURRENT_LIST_DIR}/../corgi_utils/build
+    ${CMAKE_CURRENT_LIST_DIR}/../../devel/lib
+    ${LOCAL_PACKAGE_PATH}/lib
+    ${CMAKE_INSTALL_PREFIX}/lib
+  PATH_SUFFIXES "" lib
+)
+
+if(NOT CORGI_UTILS)
+  message(FATAL_ERROR "corgi_utils library not found. Please build the corgi_utils package first: colcon build --packages-select corgi_utils")
+endif()
 
 add_subdirectory(src)
 
@@ -50,4 +48,10 @@ add_library(${PROJECT_NAME}
 )
 target_link_libraries(${PROJECT_NAME}
   ${CORGI_UTILS}
+  Eigen3::Eigen
 )
+
+ament_export_include_directories(include)
+ament_export_dependencies(Eigen3)
+ament_export_libraries(${PROJECT_NAME})
+ament_package()

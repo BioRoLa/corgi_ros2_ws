@@ -15,70 +15,31 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
-set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
-if(NOT DEFINED LOCAL_PACKAGE_PATH)
-  if(DEFINED ENV{LOCAL_PACKAGE_PATH})
-    set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}")
-  else()
-    set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
-  endif()
-endif()
-set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(catkin REQUIRED COMPONENTS 
-  roscpp 
-  std_msgs 
-  rosgraph_msgs 
-  geometry_msgs 
-  corgi_msgs 
-  joy 
-  sensor_msgs
-  corgi_utils 
-  corgi_legged 
-  corgi_wheeled
-  corgi_hybrid
-  # corgi_transformation
-  corgi_gait_selector
-)
-
-
-catkin_package(
-  INCLUDE_DIRS include
-  CATKIN_DEPENDS 
-    roscpp 
-    std_msgs 
-    rosgraph_msgs 
-    geometry_msgs 
-    corgi_msgs 
-    joy 
-    sensor_msgs
-    corgi_utils 
-    corgi_legged 
-    corgi_wheeled
-    corgi_hybrid
-    # corgi_transformation
-    corgi_gait_selector
-)
-
-    
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(corgi_msgs REQUIRED)
 
 include_directories(
-  ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
-  ${EIGEN3_INCLUDE_DIR}
   include
 )
 
-find_library(CORGI_UTILS corgi_utils)
-find_library(CORGI_HYBRID corgi_hybrid)
-find_library(CORGI_WHEELED corgi_wheeled)
-find_library(CORGI_LEGGED corgi_legged)
-find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
-# find_library(CORGI_TRANSFORMATION corgi_transformation)
+# Library (algo.cpp has cross-dependencies - exclude for now)
+# Future: re-enable once gait generators are also migrated to ROS 2
+# add_library(${PROJECT_NAME}
+#   src/algo.cpp
+# )
 
-add_subdirectory(src)
-
-add_library(${PROJECT_NAME}
-  src/algo.cpp
+install(DIRECTORY include/
+  DESTINATION include
 )
+
+ament_export_include_directories(include)
+ament_export_dependencies(Eigen3 rclcpp std_msgs geometry_msgs sensor_msgs corgi_msgs)
+ament_package()

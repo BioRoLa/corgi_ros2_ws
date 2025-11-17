@@ -16,16 +16,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 set(corgi_msgs_DIR "${CMAKE_CURRENT_LIST_DIR}/../../devel/share/corgi_msgs/cmake")
-if(NOT DEFINED LOCAL_PACKAGE_PATH)
-  if(DEFINED ENV{LOCAL_PACKAGE_PATH})
-    set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}")
-  else()
-    set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
-  endif()
-endif()
-set(EIGEN3_INCLUDE_DIR "${LOCAL_PACKAGE_PATH}/include/eigen3")
 
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(catkin REQUIRED COMPONENTS 
     roscpp 
     std_msgs 
@@ -62,7 +55,6 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}
-  ${EIGEN3_INCLUDE_DIR}
   include
 )
 
@@ -82,4 +74,8 @@ add_library(${PROJECT_NAME}
 #   src/LeggedToWheeled.cpp
 #   src/LeggedToHybrid.cpp
   src/transform_gen.cpp
+)
+
+target_link_libraries(${PROJECT_NAME}
+  Eigen3::Eigen
 )

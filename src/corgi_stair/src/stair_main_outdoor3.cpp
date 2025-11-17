@@ -5,18 +5,19 @@
 #include <array>
 #include <string>
 #include <chrono>
-#include "ros/ros.h"
+#include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/transform_listener.h>
-#include <geometry_msgs/TransformStamped.h>
+#include <tf2_ros/buffer.h>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <fstream>
 #include <Eigen/Dense>
 
-#include "corgi_msgs/MotorCmdStamped.h"
-#include "corgi_msgs/TriggerStamped.h"
-#include "corgi_msgs/StairPlanes.h"
+#include "corgi_msgs/msg/motor_cmd_stamped.hpp"
+#include "corgi_msgs/msg/trigger_stamped.hpp"
+#include "corgi_msgs/msg/stair_planes.hpp"
 #include "leg_model.hpp"
 #include "bezier.hpp"
 #include "walk_gait.hpp"
@@ -25,18 +26,18 @@
 #define INIT_THETA (M_PI*17.0/180.0)
 #define INIT_BETA (0.0)
 
-corgi_msgs::TriggerStamped trigger_msg;
-corgi_msgs::StairPlanes plane_msg;
+corgi_msgs::msg::TriggerStamped trigger_msg;
+corgi_msgs::msg::StairPlanes plane_msg;
 
-void trigger_cb(const corgi_msgs::TriggerStamped msg) {
-    trigger_msg = msg;
+void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
+    trigger_msg = *msg;
 }//end trigger_cb
 
-void camera_cb(const corgi_msgs::StairPlanes::ConstPtr& msg) {
+void camera_cb(const corgi_msgs::msg::StairPlanes::SharedPtr msg) {
     plane_msg = *msg;
 }//end camera_cb
 
-double getPitchFromTransform(const geometry_msgs::TransformStamped& tf) {
+double getPitchFromTransform(const geometry_msgs::msg::TransformStamped& tf) {
     tf2::Quaternion q(
         tf.transform.rotation.x,
         tf.transform.rotation.y,
@@ -52,15 +53,16 @@ double getPitchFromTransform(const geometry_msgs::TransformStamped& tf) {
 
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "stair_climb");
-    ros::NodeHandle nh;
-    ros::Publisher motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1);
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
-    ros::Subscriber camera_sub = nh.subscribe<corgi_msgs::StairPlanes>("stair_planes", 1, camera_cb);
-    tf2_ros::Buffer tfBuffer;
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("stair_climb");
+    
+    auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
+    auto camera_sub = node->create_subscription<corgi_msgs::msg::StairPlanes>("stair_planes", 10, camera_cb);
+    tf2_ros::Buffer tfBuffer(node->get_clock());
     tf2_ros::TransformListener tfListener(tfBuffer);
-    corgi_msgs::MotorCmdStamped motor_cmd;
-    std::array<corgi_msgs::MotorCmd*, 4> motor_cmd_modules = {
+    corgi_msgs::msg::MotorCmdStamped motor_cmd;
+    std::array<corgi_msgs::msg::MotorCmd*, 4> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
         &motor_cmd.module_c,
@@ -99,7 +101,7 @@ int main(int argc, char** argv) {
     const double min_step_length = 0.2;
 
     /* Initial variable */
-    ros::Rate rate(sampling_rate);
+    rclcpp::WallRate rate(std::chrono::milliseconds(1000 / sampling_rate));
     WalkGait walk_gait(false, CoM_bias[0], sampling_rate);
     StairClimb stair_climb(false, CoM_bias, sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
@@ -119,7 +121,7 @@ int main(int argc, char** argv) {
     std::array<int, 4> swing_phase;
     double hip_x, to_stair_d, to_enter_d;
     std::array<bool, 4> if_contact_edge, last_if_contact_edge;
-    geometry_msgs::TransformStamped initial_camera_transform, camera_transform, last_camera_transform, camera_transform_tmp;
+    geometry_msgs::msg::TransformStamped initial_camera_transform, camera_transform, last_camera_transform, camera_transform_tmp;
     double D_sum, H_sum, last_D_sum;
     std::array<int, 4> step_count;
     double optimal_foothold;
@@ -133,9 +135,9 @@ int main(int argc, char** argv) {
     walk_gait.set_stand_height(stand_height);
     walk_gait.set_step_length(step_length);
     walk_gait.set_step_height(step_height);
-    while (ros::ok()) {
+    while (rclcpp::ok()) {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
-        ros::spinOnce();
+        rclcpp::spin_some(node);
         if (state == END) {
             break;
         }//end if
@@ -168,9 +170,9 @@ int main(int argc, char** argv) {
                 break;
             case WALK:
                 /* Get camera pose */
-                if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
+                if (tfBuffer.canTransform("map", "zedxm_camera_center", tf2::TimePointZero, tf2::durationFromSec(0.0))) {
                     try {
-                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", tf2::TimePointZero);
                         if (!first_camera_pose) {
                             if (std::abs(camera_transform_tmp.transform.translation.x) < 0.05 && std::abs(camera_transform_tmp.transform.translation.y) < 0.05 && std::abs(camera_transform_tmp.transform.translation.z) < 0.05) {
                                 initial_camera_transform = camera_transform_tmp; // set initial camera pose
@@ -242,9 +244,9 @@ int main(int argc, char** argv) {
                     stair_climb.initialize(current_eta, velocity, CoM[0]);
                 }//end if
                 /* Get camera pose */
-                if (tfBuffer.canTransform("map", "zedxm_camera_center", ros::Time(0), ros::Duration(0.0))) {
+                if (tfBuffer.canTransform("map", "zedxm_camera_center", tf2::TimePointZero, tf2::durationFromSec(0.0))) {
                     try {
-                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", ros::Time(0));
+                        camera_transform_tmp = tfBuffer.lookupTransform("map", "zedxm_camera_center", tf2::TimePointZero);
                         // if (std::abs(camera_transform.transform.translation.x - camera_transform_tmp.transform.translation.x) < 0.1 
                         //     && std::abs(camera_transform.transform.translation.y - camera_transform_tmp.transform.translation.y) < 0.1 
                         //     && std::abs(camera_transform.transform.translation.z - camera_transform_tmp.transform.translation.z) < 0.1) {
@@ -377,7 +379,7 @@ int main(int argc, char** argv) {
             motor_cmd_modules[i]->theta = eta_list[0][i];
             motor_cmd_modules[i]->beta = (i == 1 || i == 2)? (eta_list[1][i]-pitch) : -(eta_list[1][i]-pitch);
         }//end for
-        motor_pub.publish(motor_cmd);
+        motor_pub->publish(motor_cmd);
         auto one_loop_end = std::chrono::high_resolution_clock::now();
         auto one_loop_duration = std::chrono::duration_cast<std::chrono::microseconds>(one_loop_end - one_loop_start);
         if (one_loop_duration.count() > max_cal_time) {
@@ -394,7 +396,7 @@ int main(int argc, char** argv) {
 
     stair_size_csv.close();
     command_pitch_CoM.close();
-    ros::shutdown();
+    rclcpp::shutdown();
     return 0;
 }//end main
 

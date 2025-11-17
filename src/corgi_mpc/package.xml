@@ -8,6 +8,9 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <depend>eigen3_cmake_module</depend>
+  <depend>Eigen3</depend>
+
   <build_depend>corgi_msgs</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>joy</build_depend>
