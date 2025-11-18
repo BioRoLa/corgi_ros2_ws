@@ -1,6 +1,13 @@
-# Define the executable and link required libraries
-add_executable(corgi_rt_control ./corgi_rt_control.cpp)
-target_link_libraries(corgi_rt_control ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS})
+add_executable(corgi_rt_control corgi_rt_control.cpp)
+ament_target_dependencies(corgi_rt_control 
+  rclcpp std_msgs geometry_msgs corgi_msgs corgi_utils)
 
-add_executable(set_zero ./set_zero.cpp)
-target_link_libraries(set_zero ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS})
+add_executable(set_zero set_zero.cpp)
+ament_target_dependencies(set_zero 
+  rclcpp std_msgs geometry_msgs corgi_msgs corgi_utils)
+
+install(TARGETS
+  corgi_rt_control
+  set_zero
+  DESTINATION lib/${PROJECT_NAME}
+)
