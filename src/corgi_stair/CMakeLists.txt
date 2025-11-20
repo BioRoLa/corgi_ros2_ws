@@ -97,6 +97,17 @@ target_include_directories(stair_main_outdoor_open PRIVATE ${CORGI_WALK_INCLUDE_
 target_link_libraries(stair_main_outdoor_open ${PROJECT_NAME} ${CORGI_WALK} Eigen3::Eigen)
 ament_target_dependencies(stair_main_outdoor_open rclcpp corgi_msgs geometry_msgs tf2_ros tf2_geometry_msgs corgi_walk corgi_utils)
 
+# Utility executables
+add_executable(stair_estimator src/stair_estimator.cpp)
+target_link_libraries(stair_estimator ${PROJECT_NAME} Eigen3::Eigen)
+ament_target_dependencies(stair_estimator rclcpp sensor_msgs pcl_conversions pcl_ros tf2_ros tf2_eigen corgi_msgs)
+
+add_executable(play_motor_cmd src/play_motor_cmd.cpp)
+ament_target_dependencies(play_motor_cmd rclcpp corgi_msgs)
+
+add_executable(save_motor_cmd src/save_motor_cmd.cpp)
+ament_target_dependencies(save_motor_cmd rclcpp corgi_msgs)
+
 install(TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
@@ -111,6 +122,9 @@ install(TARGETS
   stair_main_outdoor2
   stair_main_outdoor3
   stair_main_outdoor_open
+  stair_estimator
+  play_motor_cmd
+  save_motor_cmd
   DESTINATION lib/${PROJECT_NAME}
 )
 

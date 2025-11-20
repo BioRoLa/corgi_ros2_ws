@@ -1,30 +1,34 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <fstream>
 #include <iomanip>
-#include "corgi_msgs/MotorCmdStamped.h"
-#include "corgi_msgs/TriggerStamped.h"
+#include "corgi_msgs/msg/motor_cmd_stamped.hpp"
+#include "corgi_msgs/msg/trigger_stamped.hpp"
 
 std::ofstream csv_file;
 
-corgi_msgs::TriggerStamped trigger_msg;
-void trigger_cb(const corgi_msgs::TriggerStamped msg) {
-    trigger_msg = msg;
-}//end trigger_cb
+corgi_msgs::msg::TriggerStamped trigger_msg;
+void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg)
+{
+    trigger_msg = *msg;
+} // end trigger_cb
 
-void callback(const corgi_msgs::MotorCmdStamped::ConstPtr& msg) {
-    if (!trigger_msg.enable) {
-        return;  // 如果未啟用，則不儲存數據
+void callback(const corgi_msgs::msg::MotorCmdStamped::SharedPtr msg)
+{
+    if (!trigger_msg.enable)
+    {
+        return; // 如果未啟用，則不儲存數據
     }
 
-    const auto& h = msg->header.stamp;
-    const auto& A = msg->module_a;
-    const auto& B = msg->module_b;
-    const auto& C = msg->module_c;
-    const auto& D = msg->module_d;
+    const auto &h = msg->header.stamp;
+    const auto &A = msg->module_a;
+    const auto &B = msg->module_b;
+    const auto &C = msg->module_c;
+    const auto &D = msg->module_d;
 
-    csv_file << h.sec << "." << std::setw(9) << std::setfill('0') << h.nsec;
+    csv_file << h.sec << "." << std::setw(9) << std::setfill('0') << h.nanosec;
 
-    auto write_module = [](const corgi_msgs::MotorCmd& m) {
+    auto write_module = [](const corgi_msgs::msg::MotorCmd &m)
+    {
         return "," + std::to_string(m.theta) + "," + std::to_string(m.beta) +
                "," + std::to_string(m.kp_r) + "," + std::to_string(m.kp_l) +
                "," + std::to_string(m.ki_r) + "," + std::to_string(m.ki_l) +
@@ -35,9 +39,10 @@ void callback(const corgi_msgs::MotorCmdStamped::ConstPtr& msg) {
     csv_file << write_module(A) << write_module(B) << write_module(C) << write_module(D) << "\n";
 }
 
-int main(int argc, char** argv) {
-    ros::init(argc, argv, "motor_cmd_saver");
-    ros::NodeHandle nh;
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("motor_cmd_saver");
 
     std::string filename = "motor_commands.csv";
     csv_file.open(filename);
@@ -47,10 +52,11 @@ int main(int argc, char** argv) {
              << ",c_theta,c_beta,c_kp_r,c_kp_l,c_ki_r,c_ki_l,c_kd_r,c_kd_l,c_torque_r,c_torque_l"
              << ",d_theta,d_beta,d_kp_r,d_kp_l,d_ki_r,d_ki_l,d_kd_r,d_kd_l,d_torque_r,d_torque_l\n";
 
-    ros::Subscriber sub = nh.subscribe("motor/command", 1000, callback);
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1, trigger_cb);
-    
-    ros::spin();
+    auto sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, callback);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1, trigger_cb);
+
+    rclcpp::spin(node);
     csv_file.close();
+    rclcpp::shutdown();
     return 0;
 }
