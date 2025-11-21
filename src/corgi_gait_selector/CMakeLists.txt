@@ -26,6 +26,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
+find_package(corgi_utils REQUIRED)
 
 include_directories(
   ${CMAKE_CURRENT_LIST_DIR}
@@ -38,6 +39,7 @@ add_library(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
   Eigen3::Eigen
+  corgi_utils
 )
 
 ament_target_dependencies(${PROJECT_NAME}
@@ -47,6 +49,7 @@ ament_target_dependencies(${PROJECT_NAME}
   sensor_msgs
   visualization_msgs
   corgi_msgs
+  corgi_utils
 )
 
 install(TARGETS ${PROJECT_NAME}
@@ -63,5 +66,5 @@ install(DIRECTORY include/
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(Eigen3 rclcpp std_msgs geometry_msgs sensor_msgs visualization_msgs corgi_msgs)
+ament_export_dependencies(Eigen3 rclcpp std_msgs geometry_msgs sensor_msgs visualization_msgs corgi_msgs corgi_utils)
 ament_package()

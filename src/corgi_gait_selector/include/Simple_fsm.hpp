@@ -35,7 +35,7 @@ enum class Gait
 class GaitSelector
 {
 public:
-    GaitSelector(ros::NodeHandle &nh,
+    GaitSelector(rclcpp::Node::SharedPtr node,
                  bool sim = true,
                  double CoM_bias = 0.0,
                  int pub_rate = 1000,
@@ -47,26 +47,27 @@ public:
     Gait currentGait;
     Gait newGait;
 
-    ros::Subscriber motor_state_sub_;
-    ros::Publisher motor_cmd_pub_;
-    ros::Publisher marker_pub_;
-    ros::Subscriber trigger_sub_;
-    ros::Rate *rate_ptr;
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
+    rclcpp::Publisher<corgi_msgs::msg::MotorCmdStamped>::SharedPtr motor_cmd_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
+    rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
+    rclcpp::WallRate *rate_ptr;
     std::random_device rd;
     std::mt19937 rng;
     std::uniform_int_distribution<int> dist;
     /*    State or cmd messages      */
-    corgi_msgs::MotorCmdStamped motor_cmd;
-    corgi_msgs::TriggerStamped trigger_msg;
-    static corgi_msgs::MotorStateStamped motor_state;
-    std::vector<corgi_msgs::MotorCmd *> motor_cmd_modules = {
+    corgi_msgs::msg::MotorCmdStamped motor_cmd;
+    corgi_msgs::msg::TriggerStamped trigger_msg;
+    static corgi_msgs::msg::MotorStateStamped motor_state;
+    std::vector<corgi_msgs::msg::MotorCmd *> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
         &motor_cmd.module_c,
         &motor_cmd.module_d};
-    static std::vector<corgi_msgs::MotorState *> motor_state_modules;
-    void motor_state_cb(const corgi_msgs::MotorStateStamped state);
-    void trigger_cb(const corgi_msgs::TriggerStamped msg);
+    static std::vector<corgi_msgs::msg::MotorState *> motor_state_modules;
+    void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr state);
+    void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg);
     /*     Cooperate variables      */
     LegModel leg_model;
     int pub_rate;
