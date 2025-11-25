@@ -1,7 +1,5 @@
 #include <iostream>
 #include <mutex>
-#include <memory>
-#include <chrono>
 #include "rclcpp/rclcpp.hpp"
 
 #include "NodeHandler.h"
@@ -9,43 +7,42 @@
 #include "Power.pb.h"
 #include "Steering.pb.h"
 
-using namespace std::chrono_literals;
 
 std::mutex mutex_motor_state;
 std::mutex mutex_power_state;
 std::mutex mutex_steer_state;
 
-motor_msg::MotorCmdStamped motor_cmd;
-power_msg::PowerCmdStamped power_cmd;
-steering_msg::SteeringCmdStamped steer_cmd;
-motor_msg::MotorStateStamped motor_state;
-power_msg::PowerStateStamped power_state;
-steering_msg::SteeringStateStamped steer_state;
+motor_msg::MotorCmdStamped          motor_cmd;
+power_msg::PowerCmdStamped          power_cmd;
+steering_msg::SteeringCmdStamped    steer_cmd;
+motor_msg::MotorStateStamped        motor_state;
+power_msg::PowerStateStamped        power_state;
+steering_msg::SteeringStateStamped  steer_state;
 
-void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd)
-{
+
+void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd) {
     std::lock_guard<std::mutex> lock(mutex_motor_state);
 
-    std::vector<motor_msg::MotorState *> motor_states = {
+    std::vector<motor_msg::MotorState*> motor_states = {
         motor_state.mutable_module_a(),
         motor_state.mutable_module_b(),
         motor_state.mutable_module_c(),
-        motor_state.mutable_module_d()};
+        motor_state.mutable_module_d()
+    };
 
-    std::vector<const motor_msg::MotorCmd *> motor_cmds = {
+    std::vector<const motor_msg::MotorCmd*> motor_cmds = {
         &cmd.module_a(),
         &cmd.module_b(),
         &cmd.module_c(),
-        &cmd.module_d()};
+        &cmd.module_d()
+    };
 
     std::cout << "TB_A: (" << motor_cmds[0]->theta() << ", " << motor_cmds[0]->beta() << "); " << std::endl
               << "TB_B: (" << motor_cmds[1]->theta() << ", " << motor_cmds[1]->beta() << "); " << std::endl
               << "TB_C: (" << motor_cmds[2]->theta() << ", " << motor_cmds[2]->beta() << "); " << std::endl
-              << "TB_D: (" << motor_cmds[3]->theta() << ", " << motor_cmds[3]->beta() << "); " << std::endl
-              << std::endl;
+              << "TB_D: (" << motor_cmds[3]->theta() << ", " << motor_cmds[3]->beta() << "); " << std::endl << std::endl;
 
-    for (int i = 0; i < 4; i++)
-    {
+    for (int i = 0; i < 4; i++) {
         motor_states[i]->set_theta(motor_cmds[i]->theta());
         motor_states[i]->set_beta(motor_cmds[i]->beta());
         motor_states[i]->set_velocity_r(1);
@@ -61,14 +58,14 @@ void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd)
     motor_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
-void power_cmd_cb(const power_msg::PowerCmdStamped cmd)
-{
+void power_cmd_cb(const power_msg::PowerCmdStamped cmd) {
     std::lock_guard<std::mutex> lock(mutex_power_state);
 
     power_state.set_digital(cmd.digital());
     power_state.set_signal(cmd.signal());
     power_state.set_power(cmd.power());
     power_state.set_robot_mode((power_msg::ROBOTMODE)cmd.robot_mode());
+
 
     timeval currentTime;
     gettimeofday(&currentTime, nullptr);
@@ -77,8 +74,7 @@ void power_cmd_cb(const power_msg::PowerCmdStamped cmd)
     power_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
-void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd)
-{
+void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
     std::lock_guard<std::mutex> lock(mutex_steer_state);
 
     steer_state.set_current_angle(cmd.angle());
@@ -93,15 +89,10 @@ void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd)
     steer_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
-int main(int argc, char **argv)
-{
-    // Initialize ROS2
+int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("corgi_virtual_agent");
 
-    // Create a minimal ROS2 node for lifecycle management
-    auto ros_node = rclcpp::Node::make_shared("corgi_virtual_agent");
-
-    // Initialize gRPC core NodeHandler for custom protocol communication
     core::NodeHandler nh_;
     core::Publisher<motor_msg::MotorStateStamped> &motor_state_pub = nh_.advertise<motor_msg::MotorStateStamped>("motor/state");
     core::Publisher<power_msg::PowerStateStamped> &power_state_pub = nh_.advertise<power_msg::PowerStateStamped>("power/state");
@@ -112,10 +103,7 @@ int main(int argc, char **argv)
 
     core::Rate rate(1000);
 
-    RCLCPP_INFO(ros_node->get_logger(), "Virtual Agent started - Mock FPGA driver for testing");
-
-    while (rclcpp::ok())
-    {
+    while (rclcpp::ok()) {
         core::spinOnce();
 
         {
@@ -137,6 +125,7 @@ int main(int argc, char **argv)
     }
 
     rclcpp::shutdown();
+
 
     return 0;
 }
