@@ -20,14 +20,8 @@
   <depend>geometry_msgs</depend>
   <depend>corgi_msgs</depend>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   <member_of_group>rosidl_interface_packages</member_of_group>
-=======
->>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
-=======
-  <member_of_group>rosidl_interface_packages</member_of_group>
->>>>>>> b8dcfa1 (converted corgi_panel to ros2, set default DLOCAL_PACKAGE_PATH inside cmakelists so no launch flag is needed, corgi_bridge and corgi_data_recorder still needs ROS2 conversion for full corgi_panel functionality)
+  
   <export>
     <build_type>ament_cmake</build_type>
   </export>
