@@ -1,4 +1,5 @@
 // Because of the ROS2 update, the seq field of the imu has been removed. (2025-11-13)
+// Updated to use custom ImuStamped message to preserve seq field. (2025-12-08)
 
 #include <iostream>
 #include <fstream>
@@ -14,7 +15,7 @@
 #include "corgi_msgs/msg/power_cmd_stamped.hpp"
 #include "corgi_msgs/msg/power_state_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
-#include "sensor_msgs/msg/imu.hpp"
+#include "corgi_msgs/msg/imu_stamped.hpp"
 #include "sensor_msgs/msg/range.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
@@ -29,7 +30,7 @@ corgi_msgs::msg::MotorCmdStamped motor_cmd;
 corgi_msgs::msg::MotorStateStamped motor_state;
 corgi_msgs::msg::PowerCmdStamped power_cmd;
 corgi_msgs::msg::PowerStateStamped power_state;
-sensor_msgs::msg::Imu imu;
+corgi_msgs::msg::ImuStamped imu;
 sensor_msgs::msg::Range range_1;
 sensor_msgs::msg::Range range_2;
 sensor_msgs::msg::Range range_3;
@@ -113,7 +114,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "state_vel_r_d" << "," << "state_vel_l_d" << ","
                         << "state_trq_r_d" << "," << "state_trq_l_d" << ","
 
-                        << "imu_sec" << "," << "imu_nsec" << ","
+                        << "imu_seq" << "," << "imu_sec" << "," << "imu_nsec" << ","
                         << "imu_orien_x" << "," << "imu_orien_y" << "," << "imu_orien_z" << "," << "imu_orien_w" << ","
                         << "imu_ang_vel_x" << "," << "imu_ang_vel_y" << "," << "imu_ang_vel_z" << ","
                         << "imu_lin_acc_x" << "," << "imu_lin_acc_y" << "," << "imu_lin_acc_z" << ","
@@ -191,7 +192,7 @@ void power_state_cb(const corgi_msgs::msg::PowerStateStamped::SharedPtr state){
     power_state = *state;
 }
 
-void imu_cb(const sensor_msgs::msg::Imu::SharedPtr values){
+void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr values){
     imu = *values;
 }
 
@@ -276,7 +277,7 @@ void write_data() {
                 << motor_state.module_d.velocity_r << "," << motor_state.module_d.velocity_l << ","
                 << motor_state.module_d.torque_r   << "," << motor_state.module_d.torque_l << ","
 
-                << imu.header.stamp.sec << "," << imu.header.stamp.nanosec << ","
+                << imu.header.seq << "," << imu.header.stamp.sec << "," << imu.header.stamp.nanosec << ","
                 << imu.orientation.x << "," << imu.orientation.y << "," << imu.orientation.z << "," << imu.orientation.w << ","
                 << imu.angular_velocity.x << "," << imu.angular_velocity.y << "," << imu.angular_velocity.z << ","
                 << imu.linear_acceleration.x << "," << imu.linear_acceleration.y << "," << imu.linear_acceleration.z << ","
@@ -347,7 +348,7 @@ int main(int argc, char **argv) {
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
     auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 1000, power_state_cb);
-    auto imu_sub = node->create_subscription<sensor_msgs::msg::Imu>("imu", 1000, imu_cb);
+    auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
     auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
     auto sim_data_sub = node->create_subscription<corgi_msgs::msg::SimDataStamped>("sim/data", 1000, sim_data_cb);
