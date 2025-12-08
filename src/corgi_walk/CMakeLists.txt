@@ -22,7 +22,18 @@ include_directories(
 )
 
 # Find corgi_utils library
-find_library(CORGI_UTILS corgi_utils PATHS ${corgi_utils_DIR}/../../../lib NO_DEFAULT_PATH)
+find_library(CORGI_UTILS corgi_utils
+  PATHS
+    ${CMAKE_CURRENT_LIST_DIR}/../corgi_utils/build
+    ${CMAKE_CURRENT_LIST_DIR}/../../build/corgi_utils
+    ${CMAKE_CURRENT_LIST_DIR}/../../install/corgi_utils/lib
+    ${corgi_utils_DIR}/../../../lib
+  PATH_SUFFIXES "" lib
+)
+
+if(NOT CORGI_UTILS)
+  message(FATAL_ERROR "corgi_utils library not found. Please build the corgi_utils package first: colcon build --packages-select corgi_utils")
+endif()
 
 # Library: walk and trot gait algorithms
 add_library(${PROJECT_NAME}
