@@ -81,54 +81,20 @@ add_executable(corgi_sim_trq src/corgi_sim_trq.cpp)
 ament_target_dependencies(corgi_sim_trq
   rclcpp corgi_msgs geometry_msgs std_msgs rosgraph_msgs)
 add_dependencies(corgi_sim_trq ${PROJECT_NAME}__rosidl_generator_cpp)
-
 rosidl_get_typesupport_target(cpp_typesupport_target_trq
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(corgi_sim_trq "${cpp_typesupport_target_trq}" Eigen3::Eigen ${CMAKE_DL_LIBS})
 
 # ----------------------------------------------------------------------
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
 # 7. Install
 # ----------------------------------------------------------------------
 install(DIRECTORY 
   launch
   worlds
   controllers
-<<<<<<< HEAD
   DESTINATION share/${PROJECT_NAME}
 )
 
-<<<<<<< HEAD
-=======
-install(DIRECTORY worlds
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(DIRECTORY controllers
-  DESTINATION share/${PROJECT_NAME}
-  USE_SOURCE_PERMISSIONS  # Preserve executable permissions
-)
-
-install(PROGRAMS
-  scripts/webots_launcher.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(TARGETS
-  corgi_sim_pos 
-  DESTINATION lib/${PROJECT_NAME}
-)
-
->>>>>>> 4c41e95 (debugging corgi_sim webots runtime issues)
-=======
-  resource
-  DESTINATION share/${PROJECT_NAME}
-)
-
->>>>>>> 07edad4 (corgi_sim: cleaned up unused files, added readme)
 install(TARGETS
   corgi_sim_pos
   corgi_sim_trq 
