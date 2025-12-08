@@ -1,8 +1,8 @@
-#include <ros/ros.h>
-#include <std_msgs/String.h>
-#include <corgi_msgs/SteeringStateStamped.h>
-#include <corgi_msgs/SteeringCmdStamped.h>
-#include <corgi_msgs/WheelCmd.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <corgi_msgs/msg/steering_state_stamped.hpp>
+#include <corgi_msgs/msg/steering_cmd_stamped.hpp>
+#include <corgi_msgs/msg/wheel_cmd.hpp>
 
 const std::string reset("\033[1;0m");
 const std::string black("\033[1;30m");
@@ -14,48 +14,42 @@ const std::string magenta("\033[1;35m");
 const std::string cyan("\033[1;36m");
 const std::string white("\033[1;37m");
 
-
-// 1) For general debug/log strings from joystick_control
-void debugInfoCallback(const std_msgs::String::ConstPtr& msg)
+class DisplayNode : public rclcpp::Node
 {
-  // Print debug/log messages
-  ROS_INFO_STREAM("[DEBUG] " << msg->data << reset);
-}
+public:
+  DisplayNode() : Node("display_node")
+  {
+    debug_sub_ = create_subscription<std_msgs::msg::String>(
+        "debug_info", 10, [this](const std_msgs::msg::String::SharedPtr msg)
+        { RCLCPP_INFO(get_logger(), "[DEBUG] %s%s", msg->data.c_str(), reset.c_str()); });
 
-// 2) For SteeringCmd messages
-void steeringCmdCallback(const corgi_msgs::SteeringCmdStamped::ConstPtr& msg)
+    steering_cmd_sub_ = create_subscription<corgi_msgs::msg::SteeringCmdStamped>(
+        "steering_cmd", 10, [this](const corgi_msgs::msg::SteeringCmdStamped::SharedPtr msg)
+        { RCLCPP_INFO(get_logger(), "SteeringCmd => angle=%f, voltage=%d%s",
+                      msg->angle, msg->voltage, green.c_str()); });
+
+    steering_state_sub_ = create_subscription<corgi_msgs::msg::SteeringStateStamped>(
+        "steering_state", 10, [this](const corgi_msgs::msg::SteeringStateStamped::SharedPtr msg)
+        { RCLCPP_INFO(get_logger(), "SteeringState => state=%d, angle=%f%s",
+                      msg->current_state, msg->current_angle, green.c_str()); });
+
+    wheel_cmd_sub_ = create_subscription<corgi_msgs::msg::WheelCmd>(
+        "wheel_cmd", 10, [this](const corgi_msgs::msg::WheelCmd::SharedPtr msg)
+        { RCLCPP_INFO(get_logger(), "WheelCmd => vel=%f, dir=%d, stop=%d%s",
+                      msg->velocity, msg->direction, msg->stop, cyan.c_str()); });
+  }
+
+private:
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr debug_sub_;
+  rclcpp::Subscription<corgi_msgs::msg::SteeringCmdStamped>::SharedPtr steering_cmd_sub_;
+  rclcpp::Subscription<corgi_msgs::msg::SteeringStateStamped>::SharedPtr steering_state_sub_;
+  rclcpp::Subscription<corgi_msgs::msg::WheelCmd>::SharedPtr wheel_cmd_sub_;
+};
+
+int main(int argc, char **argv)
 {
-  ROS_INFO_STREAM("SteeringCmd => angle=" << msg->angle
-                  << ", voltage=" << msg->voltage << green);
-}
-
-// 3) For WheelCmd messages
-void wheelCmdCallback(const corgi_msgs::WheelCmd::ConstPtr& msg)
-{
-  ROS_INFO_STREAM("WheelCmd => direction=" << (msg->direction ? "FWD" : "BWD")
-                  << ", stop=" << (msg->stop ? "TRUE" : "FALSE")
-                  << ", velocity=" << msg->velocity << blue);
-}
-
-// 4) For SteeringState
-void steeringStateCallback(const corgi_msgs::SteeringStateStamped::ConstPtr& msg)
-{
-  ROS_INFO_STREAM("SteeringState => angle=" << msg->current_angle
-                  << ", state=" << (msg->current_state ? "TRUE" : "FALSE")
-                  << ", cmd_finish=" << (msg->cmd_finish ) << magenta);
-}
-
-int main(int argc, char** argv)
-{
-  ros::init(argc, argv, "display_node");
-  ros::NodeHandle nh;
-
-  // Subscribing to all topics
-  ros::Subscriber debug_sub = nh.subscribe("debug_info", 10, debugInfoCallback);
-  ros::Subscriber steering_state_sub = nh.subscribe("steering_state", 10, steeringStateCallback);
-  ros::Subscriber steering_cmd_sub   = nh.subscribe("steering_cmd", 10, steeringCmdCallback);
-  ros::Subscriber wheel_cmd_sub      = nh.subscribe("wheel_cmd", 10, wheelCmdCallback);
-
-  ros::spin();
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<DisplayNode>());
+  rclcpp::shutdown();
   return 0;
 }

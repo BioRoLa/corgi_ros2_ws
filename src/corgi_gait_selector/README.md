@@ -232,8 +232,7 @@ sudo apt install ros-humble-rclcpp \
 cd ~/corgi_ws/corgi_ros_ws
 
 # Build with dependencies
-colcon build --packages-select corgi_gait_selector \
-  --cmake-args -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
+colcon build --packages-select corgi_gait_selector
 
 # Source the workspace
 source install/setup.bash

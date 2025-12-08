@@ -1,49 +1,50 @@
 #ifndef JOYSTICK_CONTROL_HPP
 #define JOYSTICK_CONTROL_HPP
 
-#include <ros/ros.h>
-#include <sensor_msgs/Joy.h>
-#include <std_msgs/String.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/joy.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <algorithm>
 #include <cmath>
 #include <string>
 
 // Custom messages
-#include <corgi_msgs/SteeringStateStamped.h>
-#include <corgi_msgs/SteeringCmdStamped.h>
-#include <corgi_msgs/WheelCmd.h>
+#include <corgi_msgs/msg/steering_state_stamped.hpp>
+#include <corgi_msgs/msg/steering_cmd_stamped.hpp>
+#include <corgi_msgs/msg/wheel_cmd.hpp>
 
-class JoystickControl
+class JoystickControl : public rclcpp::Node
 {
 public:
   JoystickControl();
 
 private:
   // Callbacks
-  void steeringStateCallback(const corgi_msgs::SteeringStateStamped::ConstPtr& msg);
-  void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
+  void steeringStateCallback(const corgi_msgs::msg::SteeringStateStamped::SharedPtr msg);
+  void joyCallback(const sensor_msgs::msg::Joy::SharedPtr joy);
 
   // Timer callback for 1 kHz
-  void wheelCmdTimerCallback(const ros::TimerEvent&);
-  void steerCmdTimerCallback(const ros::TimerEvent&);
+  void wheelCmdTimerCallback();
+  void steerCmdTimerCallback();
 
   double clamp(double value, double min_val, double max_val);
 
   // ROS members
-  ros::NodeHandle nh_;
-  ros::Publisher steering_cmd_pub_;
-  ros::Publisher wheel_cmd_pub_;
-  ros::Publisher debug_pub_;
+  rclcpp::Publisher<corgi_msgs::msg::SteeringCmdStamped>::SharedPtr steering_cmd_pub_;
+  rclcpp::Publisher<corgi_msgs::msg::WheelCmd>::SharedPtr wheel_cmd_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr debug_pub_;
 
-  ros::Subscriber steering_state_sub_;
-  ros::Subscriber joy_sub_;
+  rclcpp::Subscription<corgi_msgs::msg::SteeringStateStamped>::SharedPtr steering_state_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
 
   // Timer at 1 kHz
-  ros::Timer wheel_cmd_timer_;
-  ros::Timer steering_cmd_timer_;
+  rclcpp::TimerBase::SharedPtr wheel_cmd_timer_;
+  rclcpp::TimerBase::SharedPtr steering_cmd_timer_;
+
   // Store the current steering state
-  corgi_msgs::SteeringStateStamped current_steering_state_;
-  corgi_msgs::SteeringCmdStamped steer;
+  corgi_msgs::msg::SteeringStateStamped current_steering_state_;
+  corgi_msgs::msg::SteeringCmdStamped steer;
+
   // Indices for axes/buttons
   int axis_left_right_;
   int axis_forward_back_;
@@ -56,11 +57,11 @@ private:
   bool was_hold_pressed_;
   bool was_reset_pressed_;
 
-  bool last_direction_;   
+  bool last_direction_;
   double current_velocity_;
 
   // The last WheelCmd we published
-  corgi_msgs::WheelCmd last_wheel_cmd_;
+  corgi_msgs::msg::WheelCmd last_wheel_cmd_;
 };
 
 #endif // JOYSTICK_CONTROL_HPP

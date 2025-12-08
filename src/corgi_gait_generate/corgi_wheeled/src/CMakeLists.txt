@@ -3,9 +3,43 @@ add_executable(publisher publisher.cpp)
 add_executable(teleop teleop_twist_keyboard.cpp)
 add_executable(wheeled_test wheeled_test.cpp wheeled_gen.cpp wheeled_cmd.cpp)
 
-target_link_libraries(display  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(publisher  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(teleop  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS})
-target_link_libraries(wheeled_test  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen )
+# Link display node with rclcpp and message dependencies
+ament_target_dependencies(display
+  rclcpp
+  std_msgs
+  corgi_msgs
+)
+
+# Link publisher node with rclcpp and message dependencies
+ament_target_dependencies(publisher
+  rclcpp
+  std_msgs
+  sensor_msgs
+  corgi_msgs
+)
+
+# Link teleop node with rclcpp and message dependencies
+ament_target_dependencies(teleop
+  rclcpp
+  std_msgs
+)
+
+# Link wheeled_test with library and ROS dependencies
+target_link_libraries(wheeled_test
+  ${PROJECT_NAME}
+  corgi_utils
+  Eigen3::Eigen
+  ${CMAKE_DL_LIBS}
+)
+ament_target_dependencies(wheeled_test
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  joy
+  corgi_msgs
+  corgi_gait_selector
+)
+
 
 

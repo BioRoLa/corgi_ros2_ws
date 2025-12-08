@@ -15,13 +15,12 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include "ros/ros.h"
-#include "corgi_msgs/MotorCmdStamped.h"
+#include "rclcpp/rclcpp.hpp"
+#include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 
 #include "leg_model.hpp"
 #include "fitted_coefficient.hpp"
 #include "bezier.hpp"
-
 
 using namespace std;
 using namespace Eigen;
@@ -36,7 +35,8 @@ void setting(double &walking_distance, double &step_length, double &velocity, do
 void setting_calculation(double walking_distance, double step_length, double tilt_angle_rad, const vector<pair<double, double>> &terrain_positions, bool output_details);
 void findMinMaxHeight(const vector<pair<double, double>> &terrain_positions);
 
-struct InputData {
+struct InputData
+{
     double Height = 0.127; // m
     double Distance = 1.5; // m
     double Velocity = 0.2; // m/sec
@@ -44,15 +44,15 @@ struct InputData {
     double total_time;
 };
 
-
-struct Gendata {
+struct Gendata
+{
     double h_desired;
     double S_max;
-    vector<Vector2d> O_list; // List of desired trajectories
-    vector<Vector2d> q_traj; // Actual trajectory
-    vector<Vector2d> O_traj; // O trajectory
+    vector<Vector2d> O_list;  // List of desired trajectories
+    vector<Vector2d> q_traj;  // Actual trajectory
+    vector<Vector2d> O_traj;  // O trajectory
     vector<Vector2d> GT_traj; // Ground truth trajectory
-    vector<int> Mode_traj; // Mode trajectory
+    vector<int> Mode_traj;    // Mode trajectory
     vector<double> fval_traj; // fval trajectory
 };
 

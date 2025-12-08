@@ -250,14 +250,6 @@ colcon build --packages-select corgi_utils
 - Original Author: yisyuan (r12522823@ntu.edu.tw)
 - Maintainer: Bio-Inspired Robotic Laboratory (BioRoLa), NTU
 
-## Citation
-
-If you use this work in your research, please cite:
-
-```
-[Add appropriate citation when published]
-```
-
 ## License
 
 BSD-3-Clause License. See workspace root for full license text.

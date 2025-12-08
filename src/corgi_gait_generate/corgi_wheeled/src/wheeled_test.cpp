@@ -1,31 +1,21 @@
 #include "wheeled_gen.hpp"
-// single execute wheeled mode
+#include <rclcpp/rclcpp.hpp>
 
-int main(int argc, char **argv){
-    ROS_INFO("Wheeled mode test\n");
-    ros::init(argc, argv, "corgi_wheeled_test");
-    ros::NodeHandle nh;
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("corgi_wheeled_test");
+    RCLCPP_INFO(node->get_logger(), "Wheeled mode test");
 
-    //  Start an async spinner to run in parallel.
-    ros::AsyncSpinner spinner(1);
-    spinner.start();    
-
-    /*     Gait Selector Setting    */ 
     bool sim = true;
     double CoM_bias = 0.0;
     int pub_rate = 1000;
     LegModel leg_model(sim);
 
-    GaitSelector gaitSelector(nh, sim, CoM_bias, pub_rate);
-   
-    /*    Initialize of each mode   */ 
-    // Wheeled mode
-    WheeledCmd WheeledCmd("joystick");
-    Wheeled wheeled(nh);
+    auto gait_selector = std::make_shared<GaitSelector>(node, sim, CoM_bias, pub_rate);
+    auto wheeled = std::make_shared<Wheeled>(node, "joystick");
 
-    while (ros::ok()) {
-        // ros::spinOnce();
-    }
+    rclcpp::spin(node);
+    rclcpp::shutdown();
     return 0;
 }
-

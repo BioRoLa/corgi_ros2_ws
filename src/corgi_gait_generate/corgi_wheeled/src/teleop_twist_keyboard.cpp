@@ -1,5 +1,5 @@
-#include <ros/ros.h>
-#include <std_msgs/String.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <termios.h>
 #include <signal.h>
 #include <stdio.h>
@@ -8,19 +8,20 @@
 
 int kfd = 0;
 struct termios cooked, raw;
+rclcpp::Node::SharedPtr g_node;
 
 void quit(int sig)
 {
   tcsetattr(kfd, TCSANOW, &cooked);
-  ros::shutdown();
+  rclcpp::shutdown();
   exit(0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "teleop_twist_keyboard");
-  ros::NodeHandle nh;
-  ros::Publisher teleop_pub = nh.advertise<std_msgs::String>("teleop_keys", 1);
+  rclcpp::init(argc, argv);
+  g_node = rclcpp::Node::make_shared("teleop_twist_keyboard");
+  auto teleop_pub = g_node->create_publisher<std_msgs::msg::String>("teleop_keys", 1);
 
   // Display instructions and mapping
   puts("Reading from the keyboard and Publishing to Twist!");
@@ -53,18 +54,24 @@ int main(int argc, char** argv)
 
   signal(SIGINT, quit);
 
+  // Main input loop - reads keyboard characters and publishes messages
   char c;
-  while (ros::ok())
+  while (rclcpp::ok())
   {
+    // Non-blocking read from keyboard (file descriptor 0 = stdin)
     if (read(kfd, &c, 1) < 0)
     {
       perror("read()");
       exit(-1);
     }
-    std_msgs::String msg;
+    // Create and publish string message with key character
+    std_msgs::msg::String msg;
     msg.data = std::string(1, c);
-    teleop_pub.publish(msg);
-    ros::spinOnce();
+    teleop_pub->publish(msg);
+    // Process any pending ROS2 callbacks
+    rclcpp::spin_some(g_node);
   }
+  // Cleanup and shutdown (normally triggered by CTRL-C)
+  rclcpp::shutdown();
   return 0;
 }
