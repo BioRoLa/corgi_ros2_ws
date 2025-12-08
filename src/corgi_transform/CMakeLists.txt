@@ -30,6 +30,8 @@ include_directories(
 find_library(CORGI_UTILS corgi_utils
   PATHS
     ${CMAKE_CURRENT_LIST_DIR}/../corgi_utils/build
+    ${CMAKE_CURRENT_LIST_DIR}/../../build/corgi_utils
+    ${CMAKE_CURRENT_LIST_DIR}/../../install/corgi_utils/lib
     ${CMAKE_CURRENT_LIST_DIR}/../../devel/lib
     ${LOCAL_PACKAGE_PATH}/lib
     ${CMAKE_INSTALL_PREFIX}/lib
