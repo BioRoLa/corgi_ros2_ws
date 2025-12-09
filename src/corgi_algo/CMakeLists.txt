@@ -23,23 +23,52 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(corgi_utils REQUIRED)
+find_package(corgi_gait_selector REQUIRED)
 find_package(corgi_msgs REQUIRED)
 
 include_directories(
   ${CMAKE_CURRENT_LIST_DIR}
   include
+  ${corgi_utils_DIR}/../../../include
+  ${corgi_gait_selector_DIR}/../../../include
 )
 
-# Library (algo.cpp has cross-dependencies - exclude for now)
-# Future: re-enable once gait generators are also migrated to ROS 2
-# add_library(${PROJECT_NAME}
-#   src/algo.cpp
-# )
+if(corgi_utils_DIR)
+  link_directories(${corgi_utils_DIR}/../../../lib)
+endif()
+if(corgi_gait_selector_DIR)
+  link_directories(${corgi_gait_selector_DIR}/../../../lib)
+endif()
+
+add_executable(algo src/algo.cpp)
+target_link_libraries(algo
+  corgi_utils
+  corgi_gait_selector
+  Eigen3::Eigen
+  ${CMAKE_DL_LIBS}
+)
+
+ament_target_dependencies(algo
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  corgi_msgs
+  corgi_utils
+  corgi_gait_selector
+  Eigen3
+)
+
+install(TARGETS
+  algo
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY include/
   DESTINATION include
 )
 
 ament_export_include_directories(include)
-ament_export_dependencies(Eigen3 rclcpp std_msgs geometry_msgs sensor_msgs corgi_msgs)
+ament_export_dependencies(Eigen3 rclcpp std_msgs geometry_msgs sensor_msgs corgi_msgs corgi_utils corgi_gait_selector)
 ament_package()

@@ -14,6 +14,8 @@
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>corgi_utils</depend>
+  <depend>corgi_gait_selector</depend>
   <depend>corgi_msgs</depend>
 
   <export>
