@@ -23,9 +23,9 @@ This package uses a **custom gRPC-based core library** (`core::NodeHandler`) rat
 
 ## Dependencies
 
-### Required gRPC Libraries (Not Yet Installed)
+### Required gRPC Libraries
 
-This package requires gRPC and custom core libraries to be installed in `~/.grpc_local/`:
+This package requires gRPC and custom core libraries to be installed in `$HOME/corgi_ws/install`:
 
 - Protobuf
 - gRPC C++
@@ -38,19 +38,26 @@ This package requires gRPC and custom core libraries to be installed in `~/.grpc
 
 ### Installation Instructions
 
-According to project docs, grpc_core should be installed to `~/.grpc_local`. Once installed:
+According to project docs, grpc_core should be installed to `$HOME/corgi_ws/install`. Once installed:
 
 ```bash
 cd ~/corgi_ws/corgi_ros_ws/
-colcon build --packages-select corgi_virtual_agent
+colcon build --packages-select corgi_virtual_agent corgi_ros_bridge
 source install/setup.bash
 ```
 
-## Usage (When Dependencies Available)
+## Usage
+
+First, start the `grpccore`.
+```bash
+# Terminal 1: Start grpccore
+grpccore
+```
 
 ### Launch Virtual Agent
 
 ```bash
+# Terminal 2: Start virtual agent
 ros2 run corgi_virtual_agent corgi_virtual_agent
 ```
 
@@ -63,24 +70,82 @@ This will:
 
 ### Test with corgi_ros_bridge
 
-Once both packages are converted and built:
-
 ```bash
-# Terminal 1: Start virtual agent
-ros2 run corgi_virtual_agent corgi_virtual_agent
-
-# Terminal 2: Start ROS bridge (when converted)
+# Terminal 3: Start ROS bridge
 ros2 run corgi_ros_bridge corgi_ros_bridge
+```
+
+### Test: Publish a command
+```bash
+# Terminal 4: Publish motor command
+ros2 topic pub /motor/command corgi_msgs/msg/MotorCmdStamped "
+header:
+  seq: 1
+  stamp:
+    sec: 0
+    nanosec: 0
+  frame_id: ''
+module_a:
+  theta: 1.0
+  beta: 0.5
+  kp_r: 0.0
+  kp_l: 0.0
+  ki_r: 0.0
+  ki_l: 0.0
+  kd_r: 0.0
+  kd_l: 0.0
+  torque_r: 0.0
+  torque_l: 0.0
+module_b:
+  theta: 1.0
+  beta: 0.5
+  kp_r: 0.0
+  kp_l: 0.0
+  ki_r: 0.0
+  ki_l: 0.0
+  kd_r: 0.0
+  kd_l: 0.0
+  torque_r: 0.0
+  torque_l: 0.0
+module_c:
+  theta: 1.0
+  beta: 0.5
+  kp_r: 0.0
+  kp_l: 0.0
+  ki_r: 0.0
+  ki_l: 0.0
+  kd_r: 0.0
+  kd_l: 0.0
+  torque_r: 0.0
+  torque_l: 0.0
+module_d:
+  theta: 1.0
+  beta: 0.5
+  kp_r: 0.0
+  kp_l: 0.0
+  ki_r: 0.0
+  ki_l: 0.0
+  kd_r: 0.0
+  kd_l: 0.0
+  torque_r: 0.0
+  torque_l: 0.0
+" -r 10
+```
+### Test: Echo a state
+```bash
+# Terminal 5: Echo motor state
+ros2 topic echo /motor/state
+```
+### Check
+In terminal 2 (start corgi_virtual_agent), it will keep printing:
+```bash
+TB_A: (1.0, 0.5);
+TB_B: (1.0, 0.5);
+TB_C: (1.0, 0.5);
+TB_D: (1.0, 0.5);
 ```
 
 ## Related Packages
 
-- `corgi_ros_bridge`: ROS ↔ FPGA gRPC interface (also needs ROS2 conversion)
+- `corgi_ros_bridge`: ROS ↔ FPGA gRPC interface
 - Both packages share gRPC dependencies and custom core library
-
-## Future Work
-
-- [ ] Install gRPC dependencies to `~/.grpc_local`
-- [ ] Convert `corgi_ros_bridge` to ROS2
-- [ ] Test gRPC communication between virtual agent and bridge
-- [ ] Create launch file for combined testing
