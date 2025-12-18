@@ -1,7 +1,15 @@
-add_executable(leg_model leg_model_main.cpp)
-ament_target_dependencies(leg_model rclcpp)
-target_link_libraries(leg_model ${PROJECT_NAME})
+add_executable(leg_model_main
+  leg_model_main.cpp
+)
 
-install(TARGETS leg_model
+target_link_libraries(leg_model_main
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(leg_model_main
+  rclcpp
+)
+
+install(TARGETS leg_model_main
   DESTINATION lib/${PROJECT_NAME}
 )

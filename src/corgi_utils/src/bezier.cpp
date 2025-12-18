@@ -2,7 +2,7 @@
 #include <array>
 #include <cmath>
 
-#include "bezier.hpp"
+#include "corgi_utils/bezier.hpp"
 
 /* class Bezier */
 Bezier::Bezier(const std::vector<std::array<double, 2>>& control_pts) : 

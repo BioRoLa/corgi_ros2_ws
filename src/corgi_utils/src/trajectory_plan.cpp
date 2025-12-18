@@ -1,7 +1,7 @@
 #include <vector>
 #include <array>
 #include <iostream>
-#include "trajectory_plan.hpp"
+#include "corgi_utils/trajectory_plan.hpp"
 
 LinearParaBlend::LinearParaBlend(std::vector<double> p, std::vector<double> t, double tp, bool use_vi, double vi, bool use_vf, double vf) : /* Initializer List */
                                                                                                                                             tp(tp)

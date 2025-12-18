@@ -6,8 +6,8 @@
 #include <array>
 #include <Eigen/Dense>
 #include <string>
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
 
 LegModel::LegModel(bool sim) : 
     /* Initializer List */

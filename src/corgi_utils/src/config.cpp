@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
-#include "config.hpp"
+#include "corgi_utils/config.hpp"
 
 RobotConfig load_config()
 {

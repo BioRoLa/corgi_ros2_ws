@@ -4,7 +4,7 @@
 #include <chrono>
 #include <Eigen/Dense>
 
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 
 int main() {
     LegModel legmodel(true);
