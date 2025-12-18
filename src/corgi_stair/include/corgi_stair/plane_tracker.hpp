@@ -4,7 +4,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 
-#include "plane_segmentation.hpp"
+#include "corgi_stair/plane_segmentation.hpp"
 
 struct TrackedPlane {
     std::deque<double> recent_distances;

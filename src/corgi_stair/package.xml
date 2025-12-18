@@ -3,7 +3,7 @@
   <name>corgi_stair</name>
   <version>0.1.0</version>
   <description>Stair climbing algorithms with point cloud processing for Corgi (ROS 2).</description>
-  <maintainer email="r12522806@ntu.edu.tw">Yatinghsu000627</maintainer>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -22,6 +22,7 @@
   <depend>pcl_ros</depend>
   <depend>corgi_msgs</depend>
   <depend>corgi_walk</depend>
+  <depend>corgi_utils</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -27,8 +27,8 @@
 
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/stair_planes.hpp"
-#include "plane_segmentation.hpp"
-#include "plane_tracker.hpp"
+#include "corgi_stair/plane_segmentation.hpp"
+#include "corgi_stair/plane_tracker.hpp"
 
 // static tf2_ros::TransformBroadcaster tf_broadcaster;
 

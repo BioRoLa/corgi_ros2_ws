@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <Eigen/Dense>
 
-#include "bezier.hpp"
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
-#include "trajectory_plan.hpp"
-#include "stair_climb.hpp"
+#include "corgi_utils/bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
+#include "corgi_utils/trajectory_plan.hpp"
+#include "corgi_stair/stair_climb.hpp"
 
 // #define BEZIER_CURVE_SWING 1
 #define CHANGE_FIRST_SWING_LEG 1

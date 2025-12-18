@@ -3,12 +3,12 @@
 
 #include <array>
 #include <vector>
-#include <complex>
+    #include <complex>
 
-#include "bezier.hpp"
-#include "leg_model.hpp"
-#include "leg_info.hpp"
-#include "trajectory_plan.hpp"
+#include "corgi_utils/bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_stair/leg_info.hpp"
+#include "corgi_utils/trajectory_plan.hpp"
 
 struct StairEdge {
     std::array<double, 2> edge{};

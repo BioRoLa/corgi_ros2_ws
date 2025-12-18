@@ -25,7 +25,7 @@
 #include <algorithm>
 
 #include <Eigen/Dense>
-#include "plane_segmentation.hpp"
+#include "corgi_stair/plane_segmentation.hpp"
 
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointXYZ PointT_no_color;

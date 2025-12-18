@@ -1,7 +1,7 @@
 #include <cmath>
 #include <array>
 
-#include "leg_info.hpp"
+#include "corgi_stair/leg_info.hpp"
 
 LegInfo::LegInfo(int leg_ID, double BL) : 
     /* Initializer List */
