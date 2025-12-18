@@ -1,10 +1,9 @@
-#include "wheel_to_leg.hpp"
+#include "corgi_transform/wheel_to_leg.hpp"
 
-WheelToLegTransformer::WheelToLegTransformer(bool sim) :
+WheelToLegTransformer::WheelToLegTransformer(bool sim):
     leg_model(sim)
-{
-    
-}
+    {   
+    }
 
 void WheelToLegTransformer::initialize(double init_eta[8]){
     // double init_theta[4] = {init_eta[0], init_eta[2], init_eta[4], init_eta[6]};

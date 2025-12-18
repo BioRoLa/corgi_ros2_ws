@@ -2,14 +2,15 @@
 <package format="3">
   <name>corgi_transform</name>
   <version>0.1.0</version>
-  <description>Transformations between wheeled and legged coordinates for Corgi (ROS 2).</description>
-  <maintainer email="r12522823@ntu.edu.tw">yisyuan</maintainer>
+  <description>Transformation from wheel to leg for Corgi.</description>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>corgi_msgs</depend>
+  <depend>corgi_utils</depend>
   <depend>eigen3_cmake_module</depend>
   <depend>Eigen3</depend>
 

@@ -3,8 +3,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
-
-#include "wheel_to_leg.hpp"
+#include "corgi_transform/wheel_to_leg.hpp"
 
 int main(int argc, char **argv)
 {

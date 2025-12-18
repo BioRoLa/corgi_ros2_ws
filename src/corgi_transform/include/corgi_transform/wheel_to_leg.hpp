@@ -5,8 +5,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 
 class WheelToLegTransformer {
     public:
@@ -86,8 +86,5 @@ class WheelToLegTransformer {
         
         double LF_target_pos[2], RF_target_pos[2];
 };
-
-
-
 
 #endif
