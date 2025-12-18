@@ -1,4 +1,4 @@
-#include "Simple_fsm.hpp"
+#include "corgi_gait_selector/Simple_fsm.hpp"
 
 GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
                            bool sim,
@@ -204,7 +204,7 @@ double GaitSelector::inner_radius = 0.0;
 double GaitSelector::diff_step_length = 0.0;     // Differential step length
 double GaitSelector::new_diff_step_length = 0.0; // New differential step length
 double GaitSelector::diff_dS = 0.0;              // Differential dS
-int GaitSelector::sign_diff[4] = {0.0};          // Differential sign
+int GaitSelector::sign_diff[4] = {0, 0, 0, 0};          // Differential sign
 
 corgi_msgs::msg::MotorStateStamped GaitSelector::motor_state = corgi_msgs::msg::MotorStateStamped();
 

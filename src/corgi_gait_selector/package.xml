@@ -3,7 +3,7 @@
   <name>corgi_gait_selector</name>
   <version>0.1.0</version>
   <description>Finite state machine for gait selection in Corgi (ROS 2).</description>
-  <maintainer email="r12522806@ntu.edu.tw">Yatinghsu000627</maintainer>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

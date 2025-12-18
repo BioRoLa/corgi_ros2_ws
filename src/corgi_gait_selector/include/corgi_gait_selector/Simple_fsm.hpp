@@ -23,7 +23,7 @@
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 
 enum class Gait
 {
