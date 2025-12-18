@@ -1,4 +1,4 @@
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 #include <iostream>
 #include <fstream>
 #include <vector>

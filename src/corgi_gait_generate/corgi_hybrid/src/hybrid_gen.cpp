@@ -1,4 +1,4 @@
-#include "hybrid_gen.hpp"
+#include "corgi_hybrid/hybrid_gen.hpp"
 
 const double PI = M_PI;
 

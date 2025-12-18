@@ -1,4 +1,4 @@
-穩定度
+// 穩定度
 // std::vector<int> makeSupportSet(Robot& robot)
 // {
 //     std::vector<int> S;
@@ -138,7 +138,7 @@ double computeFASM_N(Robot& robot,InertialWrench& W)
     return psi_min;
 }
 
-psi_min >0 穩定
-        ＝0 臨界
-        <0 不穩定
-psi_min >=5 degree (≈0.087 rad) （安全）
+// psi_min >0 穩定
+//         ＝0 臨界
+//         <0 不穩定
+// psi_min >=5 degree (≈0.087 rad) （安全）

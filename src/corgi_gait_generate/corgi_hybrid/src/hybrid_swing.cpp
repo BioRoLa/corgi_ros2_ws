@@ -1,4 +1,4 @@
-#include "hybrid_swing.hpp"
+#include "corgi_hybrid/hybrid_swing.hpp"
 
 double HybridSwing::quintic(double t) { return 10*t*t*t - 15*t*t*t*t + 6*t*t*t*t*t; }
 double HybridSwing::clamp(double value, double min_val, double max_val)

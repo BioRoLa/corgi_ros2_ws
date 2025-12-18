@@ -9,7 +9,7 @@
 #include <cmath>
 #include <thread>
 #include "rclcpp/rclcpp.hpp"
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 #include "corgi_msgs/msg/motor_state.hpp"
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
 #include "corgi_msgs/msg/motor_cmd.hpp"

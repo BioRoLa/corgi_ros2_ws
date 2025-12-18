@@ -1,7 +1,7 @@
 #ifndef HYBRID_GEN_HPP
 #define HYBRID_GEN_HPP
 
-#include "Simple_fsm.hpp"
+#include "corgi_gait_selector/Simple_fsm.hpp"
 #include <chrono>
 #include <iostream>
 #include <sstream>
@@ -16,8 +16,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include "leg_model.hpp"
-#include "hybrid_swing.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_hybrid/hybrid_swing.hpp"
 
 class Hybrid
 {

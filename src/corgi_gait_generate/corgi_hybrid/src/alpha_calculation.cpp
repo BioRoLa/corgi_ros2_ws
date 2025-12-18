@@ -8,7 +8,7 @@
 #include <complex>
 #include <stdexcept>
 #include <Eigen/Dense>
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 
 /// Free function: 根據當前姿態 (theta,beta)、弧段編號 rim 和參數化角 alpha，
 /// 計算輪緣上該點在世界座標系下的 (x,y)。

@@ -7,7 +7,7 @@
 #include <vector>
 #include <array>
 #include <cmath>
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 
 // ———— Terrain 类：支持多段“平面/斜坡”，且 length 为“水平长度” ————
 class Terrain {

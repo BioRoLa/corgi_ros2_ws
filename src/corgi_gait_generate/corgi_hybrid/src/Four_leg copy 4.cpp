@@ -9,7 +9,7 @@
 #include <cmath>
 #include <nlopt.hpp>
 #include "ros/ros.h"
-#include "leg_model.hpp"
+#include "corgi_utils/leg_model.hpp"
 #include <corgi_msgs/MotorState.h>
 #include <corgi_msgs/MotorStateStamped.h>
 #include <corgi_msgs/MotorCmd.h>

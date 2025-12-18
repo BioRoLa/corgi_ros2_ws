@@ -1,6 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
-#include "hybrid_gen.hpp"
+#include "corgi_hybrid/hybrid_gen.hpp"
 
 using namespace std;
 
