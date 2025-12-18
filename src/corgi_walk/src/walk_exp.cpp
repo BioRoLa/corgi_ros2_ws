@@ -9,9 +9,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
-#include "walk_gait.hpp"
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_walk/walk_gait.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 
 #define INIT_THETA (M_PI * 17.0 / 180.0)
 #define INIT_BETA (0.0)

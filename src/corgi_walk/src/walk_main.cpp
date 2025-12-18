@@ -8,9 +8,9 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
-#include "walk_gait.hpp"
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_walk/walk_gait.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 
 int main(int argc, char **argv)
 {

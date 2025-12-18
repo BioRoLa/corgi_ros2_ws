@@ -7,9 +7,9 @@
 #include <string>
 
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
-#include "walk_gait.hpp"
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_walk/walk_gait.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 
 WalkGait::WalkGait(bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : /* Initializer List */
                                                                                            leg_model(sim),

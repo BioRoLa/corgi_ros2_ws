@@ -3,7 +3,7 @@
   <name>corgi_walk</name>
   <version>0.1.0</version>
   <description>Walk and trot gait algorithms for Corgi quadruped robot (ROS 2).</description>
-  <maintainer email="r11522865@ntu.edu.tw">yenli</maintainer>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

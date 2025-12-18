@@ -1,5 +1,5 @@
-#ifndef WALKGAIT_HPP
-#define WALKGAIT_HPP
+#ifndef TrotGait_HPP
+#define TrotGait_HPP
 
 #include <iostream>
 #include <cmath>
@@ -8,14 +8,14 @@
 #include <chrono>
 #include <array>
 #include <string>
-#include "leg_model.hpp"
-#include "bezier.hpp"
 
-class WalkGait {
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
+class TrotGait {
     public:
-        WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
+        TrotGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
-        void initialize(double init_eta[8], double step_length_=0.3);
+        void initialize(double init_eta[8]);
         std::array<std::array<double, 4>, 2> step();
         void set_velocity(double new_value);
         void set_stand_height(double new_value);
@@ -29,11 +29,11 @@ class WalkGait {
         std::array<double, 4> get_duty();
         bool if_touchdown();
 
-        double velocity     = 0.1;
+        double velocity     = 0.4;
         double stand_height = 0.25;
-        double step_length  = 0.3;
+        double step_length  = 0.2;
         double step_height  = 0.04;
-
+        
     private:
         LegModel leg_model;
 
@@ -42,7 +42,7 @@ class WalkGait {
         const double BW;  // body width
         const double BH;  // body height
         const double CoM_bias;
-        const double swing_time = 0.2;
+        const double swing_time = 0.5;
 
         // Variable
         int rate;
@@ -84,6 +84,6 @@ class WalkGait {
         double new_diff_step_length = 0.0;  // New differential step length
         double diff_dS = 0.0;   // Differential dS
         int sign_diff[4];   // Differential sign
-};//end class WalkGait
+};//end class TrotGait
 
-#endif // WALKGAIT_HPP
+#endif // TrotGait_HPP
