@@ -1,0 +1,10 @@
+Headers header
+bool transmit
+int32 module
+int32 motor
+int32 mode
+int32 type
+int32 address
+float64 value_f
+int32 value_i
+int32 error_code

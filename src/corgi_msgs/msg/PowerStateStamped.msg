@@ -3,7 +3,6 @@ bool digital
 bool signal
 bool power
 bool clean
-int32 robot_mode
 float64 v_0
 float64 i_0
 float64 v_1
