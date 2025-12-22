@@ -1,6 +1,0 @@
-<launch>
-    <node name="corgi_control_panel" pkg="corgi_panel" type="corgi_control_panel.py" output="screen" required="true" />
-    <node name="corgi_data_recorder" pkg="corgi_data_recorder" type="corgi_data_recorder" output="screen" />
-    <node name="force_estimation" pkg="corgi_force_estimation" type="force_estimation" />
-    <node name="imu_node" pkg="corgi_imu" type="imu_node.sh" output="screen"/> 
-</launch>
