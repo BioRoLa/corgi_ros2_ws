@@ -1,9 +1,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
-#include "transform_gen.hpp"
-#include "hybrid_gen.hpp"
-#include "wheeled_gen.hpp"
-#include "legged_gen.hpp"
+#include "corgi_transform/transform_gen.hpp"
+#include "corgi_hybrid/hybrid_gen.hpp"
+#include "corgi_wheeled/wheeled_gen.hpp"
+#include "corgi_legged/legged_gen.hpp"
 
 int main(int argc, char **argv)
 {

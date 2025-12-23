@@ -1,6 +1,6 @@
 #include <iostream>
 #include <memory>
-#include "transform_gen.hpp"
+#include "corgi_transform/transform_gen.hpp"
 
 IGaitTransform* createWheeledToHybrid(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);
 IGaitTransform* createHybridToLegged(std::shared_ptr<Hybrid> hybrid_ptr,std::shared_ptr<Legged> legged_ptr);

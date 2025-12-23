@@ -1,10 +1,10 @@
 #ifndef TRANSFORM_GEN_HPP
 #define TRANSFORM_GEN_HPP
 
-#include "Simple_fsm.hpp"
-#include "hybrid_gen.hpp"
-#include "wheeled_gen.hpp"
-#include "legged_gen.hpp"
+#include "corgi_gait_selector/Simple_fsm.hpp"
+#include "corgi_hybrid/hybrid_gen.hpp"
+#include "corgi_wheeled/wheeled_gen.hpp"
+#include "corgi_legged/legged_gen.hpp"
 #include <cmath>
 #include <iostream>
 

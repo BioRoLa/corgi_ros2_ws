@@ -1,6 +1,6 @@
 // WheeledToLegged.cpp
 #include <iostream>
-#include "transform_gen.hpp"
+#include "corgi_transform/transform_gen.hpp"
 
 class WheeledToLegged : public IGaitTransform
 {

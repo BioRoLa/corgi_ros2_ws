@@ -1,19 +1,20 @@
-add_executable(transform_test transform_test.cpp transform_gen.cpp WheeledToHybrid.cpp HybridToLegged.cpp WheeledToLegged.cpp)
+add_executable(transform_test transform_test.cpp)
+
 target_link_libraries(transform_test
-	corgi_utils
-	corgi_gait_selector
-	corgi_hybrid
-	corgi_wheeled
-	corgi_legged
-	Eigen3::Eigen
-	${CMAKE_DL_LIBS}
+  ${PROJECT_NAME}
 )
+
 ament_target_dependencies(transform_test
-	rclcpp
-	std_msgs
-	geometry_msgs
-	sensor_msgs
-	joy
-	visualization_msgs
-	corgi_msgs
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  joy
+  visualization_msgs
+  corgi_msgs
+)
+
+install(TARGETS
+  transform_test
+  DESTINATION lib/${PROJECT_NAME}
 )
