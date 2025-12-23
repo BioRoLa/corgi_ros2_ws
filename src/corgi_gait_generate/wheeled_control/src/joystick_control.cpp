@@ -1,4 +1,4 @@
-#include "joystick_control.hpp"
+#include "wheeled_control/joystick_control.hpp"
 
 JoystickControl::JoystickControl()
     : Node("joystick_control"), hold_active_(false), was_hold_pressed_(false), was_reset_pressed_(false), last_direction_(false), current_velocity_(0.0)

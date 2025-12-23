@@ -1,4 +1,4 @@
-#include "wheeled.hpp"
+#include "wheeled_control/wheeled.hpp"
 // show the motor's state first and then compare with the wheel cmd to calculate the motor cmd's value
 
 Wheeled::Wheeled()
@@ -125,7 +125,6 @@ void Wheeled::wheelCmdCallback(const corgi_msgs::msg::WheelCmd::SharedPtr msg)
         }
     }
 
-    current_motor_cmd_.header.seq = current_motor_state_.header.seq;
     motor_cmd_pub_->publish(current_motor_cmd_);
 }
 
