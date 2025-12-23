@@ -15,12 +15,12 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-
     auto node = std::make_shared<rclcpp::Node>("corgi_csv_control");
+    rclcpp::Time now = node->now();
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    rclcpp::Rate rate(1000);
-
+    // rclcpp::Rate rate(1000);
+    rclcpp::Rate rate(1000.0, node->get_clock());
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
 
     std::vector<corgi_msgs::msg::MotorCmd*> motor_cmds = {
@@ -62,9 +62,10 @@ int main(int argc, char **argv) {
         for (auto& cmd : motor_cmds){
             std::getline(ss, item, ',');
             cmd->theta = std::stod(item);
-
+            RCLCPP_INFO(node->get_logger(), item.c_str());
             std::getline(ss, item, ',');
             cmd->beta = std::stod(item);
+            RCLCPP_INFO(node->get_logger(), item.c_str());
 
             cmd->kp_r = 90;
             cmd->kp_l = 90;
@@ -73,7 +74,7 @@ int main(int argc, char **argv) {
             cmd->kd_r = 1.75;
             cmd->kd_l = 1.75;
         }
-
+        motor_cmd.header.stamp = node->now();
         motor_cmd.header.seq = -1;
 
         motor_cmd_pub->publish(motor_cmd);

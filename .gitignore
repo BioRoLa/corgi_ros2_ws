@@ -17,3 +17,8 @@ output_data/*
 /log
 /install
 /build
+
+**/install
+**/build
+**/log
+**/COLCON_IGNORE

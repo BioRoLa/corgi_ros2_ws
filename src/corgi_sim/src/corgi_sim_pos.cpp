@@ -101,15 +101,20 @@ void tb2phi(corgi_msgs::msg::MotorCmd motor_cmd, double &phi_r, double &phi_l,
     // Enforce minimum theta
     if (motor_cmd.theta < theta_0)
         motor_cmd.theta = theta_0;
+    double delta_theta = motor_cmd.theta - theta_0;
     // Compute desired motor angles
-    double desired_r = motor_cmd.beta - motor_cmd.theta + theta_0;
-    double desired_l = motor_cmd.beta + motor_cmd.theta - theta_0;
+    double desired_r = motor_cmd.beta - delta_theta;
+    double desired_l = motor_cmd.beta + delta_theta;
+
     if (!std::isfinite(desired_r))
         desired_r = phi_r_fb; // fallback
     if (!std::isfinite(desired_l))
         desired_l = phi_l_fb; // fallback
-    phi_r = find_closest_phi(desired_r, phi_r_fb);
-    phi_l = find_closest_phi(desired_l, phi_l_fb);
+
+    phi_r = desired_r;
+    phi_l = desired_l;
+    // phi_r = find_closest_phi(desired_r, phi_r_fb);
+    // phi_l = find_closest_phi(desired_l, phi_l_fb);
 }
 
 // Removed blocking stdin prompt; output filename now comes from a ROS parameter.
@@ -125,8 +130,9 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     g_node = rclcpp::Node::make_shared("corgi_sim");
-    RCLCPP_INFO(g_node->get_logger(), "Corgi Simulation Starts (ROS2 Webots)\n");
-
+    RCLCPP_INFO(g_node->get_logger(), "Corgi Simulation POS Starts (ROS2 Webots)\n");
+    rclcpp::Time now = g_node->now();
+    
     // Publishers for motor position commands (standard Webots ROS2 interface)
     auto AR_motor_pub = g_node->create_publisher<std_msgs::msg::Float64>("lf_left_motor/set_position", 10);
     auto AL_motor_pub = g_node->create_publisher<std_msgs::msg::Float64>("lf_right_motor/set_position", 10);
@@ -158,7 +164,8 @@ int main(int argc, char **argv)
     auto imu_pub = g_node->create_publisher<sensor_msgs::msg::Imu>("imu/filtered", 1000);
     auto trigger_pub = g_node->create_publisher<corgi_msgs::msg::TriggerStamped>("trigger", 1000);
 
-    rclcpp::WallRate rate(1000ms); // 1kHz control loop
+    // rclcpp::WallRate rate(1000ms); // 1kHz control loop
+    rclcpp::Rate rate(1000.0, g_node->get_clock());
     signal(SIGINT, signal_handler);
 
     trigger.enable = true;

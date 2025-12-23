@@ -126,6 +126,7 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
     g_node = rclcpp::Node::make_shared("corgi_sim");
     RCLCPP_INFO(g_node->get_logger(), "Corgi Simulation Starts (ROS2 Webots)\n");
+    rclcpp::Time now = g_node->now();
 
     // Publishers for motor position commands (standard Webots ROS2 interface)
     auto AR_motor_pub = g_node->create_publisher<std_msgs::msg::Float64>("lf_left_motor/set_position", 10);
@@ -158,7 +159,8 @@ int main(int argc, char **argv)
     auto imu_pub = g_node->create_publisher<sensor_msgs::msg::Imu>("imu/filtered", 1000);
     auto trigger_pub = g_node->create_publisher<corgi_msgs::msg::TriggerStamped>("trigger", 1000);
 
-    rclcpp::WallRate rate(1000ms); // 1kHz control loop
+    // rclcpp::WallRate rate(1000ms); // 1kHz control loop
+    rclcpp::Rate rate(1000.0, g_node->get_clock());
     signal(SIGINT, signal_handler);
 
     trigger.enable = true;

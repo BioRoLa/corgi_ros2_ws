@@ -7,6 +7,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from controller import Robot
+from rosgraph_msgs.msg import Clock
+from builtin_interfaces.msg import Time
 
 class CorgiController(Node):
     def __init__(self, robot):
@@ -54,6 +56,9 @@ class CorgiController(Node):
             )
             self.motor_subs[name] = sub
         
+        # /clock publisher for sim time
+        self.clock_pub = self.create_publisher(Clock, 'clock', 1000)
+        
         self.get_logger().info('Corgi Webots Controller initialized')
     
     def motor_cmd_callback(self, msg, motor_name):
@@ -70,15 +75,20 @@ class CorgiController(Node):
     
     def step(self):
         """Called every simulation step"""
-        # Publish sensor values
-        for name, sensor in self.sensors.items():
-            msg = Float64()
-            msg.data = sensor.getValue()
-            self.sensor_pubs[name].publish(msg)
+        # # Publish sensor values
+        # for name, sensor in self.sensors.items():
+        #     msg = Float64()
+        #     msg.data = sensor.getValue()
+        #     self.sensor_pubs[name].publish(msg)
         
         # Process ROS callbacks
         rclpy.spin_once(self, timeout_sec=0)
-        
+        # A. 發布模擬時間 /clock
+        now = self.robot.getTime()
+        ros_time_msg = Time()
+        ros_time_msg.sec = int(now) 
+        ros_time_msg.nanosec = int((now - int(now)) * 1e9)
+        self.clock_pub.publish(Clock(clock=ros_time_msg))
         # Step simulation
         return self.robot.step(self.timestep) != -1
 
