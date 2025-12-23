@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include "wlw.hpp"
+#include "wlw_gen/wlw.hpp"
 
 double deg2rad(double degrees)
 {

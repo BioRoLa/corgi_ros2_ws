@@ -1,4 +1,4 @@
-#include "test2.hpp"
+#include "wlw_gen/test2.hpp"
 
 using namespace std;
 using namespace Eigen;

@@ -23,10 +23,10 @@
 #include <corgi_msgs/MotorCmd.h>
 #include <corgi_msgs/MotorCmdStamped.h>
 
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 // #include "wlw.hpp"
-#include "walk_gait.hpp"
+#include "corgi_walk/walk_gait.hpp"
 
 class WLWGait {
 public:

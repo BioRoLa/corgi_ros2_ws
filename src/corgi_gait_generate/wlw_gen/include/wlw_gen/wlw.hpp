@@ -18,9 +18,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
-#include "bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
+#include "corgi_utils/bezier.hpp"
 
 using namespace std;
 using namespace Eigen;
