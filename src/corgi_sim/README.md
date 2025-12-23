@@ -60,11 +60,13 @@ In a separate terminal:
 source ~/corgi_ws/corgi_ros_ws/install/setup.bash
 
 # Play a pre-recorded CSV trajectory
-ros2 run corgi_csv_control corgi_csv_control demo_transform_sim
+ros2 run corgi_csv_control corgi_csv_control  demo_transform_sim --ros-args -p use_sim_time:=True
 
 # Or run other gaits
-ros2 run corgi_csv_control corgi_csv_control demo_walk_sim
+ros2 run corgi_csv_control corgi_csv_control demo_walk_sim --ros-args -p use_sim_time:=True
 ```
+#### Note: 
+* must add **--ros-args -p use_sim_time:=True** to sync Node timer with Webots
 
 ## Files and Directories
 
