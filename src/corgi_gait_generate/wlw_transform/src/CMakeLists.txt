@@ -1,14 +1,38 @@
-# Define the executable and link required libraries (ROS2)
-add_executable(wlw_trans ./wlw_trans.cpp)
-target_link_libraries(wlw_trans corgi_utils Eigen3::Eigen)
-ament_target_dependencies(wlw_trans rclcpp std_msgs geometry_msgs corgi_msgs)
+# wlw_trans node
+add_executable(wlw_trans_node
+  wlw_trans.cpp
+)
 
-add_executable(turn ./turn.cpp)
-target_link_libraries(turn corgi_utils Eigen3::Eigen)
-ament_target_dependencies(turn rclcpp std_msgs geometry_msgs corgi_msgs)
+target_link_libraries(wlw_trans_node
+  ${PROJECT_NAME}
+)
 
+ament_target_dependencies(wlw_trans_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+  corgi_msgs
+)
+
+# turn node
+add_executable(turn
+  turn.cpp
+)
+
+target_link_libraries(turn
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(turn
+  rclcpp
+  std_msgs
+  geometry_msgs
+  corgi_msgs
+)
+
+# Install
 install(TARGETS
-	wlw_trans
-	turn
-	DESTINATION lib/${PROJECT_NAME}
+  wlw_trans_node
+  turn
+  DESTINATION lib/${PROJECT_NAME}
 )

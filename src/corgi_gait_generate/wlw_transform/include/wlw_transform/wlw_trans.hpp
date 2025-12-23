@@ -2,9 +2,9 @@
 #define WLW_TRANS_HPP
 
 
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
-#include "bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
+#include "corgi_utils/bezier.hpp"
 #include <iostream>
 #include <fstream>
 #include <vector>
