@@ -1,4 +1,4 @@
-#include "wheeled_gen.hpp"
+#include "corgi_wheeled/wheeled_gen.hpp"
 #include <cmath>
 
 /* Wheeled model class */

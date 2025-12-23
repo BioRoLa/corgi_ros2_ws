@@ -2,8 +2,8 @@
 #define WHEELED_GEN_HPP
 
 #include <rclcpp/rclcpp.hpp>
-#include <Simple_fsm.hpp>
-#include "wheeled_cmd.hpp"
+#include <corgi_gait_selector/Simple_fsm.hpp>
+#include "corgi_wheeled/wheeled_cmd.hpp"
 #include <corgi_msgs/msg/wheel_cmd.hpp>
 #include <corgi_msgs/msg/steering_cmd_stamped.hpp>
 #include <corgi_msgs/msg/steering_state_stamped.hpp>
