@@ -1,26 +1,26 @@
-#include "force_estimation.hpp"
+#include "corgi_force_estimation/force_estimation.hpp"
 
 bool trigger = false;
 
-void trigger_cb(const corgi_msgs::TriggerStamped msg){
-    trigger = msg.enable;
+void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
+    trigger = msg->enable;
 }
 
 
 int main(int argc, char **argv) {
-    ROS_INFO("Corgi Sim Leg Starts");
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("corgi_sim_leg");
 
-    ros::init(argc, argv, "corgi_sim_leg");
+    RCLCPP_INFO(node->get_logger(), "Corgi Sim Leg Starts");
 
-    ros::NodeHandle nh;
-    ros::Publisher motor_cmd_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("motor/command", 1000);
-    ros::Subscriber trigger_sub = nh.subscribe<corgi_msgs::TriggerStamped>("trigger", 1000, trigger_cb);
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
     
-    ros::Rate rate(1000);
+    auto rate = std::chrono::milliseconds(1);  // 1000 Hz
 
-    corgi_msgs::MotorCmdStamped motor_cmd;
+    corgi_msgs::msg::MotorCmdStamped motor_cmd;
 
-    std::vector<corgi_msgs::MotorCmd*> motor_cmd_modules = {
+    std::vector<corgi_msgs::msg::MotorCmd*> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
         &motor_cmd.module_c,
@@ -48,37 +48,37 @@ int main(int argc, char **argv) {
     // stay
     for (int i=0; i<1000; i++) {
         motor_cmd.header.seq = -1;
-        motor_cmd_pub.publish(motor_cmd);
-        rate.sleep();
+        motor_cmd_pub->publish(motor_cmd);
+        rclcpp::sleep_for(std::chrono::milliseconds(1));
     }
 
-    ROS_INFO("Transform Starts\n");
+    RCLCPP_INFO(node->get_logger(), "Transform Starts");
 
     // transform
     for (int i=0; i<3000; i++) {
         motor_cmd_modules[0]->beta += M_PI/3000.0;
         motor_cmd.header.seq = -1;
-        motor_cmd_pub.publish(motor_cmd);
-        rate.sleep();
+        motor_cmd_pub->publish(motor_cmd);
+        rclcpp::sleep_for(std::chrono::milliseconds(1));
     }
 
-    ROS_INFO("Transform Finished\n");
+    RCLCPP_INFO(node->get_logger(), "Transform Finished");
 
     // stay
     for (int i=0; i<2000; i++) {
         motor_cmd.header.seq = -1;
-        motor_cmd_pub.publish(motor_cmd);
-        rate.sleep();
+        motor_cmd_pub->publish(motor_cmd);
+        rclcpp::sleep_for(std::chrono::milliseconds(1));
     }
 
-    while (ros::ok()) {
-        ros::spinOnce();
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
         if (trigger){
-            ROS_INFO("Controller Starts ...\n");
+            RCLCPP_INFO(node->get_logger(), "Controller Starts ...");
 
             int loop_count = 0;
-            while (ros::ok()) {
-                ros::spinOnce();
+            while (rclcpp::ok()) {
+                rclcpp::spin_some(node);
 
                 if (loop_count < 36000) {
                     motor_cmd_modules[0]->beta -= M_PI/6000.0;
@@ -88,15 +88,17 @@ int main(int argc, char **argv) {
                 }
 
                 motor_cmd.header.seq = loop_count;
-                motor_cmd_pub.publish(motor_cmd);
+                motor_cmd_pub->publish(motor_cmd);
 
                 loop_count++;
 
-                rate.sleep();
+                rclcpp::sleep_for(std::chrono::milliseconds(1));
             }
             break;
         }
-        rate.sleep();
+        rclcpp::sleep_for(std::chrono::milliseconds(1));
     }
+    
+    rclcpp::shutdown();
     return 0;
 }

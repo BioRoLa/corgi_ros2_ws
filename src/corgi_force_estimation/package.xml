@@ -1,56 +1,30 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>corgi_force_estimation</name>
-  <version>0.0.0</version>
+  <version>0.0.1</version>
   <description>The corgi_force_estimation package</description>
-  <maintainer email="r12522823@ntu.edu.tw">yisyuan</maintainer>
-  <license>TODO</license>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
+  <license>Apache License 2.0</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>corgi_msgs</depend>
+  <depend>corgi_utils</depend>
+  <depend>corgi_walk</depend>
+  <depend>corgi_gait_selector</depend>
+  <depend>corgi_hybrid</depend>
   <depend>eigen3_cmake_module</depend>
   <depend>Eigen3</depend>
 
-  <build_depend>corgi_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>rospy</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <build_depend>rosgraph_msgs</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>message_generation</build_depend>
-  <build_depend>corgi_utils</build_depend>
-  <build_depend>corgi_walk</build_depend>
-  <build_depend>corgi_gait_selector</build_depend>
-  <build_depend>corgi_hybrid</build_depend>
-
-  <build_export_depend>roscpp</build_export_depend>
-  <build_export_depend>rospy</build_export_depend>
-  <build_export_depend>corgi_msgs</build_export_depend>
-  <build_export_depend>rosgraph_msgs</build_export_depend>
-  <build_export_depend>geometry_msgs</build_export_depend>
-  <build_export_depend>sensor_msgs</build_export_depend>
-  <build_export_depend>message_runtime</build_export_depend>
-  <build_export_depend>corgi_utils</build_export_depend>
-  <build_export_depend>corgi_walk</build_export_depend>
-  <build_export_depend>corgi_gait_selector</build_export_depend>
-  <build_export_depend>corgi_hybrid</build_export_depend>
-
-  <exec_depend>corgi_msgs</exec_depend>
-  <exec_depend>roscpp</exec_depend>
-  <exec_depend>rospy</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
-  <exec_depend>rosgraph_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>message_runtime</exec_depend>
-  <exec_depend>message_generation</exec_depend>
-  <exec_depend>corgi_utils</exec_depend>
-  <exec_depend>corgi_walk</exec_depend>
-  <exec_depend>corgi_gait_selector</exec_depend>
-  <exec_depend>corgi_hybrid</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <export>
-
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

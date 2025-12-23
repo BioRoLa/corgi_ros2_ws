@@ -1,22 +1,22 @@
-#include "force_estimation.hpp"
+#include "corgi_force_estimation/force_estimation.hpp"
 
 
-corgi_msgs::MotorStateStamped motor_state;
-corgi_msgs::ForceStateStamped force_state;
-corgi_msgs::ContactStateStamped contact_state;
-sensor_msgs::Imu imu;
+corgi_msgs::msg::MotorStateStamped motor_state;
+corgi_msgs::msg::ForceStateStamped force_state;
+corgi_msgs::msg::ContactStateStamped contact_state;
+sensor_msgs::msg::Imu imu;
 
 
-void motor_state_cb(const corgi_msgs::MotorStateStamped state){
-    motor_state = state;
+void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr state){
+    motor_state = *state;
 }
 
-void imu_cb(const sensor_msgs::Imu::ConstPtr &msg){
+void imu_cb(const sensor_msgs::msg::Imu::SharedPtr msg){
     imu = *msg;
 }
 
-void contact_state_cb(const corgi_msgs::ContactStateStamped state) {
-    contact_state = state;
+void contact_state_cb(const corgi_msgs::msg::ContactStateStamped::SharedPtr state) {
+    contact_state = *state;
 }
 
 Eigen::MatrixXd calculate_P_poly(int rim, double alpha){
@@ -157,37 +157,38 @@ void quaternion_to_euler(const Eigen::Quaterniond &q, double &roll, double &pitc
 
 int main(int argc, char **argv) {
 
-    ROS_INFO("Force Estimation Starts\n");
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("force_estimation");
 
-    ros::init(argc, argv, "force_estimation");
+    RCLCPP_INFO(node->get_logger(), "Force Estimation Starts");
 
-    ros::NodeHandle nh;
-    ros::Subscriber motor_state_sub = nh.subscribe<corgi_msgs::MotorStateStamped>("motor/state", 1000, motor_state_cb);
-    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("imu", 1000, imu_cb);
-    ros::Subscriber contact_sub = nh.subscribe<corgi_msgs::ContactStateStamped>("odometry/contact", 1000, contact_state_cb);
-    ros::Publisher force_state_pub = nh.advertise<corgi_msgs::ForceStateStamped>("force/state", 1000);
-    ros::Rate rate(1000);
+    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
+    auto imu_sub = node->create_subscription<sensor_msgs::msg::Imu>("imu", 1000, imu_cb);
+    auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 1000, contact_state_cb);
+    auto force_state_pub = node->create_publisher<corgi_msgs::msg::ForceStateStamped>("force/state", 1000);
+    
+    auto rate = std::chrono::milliseconds(1);  // 1000 Hz
 
     Eigen::Quaterniond body_angle_quat;
     double roll = 0;
     double pitch = 0;
     double yaw = 0;
 
-    std::vector<corgi_msgs::MotorState*> motor_state_modules = {
+    std::vector<corgi_msgs::msg::MotorState*> motor_state_modules = {
         &motor_state.module_a,
         &motor_state.module_b,
         &motor_state.module_c,
         &motor_state.module_d
     };
 
-    std::vector<corgi_msgs::ForceState*> force_state_modules = {
+    std::vector<corgi_msgs::msg::ForceState*> force_state_modules = {
         &force_state.module_a,
         &force_state.module_b,
         &force_state.module_c,
         &force_state.module_d
     };
 
-    std::vector<corgi_msgs::ContactState*> contact_state_modules = {
+    std::vector<corgi_msgs::msg::ContactState*> contact_state_modules = {
         &contact_state.module_a,
         &contact_state.module_b,
         &contact_state.module_c,
@@ -208,9 +209,7 @@ int main(int argc, char **argv) {
     // std::vector<double> kt = {2.018, 2.126, 2.141, 2.176, 1.927, 2.072, 2.098, 2.143};
     std::vector<double> friction = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};  // already include kt
 
-    while (ros::ok()) {
-        ros::spinOnce();
-
+    auto loop_timer = node->create_wall_timer(rate, [&]() {
         body_angle_quat = {imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z};
         quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
 
@@ -253,21 +252,20 @@ int main(int argc, char **argv) {
                                            motor_state_modules[i]->torque_r, motor_state_modules[i]->torque_l);
             }
 
-            if (i == 1 || i == 2) { force_state_modules[i]->Fx = -force_est(0, 0); }
-            else { force_state_modules[i]->Fx = force_est(0, 0); }
+            if (i == 1 || i == 2) { force_state_modules[i]->fx = -force_est(0, 0); }
+            else { force_state_modules[i]->fx = force_est(0, 0); }
             
-            force_state_modules[i]->Fy = -force_est(1, 0)+0.68*9.81;
+            force_state_modules[i]->fy = -force_est(1, 0)+0.68*9.81;
         }
 
-        force_state.header.seq = motor_state.header.seq;
-        force_state.header.stamp = ros::Time::now();
+
+        force_state.header.stamp = node->now();
         
-        force_state_pub.publish(force_state);
+        force_state_pub->publish(force_state);
+    });
 
-        rate.sleep();
-    }
-
-    ros::shutdown();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
 
     return 0;
 }
