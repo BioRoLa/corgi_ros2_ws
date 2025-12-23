@@ -1,4 +1,19 @@
-# add_executable(hybrid_test hybrid_test.cpp hybrid_gen.cpp)
-# target_link_libraries(hybrid_test  ${catkin_LIBRARIES} ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_GAIT_SELECTOR} Eigen3::Eigen )
+# Example executable
+# ================================================================
+# add_executable(legged_node
+#   legged_node.cpp
+# )
 
+# target_link_libraries(legged_node
+#   ${PROJECT_NAME}
+# )
 
+# ament_target_dependencies(legged_node
+#   rclcpp
+#   corgi_msgs
+# )
+
+# install(TARGETS
+#   legged_node
+#   DESTINATION lib/${PROJECT_NAME}
+# )

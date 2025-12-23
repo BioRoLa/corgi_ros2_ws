@@ -1,4 +1,4 @@
-#include "legged_gen.hpp"
+#include "corgi_legged/legged_gen.hpp"
 
 Legged::Legged(std::shared_ptr<GaitSelector> gait_selector_ptr) 
 : gaitSelector(gait_selector_ptr){}

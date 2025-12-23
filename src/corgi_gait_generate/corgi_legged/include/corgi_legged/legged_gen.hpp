@@ -1,7 +1,7 @@
 #ifndef LEGGED_GEN_HPP
 #define LEGGED_GEN_HPP
 
-#include "Simple_fsm.hpp"
+#include "corgi_gait_selector/Simple_fsm.hpp"
 #include <iostream>
 #include <cmath>
 #include <stdexcept>
@@ -10,8 +10,8 @@
 #include <array>
 #include <string>
 
-#include "leg_model.hpp"
-#include "bezier.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/bezier.hpp"
 
 class Legged
 {
