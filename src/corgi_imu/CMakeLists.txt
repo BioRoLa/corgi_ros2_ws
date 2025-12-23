@@ -39,4 +39,6 @@ install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
+add_subdirectory(src)
+
 ament_package()

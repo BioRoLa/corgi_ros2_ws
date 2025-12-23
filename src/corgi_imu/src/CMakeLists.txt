@@ -1,5 +1,5 @@
 # IMU node executable
-add_executable(imu_node src/imu.cpp)
+add_executable(imu_node imu.cpp)
 ament_target_dependencies(imu_node
   rclcpp
   std_msgs
@@ -10,7 +10,7 @@ ament_target_dependencies(imu_node
 target_link_libraries(imu_node Eigen3::Eigen mip)
 
 # IMU listener node executable
-add_executable(imu_node_listener src/imu_listener.cpp)
+add_executable(imu_node_listener imu_listener.cpp)
 ament_target_dependencies(imu_node_listener
   rclcpp
   std_msgs

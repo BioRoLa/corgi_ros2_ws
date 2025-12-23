@@ -19,6 +19,7 @@
 #include <Eigen/Geometry>
 #include <memory>
 #include <mutex>
+#include <atomic>
 #include "math.h"
 
 using namespace mip;  
@@ -109,9 +110,11 @@ class CX5_AHRS {
             // }
 
             twist_bias = Eigen::Vector3f(0,0,0);
+            running = false;
         }
 
         void start() {
+            running = true;
             std::unique_ptr<DeviceInterface>& device = utils->device;
 
             // // while (commands_base::ping(*device) != CmdResult::ACK_OK){
@@ -187,7 +190,7 @@ class CX5_AHRS {
             Eigen::Matrix3f rot;
             rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
             
-            while(true) {
+            while(running) {
                 device->update();
                 // if((!filter_state_ahrs)){
                 //     if (filter_status.filter_state == data_filter::FilterMode::AHRS) filter_state_ahrs = true;
@@ -222,6 +225,10 @@ class CX5_AHRS {
             _imu_mutex.unlock();
         }
 
+        void stop() {
+            running = false;
+        }
+
     private:
         data_filter::CompAngularRate raw_gyro;
         data_filter::CompAccel raw_accel;
@@ -235,6 +242,7 @@ class CX5_AHRS {
         Eigen::Quaternionf attitude;
         Eigen::Vector3f twist_bias;
         std::mutex _imu_mutex;
+        std::atomic<bool> running;
 
         // std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
         //     auto utils = std::unique_ptr<Utils>(new Utils());
