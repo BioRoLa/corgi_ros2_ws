@@ -2,8 +2,8 @@
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
 
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
 
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Leg Transform Starts\n");
+    RCLCPP_INFO(node->get_logger(), "Set Zero Starts");
 
     double theta_err[4];
     double beta_err[4];
@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
         beta_err[i] = (-motor_state_modules[i]->beta);
 
         if (motor_cmd_modules[i]->theta < 17/180.0*M_PI) {
+            RCLCPP_WARN(node->get_logger(), "Theta value too small, shutting down");
             rclcpp::shutdown();
             return 0;
         }
@@ -79,6 +80,7 @@ int main(int argc, char **argv) {
 
         motor_cmd_pub->publish(motor_cmd);
 
+        rclcpp::spin_some(node);
         rate.sleep();
     }
 
@@ -91,9 +93,11 @@ int main(int argc, char **argv) {
 
         motor_cmd_pub->publish(motor_cmd);
 
+        rclcpp::spin_some(node);
         rate.sleep();
     }
 
+    RCLCPP_INFO(node->get_logger(), "Set Zero Completed");
     rclcpp::shutdown();
     
     return 0;

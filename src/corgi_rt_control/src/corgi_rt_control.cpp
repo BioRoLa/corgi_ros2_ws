@@ -2,8 +2,8 @@
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
 
-#include "leg_model.hpp"
-#include "fitted_coefficient.hpp"
+#include "corgi_utils/leg_model.hpp"
+#include "corgi_utils/fitted_coefficient.hpp"
 
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
         &motor_cmd.module_d
     };
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Leg Transform Starts\n");
+    RCLCPP_INFO(node->get_logger(), "Leg Transform Starts");
     
     for (auto& cmd : motor_cmd_modules) {
         cmd->theta = 17/180.0*M_PI;
@@ -68,20 +68,22 @@ int main(int argc, char **argv) {
 
         motor_cmd_pub->publish(motor_cmd);
 
+        rclcpp::spin_some(node);
         rate.sleep();
     }
 
     for (int i=0; i<1000; i++){
+        rclcpp::spin_some(node);
         rate.sleep();
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Leg Transform Finished\n");
+    RCLCPP_INFO(node->get_logger(), "Leg Transform Finished");
 
     while (rclcpp::ok()){
         rclcpp::spin_some(node);
 
         if (trigger){
-            RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Real Time Trajectory Starts\n");
+            RCLCPP_INFO(node->get_logger(), "Real Time Trajectory Starts");
             int loop_count = 0;
             while (rclcpp::ok()) {
                 if (loop_count < 1000) {
@@ -130,13 +132,15 @@ int main(int argc, char **argv) {
 
                 loop_count++;
 
+                rclcpp::spin_some(node);
                 rate.sleep();
             }
             break;
         }
+        rate.sleep();
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Real Time Trajectory Finished\n");
+    RCLCPP_INFO(node->get_logger(), "Real Time Trajectory Finished");
 
     rclcpp::shutdown();
     
