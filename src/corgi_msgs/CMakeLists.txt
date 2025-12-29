@@ -32,7 +32,6 @@ set(msg_files
   "msg/PowerCmdStamped.msg"
   "msg/PowerStateStamped.msg"
   "msg/RobotCmdStamped.msg"
-  "msg/RobotRequestUpdate.msg"
   "msg/RobotStateStamped.msg"
   "msg/SensorEnableStamped.msg"
   "msg/SimContactPoint.msg"

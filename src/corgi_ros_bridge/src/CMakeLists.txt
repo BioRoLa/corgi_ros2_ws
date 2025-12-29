@@ -5,7 +5,7 @@ if (NOT GRPC_PROTO_LIB)
 endif()
 
 # Define the executable and link required libraries
-add_executable(corgi_ros_bridge corgi_ros_bridge.cpp)
+add_executable(corgi_ros_bridge corgi_ros_bridge_dev.cpp)
 ament_target_dependencies(corgi_ros_bridge rclcpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs)
 
 target_include_directories(corgi_ros_bridge PUBLIC

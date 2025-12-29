@@ -7,16 +7,21 @@
 #include "Power.pb.h"
 #include "Steering.pb.h"
 
+#include "Config.pb.h"
+#include "Robot.pb.h"
 
 std::mutex mutex_motor_state;
 std::mutex mutex_power_state;
 std::mutex mutex_steer_state;
+std::mutex mutex_robot_state;
 
 motor_msg::MotorCmdStamped          motor_cmd;
-power_msg::PowerCmdStamped          power_cmd;
+// power_msg::PowerCmdStamped          power_cmd;
+robot_msg::RobotCmdStamped          robot_cmd;
 steering_msg::SteeringCmdStamped    steer_cmd;
 motor_msg::MotorStateStamped        motor_state;
 power_msg::PowerStateStamped        power_state;
+robot_msg::RobotStateStamped        robot_state;
 steering_msg::SteeringStateStamped  steer_state;
 
 
@@ -58,21 +63,21 @@ void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd) {
     motor_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
-void power_cmd_cb(const power_msg::PowerCmdStamped cmd) {
-    std::lock_guard<std::mutex> lock(mutex_power_state);
+// void power_cmd_cb(const power_msg::PowerCmdStamped cmd) {
+//     std::lock_guard<std::mutex> lock(mutex_power_state);
 
-    power_state.set_digital(cmd.digital());
-    power_state.set_signal(cmd.signal());
-    power_state.set_power(cmd.power());
-    power_state.set_robot_mode((power_msg::ROBOTMODE)cmd.robot_mode());
+//     power_state.set_digital(cmd.digital());
+//     power_state.set_signal(cmd.signal());
+//     power_state.set_power(cmd.power());
+//     power_state.set_robot_mode((power_msg::ROBOTMODE)cmd.robot_mode());
 
 
-    timeval currentTime;
-    gettimeofday(&currentTime, nullptr);
-    power_state.mutable_header()->set_seq(cmd.header().seq());
-    power_state.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
-    power_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
-}
+//     timeval currentTime;
+//     gettimeofday(&currentTime, nullptr);
+//     power_state.mutable_header()->set_seq(cmd.header().seq());
+//     power_state.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
+//     power_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
+// }
 
 void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
     std::lock_guard<std::mutex> lock(mutex_steer_state);
@@ -89,6 +94,22 @@ void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
     steer_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
+void robot_cmd_cb(const robot_msg::RobotCmdStamped cmd) {
+    std::lock_guard<std::mutex> lock(mutex_robot_state);
+
+    std::cout << "Received robot command! Mode: " << cmd.request_robot_mode() << std::endl;
+
+    robot_state.set_robot_mode((robot_msg::ROBOTMODE)cmd.request_robot_mode());
+
+    timeval currentTime;
+    gettimeofday(&currentTime, nullptr);
+    robot_state.mutable_header()->set_seq(cmd.header().seq());
+    robot_state.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
+    robot_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
+    
+    std::cout << "Robot state updated. Publishing mode: " << robot_state.robot_mode() << std::endl;
+}
+
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_virtual_agent");
@@ -96,11 +117,12 @@ int main(int argc, char **argv) {
     core::NodeHandler nh_;
     core::Publisher<motor_msg::MotorStateStamped> &motor_state_pub = nh_.advertise<motor_msg::MotorStateStamped>("motor/state");
     core::Publisher<power_msg::PowerStateStamped> &power_state_pub = nh_.advertise<power_msg::PowerStateStamped>("power/state");
+    core::Publisher<robot_msg::RobotStateStamped> &robot_state_pub = nh_.advertise<robot_msg::RobotStateStamped>("robot/state");
     core::Publisher<steering_msg::SteeringStateStamped> &steer_state_pub = nh_.advertise<steering_msg::SteeringStateStamped>("steer/state");
     core::Subscriber<motor_msg::MotorCmdStamped> &motor_cmd_sub = nh_.subscribe<motor_msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
-    core::Subscriber<power_msg::PowerCmdStamped> &power_cmd_sub = nh_.subscribe<power_msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
+    // core::Subscriber<power_msg::PowerCmdStamped> &power_cmd_sub = nh_.subscribe<power_msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
     core::Subscriber<steering_msg::SteeringCmdStamped> &steer_cmd_sub = nh_.subscribe<steering_msg::SteeringCmdStamped>("steer/command", 1000, steer_cmd_cb);
-
+    core::Subscriber<robot_msg::RobotCmdStamped> &robot_cmd_sub = nh_.subscribe<robot_msg::RobotCmdStamped>("robot/command", 1000, robot_cmd_cb);
     core::Rate rate(1000);
 
     while (rclcpp::ok()) {
@@ -119,6 +141,11 @@ int main(int argc, char **argv) {
         {
             std::lock_guard<std::mutex> lock(mutex_steer_state);
             steer_state_pub.publish(steer_state);
+        }
+        
+        {
+            std::lock_guard<std::mutex> lock(mutex_robot_state);
+            robot_state_pub.publish(robot_state);
         }
 
         rate.sleep();
