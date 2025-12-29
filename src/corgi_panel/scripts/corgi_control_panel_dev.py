@@ -17,7 +17,7 @@ from PyQt5.QtCore import pyqtSignal
 
 from corgi_msgs.msg import (
     MotorCmdStamped, MotorStateStamped, PowerCmdStamped, PowerStateStamped,
-    RobotCmdStamped, RobotStateStamped, RobotRequestUpdate, TriggerStamped,
+    RobotCmdStamped, RobotStateStamped, TriggerStamped,
 )
 
 GPIO_defined = True
@@ -103,6 +103,10 @@ class CorgiControlPanel(QWidget):
         self.robot_state_signal.connect(self._handle_robot_state_update)
         self.motor_state_signal.connect(self._handle_motor_state_update)
         
+        # Robot command sequencing and pending state tracking
+        self._robot_cmd_seq = 0
+        self._pending_robot_mode = None  # type: int | None
+
         self.reset()
 
     def init_ui(self):
@@ -289,20 +293,40 @@ class CorgiControlPanel(QWidget):
         if self.btn_ros_bridge.isChecked():
             self.btn_ros_bridge.setText('Stop ROS Bridge')
             try:
-                self.process_bridge = subprocess.Popen(['ros2', 'run', 'corgi_ros_bridge', 'corgi_ros_bridge.sh'])
-                self.add_log('ROS Bridge Started (ROS2)')
-            except FileNotFoundError:
-                try:
-                    self.process_bridge = subprocess.Popen(['rosrun', 'corgi_ros_bridge', 'corgi_ros_bridge.sh'])
-                    self.add_log('ROS Bridge Started (ROS1)')
-                except:
-                     self.add_log('[ERR] Bridge script not found!')
+                if hasattr(self, 'process_bridge') and self.process_bridge is not None and self.process_bridge.poll() is None:
+                    self.add_log('Bridge already running; skip start')
+                    return
+                # Launch the ROS2 bridge executable directly
+                self.process_bridge = subprocess.Popen(['ros2', 'run', 'corgi_ros_bridge', 'corgi_ros_bridge'])
+                self.add_log('ROS Bridge Started (ros2 run corgi_ros_bridge corgi_ros_bridge)')
+            except Exception as e:
+                self.add_log(f'[ERR] Failed to start ROS Bridge: {e}')
         else:
             self.btn_ros_bridge.setText('Run ROS Bridge')
-            if hasattr(self, 'process_bridge'):
-                self.process_bridge.send_signal(signal.SIGINT)
-                self.process_bridge.wait()
-            self.add_log('ROS Bridge Stopped')
+            if hasattr(self, 'process_bridge') and self.process_bridge is not None:
+                self.btn_ros_bridge.setEnabled(False)  # avoid double clicks while stopping
+                # Stop in background to avoid freezing UI
+                def _stop():
+                    try:
+                        self.process_bridge.send_signal(signal.SIGINT)
+                        ret = self.process_bridge.wait(timeout=2.0)
+                        self.add_log(f'ROS Bridge Stopped (code {ret})')
+                    except subprocess.TimeoutExpired:
+                        self.add_log('ROS Bridge did not exit, terminating...')
+                        self.process_bridge.terminate()
+                        try:
+                            ret = self.process_bridge.wait(timeout=2.0)
+                            self.add_log(f'ROS Bridge Terminated (code {ret})')
+                        except subprocess.TimeoutExpired:
+                            self.add_log('ROS Bridge still alive, killing...')
+                            self.process_bridge.kill()
+                            self.process_bridge.wait()
+                    finally:
+                        self.process_bridge = None
+                        self.btn_ros_bridge.setEnabled(True)
+                threading.Thread(target=_stop, daemon=True).start()
+            else:
+                self.add_log('ROS Bridge Stopped')
         self.set_btn_enable()
 
     def imu_cmd(self): pass
@@ -310,9 +334,14 @@ class CorgiControlPanel(QWidget):
     def e_stop_cmd(self):
         self.add_log('EMERGENCY STOP ACTIVATED!')
         robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.node.get_clock().now().to_msg()
-        robot_cmd.robot_mode = ROBOTMODE.IDLE  # [2] 強制回 IDLE
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)  # [2] 強制回 IDLE
         self.robot_cmd_pub.publish(robot_cmd)
+        self._robot_cmd_seq += 1
+        self._pending_robot_mode = int(ROBOTMODE.IDLE)
+        self.set_btn_enable()
     
     # 使用 Enum 發送命令
     def system_cmd(self): self._pub_robot_mode(ROBOTMODE.SYSTEM_ON)
@@ -322,10 +351,16 @@ class CorgiControlPanel(QWidget):
     
     def _pub_robot_mode(self, mode):
         robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.node.get_clock().now().to_msg()
-        robot_cmd.robot_mode = int(mode)
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(mode)
         self.robot_cmd_pub.publish(robot_cmd)
-        self.add_log(f'Sent Robot Mode Command: {mode.name} ({mode.value})')
+        self._robot_cmd_seq += 1
+        self._pending_robot_mode = int(mode)
+        self.add_log(f'Sent Robot Mode Command: {mode.name} ({mode.value}), seq={self._robot_cmd_seq}')
+        # Disable buttons until state matches the requested mode
+        self.set_btn_enable()
 
     def publish_trigger_cmd(self):
         trigger_cmd = TriggerStamped()
@@ -406,6 +441,10 @@ class CorgiControlPanel(QWidget):
 
     def _handle_robot_state_update(self, state):
         self.robot_state = state
+        # Clear pending command once state matches
+        if self._pending_robot_mode is not None and int(state.robot_mode) == int(self._pending_robot_mode):
+            self.add_log(f'Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})')
+            self._pending_robot_mode = None
         
         # 使用 Enum 更新 UI 顯示
         try:
