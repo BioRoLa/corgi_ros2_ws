@@ -17,7 +17,7 @@ from PyQt5.QtCore import pyqtSignal
 
 from corgi_msgs.msg import (
     MotorCmdStamped, MotorStateStamped, PowerCmdStamped, PowerStateStamped,
-    RobotCmdStamped, RobotStateStamped, TriggerStamped,
+    RobotCmdStamped, RobotStateStamped, TriggerStamped, LogStamped
 )
 
 GPIO_defined = True
@@ -30,6 +30,13 @@ class ROBOTMODE(IntEnum):
     IDLE = 2
     STANDBY = 3
     MOTORCONFIG = 4
+
+class LOGLEVEL(IntEnum):
+    DEBUG = 0
+    INFO = 1
+    WARN = 2
+    ERROR = 3
+    FATAL = 4
 
 STYLESHEET = """
 QWidget {
@@ -80,6 +87,7 @@ class CorgiControlPanel(QWidget):
     power_state_signal = pyqtSignal(object)
     robot_state_signal = pyqtSignal(object)
     motor_state_signal = pyqtSignal(object)
+    log_state_signal = pyqtSignal(object)
 
     def __init__(self):
         super(CorgiControlPanel, self).__init__()
@@ -102,10 +110,12 @@ class CorgiControlPanel(QWidget):
         self.power_state_signal.connect(self._handle_power_state_update)
         self.robot_state_signal.connect(self._handle_robot_state_update)
         self.motor_state_signal.connect(self._handle_motor_state_update)
+        self.log_state_signal.connect(self._handle_log_update)
         
         # Robot command sequencing and pending state tracking
         self._robot_cmd_seq = 0
         self._pending_robot_mode = None  # type: int | None
+        self._last_confirmed_mode = None  # Track last confirmed mode for error recovery
 
         self.reset()
 
@@ -283,24 +293,26 @@ class CorgiControlPanel(QWidget):
         self.power_state_sub = self.node.create_subscription(PowerStateStamped, 'power/state', self.power_state_cb, 10)
         self.robot_state_sub = self.node.create_subscription(RobotStateStamped, 'robot/state', self.robot_state_cb, 10)
         self.motor_state_sub = self.node.create_subscription(MotorStateStamped, 'motor/state', self.motor_state_cb, 10)
+        self.log_sub = self.node.create_subscription(LogStamped, 'log', self.log_cb, 10)
 
         self.power_state = PowerStateStamped()
         self.robot_state = RobotStateStamped()
         self.motor_state = MotorStateStamped()
-        self.add_log('[SYSTEM] Control Panel Initialized')
+        self.log_state = LogStamped()
+        self.add_log('[SYSTEM] Control Panel Initialized', 'INFO')
 
     def ros_bridge_cmd(self):        
         if self.btn_ros_bridge.isChecked():
             self.btn_ros_bridge.setText('Stop ROS Bridge')
             try:
                 if hasattr(self, 'process_bridge') and self.process_bridge is not None and self.process_bridge.poll() is None:
-                    self.add_log('Bridge already running; skip start')
+                    self.add_log('Bridge already running; skip start', 'WARN')
                     return
                 # Launch the ROS2 bridge executable directly
                 self.process_bridge = subprocess.Popen(['ros2', 'run', 'corgi_ros_bridge', 'corgi_ros_bridge'])
-                self.add_log('ROS Bridge Started (ros2 run corgi_ros_bridge corgi_ros_bridge)')
+                self.add_log('ROS Bridge Started (ros2 run corgi_ros_bridge corgi_ros_bridge)', 'SYSTEM')
             except Exception as e:
-                self.add_log(f'[ERR] Failed to start ROS Bridge: {e}')
+                self.add_log(f'Failed to start ROS Bridge: {e}', 'ERROR')
         else:
             self.btn_ros_bridge.setText('Run ROS Bridge')
             if hasattr(self, 'process_bridge') and self.process_bridge is not None:
@@ -310,15 +322,15 @@ class CorgiControlPanel(QWidget):
                     try:
                         self.process_bridge.send_signal(signal.SIGINT)
                         ret = self.process_bridge.wait(timeout=2.0)
-                        self.add_log(f'ROS Bridge Stopped (code {ret})')
+                        self.add_log(f'ROS Bridge Stopped (code {ret})', 'SYSTEM')
                     except subprocess.TimeoutExpired:
-                        self.add_log('ROS Bridge did not exit, terminating...')
+                        self.add_log('ROS Bridge did not exit, terminating...', 'WARN')
                         self.process_bridge.terminate()
                         try:
                             ret = self.process_bridge.wait(timeout=2.0)
-                            self.add_log(f'ROS Bridge Terminated (code {ret})')
+                            self.add_log(f'ROS Bridge Terminated (code {ret})', 'SYSTEM')
                         except subprocess.TimeoutExpired:
-                            self.add_log('ROS Bridge still alive, killing...')
+                            self.add_log('ROS Bridge still alive, killing...', 'ERROR')
                             self.process_bridge.kill()
                             self.process_bridge.wait()
                     finally:
@@ -326,13 +338,13 @@ class CorgiControlPanel(QWidget):
                         self.btn_ros_bridge.setEnabled(True)
                 threading.Thread(target=_stop, daemon=True).start()
             else:
-                self.add_log('ROS Bridge Stopped')
+                self.add_log('ROS Bridge Stopped', 'SYSTEM')
         self.set_btn_enable()
 
     def imu_cmd(self): pass
 
     def e_stop_cmd(self):
-        self.add_log('EMERGENCY STOP ACTIVATED!')
+        self.add_log('EMERGENCY STOP ACTIVATED!', 'FATAL')
         robot_cmd = RobotCmdStamped()
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.node.get_clock().now().to_msg()
@@ -358,7 +370,7 @@ class CorgiControlPanel(QWidget):
         self.robot_cmd_pub.publish(robot_cmd)
         self._robot_cmd_seq += 1
         self._pending_robot_mode = int(mode)
-        self.add_log(f'Sent Robot Mode Command: {mode.name} ({mode.value}), seq={self._robot_cmd_seq}')
+        self.add_log(f'Sent Robot Mode Command: {mode.name} ({mode.value}), seq={self._robot_cmd_seq}', 'SYSTEM')
         # Disable buttons until state matches the requested mode
         self.set_btn_enable()
 
@@ -434,17 +446,67 @@ class CorgiControlPanel(QWidget):
     def power_state_cb(self, state): self.power_state_signal.emit(state)
     def robot_state_cb(self, state): self.robot_state_signal.emit(state)
     def motor_state_cb(self, state): self.motor_state_signal.emit(state)
+    def log_cb(self, log_msg): self.log_state_signal.emit(log_msg)
 
     def _handle_power_state_update(self, state):
         self.power_state = state
         self.set_btn_enable()
 
+    def _handle_log_update(self, log_msg):
+        """Handle incoming log messages from lower-level systems"""
+        self.log_state = log_msg
+        
+        # Extract log information
+        level = log_msg.level
+        node_name = log_msg.node_name if hasattr(log_msg, 'node_name') else 'unknown'
+        message = log_msg.message if hasattr(log_msg, 'message') else ''
+        
+        # Convert timestamp
+        if hasattr(log_msg.header, 'stamp'):
+            stamp = log_msg.header.stamp
+            timestamp = datetime.fromtimestamp(stamp.sec + stamp.nanosec / 1e9).strftime('%Y-%m-%d %H:%M:%S.%f')
+        else:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        
+        # Map level to name and color
+        level_map = {
+            LOGLEVEL.DEBUG: ('DEBUG', '#2196f3'),  # BLUE
+            LOGLEVEL.INFO: ('INFO ', '#00e676'),   # GREEN
+            LOGLEVEL.WARN: ('WARN ', '#ffea00'),   # YELLOW
+            LOGLEVEL.ERROR: ('ERROR', '#ff5252'),  # RED
+            LOGLEVEL.FATAL: ('FATAL', '#d32f2f'),  # BOLD RED
+        }
+        
+        level_name, color = level_map.get(level, ('UNKNOWN', '#ffffff'))
+        
+        # Format and display log with color
+        log_html = f'<span style="color:#888;">[{timestamp}]</span> '
+        log_html += f'<span style="color:{color}; font-weight:bold;">[{level_name}]</span> '
+        log_html += f'<span style="color:#aaa;">[{node_name}]</span> '
+        log_html += f'<span style="color:#ddd;">{message}</span>'
+        
+        self.text_log.append(log_html)
+        self.text_log.verticalScrollBar().setValue(self.text_log.verticalScrollBar().maximum())
+        
+        # Handle ERROR and FATAL: clear pending mode as lower system reverted
+        if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
+            if self._pending_robot_mode is not None:
+                reverted_mode = ROBOTMODE(self._pending_robot_mode).name if self._pending_robot_mode in ROBOTMODE.__members__.values() else str(self._pending_robot_mode)
+                self.add_log(f'[SYSTEM] Command to {reverted_mode} failed - system reverted', 'WARN')
+                self._pending_robot_mode = None
+                self.set_btn_enable()
+    
     def _handle_robot_state_update(self, state):
         self.robot_state = state
+        current_mode = int(state.robot_mode)
+        
         # Clear pending command once state matches
-        if self._pending_robot_mode is not None and int(state.robot_mode) == int(self._pending_robot_mode):
-            self.add_log(f'Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})')
+        if self._pending_robot_mode is not None and current_mode == int(self._pending_robot_mode):
+            self.add_log(f'[SYSTEM] Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})', 'INFO')
             self._pending_robot_mode = None
+        
+        # Update last confirmed mode
+        self._last_confirmed_mode = current_mode
         
         # 使用 Enum 更新 UI 顯示
         try:
@@ -482,9 +544,26 @@ class CorgiControlPanel(QWidget):
                     if temp > 60: self.motor_labels[key].setStyleSheet("color: #ff5252; font-weight: bold;")
                     else: self.motor_labels[key].setStyleSheet("color: #aaa;")
 
-    def add_log(self, message):
+    def add_log(self, message, level='INFO'):
+        """Add log message with optional level for color coding"""
         timestamp = datetime.now().strftime('%H:%M:%S')
-        self.text_log.append(f'<span style="color:#888;">[{timestamp}]</span> {message}')
+        
+        # Color map for internal logs
+        color_map = {
+            'DEBUG': '#2196f3',
+            'INFO': '#00e676',
+            'WARN': '#ffea00',
+            'ERROR': '#ff5252',
+            'FATAL': '#d32f2f',
+            'SYSTEM': '#bb86fc',  # Purple for system messages
+        }
+        color = color_map.get(level, '#ffffff')
+        
+        log_html = f'<span style="color:#888;">[{timestamp}]</span> '
+        log_html += f'<span style="color:{color}; font-weight:bold;">[{level}]</span> '
+        log_html += f'<span style="color:#ddd;">{message}</span>'
+        
+        self.text_log.append(log_html)
         self.text_log.verticalScrollBar().setValue(self.text_log.verticalScrollBar().maximum())
 
     def timer_update(self): pass
@@ -492,6 +571,8 @@ class CorgiControlPanel(QWidget):
         try: self.node.destroy_subscription(self.power_state_sub)
         except: pass
         try: self.node.destroy_subscription(self.robot_state_sub)
+        except: pass
+        try: self.node.destroy_subscription(self.log_sub)
         except: pass
         self.reset()
         if hasattr(self, 'process_bridge'): self.process_bridge.send_signal(signal.SIGINT)
