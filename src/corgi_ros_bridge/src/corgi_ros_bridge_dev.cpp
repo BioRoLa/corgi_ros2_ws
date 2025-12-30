@@ -308,7 +308,7 @@ int main(int argc, char **argv) {
     core::Subscriber<power_msg::PowerStateStamped> &grpc_power_state_sub = nh_.subscribe<power_msg::PowerStateStamped>("power/state", 1000, grpc_power_state_cb);
     core::Subscriber<steering_msg::SteeringStateStamped> &grpc_steer_state_sub = nh_.subscribe<steering_msg::SteeringStateStamped>("steer/state", 1000, grpc_steer_state_cb);
     core::Subscriber<robot_msg::RobotStateStamped> &grpc_robot_state_sub = nh_.subscribe<robot_msg::RobotStateStamped>("robot/state", 1000, grpc_robot_state_cb);
-    core::Subscriber<log_msg::LogEntry> &grpc_log_sub = nh_.subscribe<log_msg::LogEntry>("log", 1000, grpc_log_cb);
+    core::Subscriber<log_msg::LogEntry> &grpc_log_sub = nh_.subscribe<log_msg::LogEntry>("/log", 10000, grpc_log_cb, 100);
 
     grpc_motor_cmd_pub = &(nh_.advertise<motor_msg::MotorCmdStamped>("motor/command"));
     // grpc_power_cmd_pub = &(nh_.advertise<power_msg::PowerCmdStamped>("power/command"));
