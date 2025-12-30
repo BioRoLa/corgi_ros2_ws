@@ -25,6 +25,7 @@ set(msg_files
   "msg/ImpedanceCmd.msg"
   "msg/ImpedanceCmdStamped.msg"
   "msg/ImuStamped.msg"
+  "msg/LogStamped.msg"
   "msg/MotorCmd.msg"
   "msg/MotorCmdStamped.msg"
   "msg/MotorState.msg"

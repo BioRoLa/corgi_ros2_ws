@@ -9,11 +9,13 @@
 
 #include "Config.pb.h"
 #include "Robot.pb.h"
+#include "Log.pb.h"
 
 std::mutex mutex_motor_state;
 std::mutex mutex_power_state;
 std::mutex mutex_steer_state;
 std::mutex mutex_robot_state;
+std::mutex mutex_log;
 
 motor_msg::MotorCmdStamped          motor_cmd;
 // power_msg::PowerCmdStamped          power_cmd;
@@ -23,6 +25,7 @@ motor_msg::MotorStateStamped        motor_state;
 power_msg::PowerStateStamped        power_state;
 robot_msg::RobotStateStamped        robot_state;
 steering_msg::SteeringStateStamped  steer_state;
+log_msg::LogEntry              log_entry;
 
 
 void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd) {
@@ -110,6 +113,21 @@ void robot_cmd_cb(const robot_msg::RobotCmdStamped cmd) {
     std::cout << "Robot state updated. Publishing mode: " << robot_state.robot_mode() << std::endl;
 }
 
+void log_cb(const log_msg::LogEntry entry) {
+    std::lock_guard<std::mutex> lock(mutex_log);
+
+    log_entry.set_level(entry.level());
+    log_entry.set_node_name(entry.node_name());
+    log_entry.set_message(entry.message());
+
+    timeval currentTime;
+    gettimeofday(&currentTime, nullptr);
+    log_entry.mutable_header()->set_seq(entry.header().seq());
+    log_entry.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
+    log_entry.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
+    std::cout << "Log Entry - Level: " << log_entry.level() << ", Node: " << log_entry.node_name() << ", Message: " << log_entry.message() << std::endl;
+}
+
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_virtual_agent");
@@ -119,6 +137,8 @@ int main(int argc, char **argv) {
     core::Publisher<power_msg::PowerStateStamped> &power_state_pub = nh_.advertise<power_msg::PowerStateStamped>("power/state");
     core::Publisher<robot_msg::RobotStateStamped> &robot_state_pub = nh_.advertise<robot_msg::RobotStateStamped>("robot/state");
     core::Publisher<steering_msg::SteeringStateStamped> &steer_state_pub = nh_.advertise<steering_msg::SteeringStateStamped>("steer/state");
+    core::Publisher<log_msg::LogEntry> &log_pub = nh_.advertise<log_msg::LogEntry>("log");
+
     core::Subscriber<motor_msg::MotorCmdStamped> &motor_cmd_sub = nh_.subscribe<motor_msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
     // core::Subscriber<power_msg::PowerCmdStamped> &power_cmd_sub = nh_.subscribe<power_msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
     core::Subscriber<steering_msg::SteeringCmdStamped> &steer_cmd_sub = nh_.subscribe<steering_msg::SteeringCmdStamped>("steer/command", 1000, steer_cmd_cb);
@@ -146,6 +166,11 @@ int main(int argc, char **argv) {
         {
             std::lock_guard<std::mutex> lock(mutex_robot_state);
             robot_state_pub.publish(robot_state);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_log);
+            log_pub.publish(log_entry);
         }
 
         rate.sleep();
