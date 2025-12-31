@@ -214,7 +214,8 @@ class CorgiControlPanel(QWidget):
         grp_rec_layout = QVBoxLayout()
         self.edit_output = QLineEdit()
         self.edit_output.setPlaceholderText("File Name (.csv)")
-        self.btn_trigger = QPushButton('Trigger')
+        self.edit_output.returnPressed.connect(self.start_recording_from_input)
+        self.btn_trigger = QPushButton('Start Recording')
         self.btn_trigger.setCheckable(True)
         self.btn_trigger.clicked.connect(self.publish_trigger_cmd)
         
@@ -374,19 +375,51 @@ class CorgiControlPanel(QWidget):
         # Disable buttons until state matches the requested mode
         self.set_btn_enable()
 
-    def publish_trigger_cmd(self):
-        trigger_cmd = TriggerStamped()
-        trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
-        trigger_cmd.enable = self.btn_trigger.isChecked()
-        trigger_cmd.output_filename = self.edit_output.text()
-        self.trigger_pub.publish(trigger_cmd)
-        if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW)
-        if self.btn_trigger.isChecked():
-            self.btn_trigger.setText("Trigger is on ...")
-            self.btn_trigger.setStyleSheet("background-color: #d32f2f; color: white;")
+    def start_recording_from_input(self):
+        """Start recording when user presses Enter in the filename input field"""
+        filename = self.edit_output.text().strip()
+        if filename and not self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(True)
+            self.publish_trigger_cmd()
+        elif not filename:
+            self.add_log('Please enter a filename before recording', 'WARN')
         else:
-            self.btn_trigger.setText("Trigger")
+            self.add_log('Recording already in progress', 'WARN')
+
+    def publish_trigger_cmd(self):
+        # Check if starting recording
+        if self.btn_trigger.isChecked():
+            filename = self.edit_output.text().strip()
+            if not filename:
+                self.add_log('Please enter a filename before recording', 'WARN')
+                self.btn_trigger.setChecked(False)  # Uncheck the button
+                return
+            
+            # Start recording
+            trigger_cmd = TriggerStamped()
+            trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
+            trigger_cmd.enable = True
+            trigger_cmd.output_filename = filename
+            self.trigger_pub.publish(trigger_cmd)
+            if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.HIGH)
+            
+            self.btn_trigger.setText("Stop Recording")
+            self.btn_trigger.setStyleSheet("background-color: #d32f2f; color: white;")
+            self.edit_output.setEnabled(False)  # Disable editing while recording
+            self.add_log(f'Recording started: {filename}', 'INFO')
+        else:
+            # Stop recording
+            trigger_cmd = TriggerStamped()
+            trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
+            trigger_cmd.enable = False
+            trigger_cmd.output_filename = self.edit_output.text()
+            self.trigger_pub.publish(trigger_cmd)
+            if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.LOW)
+            
+            self.btn_trigger.setText("Start Recording")
             self.btn_trigger.setStyleSheet("")
+            self.edit_output.setEnabled(True)  # Re-enable editing after stopping
+            self.add_log('Recording stopped', 'INFO')
 
     def set_btn_enable(self):
         bridge_on = self.btn_ros_bridge.isChecked()
@@ -546,9 +579,9 @@ class CorgiControlPanel(QWidget):
 
     def add_log(self, message, level='INFO'):
         """Add log message with optional level for color coding"""
-        timestamp = datetime.now().strftime('%H:%M:%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
         
-        # Color map for internal logs
+        # Color map for internal logs (matching lower system)
         color_map = {
             'DEBUG': '#2196f3',
             'INFO': '#00e676',
@@ -559,8 +592,12 @@ class CorgiControlPanel(QWidget):
         }
         color = color_map.get(level, '#ffffff')
         
+        # Format level to be 5 chars like lower system (e.g., 'INFO ')
+        level_padded = f'{level:5s}'
+        
         log_html = f'<span style="color:#888;">[{timestamp}]</span> '
-        log_html += f'<span style="color:{color}; font-weight:bold;">[{level}]</span> '
+        log_html += f'<span style="color:{color}; font-weight:bold;">[{level_padded}]</span> '
+        log_html += f'<span style="color:#aaa;">[orin]</span> '
         log_html += f'<span style="color:#ddd;">{message}</span>'
         
         self.text_log.append(log_html)
