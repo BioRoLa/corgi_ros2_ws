@@ -19,8 +19,7 @@ int main(int argc, char **argv) {
     rclcpp::Time now = node->now();
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    // rclcpp::Rate rate(1000);
-    rclcpp::Rate rate(1000.0, node->get_clock());
+    rclcpp::Rate rate(1000);
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
 
     std::vector<corgi_msgs::msg::MotorCmd*> motor_cmds = {
