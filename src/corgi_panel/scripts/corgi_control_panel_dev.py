@@ -116,6 +116,8 @@ class CorgiControlPanel(QWidget):
         self._robot_cmd_seq = 0
         self._pending_robot_mode = None  # type: int | None
         self._last_confirmed_mode = None  # Track last confirmed mode for error recovery
+        self.process_recorder = None  # Track data recorder process
+        self.process_imu = None  # Track IMU process
 
         self.reset()
 
@@ -215,7 +217,7 @@ class CorgiControlPanel(QWidget):
         self.edit_output = QLineEdit()
         self.edit_output.setPlaceholderText("File Name (.csv)")
         self.edit_output.returnPressed.connect(self.start_recording_from_input)
-        self.btn_trigger = QPushButton('Start Recording')
+        self.btn_trigger = QPushButton('Start Trigger')
         self.btn_trigger.setCheckable(True)
         self.btn_trigger.clicked.connect(self.publish_trigger_cmd)
         
@@ -342,7 +344,44 @@ class CorgiControlPanel(QWidget):
                 self.add_log('ROS Bridge Stopped', 'SYSTEM')
         self.set_btn_enable()
 
-    def imu_cmd(self): pass
+    def imu_cmd(self):
+        if self.btn_imu.isChecked():
+            self.btn_imu.setText('Stop IMU')
+            try:
+                if hasattr(self, 'process_imu') and self.process_imu is not None and self.process_imu.poll() is None:
+                    self.add_log('IMU already running; skip start', 'WARN')
+                    return
+                # Launch the IMU node using ros2 launch
+                self.process_imu = subprocess.Popen(['ros2', 'launch', 'corgi_imu', 'imu.launch.py'])
+                self.add_log('IMU Started (ros2 launch corgi_imu imu.launch.py)', 'SYSTEM')
+            except Exception as e:
+                self.add_log(f'Failed to start IMU: {e}', 'ERROR')
+        else:
+            self.btn_imu.setText('IMU')
+            if hasattr(self, 'process_imu') and self.process_imu is not None:
+                self.btn_imu.setEnabled(False)  # avoid double clicks while stopping
+                # Stop in background to avoid freezing UI
+                def _stop():
+                    try:
+                        self.process_imu.send_signal(signal.SIGINT)
+                        ret = self.process_imu.wait(timeout=2.0)
+                        self.add_log(f'IMU Stopped (code {ret})', 'SYSTEM')
+                    except subprocess.TimeoutExpired:
+                        self.add_log('IMU did not exit, terminating...', 'WARN')
+                        self.process_imu.terminate()
+                        try:
+                            ret = self.process_imu.wait(timeout=2.0)
+                            self.add_log(f'IMU Terminated (code {ret})', 'SYSTEM')
+                        except subprocess.TimeoutExpired:
+                            self.add_log('IMU still alive, killing...', 'ERROR')
+                            self.process_imu.kill()
+                            self.process_imu.wait()
+                    finally:
+                        self.process_imu = None
+                        self.btn_imu.setEnabled(True)
+                threading.Thread(target=_stop, daemon=True).start()
+            else:
+                self.add_log('IMU Stopped', 'SYSTEM')
 
     def e_stop_cmd(self):
         self.add_log('EMERGENCY STOP ACTIVATED!', 'FATAL')
@@ -387,39 +426,69 @@ class CorgiControlPanel(QWidget):
             self.add_log('Recording already in progress', 'WARN')
 
     def publish_trigger_cmd(self):
-        # Check if starting recording
+        # Check if starting trigger/recording
         if self.btn_trigger.isChecked():
             filename = self.edit_output.text().strip()
-            if not filename:
-                self.add_log('Please enter a filename before recording', 'WARN')
-                self.btn_trigger.setChecked(False)  # Uncheck the button
-                return
             
-            # Start recording
+            # Send trigger command
             trigger_cmd = TriggerStamped()
             trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
             trigger_cmd.enable = True
-            trigger_cmd.output_filename = filename
+            trigger_cmd.output_filename = filename if filename else ""
             self.trigger_pub.publish(trigger_cmd)
             if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.HIGH)
             
-            self.btn_trigger.setText("Stop Recording")
+            # If filename is provided, launch data recorder
+            if filename:
+                try:
+                    # Check if recorder is already running
+                    if self.process_recorder is not None and self.process_recorder.poll() is None:
+                        self.add_log('Data recorder already running', 'WARN')
+                    else:
+                        # Launch data recorder
+                        self.process_recorder = subprocess.Popen(['ros2', 'run', 'corgi_data_recorder', 'corgi_data_recorder'])
+                        self.add_log(f'Data recorder started for: {filename}', 'SYSTEM')
+                except Exception as e:
+                    self.add_log(f'Failed to start data recorder: {e}', 'ERROR')
+                
+                self.btn_trigger.setText("Stop Recording")
+                self.add_log(f'Recording started: {filename}', 'INFO')
+            else:
+                self.btn_trigger.setText("Stop Trigger")
+                self.add_log('Trigger enabled (no recording)', 'INFO')
+            
             self.btn_trigger.setStyleSheet("background-color: #d32f2f; color: white;")
-            self.edit_output.setEnabled(False)  # Disable editing while recording
-            self.add_log(f'Recording started: {filename}', 'INFO')
+            self.edit_output.setEnabled(False)  # Disable editing while active
         else:
-            # Stop recording
+            # Stop trigger/recording
             trigger_cmd = TriggerStamped()
             trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
             trigger_cmd.enable = False
-            trigger_cmd.output_filename = self.edit_output.text()
+            trigger_cmd.output_filename = self.edit_output.text().strip()
             self.trigger_pub.publish(trigger_cmd)
             if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.LOW)
             
-            self.btn_trigger.setText("Start Recording")
+            # Stop data recorder if it was running
+            if self.process_recorder is not None:
+                try:
+                    self.process_recorder.send_signal(signal.SIGINT)
+                    self.process_recorder.wait(timeout=2.0)
+                    self.add_log('Data recorder stopped', 'SYSTEM')
+                except subprocess.TimeoutExpired:
+                    self.process_recorder.terminate()
+                    try:
+                        self.process_recorder.wait(timeout=1.0)
+                    except:
+                        self.process_recorder.kill()
+                except:
+                    pass
+                finally:
+                    self.process_recorder = None
+            
+            self.btn_trigger.setText("Start Trigger")
             self.btn_trigger.setStyleSheet("")
-            self.edit_output.setEnabled(True)  # Re-enable editing after stopping
-            self.add_log('Recording stopped', 'INFO')
+            self.edit_output.setEnabled(True)  # Re-enable editing
+            self.add_log('Trigger stopped', 'INFO')
 
     def set_btn_enable(self):
         bridge_on = self.btn_ros_bridge.isChecked()
@@ -537,6 +606,10 @@ class CorgiControlPanel(QWidget):
         if self._pending_robot_mode is not None and current_mode == int(self._pending_robot_mode):
             self.add_log(f'[SYSTEM] Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})', 'INFO')
             self._pending_robot_mode = None
+            
+            # Launch config panel when entering MOTORCONFIG mode
+            if current_mode == ROBOTMODE.MOTORCONFIG:
+                self.launch_config_panel()
         
         # Update last confirmed mode
         self._last_confirmed_mode = current_mode
@@ -577,6 +650,24 @@ class CorgiControlPanel(QWidget):
                     if temp > 60: self.motor_labels[key].setStyleSheet("color: #ff5252; font-weight: bold;")
                     else: self.motor_labels[key].setStyleSheet("color: #aaa;")
 
+    def launch_config_panel(self):
+        """Launch the config panel when entering MOTORCONFIG mode"""
+        try:
+            # Check if config panel is already running
+            if hasattr(self, 'process_config') and self.process_config is not None and self.process_config.poll() is None:
+                self.add_log('Config Panel already running', 'WARN')
+                return
+            
+            # Get the path to the config panel script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_panel_path = os.path.join(script_dir, 'corgi_config_panel_dev.py')
+            
+            # Launch the config panel
+            self.process_config = subprocess.Popen(['python3', config_panel_path])
+            self.add_log('Config Panel launched', 'SYSTEM')
+        except Exception as e:
+            self.add_log(f'Failed to launch Config Panel: {e}', 'ERROR')
+
     def add_log(self, message, level='INFO'):
         """Add log message with optional level for color coding"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
@@ -612,7 +703,30 @@ class CorgiControlPanel(QWidget):
         try: self.node.destroy_subscription(self.log_sub)
         except: pass
         self.reset()
-        if hasattr(self, 'process_bridge'): self.process_bridge.send_signal(signal.SIGINT)
+        if hasattr(self, 'process_bridge') and self.process_bridge is not None:
+            try:
+                self.process_bridge.send_signal(signal.SIGINT)
+                self.process_bridge.wait(timeout=1.0)
+            except:
+                pass
+        if hasattr(self, 'process_imu') and self.process_imu is not None:
+            try:
+                self.process_imu.send_signal(signal.SIGINT)
+                self.process_imu.wait(timeout=1.0)
+            except:
+                pass
+        if hasattr(self, 'process_config') and self.process_config is not None:
+            try:
+                self.process_config.terminate()
+                self.process_config.wait(timeout=1.0)
+            except:
+                pass
+        if hasattr(self, 'process_recorder') and self.process_recorder is not None:
+            try:
+                self.process_recorder.send_signal(signal.SIGINT)
+                self.process_recorder.wait(timeout=1.0)
+            except:
+                pass
         try: rclpy.try_shutdown()
         except: pass
         super(CorgiControlPanel, self).closeEvent(event)

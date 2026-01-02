@@ -10,7 +10,6 @@ find_package(corgi_msgs REQUIRED)
 # Install Python script as an executable
 install(PROGRAMS
   scripts/corgi_control_panel_dev.py
-  scripts/corgi_control_panel.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
