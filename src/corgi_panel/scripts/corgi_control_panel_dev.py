@@ -351,9 +351,9 @@ class CorgiControlPanel(QWidget):
                 if hasattr(self, 'process_imu') and self.process_imu is not None and self.process_imu.poll() is None:
                     self.add_log('IMU already running; skip start', 'WARN')
                     return
-                # Launch the IMU node using ros2 launch
-                self.process_imu = subprocess.Popen(['ros2', 'launch', 'corgi_imu', 'imu.launch.py'])
-                self.add_log('IMU Started (ros2 launch corgi_imu imu.launch.py)', 'SYSTEM')
+                # Launch the IMU node using ros2 run
+                self.process_imu = subprocess.Popen(['ros2', 'run', 'corgi_imu', 'imu_node'])
+                self.add_log('IMU Started (ros2 run corgi_imu imu_node)', 'SYSTEM')
             except Exception as e:
                 self.add_log(f'Failed to start IMU: {e}', 'ERROR')
         else:
@@ -426,69 +426,23 @@ class CorgiControlPanel(QWidget):
             self.add_log('Recording already in progress', 'WARN')
 
     def publish_trigger_cmd(self):
-        # Check if starting trigger/recording
+        trigger_cmd = TriggerStamped()
+        
+        trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
+        trigger_cmd.enable = self.btn_trigger.isChecked()
+        trigger_cmd.output_filename = self.edit_output.text().strip()
+        
+        self.trigger_pub.publish(trigger_cmd)
+        
+        if GPIO_defined: 
+            GPIO.output(self.trigger_pin, GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW)
+        
         if self.btn_trigger.isChecked():
-            filename = self.edit_output.text().strip()
-            
-            # Send trigger command
-            trigger_cmd = TriggerStamped()
-            trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
-            trigger_cmd.enable = True
-            trigger_cmd.output_filename = filename if filename else ""
-            self.trigger_pub.publish(trigger_cmd)
-            if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.HIGH)
-            
-            # If filename is provided, launch data recorder
-            if filename:
-                try:
-                    # Check if recorder is already running
-                    if self.process_recorder is not None and self.process_recorder.poll() is None:
-                        self.add_log('Data recorder already running', 'WARN')
-                    else:
-                        # Launch data recorder
-                        self.process_recorder = subprocess.Popen(['ros2', 'run', 'corgi_data_recorder', 'corgi_data_recorder'])
-                        self.add_log(f'Data recorder started for: {filename}', 'SYSTEM')
-                except Exception as e:
-                    self.add_log(f'Failed to start data recorder: {e}', 'ERROR')
-                
-                self.btn_trigger.setText("Stop Recording")
-                self.add_log(f'Recording started: {filename}', 'INFO')
-            else:
-                self.btn_trigger.setText("Stop Trigger")
-                self.add_log('Trigger enabled (no recording)', 'INFO')
-            
-            self.btn_trigger.setStyleSheet("background-color: #d32f2f; color: white;")
-            self.edit_output.setEnabled(False)  # Disable editing while active
+            self.add_log(f'Trigger enabled: {trigger_cmd.output_filename if trigger_cmd.output_filename else "no filename"}', 'INFO')
         else:
-            # Stop trigger/recording
-            trigger_cmd = TriggerStamped()
-            trigger_cmd.header.stamp = self.node.get_clock().now().to_msg()
-            trigger_cmd.enable = False
-            trigger_cmd.output_filename = self.edit_output.text().strip()
-            self.trigger_pub.publish(trigger_cmd)
-            if GPIO_defined: GPIO.output(self.trigger_pin, GPIO.LOW)
-            
-            # Stop data recorder if it was running
-            if self.process_recorder is not None:
-                try:
-                    self.process_recorder.send_signal(signal.SIGINT)
-                    self.process_recorder.wait(timeout=2.0)
-                    self.add_log('Data recorder stopped', 'SYSTEM')
-                except subprocess.TimeoutExpired:
-                    self.process_recorder.terminate()
-                    try:
-                        self.process_recorder.wait(timeout=1.0)
-                    except:
-                        self.process_recorder.kill()
-                except:
-                    pass
-                finally:
-                    self.process_recorder = None
-            
-            self.btn_trigger.setText("Start Trigger")
-            self.btn_trigger.setStyleSheet("")
-            self.edit_output.setEnabled(True)  # Re-enable editing
             self.add_log('Trigger stopped', 'INFO')
+        
+        self.set_btn_enable()
 
     def set_btn_enable(self):
         bridge_on = self.btn_ros_bridge.isChecked()
