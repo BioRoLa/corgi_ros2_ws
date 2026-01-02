@@ -44,7 +44,7 @@ set(msg_files
   "msg/WheelCmd.msg"
 )
 
-# List your service files. It is recommended to place your .ser files under the ser/ directory.
+# List your service files. It is recommended to place your .srv files under the srv/ directory.
 set(srv_files
   "srv/Imu.srv"
 )
@@ -55,18 +55,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   ${srv_files}
   DEPENDENCIES std_msgs sensor_msgs geometry_msgs
 )
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
 
 # Export dependencies
 ament_export_dependencies(rosidl_default_runtime)
