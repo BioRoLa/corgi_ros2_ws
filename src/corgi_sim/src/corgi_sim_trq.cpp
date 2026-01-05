@@ -160,7 +160,10 @@ int main(int argc, char **argv)
     auto trigger_pub = g_node->create_publisher<corgi_msgs::msg::TriggerStamped>("trigger", 1000);
 
     // rclcpp::WallRate rate(1000ms); // 1kHz control loop
-    rclcpp::Rate rate(1000.0, g_node->get_clock());
+    // rclcpp::Rate rate(1000.0, g_node->get_clock());
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = g_node->now();
     signal(SIGINT, signal_handler);
 
     trigger.enable = true;
@@ -173,7 +176,7 @@ int main(int argc, char **argv)
 
     int loop_counter = 0;
     std_msgs::msg::Float64 motor_cmd_msg;
-
+    next_time = g_node->now();
     while (rclcpp::ok())
     {
         // Process callbacks
@@ -244,7 +247,14 @@ int main(int argc, char **argv)
         imu_pub->publish(imu_filtered);
 
         loop_counter++;
-        rate.sleep();
+        // Maintain loop rate
+        next_time += period;
+        if (!g_node->get_clock()->sleep_until(next_time))
+        {
+            RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
+            break;
+        }
+        // rate.sleep();
     }
 
     trigger.enable = false;

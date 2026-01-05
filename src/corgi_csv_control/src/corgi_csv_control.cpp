@@ -16,10 +16,29 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("corgi_csv_control");
-    rclcpp::Time now = node->now();
+    // rclcpp::Time now = node->now();
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        rclcpp::spin_some(node);
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    rclcpp::Rate rate(1000);
+    // rclcpp::Rate rate(1000);
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node->now();
+
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
 
     std::vector<corgi_msgs::msg::MotorCmd*> motor_cmds = {
@@ -78,8 +97,14 @@ int main(int argc, char **argv) {
 
         motor_cmd_pub->publish(motor_cmd);
 
-        rate.sleep();
+        // rate.sleep();
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+            break;
+        }
     }
+    
 
     RCLCPP_INFO(node->get_logger(), "Leg Transform Finished\n");
 
@@ -91,6 +116,7 @@ int main(int argc, char **argv) {
             RCLCPP_INFO(node->get_logger(), "CSV Trajectory Starts\n");
 
             int seq = 0;
+            next_time = node->now();
             while (rclcpp::ok() && std::getline(csv_file, line)) {
                 std::vector<double> columns;
                 std::stringstream ss(line);
@@ -117,7 +143,12 @@ int main(int argc, char **argv) {
 
                 seq++;
 
-                rate.sleep();
+                // rate.sleep();
+                next_time += period;
+                if(!node->get_clock()->sleep_until(next_time)){
+                    RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+                    break;
+                }
             }
             break;
         }
