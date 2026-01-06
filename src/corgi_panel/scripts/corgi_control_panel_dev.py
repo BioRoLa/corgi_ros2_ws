@@ -118,6 +118,7 @@ class CorgiControlPanel(QWidget):
         self._last_confirmed_mode = None  # Track last confirmed mode for error recovery
         self.process_recorder = None  # Track data recorder process
         self.process_imu = None  # Track IMU process
+        self.process_set_zero = None  # Track set_zero process
 
         self.reset()
 
@@ -147,26 +148,22 @@ class CorgiControlPanel(QWidget):
         sidebar = QVBoxLayout()
         sidebar.setSpacing(15)
         
-        # 1. System Connection
-        grp_sys = QGroupBox("System Connection")
-        grp_sys_layout = QVBoxLayout()
+        # 1. ROS Bridge
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
         self.btn_ros_bridge.setCheckable(True)
         self.btn_ros_bridge.clicked.connect(self.ros_bridge_cmd)
-        grp_sys_layout.addWidget(self.btn_ros_bridge)
-        grp_sys.setLayout(grp_sys_layout)
-        sidebar.addWidget(grp_sys)
+        sidebar.addWidget(self.btn_ros_bridge)
         
-        # 2. Sensor Control (IMU)
-        grp_sensor = QGroupBox("Sensor Control")
-        grp_sensor_layout = QVBoxLayout()
+        # 2. IMU & Set Zero
         self.btn_imu = QPushButton('IMU')
         self.btn_imu.setCheckable(True)
         self.btn_imu.clicked.connect(self.imu_cmd)
-        grp_sensor_layout.addWidget(self.btn_imu)
-        grp_sensor.setLayout(grp_sensor_layout)
-        sidebar.addWidget(grp_sensor)
-        
+        sidebar.addWidget(self.btn_imu)
+
+        self.btn_set_zero = QPushButton('Set Zero')
+        self.btn_set_zero.clicked.connect(self.set_zero_cmd)
+        sidebar.addWidget(self.btn_set_zero)
+
         # 3. FSM Control + Current Mode (Merged)
         grp_fsm = QGroupBox("FSM Indicator")
         grp_fsm_layout = QVBoxLayout()
@@ -270,6 +267,7 @@ class CorgiControlPanel(QWidget):
         # 初始化按鈕狀態：只有 ros_bridge 可用
         self.btn_estop.setEnabled(False)
         self.btn_imu.setEnabled(False)
+        self.btn_set_zero.setEnabled(False)
         self.btn_system.setEnabled(False)
         self.btn_idle.setEnabled(False)
         self.btn_standby.setEnabled(False)
@@ -383,6 +381,21 @@ class CorgiControlPanel(QWidget):
             else:
                 self.add_log('IMU Stopped', 'SYSTEM')
 
+    def set_zero_cmd(self):
+        """Run set_zero command to reset motor reference zero points"""
+        # Disable button immediately to prevent double clicks
+        self.btn_set_zero.setEnabled(False)
+        self.btn_set_zero.setText('Setting Zero...')
+        
+        try:
+            # Launch set_zero as a background process
+            self.process_set_zero = subprocess.Popen(['ros2', 'run', 'corgi_set_zero', 'set_zero'])
+            self.add_log('Set Zero Started (ros2 run corgi_set_zero set_zero)', 'SYSTEM')
+        except Exception as e:
+            self.add_log(f'Failed to start set_zero: {e}', 'ERROR')
+            self.btn_set_zero.setEnabled(True)
+            self.btn_set_zero.setText('Set Zero')
+
     def e_stop_cmd(self):
         self.add_log('EMERGENCY STOP ACTIVATED!', 'FATAL')
         robot_cmd = RobotCmdStamped()
@@ -447,9 +460,10 @@ class CorgiControlPanel(QWidget):
     def set_btn_enable(self):
         bridge_on = self.btn_ros_bridge.isChecked()
         
-        # E-Stop 和 IMU：ROS Bridge 啟動後始終可用
+        # E-Stop, IMU, Set Zero：ROS Bridge 啟動後始終可用
         self.btn_estop.setEnabled(bridge_on)
         self.btn_imu.setEnabled(bridge_on)
+        self.btn_set_zero.setEnabled(bridge_on)
         self.btn_trigger.setEnabled(bridge_on)
         
         # 使用 Enum 判斷當前模式
@@ -544,6 +558,10 @@ class CorgiControlPanel(QWidget):
         self.text_log.append(log_html)
         self.text_log.verticalScrollBar().setValue(self.text_log.verticalScrollBar().maximum())
         
+        # Check if set_zero has completed
+        if node_name == 'corgi_set_zero' and 'Set Zero Completed' in message:
+            self._on_set_zero_completed()
+        
         # Handle ERROR and FATAL: clear pending mode as lower system reverted
         if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
             if self._pending_robot_mode is not None:
@@ -622,6 +640,17 @@ class CorgiControlPanel(QWidget):
         except Exception as e:
             self.add_log(f'Failed to launch Config Panel: {e}', 'ERROR')
 
+    def _on_set_zero_completed(self):
+        """Handle set_zero completion"""
+        if hasattr(self, 'process_set_zero') and self.process_set_zero is not None:
+            self.process_set_zero.wait(timeout=1.0)
+            self.process_set_zero = None
+        
+        # Re-enable button after completion
+        self.btn_set_zero.setEnabled(True)
+        self.btn_set_zero.setText('Set Zero')
+        self.add_log('Motor zero points set successfully', 'SYSTEM')
+
     def add_log(self, message, level='INFO'):
         """Add log message with optional level for color coding"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
@@ -679,6 +708,12 @@ class CorgiControlPanel(QWidget):
             try:
                 self.process_recorder.send_signal(signal.SIGINT)
                 self.process_recorder.wait(timeout=1.0)
+            except:
+                pass
+        if hasattr(self, 'process_set_zero') and self.process_set_zero is not None:
+            try:
+                self.process_set_zero.send_signal(signal.SIGINT)
+                self.process_set_zero.wait(timeout=1.0)
             except:
                 pass
         try: rclpy.try_shutdown()
