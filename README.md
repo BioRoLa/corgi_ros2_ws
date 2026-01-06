@@ -138,8 +138,20 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       make -j16
       sudo make install
       ```
+
+    7. **pcl_ros**
+    PCL (Point Cloud Library) ROS interface stack.
+      ```bash
+      sudo apt install ros-humble-pcl*
+      ```   
+
+    8. **joy**
+    The joy package contains joy_node, a node that interfaces a generic joystick to ROS 2.
+      ```bash
+      sudo apt install ros-humble-joy
+      ```
     
-4.  **Build the ROS Workspace**
+5.  **Build the ROS Workspace**
 
     If you installed C++ dependencies to the recommended path, use the following command.
 
@@ -148,7 +160,8 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     colcon build --cmake-args -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
     ```
 
-5.  **Source the Environment (ROS 2)**
+6.  **Source the Environment (ROS 2)**
+
     You can also add this to your own `~/.bashrc`:
 
     ```bash
