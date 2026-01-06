@@ -12,7 +12,6 @@ ament_target_dependencies(set_zero
 
 # Install
 install(TARGETS
-  corgi_rt_control
   set_zero
   DESTINATION lib/${PROJECT_NAME}
 )
