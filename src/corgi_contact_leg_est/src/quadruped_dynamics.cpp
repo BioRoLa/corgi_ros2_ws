@@ -1,0 +1,413 @@
+#include "quadruped_dynamics.hpp"
+
+namespace quadruped_dynamics {
+
+void compute_dynamics(
+    const Eigen::Ref<const Eigen::VectorXd>& q,
+    const Eigen::Ref<const Eigen::VectorXd>& q_dot,
+    const Eigen::Ref<const Eigen::VectorXd>& I_c,
+    Eigen::Ref<Eigen::MatrixXd> M,
+    Eigen::Ref<Eigen::MatrixXd> C,
+    Eigen::Ref<Eigen::VectorXd> G,
+    Eigen::Ref<Eigen::MatrixXd> D
+) {
+    // Extract state variables
+    const double x = q(0);
+    const double z = q(1);
+    const double phi = q(2);
+    const double psi = q(3);
+    const double beta_lf = q(4);
+    const double Rm_lf = q(5);
+    const double beta_rf = q(6);
+    const double Rm_rf = q(7);
+    const double beta_rh = q(8);
+    const double Rm_rh = q(9);
+    const double beta_lh = q(10);
+    const double Rm_lh = q(11);
+
+    const double dx = q_dot(0);
+    const double dz = q_dot(1);
+    const double dphi = q_dot(2);
+    const double dpsi = q_dot(3);
+    const double dbeta_lf = q_dot(4);
+    const double dRm_lf = q_dot(5);
+    const double dbeta_rf = q_dot(6);
+    const double dRm_rf = q_dot(7);
+    const double dbeta_rh = q_dot(8);
+    const double dRm_rh = q_dot(9);
+    const double dbeta_lh = q_dot(10);
+    const double dRm_lh = q_dot(11);
+
+    const double I_c_lf = I_c(0);
+    const double I_c_rf = I_c(1);
+    const double I_c_rh = I_c(2);
+    const double I_c_lh = I_c(3);
+
+    // Precompute trigonometric functions
+    const double sin_phi = std::sin(phi);
+    const double cos_phi = std::cos(phi);
+    const double sin_psi = std::sin(psi);
+    const double cos_psi = std::cos(psi);
+
+    // CSE optimized temporary variables
+    const double tmp0 = beta_lf + psi;
+    const double tmp1 = std::cos(tmp0);
+    const double tmp2 = Rm_lf*tmp1;
+    const double tmp3 = 0.65000000000000002*tmp2;
+    const double tmp4 = -tmp3;
+    const double tmp5 = beta_lh + psi;
+    const double tmp6 = std::cos(tmp5);
+    const double tmp7 = Rm_lh*tmp6;
+    const double tmp8 = 0.65000000000000002*tmp7;
+    const double tmp9 = -tmp8;
+    const double tmp10 = beta_rf + psi;
+    const double tmp11 = std::cos(tmp10);
+    const double tmp12 = Rm_rf*tmp11;
+    const double tmp13 = 0.65000000000000002*tmp12;
+    const double tmp14 = -tmp13;
+    const double tmp15 = beta_rh + psi;
+    const double tmp16 = std::cos(tmp15);
+    const double tmp17 = Rm_rh*tmp16;
+    const double tmp18 = 0.65000000000000002*tmp17;
+    const double tmp19 = -tmp18;
+    const double tmp20 = std::sin(tmp0);
+    const double tmp21 = 0.65000000000000002*tmp20;
+    const double tmp22 = std::sin(tmp10);
+    const double tmp23 = 0.65000000000000002*tmp22;
+    const double tmp24 = std::sin(tmp15);
+    const double tmp25 = 0.65000000000000002*tmp24;
+    const double tmp26 = std::sin(tmp5);
+    const double tmp27 = 0.65000000000000002*tmp26;
+    const double tmp28 = std::sin(phi);
+    const double tmp29 = tmp12 + tmp17;
+    const double tmp30 = tmp2 + tmp29 + tmp7;
+    const double tmp31 = tmp28*tmp30;
+    const double tmp32 = Rm_lf*tmp20;
+    const double tmp33 = Rm_lh*tmp26;
+    const double tmp34 = Rm_rf*tmp22;
+    const double tmp35 = Rm_rh*tmp24;
+    const double tmp36 = tmp32 + tmp33 + tmp34 + tmp35;
+    const double tmp37 = std::cos(phi);
+    const double tmp38 = 0.65000000000000002*tmp37;
+    const double tmp39 = Rm_lf*tmp21;
+    const double tmp40 = Rm_rf*tmp23;
+    const double tmp41 = Rm_rh*tmp25;
+    const double tmp42 = Rm_lh*tmp27;
+    const double tmp43 = 0.193*tmp37;
+    const double tmp44 = 0.222*std::sin(psi);
+    const double tmp45 = tmp28*tmp44;
+    const double tmp46 = tmp43 + tmp45;
+    const double tmp47 = 0.193*tmp28;
+    const double tmp48 = tmp37*tmp44;
+    const double tmp49 = tmp47 + tmp48;
+    const double tmp50 = 0.12545000000000001*tmp32;
+    const double tmp51 = 0.12545000000000001*tmp33;
+    const double tmp52 = -0.12545000000000001*tmp34;
+    const double tmp53 = -0.12545000000000001*tmp35;
+    const double tmp54 = std::sin(beta_lh);
+    const double tmp55 = std::sin(beta_rh);
+    const double tmp56 = std::sin(beta_lf);
+    const double tmp57 = std::sin(beta_rf);
+    const double tmp58 = std::pow(Rm_lf, 2);
+    const double tmp59 = I_c_lf + 0.65000000000000002*tmp58;
+    const double tmp60 = std::pow(Rm_rf, 2);
+    const double tmp61 = I_c_rf + 0.65000000000000002*tmp60;
+    const double tmp62 = std::pow(Rm_rh, 2);
+    const double tmp63 = I_c_rh + 0.65000000000000002*tmp62;
+    const double tmp64 = std::pow(Rm_lh, 2);
+    const double tmp65 = I_c_lh + 0.65000000000000002*tmp64;
+    const double tmp66 = -0.65000000000000002*Rm_lf + 0.14430000000000001*tmp56;
+    const double tmp67 = 0.14430000000000001*std::cos(beta_lf);
+    const double tmp68 = -0.65000000000000002*Rm_rf + 0.14430000000000001*tmp57;
+    const double tmp69 = 0.14430000000000001*std::cos(beta_rf);
+    const double tmp70 = 0.65000000000000002*Rm_rh + 0.14430000000000001*tmp55;
+    const double tmp71 = 0.14430000000000001*std::cos(beta_rh);
+    const double tmp72 = 0.65000000000000002*Rm_lh + 0.14430000000000001*tmp54;
+    const double tmp73 = 0.14430000000000001*std::cos(beta_lh);
+    const double tmp74 = 0.65000000000000002*dpsi;
+    const double tmp75 = tmp36*tmp74;
+    const double tmp76 = 0.65000000000000002*tmp1;
+    const double tmp77 = dRm_lf*tmp76;
+    const double tmp78 = dbeta_lf*tmp39;
+    const double tmp79 = -tmp77 + tmp78;
+    const double tmp80 = 0.65000000000000002*tmp11;
+    const double tmp81 = dRm_rf*tmp80;
+    const double tmp82 = dbeta_rf*tmp40;
+    const double tmp83 = -tmp81 + tmp82;
+    const double tmp84 = 0.65000000000000002*tmp16;
+    const double tmp85 = dRm_rh*tmp84;
+    const double tmp86 = dbeta_rh*tmp41;
+    const double tmp87 = -tmp85 + tmp86;
+    const double tmp88 = 0.65000000000000002*tmp6;
+    const double tmp89 = dRm_lh*tmp88;
+    const double tmp90 = dbeta_lh*tmp42;
+    const double tmp91 = -tmp89 + tmp90;
+    const double tmp92 = dbeta_lf + dpsi;
+    const double tmp93 = dbeta_rf + dpsi;
+    const double tmp94 = dbeta_rh + dpsi;
+    const double tmp95 = dbeta_lh + dpsi;
+    const double tmp96 = tmp30*tmp38;
+    const double tmp97 = 0.65000000000000002*dphi;
+    const double tmp98 = tmp21*tmp37;
+    const double tmp99 = tmp3*tmp37;
+    const double tmp100 = dRm_lf*tmp98 + dbeta_lf*tmp99;
+    const double tmp101 = tmp23*tmp37;
+    const double tmp102 = tmp13*tmp37;
+    const double tmp103 = dRm_rf*tmp101 + dbeta_rf*tmp102;
+    const double tmp104 = tmp25*tmp37;
+    const double tmp105 = tmp18*tmp37;
+    const double tmp106 = dRm_rh*tmp104 + dbeta_rh*tmp105;
+    const double tmp107 = tmp27*tmp37;
+    const double tmp108 = tmp37*tmp8;
+    const double tmp109 = dRm_lh*tmp107 + dbeta_lh*tmp108;
+    const double tmp110 = dphi*tmp28;
+    const double tmp111 = tmp2 + tmp44;
+    const double tmp112 = -tmp44 + tmp7;
+    const double tmp113 = tmp12 + tmp44;
+    const double tmp114 = -tmp17 + tmp44;
+    const double tmp115 = 2*psi;
+    const double tmp116 = 0.098568000000000003*std::sin(tmp115);
+    const double tmp117 = 0.222*Rm_lf*std::cos(beta_lf + tmp115);
+    const double tmp118 = 0.222*Rm_lh*std::cos(beta_lh + tmp115);
+    const double tmp119 = 0.222*Rm_rf*std::cos(beta_rf + tmp115);
+    const double tmp120 = 0.222*Rm_rh*std::cos(beta_rh + tmp115);
+    const double tmp121 = (1.0/2.0)*tmp58*std::sin(2*beta_lf + tmp115);
+    const double tmp122 = (1.0/2.0)*tmp64*std::sin(2*beta_lh + tmp115);
+    const double tmp123 = (1.0/2.0)*tmp60*std::sin(2*beta_rf + tmp115);
+    const double tmp124 = (1.0/2.0)*tmp62*std::sin(2*beta_rh + tmp115);
+    const double tmp125 = 0.12545000000000001*dpsi;
+    const double tmp126 = 0.12545000000000001*tmp20;
+    const double tmp127 = dRm_lf*tmp126 + 0.12545000000000001*dbeta_lf*tmp2;
+    const double tmp128 = 0.12545000000000001*tmp22;
+    const double tmp129 = -dRm_rf*tmp128 - 0.12545000000000001*dbeta_rf*tmp12;
+    const double tmp130 = 0.12545000000000001*tmp24;
+    const double tmp131 = -dRm_rh*tmp130 - 0.12545000000000001*dbeta_rh*tmp17;
+    const double tmp132 = 0.12545000000000001*tmp26;
+    const double tmp133 = dRm_lh*tmp132 + 0.12545000000000001*dbeta_lh*tmp7;
+    const double tmp134 = dphi*tmp111;
+    const double tmp135 = dphi*tmp113;
+    const double tmp136 = dphi*tmp114;
+    const double tmp137 = dphi*tmp112;
+    const double tmp138 = Rm_lf*tmp67;
+    const double tmp139 = -dRm_lf*tmp66 - dbeta_lf*tmp138;
+    const double tmp140 = Rm_rf*tmp69;
+    const double tmp141 = -dRm_rf*tmp68 - dbeta_rf*tmp140;
+    const double tmp142 = Rm_rh*tmp71;
+    const double tmp143 = dRm_rh*tmp70 + dbeta_rh*tmp142;
+    const double tmp144 = Rm_lh*tmp73;
+    const double tmp145 = dRm_lh*tmp72 + dbeta_lh*tmp144;
+    const double tmp146 = 0.65000000000000002*Rm_lf;
+    const double tmp147 = 0.65000000000000002*Rm_rf;
+    const double tmp148 = 0.65000000000000002*Rm_rh;
+    const double tmp149 = 0.65000000000000002*Rm_lh;
+    const double tmp150 = 6.3765000000000009*tmp37;
+
+    // Compute mass matrix M (symmetric, only compute upper triangular)
+    M.setZero();
+    M(0,0) = 21.600000000000001;
+    M(0,3) = tmp14 + tmp19 + tmp4 + tmp9;
+    M(3,0) = M(0,3);
+    M(0,4) = tmp4;
+    M(4,0) = M(0,4);
+    M(0,5) = -tmp21;
+    M(5,0) = M(0,5);
+    M(0,6) = tmp14;
+    M(6,0) = M(0,6);
+    M(0,7) = -tmp23;
+    M(7,0) = M(0,7);
+    M(0,8) = tmp19;
+    M(8,0) = M(0,8);
+    M(0,9) = -tmp25;
+    M(9,0) = M(0,9);
+    M(0,10) = tmp9;
+    M(10,0) = M(0,10);
+    M(0,11) = -tmp27;
+    M(11,0) = M(0,11);
+    M(1,1) = 21.600000000000001;
+    M(1,2) = 0.65000000000000002*tmp31;
+    M(2,1) = M(1,2);
+    M(1,3) = tmp36*tmp38;
+    M(3,1) = M(1,3);
+    M(1,4) = tmp37*tmp39;
+    M(4,1) = M(1,4);
+    M(1,5) = -tmp1*tmp38;
+    M(5,1) = M(1,5);
+    M(1,6) = tmp37*tmp40;
+    M(6,1) = M(1,6);
+    M(1,7) = -tmp11*tmp38;
+    M(7,1) = M(1,7);
+    M(1,8) = tmp37*tmp41;
+    M(8,1) = M(1,8);
+    M(1,9) = -tmp16*tmp38;
+    M(9,1) = M(1,9);
+    M(1,10) = tmp37*tmp42;
+    M(10,1) = M(1,10);
+    M(1,11) = -tmp38*tmp6;
+    M(11,1) = M(1,11);
+    M(2,2) = 0.65000000000000002*std::pow(tmp12*tmp37 + tmp49, 2) + 0.65000000000000002*std::pow(-tmp17*tmp28 + tmp46, 2) + 0.65000000000000002*std::pow(tmp2*tmp28 + tmp46, 2) + 0.65000000000000002*std::pow(-tmp37*tmp7 + tmp49, 2) + 0.65000000000000002*std::pow(tmp12*tmp28 - tmp43 + tmp45, 2) + 0.65000000000000002*std::pow(tmp17*tmp37 + tmp47 - tmp48, 2) + 0.65000000000000002*std::pow(tmp2*tmp37 - tmp47 + tmp48, 2) + 0.65000000000000002*std::pow(tmp28*tmp7 + tmp43 - tmp45, 2) + 0.41166666666666668;
+    M(2,3) = tmp50 + tmp51 + tmp52 + tmp53;
+    M(3,2) = M(2,3);
+    M(2,4) = tmp50;
+    M(4,2) = M(2,4);
+    M(2,5) = -0.12545000000000001*tmp1;
+    M(5,2) = M(2,5);
+    M(2,6) = tmp52;
+    M(6,2) = M(2,6);
+    M(2,7) = 0.12545000000000001*tmp11;
+    M(7,2) = M(2,7);
+    M(2,8) = tmp53;
+    M(8,2) = M(2,8);
+    M(2,9) = 0.12545000000000001*tmp16;
+    M(9,2) = M(2,9);
+    M(2,10) = tmp51;
+    M(10,2) = M(2,10);
+    M(2,11) = -0.12545000000000001*tmp6;
+    M(11,2) = M(2,11);
+    M(3,3) = -0.28860000000000002*Rm_lf*tmp56 + 0.28860000000000002*Rm_lh*tmp54 - 0.28860000000000002*Rm_rf*tmp57 + 0.28860000000000002*Rm_rh*tmp55 + tmp59 + tmp61 + tmp63 + tmp65 + 0.2073050666666667;
+    M(3,4) = -Rm_lf*tmp66;
+    M(4,3) = M(3,4);
+    M(3,5) = tmp67;
+    M(5,3) = M(3,5);
+    M(3,6) = -Rm_rf*tmp68;
+    M(6,3) = M(3,6);
+    M(3,7) = tmp69;
+    M(7,3) = M(3,7);
+    M(3,8) = Rm_rh*tmp70;
+    M(8,3) = M(3,8);
+    M(3,9) = -tmp71;
+    M(9,3) = M(3,9);
+    M(3,10) = Rm_lh*tmp72;
+    M(10,3) = M(3,10);
+    M(3,11) = -tmp73;
+    M(11,3) = M(3,11);
+    M(4,4) = tmp59;
+    M(5,5) = 0.65000000000000002;
+    M(6,6) = tmp61;
+    M(7,7) = 0.65000000000000002;
+    M(8,8) = tmp63;
+    M(9,9) = 0.65000000000000002;
+    M(10,10) = tmp65;
+    M(11,11) = 0.65000000000000002;
+
+    // Compute Coriolis matrix C
+    C.setZero();
+    C(0,3) = tmp75 + tmp79 + tmp83 + tmp87 + tmp91;
+    C(3,0) = C(0,3);
+    C(0,4) = dpsi*tmp39 + tmp79;
+    C(4,0) = C(0,4);
+    C(0,5) = -tmp76*tmp92;
+    C(5,0) = C(0,5);
+    C(0,6) = dpsi*tmp40 + tmp83;
+    C(6,0) = C(0,6);
+    C(0,7) = -tmp80*tmp93;
+    C(7,0) = C(0,7);
+    C(0,8) = dpsi*tmp41 + tmp87;
+    C(8,0) = C(0,8);
+    C(0,9) = -tmp84*tmp94;
+    C(9,0) = C(0,9);
+    C(0,10) = dpsi*tmp42 + tmp91;
+    C(10,0) = C(0,10);
+    C(0,11) = -tmp88*tmp95;
+    C(11,0) = C(0,11);
+    C(1,2) = dphi*tmp96 - tmp28*tmp75 + tmp28*tmp77 - tmp28*tmp78 + tmp28*tmp81 - tmp28*tmp82 + tmp28*tmp85 - tmp28*tmp86 + tmp28*tmp89 - tmp28*tmp90;
+    C(2,1) = C(1,2);
+    C(1,3) = dpsi*tmp96 + tmp100 + tmp103 + tmp106 + tmp109 - tmp28*tmp36*tmp97;
+    C(3,1) = C(1,3);
+    C(1,4) = dpsi*tmp99 + tmp100 - tmp110*tmp39;
+    C(4,1) = C(1,4);
+    C(1,5) = dbeta_lf*tmp98 + dpsi*tmp98 + tmp110*tmp76;
+    C(5,1) = C(1,5);
+    C(1,6) = dpsi*tmp102 + tmp103 - tmp110*tmp40;
+    C(6,1) = C(1,6);
+    C(1,7) = dbeta_rf*tmp101 + dpsi*tmp101 + tmp110*tmp80;
+    C(7,1) = C(1,7);
+    C(1,8) = dpsi*tmp105 + tmp106 - tmp110*tmp41;
+    C(8,1) = C(1,8);
+    C(1,9) = dbeta_rh*tmp104 + dpsi*tmp104 + tmp110*tmp84;
+    C(9,1) = C(1,9);
+    C(1,10) = dpsi*tmp108 + tmp109 - tmp110*tmp42;
+    C(10,1) = C(1,10);
+    C(1,11) = dbeta_lh*tmp107 + dpsi*tmp107 + tmp110*tmp88;
+    C(11,1) = C(1,11);
+    C(2,2) = tmp111*tmp77 - tmp111*tmp78 + tmp112*tmp89 - tmp112*tmp90 + tmp113*tmp81 - tmp113*tmp82 - tmp114*tmp85 + tmp114*tmp86 - tmp74*(-tmp116 - tmp117 + tmp118 - tmp119 + tmp120 + tmp121 + tmp122 + tmp123 + tmp124);
+    C(2,3) = -tmp125*(-tmp2 + tmp29 - tmp7) + tmp127 + tmp129 + tmp131 + tmp133 + tmp97*(tmp116 + tmp117 - tmp118 + tmp119 - tmp120 - tmp121 - tmp122 - tmp123 - tmp124);
+    C(3,2) = C(2,3);
+    C(2,4) = tmp125*tmp2 + tmp127 - tmp134*tmp39;
+    C(4,2) = C(2,4);
+    C(2,5) = dbeta_lf*tmp126 + dpsi*tmp126 + tmp134*tmp76;
+    C(5,2) = C(2,5);
+    C(2,6) = -tmp12*tmp125 + tmp129 - tmp135*tmp40;
+    C(6,2) = C(2,6);
+    C(2,7) = -dbeta_rf*tmp128 - dpsi*tmp128 + tmp135*tmp80;
+    C(7,2) = C(2,7);
+    C(2,8) = -tmp125*tmp17 + tmp131 + tmp136*tmp41;
+    C(8,2) = C(2,8);
+    C(2,9) = -dbeta_rh*tmp130 - dpsi*tmp130 - tmp136*tmp84;
+    C(9,2) = C(2,9);
+    C(2,10) = tmp125*tmp7 + tmp133 - tmp137*tmp42;
+    C(10,2) = C(2,10);
+    C(2,11) = dbeta_lh*tmp132 + dpsi*tmp132 + tmp137*tmp88;
+    C(11,2) = C(2,11);
+    C(3,3) = tmp139 + tmp141 + tmp143 + tmp145;
+    C(3,4) = -dpsi*tmp138 + tmp139;
+    C(4,3) = C(3,4);
+    C(3,5) = -tmp66*tmp92;
+    C(5,3) = C(3,5);
+    C(3,6) = -dpsi*tmp140 + tmp141;
+    C(6,3) = C(3,6);
+    C(3,7) = -tmp68*tmp93;
+    C(7,3) = C(3,7);
+    C(3,8) = dpsi*tmp142 + tmp143;
+    C(8,3) = C(3,8);
+    C(3,9) = tmp70*tmp94;
+    C(9,3) = C(3,9);
+    C(3,10) = dpsi*tmp144 + tmp145;
+    C(10,3) = C(3,10);
+    C(3,11) = tmp72*tmp95;
+    C(11,3) = C(3,11);
+    C(4,4) = dRm_lf*tmp146;
+    C(4,5) = tmp146*tmp92;
+    C(5,4) = C(4,5);
+    C(6,6) = dRm_rf*tmp147;
+    C(6,7) = tmp147*tmp93;
+    C(7,6) = C(6,7);
+    C(8,8) = dRm_rh*tmp148;
+    C(8,9) = tmp148*tmp94;
+    C(9,8) = C(8,9);
+    C(10,10) = dRm_lh*tmp149;
+    C(10,11) = tmp149*tmp95;
+    C(11,10) = C(10,11);
+
+    // Compute gravity vector G
+    G(0) = 0;
+    G(1) = 211.89600000000002;
+    G(2) = 6.3765000000000009*tmp31;
+    G(3) = tmp150*tmp36;
+    G(4) = tmp150*tmp32;
+    G(5) = -tmp1*tmp150;
+    G(6) = tmp150*tmp34;
+    G(7) = -tmp11*tmp150;
+    G(8) = tmp150*tmp35;
+    G(9) = -tmp150*tmp16;
+    G(10) = tmp150*tmp33;
+    G(11) = -tmp150*tmp6;
+
+    // Compute inertia rate matrix D (sparse)
+    D.setZero();
+    // D only has specific non-zero diagonal elements
+    // This part requires dI_c/dt to be computed externally and passed in
+}
+
+void compute_mass_matrix(
+    const Eigen::Ref<const Eigen::VectorXd>& q,
+    const Eigen::Ref<const Eigen::VectorXd>& I_c,
+    Eigen::Ref<Eigen::MatrixXd> M
+) {
+    Eigen::MatrixXd C_dummy(12, 12);
+    Eigen::VectorXd G_dummy(12);
+    Eigen::MatrixXd D_dummy(12, 12);
+    Eigen::VectorXd q_dot_dummy = Eigen::VectorXd::Zero(12);
+    compute_dynamics(q, q_dot_dummy, I_c, M, C_dummy, G_dummy, D_dummy);
+}
+
+} // namespace quadruped_dynamics
