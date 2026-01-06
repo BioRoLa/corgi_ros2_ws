@@ -81,6 +81,7 @@ QLabel#StatusLabel { font-size: 24px; font-weight: bold; color: #4fc3f7; }
 QLabel#MotorLabel { font-size: 12px; color: #aaa; }
 QLineEdit { background-color: #202020; border: 1px solid #555; color: white; padding: 5px; border-radius: 3px; }
 QTextEdit { background-color: #1e1e1e; border: 1px solid #444; color: #00e676; font-family: 'Consolas', monospace; }
+QLabel#PowerBadge { background-color: #222; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; color: #eee; }
 """
 
 class CorgiControlPanel(QWidget):
@@ -97,11 +98,6 @@ class CorgiControlPanel(QWidget):
             GPIO.setmode(GPIO.BOARD)
             GPIO.setup(self.trigger_pin, GPIO.OUT)
             GPIO.output(self.trigger_pin, GPIO.LOW)
-        
-        # Internal Power State Flags
-        self.p_digital = False
-        self.p_signal = False
-        self.p_power = False
 
         self.init_ui()
         self.init_ros()
@@ -132,7 +128,24 @@ class CorgiControlPanel(QWidget):
         
         # --- Top Bar ---
         top_bar = QHBoxLayout()
-        
+
+        # Power summary (top-left)
+        power_box = QHBoxLayout()
+        power_box.setSpacing(8)
+        self.lbl_voltage = QLabel('--.- V')
+        self.lbl_voltage.setObjectName('PowerBadge')
+        self.lbl_soc = QLabel('-- %')
+        self.lbl_soc.setObjectName('PowerBadge')
+        self.lbl_current = QLabel('-.-- A')
+        self.lbl_current.setObjectName('PowerBadge')
+        self.lbl_power = QLabel('--.- W')
+        self.lbl_power.setObjectName('PowerBadge')
+        power_box.addWidget(self.lbl_voltage)
+        power_box.addWidget(self.lbl_soc)
+        power_box.addWidget(self.lbl_current)
+        power_box.addWidget(self.lbl_power)
+        top_bar.addLayout(power_box)
+
         self.btn_estop = QPushButton('EMERGENCY STOP')
         self.btn_estop.setObjectName("EstopBtn")
         self.btn_estop.setMinimumWidth(200)
@@ -520,7 +533,37 @@ class CorgiControlPanel(QWidget):
 
     def _handle_power_state_update(self, state):
         self.power_state = state
+        # Update power badges
+        try:
+            v_total = float(getattr(state, 'v_0', 0.0))
+        except Exception:
+            v_total = 0.0
+        i_total = 0.0
+        for idx in range(1, 12):
+            val = getattr(state, f'i_{idx}', 0.0)
+            try:
+                i_total += float(val)
+            except Exception:
+                pass
+        soc = self._soc_from_voltage(v_total)
+        self.lbl_voltage.setText(f"{v_total:.1f} V")
+        self.lbl_soc.setText(f"{soc:.0f} %")
+        self.lbl_current.setText(f"{i_total:.2f} A")
+        power = v_total * i_total
+        self.lbl_power.setText(f"{power:.1f} W")
         self.set_btn_enable()
+
+    def _soc_from_voltage(self, v_total: float) -> float:
+        V_MIN = 42.0  # 3.5V * 12
+        V_MAX = 50.4  # 4.2V * 12
+        if V_MAX <= V_MIN:
+            return 0.0
+        soc = (v_total - V_MIN) / (V_MAX - V_MIN) * 100.0
+        if soc > 100.0:
+            soc = 100.0
+        if soc < 0.0:
+            soc = 0.0
+        return soc
 
     def _handle_log_update(self, log_msg):
         """Handle incoming log messages from lower-level systems"""
