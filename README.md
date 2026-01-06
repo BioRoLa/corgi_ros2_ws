@@ -25,7 +25,7 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
 
 ## System Architecture
 
-The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
+The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 
 ## System Requirements & Dependencies
 
@@ -54,7 +54,7 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
   - **C++ Dependencies**:
     - [**Eigen 3.4.0**](https://eigen.tuxfamily.org/index.php?title=Main_Page)
     - [**yaml-cpp**](https://github.com/jbeder/yaml-cpp)
-    - [**mip_sdk (v2.0.0)**](https://github.com/LORD-MicroStrain/mip_sdk/tree/v2.0.0) (**_Important:_** You must modify its `CMakeLists.txt` at line 241, changing `src` to `include`.)
+    - [**mip_sdk (v2.0.0)**](https://github.com/hiho817/mip_sdk/tree/fix-install-interface)
     - [**osqp (v0.6.3)**](https://github.com/osqp/osqp/tree/v0.6.3)
     - [**osqp-eigen**](https://github.com/robotology/osqp-eigen)
 
@@ -76,7 +76,7 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
 
     ```
     cd ~/corgi_ws/
-    git clone https://github.com/BioRoLa/corgi_ros_ws.git
+    git clone https://github.com/BioRoLa/corgi_ros2_ws.git
     ```
 
 3.  **Install All Dependencies**
@@ -87,39 +87,75 @@ The system uses ROS 2 on a high-level computer (PC/Jetson) to communicate with a
     cd ~/corgi_ws/
     mkdir install/
     ```
+    1. **yaml-cpp**
+    Clone the `yaml-cpp` repository and follow the installation instructions:
+      ```bash
+      cd ~/corgi_ws/install
+      git clone https://github.com/jbeder/yaml-cpp.git
+      cd yaml-cpp
+      mkdir build && cd build
+      cmake ..
+      make -j16
+      sudo make install
+      ```
+    2. **Eigen**
+    Clone the `Eigen` repository and follow the installation instructions:
+      ```bash
+      cd ~/corgi_ws/install
+      git clone https://gitlab.com/libeigen/eigen.git
+      cd eigen
+      mkdir build && cd build
+      cmake ..
+      make -j16
+      sudo make install
+      ```
+    3. **grpc_core**
+    Install gRPC & grpc_core as follows: [**grpc_core**](https://github.com/BioRoLa/grpc_core)
 
+    4. **osqp**
+    Install osqp as follow: [**osqp**](https://osqp.org/docs/get_started/sources.html)
+      ```bash
+      git clone https://github.com/osqp/osqp
+      cd osqp
+      mkdir build && cd build
+      cmake -G "Unix Makefiles" ..
+      cmake --build .
+      make -j16
+      sudo make install
+      ```
+    
+    5. **osqp_eigen**
+    Install osqp_eigen as follows: [**osqp_eigen**](https://github.com/robotology/osqp-eigen)
+
+    6. **MIP_SDK**
+    Clone the `mip_sdk` repository and follow the installation instructions:
+      ```bash
+      cd corgi_ws
+      git clone --branch fix-install-interface --single-branch https://github.com/hiho817/mip_sdk.git
+      cd mip_sdk
+      mkdir build && cd build
+      cmake .. -DMIP_USE_SERIAL=ON
+      make -j16
+      sudo make install
+      ```
+    
 4.  **Build the ROS Workspace**
 
     If you installed C++ dependencies to the recommended path, use the following command.
 
-    ```
-    cd ~/corgi_ws/corgi_ros_ws/
-    colcon build
+    ```bash
+    cd ~/corgi_ws/corgi_ros2_ws/
+    colcon build --cmake-args -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
     ```
 
 5.  **Source the Environment (ROS 2)**
-    Run this once to append auto-source lines to your `~/.bashrc`:
+    You can also add this to your own `~/.bashrc`:
 
-    ```
-    cat <<'EOF' >> ~/.bashrc
-    # ROS 2 base
-    [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
-    # Corgi workspace (ROS 2 overlay)
-    [ -f "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash" ] && source "$HOME/corgi_ws/corgi_ros_ws/install/setup.bash"
-    EOF
-    source ~/.bashrc
+    ```bash
+    source /opt/ros/humble/setup.bash
+    source $HOME/corgi_ws/corgi_ros2_ws/install/setup.bash
     ```
 ## Usage Guide
-
-### Running the Simulation
-
-To launch the Corgi robot in the Webots simulator:
-
-```
-roslaunch corgi_sim run_simulation.launch
-```
-
-After launching the simulation, you can run other nodes to interact with the simulated robot. Press **_Enter_** to start the simulation, and the data will be recorded in `output_data/` if the output file name are not empty.
 
 ### Running on the Real Robot
 
@@ -134,24 +170,10 @@ After launching the simulation, you can run other nodes to interact with the sim
     On the Jetson/PC, run the main launch file. This will start the **_panel_**, **_data recorder_**, **_force estimation_**, and **_IMU_** nodes.
 
     ```
-    roslaunch corgi_panel corgi_control_panel.launch
+    ros2 launch corgi_panel corgi_control_panel_dev.launch
     ```
 
-3.  **Control Panel Operation Sequence**
-
-    Follow these steps **in order** on the GUI to safely start the robot:
-
-    1.  **Power On**: Click `Digital` -> `Signal` -> `Power`.
-    2.  **Set Zero Position**: Press `Set Zero` to define the motor's home position.
-    3.  **Calibrate & Enable**:
-        - If legs are fully extended, press `Hall Calibration`.
-        - If legs are already in wheeled mode, press `Motor Mode` to enable motors.
-    4.  **Steer Calibration (Optional)**: If you will use wheeled steering, press `Steer Calibration`.
-    5.  **Select Control Mode**: After entering `Motor Mode`, PID gains will be zeroed. Choose either `RT` (Real-Time) or `CSV` (from `input_csv/`) mode.
-    6.  **Trigger Motion & Recording**:
-        - Fill in a filename in the `Output File Name` field to enable data logging, or data will not be recorded.
-        - Press `Trigger` to start the motion trajectory, and data will be saved to `output_data/`.
-    7.  **Powery Reset**: Pressing `Reset` will **cut all power** to the motors. Ensure the robot is secure before using this.
+3.  **Control Panel Operation Sequence** 
 
 ## Workspace Structure & Key Packages
 
@@ -160,34 +182,22 @@ After launching the simulation, you can run other nodes to interact with the sim
 For more details on a specific package, please see its respective `README.md` file.
 
 - **Core**
-
   - [`corgi_msgs`](src/corgi_msgs): Defines all custom ROS messages used in the project.
   - [`corgi_ros_bridge`](src/corgi_ros_bridge): The gRPC client/server that connects ROS to the FPGA driver.
-  - [`corgi_virtual_agent`](src/corgi_virtual_agent): A mock FPGA driver for testing the `corgi_ros_bridge` without hardware.
   - [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
   - [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
   - [`*corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
 
-- **Simulation**
-
-  - [`corgi_sim`](src/corgi_sim): Contains Webots models, worlds, and controllers for simulation.
-
 - **Sensing & Estimation**
 
   - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
-  - [`corgi_force_estimation`](src/corgi_force_estimation): Estimates contact forces from motor currents.
-  - [`*corgi_odometry`](src/corgi_odometry): Robot odometry estimation.
-  - [`*corgi_camera`](src/corgi_camera): Integrates ZED camera for visual perception.
 
 - **Control & Planning**
   - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
-  - [`corgi_rt_control`](src/corgi_rt_control): Handles real-time trajectory commands.
+  - [`corgi_set_zero`](src/corgi_set_zero): Adjust all motors to the standard zero position.
   - [`*corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
   - [`*corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
-  - [`corgi_force_control`](src/corgi_force_control): Foot contact force control algorithms.
-  - [`corgi_mpc`](src/corgi_mpc): Model Predictive Control implementation.
   - [`*corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
   - [`*corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
-  - [`*corgi_algo`](src/corgi_algo): Contains various core algorithms for control.
 
 ## Notes
