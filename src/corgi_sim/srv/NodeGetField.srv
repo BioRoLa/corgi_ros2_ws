@@ -1,5 +1,0 @@
-uint64 node
-string field_name
-bool proto
----
-uint64 field
