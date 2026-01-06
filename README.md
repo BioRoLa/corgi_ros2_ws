@@ -199,7 +199,7 @@ For more details on a specific package, please see its respective `README.md` fi
   - [`corgi_ros_bridge`](src/corgi_ros_bridge): The gRPC client/server that connects ROS to the FPGA driver.
   - [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
   - [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
-  - [`*corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
+  - [`corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
 
 - **Sensing & Estimation**
 
@@ -208,9 +208,9 @@ For more details on a specific package, please see its respective `README.md` fi
 - **Control & Planning**
   - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
   - [`corgi_set_zero`](src/corgi_set_zero): Adjust all motors to the standard zero position.
-  - [`*corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
-  - [`*corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
-  - [`*corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
-  - [`*corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
+  - [`corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
+  - [`corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
+  - [`corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
+  - [`corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
 
 ## Notes
