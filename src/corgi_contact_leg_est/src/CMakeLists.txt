@@ -28,3 +28,24 @@ target_link_libraries(offline_test
 
 install(TARGETS offline_test
   DESTINATION lib/${PROJECT_NAME})
+
+# Build executable
+add_executable(corgi_contact_leg_est 
+  corgi_contact_leg_est.cpp
+)
+
+ament_target_dependencies(corgi_contact_leg_est 
+  rclcpp 
+  std_msgs 
+  rosgraph_msgs 
+  geometry_msgs 
+  corgi_msgs
+)
+
+target_link_libraries(corgi_contact_leg_est
+  quadruped_dynamics
+  Eigen3::Eigen
+)
+
+install(TARGETS corgi_contact_leg_est
+  DESTINATION lib/${PROJECT_NAME})
