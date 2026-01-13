@@ -48,13 +48,13 @@ std::string output_file_path = "";
 
 std_msgs::msg::Float32MultiArray camera;
 
-
+// Check if file exists
 bool file_exists(const std::string &filename) {
     struct stat buffer;
     return (stat(filename.c_str(), &buffer) == 0);
 }
 
-
+// Signal handler for graceful shutdown
 void signal_handler(int signum) {
     RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Interrupt received.");
 
@@ -67,14 +67,14 @@ void signal_handler(int signum) {
     exit(signum);
 }
 
-
+// Callback function for trigger topic
 void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
     trigger = msg.enable;
     
     output_file_name = msg.output_filename;
     
-    if (trigger && msg.output_filename != "") {
-        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+    if (trigger && msg.output_filename != "") { //triggered and output filename assigned
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros2_ws/output_data/" + output_file_name;
 
         int index = 1;
         std::string file_path_with_extension = output_file_path + ".csv";
@@ -245,6 +245,7 @@ void range_4_cb(const sensor_msgs::msg::Range::SharedPtr msg){
     range_4 = *msg;
 }
 
+// write data to CSV file
 void write_data() {
     if (!output_file.is_open()){
         if (output_file_name != "") 
@@ -361,7 +362,9 @@ int main(int argc, char **argv) {
     auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 1000, range_3_cb);
     auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 1000, range_4_cb);
 
-    rclcpp::Rate rate(1000);
+    // rclcpp::Rate rate(1000);
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node->now();//timer init
 
     signal(SIGINT, signal_handler);
 
@@ -371,8 +374,12 @@ int main(int argc, char **argv) {
         if (trigger) {
             write_data();
         }
-
-        rate.sleep();
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+            break;
+        }
+        // rate.sleep();
     }
 
     if (output_file.is_open()) {
