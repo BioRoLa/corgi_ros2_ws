@@ -49,3 +49,23 @@ target_link_libraries(corgi_contact_leg_est
 
 install(TARGETS corgi_contact_leg_est
   DESTINATION lib/${PROJECT_NAME})
+
+# Build executable for velocity estimator
+add_executable(velocity_estimator 
+  velocity_estimator.cpp
+)
+
+ament_target_dependencies(velocity_estimator 
+  rclcpp 
+  std_msgs 
+  geometry_msgs 
+  corgi_msgs
+  sensor_msgs
+)
+
+target_link_libraries(velocity_estimator
+  Eigen3::Eigen
+)
+
+install(TARGETS velocity_estimator
+  DESTINATION lib/${PROJECT_NAME})
