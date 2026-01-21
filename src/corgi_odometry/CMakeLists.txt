@@ -16,6 +16,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # Include directories

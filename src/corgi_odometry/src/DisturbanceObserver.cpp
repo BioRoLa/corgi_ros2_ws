@@ -129,7 +129,7 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
     const Eigen::Ref<const Eigen::VectorXd>& tau,
     const Eigen::Ref<const Eigen::VectorXd>& I_c,
     int index,
-    bool details
+    bool print_info
 ) {
     // Validate input dimensions
     if (q.size() != dof_ || q_dot.size() != dof_) {
@@ -170,6 +170,14 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
     
     // Update filter state for next iteration
     Y_filtered_prev_ = Y_filtered_k;
+
+    if (print_info) {
+        std::cout << "=== Disturbance Observer Details (Index " << index << ") ===\n";
+        std::cout << "Estimated Disturbance Torque τ̂_d_k:\n" 
+                  << "x,\tz,\troll,\tpitch,\t,beta_a,\tRm_a,\tbeta_b,\tRm_b,\tbeta_c,\tRm_c,\tbeta_d,\tRm_d\n"
+                  << estimated_disturbance_.transpose() << "\n";
+        std::cout << "=============================================\n";
+    }
     
     return estimated_disturbance_;
 }

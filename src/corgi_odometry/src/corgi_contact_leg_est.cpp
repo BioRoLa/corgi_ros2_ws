@@ -2,12 +2,13 @@
 #include <iostream>
 #include <cmath>
 #include <chrono>
+#include <thread>
 #include <signal.h>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include "rclcpp/rclcpp.hpp"
-#include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
+#include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/contact_state.hpp>
 #include "DisturbanceObserver.hpp"
@@ -41,7 +42,7 @@ public:
     ProcessedData process_realtime_data(
         const geometry_msgs::msg::Vector3& position,
         const geometry_msgs::msg::Vector3& velocity,
-        const sensor_msgs::msg::Imu& imu,
+        const corgi_msgs::msg::ImuStamped& imu,
         const corgi_msgs::msg::MotorStateStamped& motor_state
     ) {
         ProcessedData result;
@@ -251,7 +252,7 @@ public:
               quadruped::Config::DT,
               quadruped::Config::OBSERVER_CUTOFF_FREQ,
               quadruped::Config::DOF,
-              false,  // Disable CSV logging in online mode
+              false,  // CSV logging
               ""      // No CSV filename
           )
     {
@@ -262,7 +263,7 @@ public:
             std::bind(&ContactLegEstimatorNode::motor_state_callback, this, std::placeholders::_1)
         );
         
-        imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
             quadruped::Config::TOPIC_IMU,
             quadruped::Config::QUEUE_SIZE_SUB,
             std::bind(&ContactLegEstimatorNode::imu_callback, this, std::placeholders::_1)
@@ -289,13 +290,6 @@ public:
         RCLCPP_INFO(this->get_logger(), "Contact Leg Estimator Node Started");
         RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", quadruped::Config::ONLINE_LOOP_RATE);
         
-        // Create timer for main processing loop
-        auto period = std::chrono::microseconds(static_cast<int>(1e6 / quadruped::Config::ONLINE_LOOP_RATE));
-        timer_ = this->create_wall_timer(
-            period,
-            std::bind(&ContactLegEstimatorNode::timer_callback, this)
-        );
-        
         // Initialize data received flags
         motor_state_received_ = false;
         imu_received_ = false;
@@ -305,30 +299,8 @@ public:
         iteration_count_ = 0;
     }
     
-private:
-    // Callbacks for subscribers
-    void motor_state_callback(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
-        motor_state_ = *msg;
-        motor_state_received_ = true;
-    }
-    
-    void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
-        imu_ = *msg;
-        imu_received_ = true;
-    }
-    
-    void position_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
-        position_ = *msg;
-        position_received_ = true;
-    }
-    
-    void velocity_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
-        velocity_ = *msg;
-        velocity_received_ = true;
-    }
-    
-    // Main processing loop
-    void timer_callback() {
+    // Main processing method (called from external loop)
+    void process() {
         // Check if all data is available
         if (!motor_state_received_ || !imu_received_ || !position_received_ || !velocity_received_) {
             if (iteration_count_ % 1000 == 0) {
@@ -350,8 +322,9 @@ private:
             processed.tau,
             processed.I_c,
             iteration_count_,
-            false  // Don't print detailed info
+            true  // Don't print detailed info
         );
+        
         
         // // Publish contact state (simplified - just use disturbance magnitude as indicator)
         // // TODO: Implement proper contact detection logic
@@ -367,7 +340,7 @@ private:
         
         // contact_state_pub_->publish(contact_msg);
         
-        // iteration_count_++;
+        iteration_count_++;
         
         // // Log periodically
         // if (iteration_count_ % 1000 == 0) {
@@ -377,19 +350,50 @@ private:
         // }
     }
     
+private:
+    // Callbacks for subscribers
+    void motor_state_callback(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
+        motor_state_ = *msg;
+        motor_state_time_ = rclcpp::Time(msg->header.stamp);
+        motor_state_received_ = true;
+    }
+    
+    void imu_callback(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
+        imu_ = *msg;
+        imu_time_ = rclcpp::Time(msg->header.stamp);
+        imu_received_ = true;
+    }
+    
+    void position_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
+        position_ = *msg;
+        position_time_ = this->now();  // Position topic has no header, use current time
+        position_received_ = true;
+    }
+    
+    void velocity_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
+        velocity_ = *msg;
+        velocity_time_ = this->now();  // Velocity topic has no header, use current time
+        velocity_received_ = true;
+    }
+    
     // ROS2 publishers and subscribers
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr velocity_sub_;
     rclcpp::Publisher<corgi_msgs::msg::ContactState>::SharedPtr contact_state_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
     
     // Data storage
     corgi_msgs::msg::MotorStateStamped motor_state_;
-    sensor_msgs::msg::Imu imu_;
+    corgi_msgs::msg::ImuStamped imu_;
     geometry_msgs::msg::Vector3 position_;
     geometry_msgs::msg::Vector3 velocity_;
+    
+    // Message timestamps
+    rclcpp::Time motor_state_time_;
+    rclcpp::Time imu_time_;
+    rclcpp::Time position_time_;
+    rclcpp::Time velocity_time_;
     
     // Data received flags
     bool motor_state_received_;
@@ -420,8 +424,45 @@ int main(int argc, char** argv) {
     
     g_node = std::make_shared<ContactLegEstimatorNode>();
     
+    // Wait for clock sync if using simulation time
+    bool use_sim_time = false;
+    g_node->get_parameter("use_sim_time", use_sim_time);
+    rclcpp::Duration period(0, 1000000);
+    if (use_sim_time) {
+        RCLCPP_INFO(g_node->get_logger(), "Waiting for simulation clock...");
+        
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(g_node);
+            
+            if (g_node->now().seconds() > 0.0) {
+                RCLCPP_INFO(g_node->get_logger(), "Clock synced! Sim Time: %.2f", g_node->now().seconds());
+                break;
+            }
+            
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    
+    // Calculate loop period based on configured rate
+    auto loop_period = std::chrono::microseconds(static_cast<int>(1e6 / quadruped::Config::ONLINE_LOOP_RATE));
+    
     try {
-        rclcpp::spin(g_node);
+        // Manual spin loop with controlled rate
+        rclcpp::Time next_time = g_node->now();
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(g_node);  // Process all pending callbacks
+            
+            // Process data if available
+            std::dynamic_pointer_cast<ContactLegEstimatorNode>(g_node)->process();
+            
+            // Sleep to maintain desired loop rate
+            // std::this_thread::sleep_for(loop_period);
+            next_time += period;
+            if(!g_node->get_clock()->sleep_until(next_time)){
+                RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
+                break;
+            }
+        }
     } catch (const std::exception& e) {
         RCLCPP_ERROR(g_node->get_logger(), "Exception: %s", e.what());
         return 1;

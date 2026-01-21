@@ -61,6 +61,7 @@ ament_target_dependencies(velocity_estimator
   geometry_msgs 
   corgi_msgs
   sensor_msgs
+  tf2_ros
 )
 
 target_link_libraries(velocity_estimator

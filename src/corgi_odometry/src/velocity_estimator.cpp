@@ -4,12 +4,15 @@
 #include <iostream>
 #include <cmath>
 #include <chrono>
+#include <thread>
 #include <signal.h>
 #include <deque>
 #include <Eigen/Dense>
 #include "rclcpp/rclcpp.hpp"
 #include <geometry_msgs/msg/vector3.hpp>
-#include <corgi_msgs/msg/sim_data_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
 
 using namespace std::chrono_literals;
 
@@ -59,7 +62,7 @@ private:
 
 /**
  * @brief Velocity Estimator Node
- * Subscribes to position (from SimDataStamped), differentiates and filters to compute velocity
+ * Subscribes to TF (odom->base_link), differentiates and filters to compute velocity
  */
 class VelocityEstimatorNode : public rclcpp::Node {
 public:
@@ -71,35 +74,33 @@ public:
           position_initialized_(false),
           last_position_x_(0.0),
           last_position_y_(0.0),
-          last_position_z_(0.0)
+          last_position_z_(0.0),
+          tf_buffer_(this->get_clock()),
+          tf_listener_(tf_buffer_)
     {
         // Declare parameters
         this->declare_parameter<double>("cutoff_freq", 30.0);
         this->declare_parameter<double>("sample_rate", 1000.0);
-        this->declare_parameter<std::string>("position_topic", "sim/data");
         this->declare_parameter<std::string>("velocity_topic", "odometry/velocity");
         this->declare_parameter<std::string>("position_output_topic", "odometry/position");
+        this->declare_parameter<std::string>("parent_frame", "odom");
+        this->declare_parameter<std::string>("child_frame", "base_link");
         
         // Get parameters
         double cutoff_freq = this->get_parameter("cutoff_freq").as_double();
         double sample_rate = this->get_parameter("sample_rate").as_double();
-        std::string position_topic = this->get_parameter("position_topic").as_string();
         std::string velocity_topic = this->get_parameter("velocity_topic").as_string();
         std::string position_output_topic = this->get_parameter("position_output_topic").as_string();
+        parent_frame_ = this->get_parameter("parent_frame").as_string();
+        child_frame_ = this->get_parameter("child_frame").as_string();
         
         // Reinitialize filters with parameters
         vx_filter_ = LowPassFilter(cutoff_freq, sample_rate);
         vy_filter_ = LowPassFilter(cutoff_freq, sample_rate);
         vz_filter_ = LowPassFilter(cutoff_freq, sample_rate);
         
-        dt_ = 1.0 / sample_rate;
-        
-        // Create subscriber to SimDataStamped
-        sim_data_sub_ = this->create_subscription<corgi_msgs::msg::SimDataStamped>(
-            position_topic,
-            10,
-            std::bind(&VelocityEstimatorNode::sim_data_callback, this, std::placeholders::_1)
-        );
+        // Store sample rate for loop control
+        sample_rate_ = sample_rate;
         
         // Create publishers
         velocity_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(
@@ -113,44 +114,69 @@ public:
         );
         
         RCLCPP_INFO(this->get_logger(), "Velocity Estimator Node Started");
-        RCLCPP_INFO(this->get_logger(), "  Subscribing to: %s", position_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "  Listening to TF: %s -> %s", parent_frame_.c_str(), child_frame_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing velocity to: %s", velocity_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing position to: %s", position_output_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "  Filter cutoff frequency: %.1f Hz", cutoff_freq);
         RCLCPP_INFO(this->get_logger(), "  Sample rate: %.1f Hz", sample_rate);
     }
     
-private:
-    void sim_data_callback(const corgi_msgs::msg::SimDataStamped::SharedPtr msg) {
-        // Extract position from message
-        double current_x = msg->position.x;
-        double current_y = msg->position.y;
-        double current_z = msg->position.z;
+    // Main processing method (called from external loop)
+    void process() {
+        geometry_msgs::msg::TransformStamped transform;
         
-        // Publish position (extracted from SimDataStamped)
+        try {
+            // Look up the transform from parent_frame to child_frame
+            transform = tf_buffer_.lookupTransform(
+                parent_frame_, child_frame_,
+                tf2::TimePointZero  // Get the latest available transform
+            );
+        } catch (const tf2::TransformException &ex) {
+            // Only log warning periodically to avoid spam
+            message_count_++;
+            if (message_count_ % 1000 == 0) {
+                RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
+            }
+            return;
+        }
+        
+        // Extract position and timestamp from transform
+        double current_x = transform.transform.translation.x;
+        double current_y = transform.transform.translation.y;
+        double current_z = transform.transform.translation.z;
+        rclcpp::Time current_time = rclcpp::Time(transform.header.stamp);
+        // RCLCPP_INFO
+
+        if (current_time.nanoseconds() == last_time_.nanoseconds()) {
+            RCLCPP_WARN(this->get_logger(), "Received identical timestamp");
+            return;  // Skip this iteration
+        }
+                
+        // Publish position (global position from TF)
         geometry_msgs::msg::Vector3 position_msg;
         position_msg.x = current_x;
         position_msg.y = current_y;
         position_msg.z = current_z;
         position_pub_->publish(position_msg);
         
-        // Initialize previous position on first callback
+        // Initialize previous position and time on first callback
         if (!position_initialized_) {
             last_position_x_ = current_x;
             last_position_y_ = current_y;
             last_position_z_ = current_z;
-            last_time_ = msg->header.stamp;
+            last_time_ = current_time;
             position_initialized_ = true;
+            RCLCPP_WARN(this->get_logger(), "Initialized position tracking.");
             return;
         }
         
-        // Calculate time difference
-        rclcpp::Time current_time = msg->header.stamp;
+        // Calculate time difference using TF timestamps
         double dt = (current_time - last_time_).seconds();
         
         // Avoid division by zero
-        if (dt < 1e-6) {
-            return;
+        if (dt < 1e-7) {
+            RCLCPP_WARN(this->get_logger(), "Time difference too small: dt=%.9f", dt);
+            dt = 1e-6;
         }
         
         // Compute raw velocities via differentiation
@@ -185,10 +211,22 @@ private:
         }
     }
     
-    // ROS2 publishers and subscribers
-    rclcpp::Subscription<corgi_msgs::msg::SimDataStamped>::SharedPtr sim_data_sub_;
+    double get_sample_rate() const {
+        return sample_rate_;
+    }
+    
+private:
+    // ROS2 publishers
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr position_pub_;
+    
+    // TF2 listener
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener tf_listener_;
+    
+    // Frame names
+    std::string parent_frame_;
+    std::string child_frame_;
     
     // Low-pass filters
     LowPassFilter vx_filter_;
@@ -201,8 +239,8 @@ private:
     double last_position_y_;
     double last_position_z_;
     rclcpp::Time last_time_;
-    double dt_;
     size_t message_count_ = 0;
+    double sample_rate_;
 };
 
 void signal_handler(int signum) {
@@ -220,8 +258,47 @@ int main(int argc, char** argv) {
     
     g_node = std::make_shared<VelocityEstimatorNode>();
     
+    // Wait for clock sync if using simulation time
+    bool use_sim_time = false;
+    g_node->get_parameter("use_sim_time", use_sim_time);
+    
+    if (use_sim_time) {
+        RCLCPP_INFO(g_node->get_logger(), "Waiting for simulation clock...");
+        
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(g_node);
+            
+            if (g_node->now().seconds() > 0.0) {
+                RCLCPP_INFO(g_node->get_logger(), "Clock synced! Sim Time: %.2f", g_node->now().seconds());
+                break;
+            }
+            
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    
+    // Get sample rate for loop control
+    auto node_ptr = std::dynamic_pointer_cast<VelocityEstimatorNode>(g_node);
+    // auto loop_period = std::chrono::microseconds(static_cast<int>(1e6 / node_ptr->get_sample_rate()));
+    rclcpp::Duration period(0, 1000000);
     try {
-        rclcpp::spin(g_node);
+        // Manual spin loop with controlled rate
+        rclcpp::Time next_time = g_node->now();
+
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(g_node);  // Process all pending callbacks
+            
+            // Process TF and compute velocity
+            node_ptr->process();
+            
+            // // Sleep to maintain desired loop rate
+
+            // next_time += period;
+            // if(!g_node->get_clock()->sleep_until(next_time)){
+            //     RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
+            //     break;
+            // }
+        }
     } catch (const std::exception& e) {
         RCLCPP_ERROR(g_node->get_logger(), "Exception: %s", e.what());
         return 1;

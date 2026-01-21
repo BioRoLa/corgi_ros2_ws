@@ -25,10 +25,16 @@ def generate_launch_description():
         description='Sample rate (Hz)'
     )
     
-    position_topic_arg = DeclareLaunchArgument(
-        'position_topic',
-        default_value='sim/data',
-        description='Input topic for position data (SimDataStamped)'
+    parent_frame_arg = DeclareLaunchArgument(
+        'parent_frame',
+        default_value='odom',
+        description='Parent frame for TF lookup (typically odom)'
+    )
+    
+    child_frame_arg = DeclareLaunchArgument(
+        'child_frame',
+        default_value='base_link',
+        description='Child frame for TF lookup (typically base_link)'
     )
     
     velocity_topic_arg = DeclareLaunchArgument(
@@ -52,7 +58,8 @@ def generate_launch_description():
         parameters=[{
             'cutoff_freq': LaunchConfiguration('cutoff_freq'),
             'sample_rate': LaunchConfiguration('sample_rate'),
-            'position_topic': LaunchConfiguration('position_topic'),
+            'parent_frame': LaunchConfiguration('parent_frame'),
+            'child_frame': LaunchConfiguration('child_frame'),
             'velocity_topic': LaunchConfiguration('velocity_topic'),
             'position_output_topic': LaunchConfiguration('position_output_topic'),
         }]
@@ -61,7 +68,8 @@ def generate_launch_description():
     return LaunchDescription([
         cutoff_freq_arg,
         sample_rate_arg,
-        position_topic_arg,
+        parent_frame_arg,
+        child_frame_arg,
         velocity_topic_arg,
         position_output_topic_arg,
         velocity_estimator_node,
