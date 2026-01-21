@@ -1,26 +1,33 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>corgi_panel</name>
-  <version>0.0.1</version>
-  <description>PyQt5 GUI control panel for the Corgi quadruped robot (ROS 2).</description>
-  <maintainer email="r12522823@ntu.edu.tw">yisyuan</maintainer>
-  <license>BSD-3-Clause</license>
-
-  <!-- Build tools -->
+  <version>1.0.0</version>
+  <description>Corgi Robot Control and Configuration Panels with PyQt5 GUI</description>
+  
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
+  <license>Apache-2.0</license>
+  
   <buildtool_depend>ament_cmake</buildtool_depend>
-
-  <!-- Build dependencies for installing Python scripts via CMake -->
-  <build_depend>ament_cmake_python</build_depend>
-
-  <!-- Runtime dependencies -->
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>corgi_msgs</exec_depend>
-  <exec_depend>python3-pyqt5</exec_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
+  
+  <!-- ROS 2 Dependencies -->
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>corgi_msgs</depend>
+  
+  <!-- Python Dependencies -->
   <exec_depend>python3-numpy</exec_depend>
-  <exec_depend>launch</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
-
+  <exec_depend>python3-pyqt5</exec_depend>
+  
+  <!-- Test Dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>
