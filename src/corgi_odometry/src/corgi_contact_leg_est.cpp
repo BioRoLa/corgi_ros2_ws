@@ -10,7 +10,7 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
-#include <corgi_msgs/msg/contact_state.hpp>
+#include <corgi_msgs/msg/contact_state_stamped.hpp>
 #include "DisturbanceObserver.hpp"
 #include "Config.hpp"
 
@@ -282,7 +282,7 @@ public:
         );
         
         // Create publishers
-        contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactState>(
+        contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
             quadruped::Config::TOPIC_CONTACT_STATE,
             quadruped::Config::QUEUE_SIZE_PUB
         );
@@ -325,29 +325,10 @@ public:
             true  // Don't print detailed info
         );
         
-        
-        // // Publish contact state (simplified - just use disturbance magnitude as indicator)
-        // // TODO: Implement proper contact detection logic
-        // corgi_msgs::msg::ContactState contact_msg;
-        
-        // // Simple threshold-based contact detection
-        // double threshold = 5.0;  // N - adjust based on actual data //FIXME: Tune threshold
-        // contact_msg.contact = (std::abs(disturbance(2)) > threshold ||
-        //                       std::abs(disturbance(5)) > threshold ||
-        //                       std::abs(disturbance(8)) > threshold ||
-        //                       std::abs(disturbance(11)) > threshold);
-        // contact_msg.score = disturbance.norm();
-        
-        // contact_state_pub_->publish(contact_msg);
+        // Publish contact state
+        publish_contact_state(disturbance);
         
         iteration_count_++;
-        
-        // // Log periodically
-        // if (iteration_count_ % 1000 == 0) {
-        //     RCLCPP_INFO(this->get_logger(), 
-        //         "Processed %ld iterations, Contact: %d, Score: %.3f",
-        //         iteration_count_, contact_msg.contact, contact_msg.score);
-        // }
     }
     
 private:
@@ -376,12 +357,59 @@ private:
         velocity_received_ = true;
     }
     
+    /**
+     * @brief Detect contact state using Schmitt trigger and publish message
+     * @param disturbance Disturbance observer output vector
+     */
+    inline void publish_contact_state(const Eigen::VectorXd& disturbance) {
+        corgi_msgs::msg::ContactStateStamped contact_msg;
+        contact_msg.header.stamp = this->now();
+
+        // Indices for Rm forces in the disturbance vector
+        constexpr int rm_force_indices[4] = {5, 7, 9, 11}; // LF, RF, RH, LH
+        constexpr int beta_torque_indices[4] = {4, 6, 8, 10};
+
+        // Schmitt trigger for contact detection
+        for (int i = 0; i < 4; ++i) {
+            double rm_force = disturbance(rm_force_indices[i]);
+            
+            if (!leg_contact_state_[i]) { // Currently no contact
+                if (std::abs(rm_force) > quadruped::Config::CONTACT_THRESHOLD_HIGH) {
+                    leg_contact_state_[i] = true;
+                }
+            } else { // Currently in contact
+                if (std::abs(rm_force) < quadruped::Config::CONTACT_THRESHOLD_LOW) {
+                    leg_contact_state_[i] = false;
+                }
+            }
+        }
+        
+        // Populate message
+        contact_msg.module_a.contact = leg_contact_state_[0];
+        contact_msg.module_a.rm_force = disturbance(rm_force_indices[0]);
+        contact_msg.module_a.beta_torque = disturbance(beta_torque_indices[0]);
+
+        contact_msg.module_b.contact = leg_contact_state_[1];
+        contact_msg.module_b.rm_force = disturbance(rm_force_indices[1]);
+        contact_msg.module_b.beta_torque = disturbance(beta_torque_indices[1]);
+
+        contact_msg.module_c.contact = leg_contact_state_[2];
+        contact_msg.module_c.rm_force = disturbance(rm_force_indices[2]);
+        contact_msg.module_c.beta_torque = disturbance(beta_torque_indices[2]);
+
+        contact_msg.module_d.contact = leg_contact_state_[3];
+        contact_msg.module_d.rm_force = disturbance(rm_force_indices[3]);
+        contact_msg.module_d.beta_torque = disturbance(beta_torque_indices[3]);
+
+        contact_state_pub_->publish(contact_msg);
+    }
+    
     // ROS2 publishers and subscribers
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr velocity_sub_;
-    rclcpp::Publisher<corgi_msgs::msg::ContactState>::SharedPtr contact_state_pub_;
+    rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr contact_state_pub_;
     
     // Data storage
     corgi_msgs::msg::MotorStateStamped motor_state_;
@@ -400,6 +428,9 @@ private:
     bool imu_received_;
     bool position_received_;
     bool velocity_received_;
+    
+    // Leg contact states (for Schmitt trigger)
+    std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
     
     // Processing components
     DataProcessor processor_;

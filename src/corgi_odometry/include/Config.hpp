@@ -34,6 +34,8 @@ public:
     // Observer parameters
     static constexpr double OBSERVER_CUTOFF_FREQ = 15.0;  // Disturbance observer cutoff frequency [Hz]
     static constexpr double ENCODER_CUTOFF_FREQ = 30.0;   // Encoder low-pass filter cutoff frequency [Hz]
+    static constexpr double CONTACT_THRESHOLD_HIGH = 25.0; // High threshold for contact detection [N]
+    static constexpr double CONTACT_THRESHOLD_LOW = 15.0;  // Low threshold for contact detection [N]
     
     // Sample rate and time step
     static constexpr double SAMPLE_RATE = 1000.0;         // Sampling frequency [Hz]
