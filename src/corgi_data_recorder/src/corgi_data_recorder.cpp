@@ -246,14 +246,14 @@ void range_4_cb(const sensor_msgs::msg::Range::SharedPtr msg){
 }
 
 // write data to CSV file
-void write_data() {
+void write_data(rclcpp::Node::SharedPtr node) {
     if (!output_file.is_open()){
         if (output_file_name != "") 
             RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Output file is not opened");
         return;
     }
 
-    output_file << rclcpp::Clock().now().nanoseconds() << ","
+    output_file << node->now().nanoseconds() / 10e9 << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << ","
@@ -372,7 +372,7 @@ int main(int argc, char **argv) {
         rclcpp::spin_some(node);
 
         if (trigger) {
-            write_data();
+            write_data(node);
         }
         next_time += period;
         if(!node->get_clock()->sleep_until(next_time)){
