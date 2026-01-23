@@ -197,7 +197,7 @@ public:
         
         // IMU to Euler angles (Quaternion -> Euler)
         double roll, pitch;
-        quaternion_to_euler(
+        cal_quaternion_to_euler(
             data.imu_orien_x, data.imu_orien_y, 
             data.imu_orien_z, data.imu_orien_w,
             roll, pitch
@@ -207,13 +207,13 @@ public:
         
         // Leg joint angles - CRITICAL: Use Rm not theta!
         result.q(4) = data.state_beta_a;
-        result.q(5) = theta_to_Rm(data.state_theta_a);  // Convert theta to Rm
+        result.q(5) = cal_theta_to_Rm(data.state_theta_a);  // Convert theta to Rm
         result.q(6) = -data.state_beta_b;  // RF needs negation
-        result.q(7) = theta_to_Rm(data.state_theta_b);
+        result.q(7) = cal_theta_to_Rm(data.state_theta_b);
         result.q(8) = -data.state_beta_c;  // RH needs negation
-        result.q(9) = theta_to_Rm(data.state_theta_c);
+        result.q(9) = cal_theta_to_Rm(data.state_theta_c);
         result.q(10) = data.state_beta_d;
-        result.q(11) = theta_to_Rm(data.state_theta_d);
+        result.q(11) = cal_theta_to_Rm(data.state_theta_d);
         
         // Base angular velocity (from IMU)
         result.q_dot(2) = data.imu_ang_vel_x;  // roll rate
@@ -242,13 +242,13 @@ public:
         
         // Convert theta_dot to Rm_dot
         result.q_dot(4) = beta_a_dot;
-        result.q_dot(5) = theta_dot_to_Rm_dot(data.state_theta_a, theta_a_dot);
+        result.q_dot(5) = cal_theta_dot_to_Rm_dot(data.state_theta_a, theta_a_dot);
         result.q_dot(6) = beta_b_dot;
-        result.q_dot(7) = theta_dot_to_Rm_dot(data.state_theta_b, theta_b_dot);
+        result.q_dot(7) = cal_theta_dot_to_Rm_dot(data.state_theta_b, theta_b_dot);
         result.q_dot(8) = beta_c_dot;
-        result.q_dot(9) = theta_dot_to_Rm_dot(data.state_theta_c, theta_c_dot);
+        result.q_dot(9) = cal_theta_dot_to_Rm_dot(data.state_theta_c, theta_c_dot);
         result.q_dot(10) = beta_d_dot;
-        result.q_dot(11) = theta_dot_to_Rm_dot(data.state_theta_d, theta_d_dot);
+        result.q_dot(11) = cal_theta_dot_to_Rm_dot(data.state_theta_d, theta_d_dot);
         
         // Update last values
         last_theta_a_ = data.state_theta_a;
@@ -272,16 +272,16 @@ public:
         // CRITICAL: Convert motor torques to joint space torques
         // Motor torques (trq_r, trq_l) need to be converted to (torque_beta, force_Rm)
         double torque_beta_a, F_Rm_a;
-        calculate_motor_to_joint_torque(data.state_theta_a, data.state_trq_r_a, data.state_trq_l_a, torque_beta_a, F_Rm_a);
+        cal_motor_to_joint_torque(data.state_theta_a, data.state_trq_r_a, data.state_trq_l_a, torque_beta_a, F_Rm_a);
         
         double torque_beta_b, F_Rm_b;
-        calculate_motor_to_joint_torque(data.state_theta_b, data.state_trq_r_b, data.state_trq_l_b, torque_beta_b, F_Rm_b);
+        cal_motor_to_joint_torque(data.state_theta_b, data.state_trq_r_b, data.state_trq_l_b, torque_beta_b, F_Rm_b);
         
         double torque_beta_c, F_Rm_c;
-        calculate_motor_to_joint_torque(data.state_theta_c, data.state_trq_r_c, data.state_trq_l_c, torque_beta_c, F_Rm_c);
+        cal_motor_to_joint_torque(data.state_theta_c, data.state_trq_r_c, data.state_trq_l_c, torque_beta_c, F_Rm_c);
         
         double torque_beta_d, F_Rm_d;
-        calculate_motor_to_joint_torque(data.state_theta_d, data.state_trq_r_d, data.state_trq_l_d, torque_beta_d, F_Rm_d);
+        cal_motor_to_joint_torque(data.state_theta_d, data.state_trq_r_d, data.state_trq_l_d, torque_beta_d, F_Rm_d);
         
         // Joint torques in generalized coordinates
         result.tau(0) = torque_beta_a;
@@ -294,10 +294,10 @@ public:
         result.tau(7) = F_Rm_d;
         
         // Compute leg inertia (fitting formula)
-        result.I_c(0) = theta_to_Ic(data.state_theta_a);
-        result.I_c(1) = theta_to_Ic(data.state_theta_b);
-        result.I_c(2) = theta_to_Ic(data.state_theta_c);
-        result.I_c(3) = theta_to_Ic(data.state_theta_d);
+        result.I_c(0) = cal_theta_to_Ic(data.state_theta_a);
+        result.I_c(1) = cal_theta_to_Ic(data.state_theta_b);
+        result.I_c(2) = cal_theta_to_Ic(data.state_theta_c);
+        result.I_c(3) = cal_theta_to_Ic(data.state_theta_d);
         
         first_call_ = false;
         
@@ -323,7 +323,7 @@ private:
         return (current - last) / dt_;
     }
     
-    void quaternion_to_euler(
+    void cal_quaternion_to_euler(
         double x, double y, double z, double w,
         double& roll, double& pitch
     ) {
@@ -340,7 +340,7 @@ private:
             pitch = std::asin(sinp);
     }
     
-    double theta_to_Rm(double theta) {
+    double cal_theta_to_Rm(double theta) {
         // Polynomial evaluation: Rm = A[0]*theta^4 + A[1]*theta^3 + ... + A[4]
         const auto& A = quadruped::Config::RM_COEFF;
         double result = 0.0;
@@ -354,7 +354,7 @@ private:
         return result;
     }
     
-    double theta_dot_to_Rm_dot(double theta, double theta_dot) {
+    double cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
         // Derivative of polynomial: dRm/dt = (dRm/dtheta) * (dtheta/dt)
         const auto& A = quadruped::Config::RM_COEFF;
         double derivative = 0.0;
@@ -368,7 +368,7 @@ private:
         return derivative * theta_dot;
     }
     
-    double theta_to_Ic(double theta) {
+    double cal_theta_to_Ic(double theta) {
         // Polynomial evaluation: Ic = B[0]*theta^6 + B[1]*theta^5 + ... + B[6]
         const auto& B = quadruped::Config::IC_COEFF;
         double result = 0.0;
@@ -381,7 +381,7 @@ private:
         return result;
     }
     
-    void calculate_motor_to_joint_torque(
+    void cal_motor_to_joint_torque(
         double theta, 
         double torque_right,
         double torque_left, 

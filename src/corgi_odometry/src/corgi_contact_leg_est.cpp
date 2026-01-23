@@ -63,7 +63,7 @@ public:
         
         // IMU to Euler angles (Quaternion -> Euler)
         double roll, pitch;
-        quaternion_to_euler(
+        cal_quaternion_to_euler(
             imu.orientation.x, imu.orientation.y,
             imu.orientation.z, imu.orientation.w,
             roll, pitch
@@ -87,13 +87,13 @@ public:
         
         // Leg joint angles - Convert theta to Rm
         result.q(4) = beta_a;
-        result.q(5) = theta_to_Rm(theta_a);
+        result.q(5) = cal_theta_to_Rm(theta_a);
         result.q(6) = -beta_b;  // RF needs negation
-        result.q(7) = theta_to_Rm(theta_b);
+        result.q(7) = cal_theta_to_Rm(theta_b);
         result.q(8) = -beta_c;  // RH needs negation
-        result.q(9) = theta_to_Rm(theta_c);
+        result.q(9) = cal_theta_to_Rm(theta_c);
         result.q(10) = beta_d;
-        result.q(11) = theta_to_Rm(theta_d);
+        result.q(11) = cal_theta_to_Rm(theta_d);
         
         // Leg joint velocities from motor_state (velocity_r, velocity_l)
         // Convert motor velocities to joint velocities: phi_r, phi_l -> theta, beta
@@ -114,32 +114,32 @@ public:
         
         // Convert theta_dot to Rm_dot
         result.q_dot(4) = beta_a_dot;
-        result.q_dot(5) = theta_dot_to_Rm_dot(theta_a, theta_a_dot);
+        result.q_dot(5) = cal_theta_dot_to_Rm_dot(theta_a, theta_a_dot);
         result.q_dot(6) = beta_b_dot;
-        result.q_dot(7) = theta_dot_to_Rm_dot(theta_b, theta_b_dot);
+        result.q_dot(7) = cal_theta_dot_to_Rm_dot(theta_b, theta_b_dot);
         result.q_dot(8) = beta_c_dot;
-        result.q_dot(9) = theta_dot_to_Rm_dot(theta_c, theta_c_dot);
+        result.q_dot(9) = cal_theta_dot_to_Rm_dot(theta_c, theta_c_dot);
         result.q_dot(10) = beta_d_dot;
-        result.q_dot(11) = theta_dot_to_Rm_dot(theta_d, theta_d_dot);
+        result.q_dot(11) = cal_theta_dot_to_Rm_dot(theta_d, theta_d_dot);
         
         // Convert motor torques to joint space torques
         double torque_beta_a, F_Rm_a;
-        calculate_motor_to_joint_torque(theta_a, 
+        cal_motor_to_joint_torque(theta_a, 
             motor_state.module_a.torque_r, motor_state.module_a.torque_l, 
             torque_beta_a, F_Rm_a);
         
         double torque_beta_b, F_Rm_b;
-        calculate_motor_to_joint_torque(theta_b,
+        cal_motor_to_joint_torque(theta_b,
             motor_state.module_b.torque_r, motor_state.module_b.torque_l,
             torque_beta_b, F_Rm_b);
         
         double torque_beta_c, F_Rm_c;
-        calculate_motor_to_joint_torque(theta_c,
+        cal_motor_to_joint_torque(theta_c,
             motor_state.module_c.torque_r, motor_state.module_c.torque_l,
             torque_beta_c, F_Rm_c);
         
         double torque_beta_d, F_Rm_d;
-        calculate_motor_to_joint_torque(theta_d,
+        cal_motor_to_joint_torque(theta_d,
             motor_state.module_d.torque_r, motor_state.module_d.torque_l,
             torque_beta_d, F_Rm_d);
         
@@ -154,10 +154,10 @@ public:
         result.tau(7) = F_Rm_d;
         
         // Compute leg inertia
-        result.I_c(0) = theta_to_Ic(theta_a);
-        result.I_c(1) = theta_to_Ic(theta_b);
-        result.I_c(2) = theta_to_Ic(theta_c);
-        result.I_c(3) = theta_to_Ic(theta_d);
+        result.I_c(0) = cal_theta_to_Ic(theta_a);
+        result.I_c(1) = cal_theta_to_Ic(theta_b);
+        result.I_c(2) = cal_theta_to_Ic(theta_c);
+        result.I_c(3) = cal_theta_to_Ic(theta_d);
         
         return result;
     }
@@ -165,7 +165,7 @@ public:
 private:
     double dt_;
     
-    void quaternion_to_euler(double x, double y, double z, double w, double& roll, double& pitch) {
+    void cal_quaternion_to_euler(double x, double y, double z, double w, double& roll, double& pitch) {
         // Roll (x-axis rotation)
         double sinr_cosp = 2.0 * (w * x + y * z);
         double cosr_cosp = 1.0 - 2.0 * (x * x + y * y);
@@ -179,7 +179,7 @@ private:
             pitch = std::asin(sinp);
     }
     
-    double theta_to_Rm(double theta) {
+    double cal_theta_to_Rm(double theta) {
         const auto& A = quadruped::Config::RM_COEFF;
         double Rm = 0.0;
         double theta_power = 1.0;
@@ -190,7 +190,7 @@ private:
         return Rm;
     }
     
-    double theta_dot_to_Rm_dot(double theta, double theta_dot) {
+    double cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
         const auto& A = quadruped::Config::RM_COEFF;
         double dRm_dtheta = 0.0;
         double theta_power = 1.0;
@@ -203,7 +203,7 @@ private:
         return dRm_dtheta * theta_dot;
     }
     
-    double theta_to_Ic(double theta) {
+    double cal_theta_to_Ic(double theta) {
         const auto& B = quadruped::Config::IC_COEFF;
         double Ic = 0.0;
         double theta_power = 1.0;
@@ -214,7 +214,7 @@ private:
         return Ic;
     }
     
-    void calculate_motor_to_joint_torque(double theta, double torque_right, double torque_left,
+    void cal_motor_to_joint_torque(double theta, double torque_right, double torque_left,
                                         double& torque_beta, double& force_Rm) {
         const auto& A = quadruped::Config::RM_COEFF;
         double dRm_dtheta = 0.0;
@@ -260,25 +260,25 @@ public:
         motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
             quadruped::Config::TOPIC_MOTOR_STATE,
             quadruped::Config::QUEUE_SIZE_SUB,
-            std::bind(&ContactLegEstimatorNode::motor_state_callback, this, std::placeholders::_1)
+            std::bind(&ContactLegEstimatorNode::cb_motor_state, this, std::placeholders::_1)
         );
         
         imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
             quadruped::Config::TOPIC_IMU,
             quadruped::Config::QUEUE_SIZE_SUB,
-            std::bind(&ContactLegEstimatorNode::imu_callback, this, std::placeholders::_1)
+            std::bind(&ContactLegEstimatorNode::cb_imu, this, std::placeholders::_1)
         );
         
         position_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
             quadruped::Config::TOPIC_ODOMETRY_POSITION,
             quadruped::Config::QUEUE_SIZE_SUB,
-            std::bind(&ContactLegEstimatorNode::position_callback, this, std::placeholders::_1)
+            std::bind(&ContactLegEstimatorNode::cb_position, this, std::placeholders::_1)
         );
         
         velocity_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
             quadruped::Config::TOPIC_ODOMETRY_VELOCITY,
             quadruped::Config::QUEUE_SIZE_SUB,
-            std::bind(&ContactLegEstimatorNode::velocity_callback, this, std::placeholders::_1)
+            std::bind(&ContactLegEstimatorNode::cb_velocity, this, std::placeholders::_1)
         );
         
         // Create publishers
@@ -352,25 +352,25 @@ public:
     
 private:
     // Callbacks for subscribers
-    void motor_state_callback(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
+    void cb_motor_state(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
         motor_state_ = *msg;
         motor_state_time_ = rclcpp::Time(msg->header.stamp);
         motor_state_received_ = true;
     }
     
-    void imu_callback(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
+    void cb_imu(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
         imu_ = *msg;
         imu_time_ = rclcpp::Time(msg->header.stamp);
         imu_received_ = true;
     }
     
-    void position_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
+    void cb_position(const geometry_msgs::msg::Vector3::SharedPtr msg) {
         position_ = *msg;
         position_time_ = this->now();  // Position topic has no header, use current time
         position_received_ = true;
     }
     
-    void velocity_callback(const geometry_msgs::msg::Vector3::SharedPtr msg) {
+    void cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr msg) {
         velocity_ = *msg;
         velocity_time_ = this->now();  // Velocity topic has no header, use current time
         velocity_received_ = true;
@@ -409,7 +409,7 @@ private:
     size_t iteration_count_;
 };
 
-void signal_handler(int signum) {
+void handle_signal(int signum) {
     if (g_node) {
         RCLCPP_INFO(g_node->get_logger(), "Interrupt received, shutting down...");
     }
@@ -417,10 +417,29 @@ void signal_handler(int signum) {
     exit(signum);
 }
 
+/**
+ * @brief Wait for simulation clock to sync
+ * @param node ROS2 node pointer
+ */
+void wait_for_clock_sync(const rclcpp::Node::SharedPtr& node) {
+    RCLCPP_INFO(node->get_logger(), "Waiting for simulation clock...");
+    
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     
-    signal(SIGINT, signal_handler);
+    signal(SIGINT, handle_signal);
     
     g_node = std::make_shared<ContactLegEstimatorNode>();
     
@@ -429,18 +448,7 @@ int main(int argc, char** argv) {
     g_node->get_parameter("use_sim_time", use_sim_time);
     rclcpp::Duration period(0, 1000000);
     if (use_sim_time) {
-        RCLCPP_INFO(g_node->get_logger(), "Waiting for simulation clock...");
-        
-        while (rclcpp::ok()) {
-            rclcpp::spin_some(g_node);
-            
-            if (g_node->now().seconds() > 0.0) {
-                RCLCPP_INFO(g_node->get_logger(), "Clock synced! Sim Time: %.2f", g_node->now().seconds());
-                break;
-            }
-            
-            rclcpp::sleep_for(std::chrono::milliseconds(100));
-        }
+        wait_for_clock_sync(g_node);
     }
     
     // Calculate loop period based on configured rate
@@ -456,7 +464,6 @@ int main(int argc, char** argv) {
             std::dynamic_pointer_cast<ContactLegEstimatorNode>(g_node)->process();
             
             // Sleep to maintain desired loop rate
-            // std::this_thread::sleep_for(loop_period);
             next_time += period;
             if(!g_node->get_clock()->sleep_until(next_time)){
                 RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");

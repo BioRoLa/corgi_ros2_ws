@@ -243,7 +243,7 @@ private:
     double sample_rate_;
 };
 
-void signal_handler(int signum) {
+void handle_signal(int signum) {
     if (g_node) {
         RCLCPP_INFO(g_node->get_logger(), "Interrupt received, shutting down...");
     }
@@ -254,7 +254,7 @@ void signal_handler(int signum) {
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     
-    signal(SIGINT, signal_handler);
+    signal(SIGINT, handle_signal);
     
     g_node = std::make_shared<VelocityEstimatorNode>();
     
