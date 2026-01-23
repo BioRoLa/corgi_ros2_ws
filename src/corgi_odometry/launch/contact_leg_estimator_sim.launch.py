@@ -12,6 +12,28 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     """Generate launch description for contact leg estimator and velocity estimator."""
     
+    cutoff_freq_arg = DeclareLaunchArgument(
+        'cutoff_freq',
+        default_value='30.0',
+        description='Low-pass filter cutoff frequency (Hz)'
+    )
+    
+    # Create velocity estimator node
+    velocity_estimator_node = Node(
+        package='corgi_odometry',
+        executable='velocity_estimator',
+        name='velocity_estimator',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'cutoff_freq': LaunchConfiguration('cutoff_freq'),
+            'sample_rate': 1000.0,
+            'position_topic': 'sim/data',
+            'velocity_topic': 'odometry/velocity',
+            'position_output_topic': 'odometry/position',
+        }]
+    )
+    
     # Create contact leg estimator node
     contact_leg_estimator_node = Node(
         package='corgi_odometry',
@@ -19,7 +41,7 @@ def generate_launch_description():
         name='corgi_contact_leg_est',
         output='screen',
         parameters=[{
-            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'use_sim_time': True,
         }],
         remappings=[
             # Uncomment and modify if you need to remap topics
@@ -29,5 +51,7 @@ def generate_launch_description():
         ]
     )
     return LaunchDescription([
+        cutoff_freq_arg,
+        velocity_estimator_node,
         contact_leg_estimator_node,
     ])
