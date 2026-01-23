@@ -6,6 +6,7 @@
 #include <map>
 #include <chrono>
 #include <iomanip>
+#include <filesystem>
 #include "DisturbanceObserver.hpp"
 #include "Config.hpp"
 
@@ -429,8 +430,12 @@ private:
 
 int main(int argc, char** argv) {
     try {
+        (void)argc;
+        (void)argv;
         // Configuration from Config.hpp
-        const std::string csv_file_path = std::string("data/") + quadruped::Config::CSV_FILENAME + ".csv";
+        // Build CSV path relative to this source file: package_root/data/<filename>.csv
+        const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "data" /
+                       (std::string(quadruped::Config::CSV_FILENAME) + ".csv")).string();
         const double dt = quadruped::Config::DT;
         const double cutoff_freq = quadruped::Config::OBSERVER_CUTOFF_FREQ;
         const int start_index = quadruped::Config::START_INDEX;
