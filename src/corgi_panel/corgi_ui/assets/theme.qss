@@ -1,0 +1,172 @@
+/* Corgi UI Dark Theme Stylesheet */
+
+QWidget {
+    background-color: #2b2b2b;
+    color: #ffffff;
+    font-family: 'Segoe UI', 'Ubuntu', sans-serif;
+    font-size: 14px;
+}
+
+QGroupBox {
+    border: 1px solid #555;
+    border-radius: 5px;
+    margin-top: 20px;
+    font-weight: bold;
+    color: #ccc;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 3px;
+}
+
+QPushButton {
+    background-color: #404040;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 25px;
+}
+
+QPushButton:hover {
+    background-color: #505050;
+}
+
+QPushButton:pressed {
+    background-color: #2d2d2d;
+}
+
+QPushButton:checked {
+    background-color: #3a6ea5;
+    color: white;
+    border: 1px solid #5a9ed5;
+}
+
+QPushButton:disabled {
+    background-color: #333;
+    color: #777;
+    border: 1px solid #444;
+}
+
+/* E-Stop Button */
+QPushButton#EstopBtn {
+    background-color: #d32f2f;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+    border: none;
+    border-radius: 4px;
+}
+
+QPushButton#EstopBtn:hover {
+    background-color: #b71c1c;
+}
+
+QPushButton#EstopBtn:pressed {
+    background-color: #8e0000;
+}
+
+QPushButton#EstopBtn:disabled {
+    background-color: #5a1515;
+    color: #888;
+}
+
+/* Labels */
+QLabel#HeaderLabel {
+    font-size: 18px;
+    font-weight: bold;
+    color: #eee;
+}
+
+QLabel#StatusLabel {
+    font-size: 24px;
+    font-weight: bold;
+    color: #4fc3f7;
+}
+
+QLabel#MotorLabel {
+    font-size: 12px;
+    color: #aaa;
+}
+
+QLabel#PowerBadge {
+    background-color: #222;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #eee;
+}
+
+/* Input Fields */
+QLineEdit {
+    background-color: #202020;
+    border: 1px solid #555;
+    color: white;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+QLineEdit:focus {
+    border: 1px solid #2196F3;
+}
+
+/* Text Display */
+QTextEdit {
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+    color: #00e676;
+    font-family: 'Consolas', monospace;
+}
+
+/* Combo Box */
+QComboBox {
+    background-color: #404040;
+    border: 1px solid #555;
+    border-radius: 3px;
+    padding: 5px;
+    color: white;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #aaa;
+}
+
+/* Progress Bar */
+QProgressBar {
+    border: 1px solid #555;
+    border-radius: 5px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #00e676;
+}
+
+/* Tab Widget */
+QTabWidget::pane {
+    border: 1px solid #555;
+}
+
+QTabBar::tab {
+    background-color: #404040;
+    border: 1px solid #555;
+    padding: 5px 10px;
+    color: #ccc;
+}
+
+QTabBar::tab:selected {
+    background-color: #3a6ea5;
+    color: white;
+}
+
+QTabBar::tab:hover {
+    background-color: #505050;
+}
