@@ -178,7 +178,7 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
     if (print_info) {
         std::cout << "=== Disturbance Observer Details (Index " << index << ") ===\n";
         std::cout << "Estimated Disturbance Torque τ̂_d_k:\n" 
-                  << "x,\tz,\troll,\tpitch,\t,beta_a,\tRm_a,\tbeta_b,\tRm_b,\tbeta_c,\tRm_c,\tbeta_d,\tRm_d\n"
+                  << "x,\tz,\troll,\tpitch,\tbeta_a,\tRm_a,\tbeta_b,\tRm_b,\tbeta_c,\tRm_c,\tbeta_d,\tRm_d\n"
                   << estimated_disturbance_.transpose() << "\n";
         std::cout << "=============================================\n";
     }
