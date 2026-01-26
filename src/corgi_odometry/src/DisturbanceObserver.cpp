@@ -30,6 +30,10 @@ DisturbanceObserver::DisturbanceObserver(
     print_init_info();
 }
 
+void DisturbanceObserver::reset() {
+    initialize_observer_states();
+}
+
 void DisturbanceObserver::validate_params(double dt, double cutoff_freq) {
     if (dt <= 0) {
         throw std::invalid_argument("採樣時間 dt 必須大於 0");

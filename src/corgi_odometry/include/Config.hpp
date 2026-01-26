@@ -38,7 +38,7 @@ public:
     static constexpr double CONTACT_THRESHOLD_LOW = 15.0;  // Low threshold for contact detection [N]
     
     // Sample rate and time step
-    static constexpr double SAMPLE_RATE = 1000.0;         // Sampling frequency [Hz]
+    static constexpr double SAMPLE_RATE = 800.0;         // Sampling frequency [Hz]
     static constexpr double DT = 1.0 / SAMPLE_RATE;       // Time step [s]
     
     // Polynomial coefficients for Rm calculation
@@ -75,6 +75,7 @@ public:
     static constexpr const char* TOPIC_IMU = "imu";
     static constexpr const char* TOPIC_ODOMETRY_POSITION = "odometry/position";
     static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "odometry/velocity";
+    static constexpr const char* TOPIC_TRIGGER = "trigger";
     
     // Topic names for publications
     static constexpr const char* TOPIC_CONTACT_STATE = "contact_state";

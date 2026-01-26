@@ -66,6 +66,11 @@ public:
     Eigen::VectorXd get_disturbance() const {
         return estimated_disturbance_;
     }
+
+    /**
+     * @brief Reset observer internal states
+     */
+    void reset();
     
 private:
     // Observer parameters

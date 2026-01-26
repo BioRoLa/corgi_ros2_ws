@@ -11,6 +11,7 @@
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/contact_state_stamped.hpp>
+#include <corgi_msgs/msg/trigger_stamped.hpp>
 #include "DisturbanceObserver.hpp"
 #include "Config.hpp"
 
@@ -281,6 +282,12 @@ public:
             std::bind(&ContactLegEstimatorNode::cb_velocity, this, std::placeholders::_1)
         );
         
+        trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
+            quadruped::Config::TOPIC_TRIGGER,
+            quadruped::Config::QUEUE_SIZE_SUB,
+            std::bind(&ContactLegEstimatorNode::cb_trigger, this, std::placeholders::_1)
+        );
+
         // Create publishers
         contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
             quadruped::Config::TOPIC_CONTACT_STATE,
@@ -295,6 +302,7 @@ public:
         imu_received_ = false;
         position_received_ = false;
         velocity_received_ = false;
+        is_triggered_ = false;
         
         iteration_count_ = 0;
     }
@@ -303,12 +311,22 @@ public:
     void process() {
         // Check if all data is available
         if (!motor_state_received_ || !imu_received_ || !position_received_ || !velocity_received_) {
-            if (iteration_count_ % 1000 == 0) {
+            if (iteration_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
                 RCLCPP_WARN(this->get_logger(), 
                     "Waiting for data... Motor: %d, IMU: %d, Position: %d, Velocity: %d",
                     motor_state_received_, imu_received_, position_received_, velocity_received_);
             }
             iteration_count_++;
+            return;
+        }
+
+        if (!is_triggered_) {
+            if (iteration_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
+                RCLCPP_INFO(this->get_logger(), "Waiting for trigger...");
+            }
+            iteration_count_++;
+            // Reset observer when not triggered
+            observer_.reset();
             return;
         }
         
@@ -355,6 +373,10 @@ private:
         velocity_ = *msg;
         velocity_time_ = this->now();  // Velocity topic has no header, use current time
         velocity_received_ = true;
+    }
+
+    void cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
+        is_triggered_ = msg->enable;
     }
     
     /**
@@ -409,6 +431,7 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr velocity_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
     rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr contact_state_pub_;
     
     // Data storage
@@ -428,6 +451,7 @@ private:
     bool imu_received_;
     bool position_received_;
     bool velocity_received_;
+    bool is_triggered_;
     
     // Leg contact states (for Schmitt trigger)
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
@@ -482,7 +506,7 @@ int main(int argc, char** argv) {
     }
     
     // Calculate loop period based on configured rate
-    rclcpp::Duration period(0, static_cast<int>(1e9 / quadruped::Config::ONLINE_LOOP_RATE));
+    rclcpp::Duration period(0, static_cast<int>(1e9 / quadruped::Config::ONLINE_LOOP_RATE)); // in nanoseconds
     
     try {
         // Manual spin loop with controlled rate
