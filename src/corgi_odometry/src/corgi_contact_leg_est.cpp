@@ -477,13 +477,12 @@ int main(int argc, char** argv) {
     // Wait for clock sync if using simulation time
     bool use_sim_time = false;
     g_node->get_parameter("use_sim_time", use_sim_time);
-    rclcpp::Duration period(0, 1000000);
     if (use_sim_time) {
         wait_for_clock_sync(g_node);
     }
     
     // Calculate loop period based on configured rate
-    auto loop_period = std::chrono::microseconds(static_cast<int>(1e6 / quadruped::Config::ONLINE_LOOP_RATE));
+    rclcpp::Duration period(0, static_cast<int>(1e9 / quadruped::Config::ONLINE_LOOP_RATE));
     
     try {
         // Manual spin loop with controlled rate

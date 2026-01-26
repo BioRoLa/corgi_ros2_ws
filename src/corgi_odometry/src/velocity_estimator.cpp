@@ -251,6 +251,25 @@ void handle_signal(int signum) {
     exit(signum);
 }
 
+/**
+ * @brief Wait for simulation clock to sync
+ * @param node ROS2 node pointer
+ */
+void wait_for_clock_sync(const rclcpp::Node::SharedPtr& node) {
+    RCLCPP_INFO(node->get_logger(), "Waiting for simulation clock...");
+    
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     
@@ -261,20 +280,8 @@ int main(int argc, char** argv) {
     // Wait for clock sync if using simulation time
     bool use_sim_time = false;
     g_node->get_parameter("use_sim_time", use_sim_time);
-    
     if (use_sim_time) {
-        RCLCPP_INFO(g_node->get_logger(), "Waiting for simulation clock...");
-        
-        while (rclcpp::ok()) {
-            rclcpp::spin_some(g_node);
-            
-            if (g_node->now().seconds() > 0.0) {
-                RCLCPP_INFO(g_node->get_logger(), "Clock synced! Sim Time: %.2f", g_node->now().seconds());
-                break;
-            }
-            
-            rclcpp::sleep_for(std::chrono::milliseconds(100));
-        }
+        wait_for_clock_sync(g_node);
     }
     
     // Get sample rate for loop control
@@ -293,11 +300,11 @@ int main(int argc, char** argv) {
             
             // // Sleep to maintain desired loop rate
 
-            // next_time += period;
-            // if(!g_node->get_clock()->sleep_until(next_time)){
-            //     RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
-            //     break;
-            // }
+            next_time += period;
+            if(!g_node->get_clock()->sleep_until(next_time)){
+                RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
+                break;
+            }
         }
     } catch (const std::exception& e) {
         RCLCPP_ERROR(g_node->get_logger(), "Exception: %s", e.what());
