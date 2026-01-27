@@ -38,7 +38,7 @@ public:
     static constexpr double CONTACT_THRESHOLD_LOW = 15.0;  // Low threshold for contact detection [N]
     
     // Sample rate and time step
-    static constexpr double SAMPLE_RATE = 800.0;         // Sampling frequency [Hz]
+    static constexpr double SAMPLE_RATE = 1000.0;         // Sampling frequency [Hz]
     static constexpr double DT = 1.0 / SAMPLE_RATE;       // Time step [s]
     
     // Polynomial coefficients for Rm calculation
@@ -58,7 +58,7 @@ public:
     // ============================================================
     
     // CSV file configuration
-    static constexpr const char* CSV_FILENAME = "cpp_test";
+    static constexpr const char* CSV_FILENAME = "walk_5m";
     static constexpr int START_INDEX = 5000;          // Starting index for offline data processing
     static constexpr bool ENABLE_LOGGING = true;      // Enable CSV logging for offline mode
     
@@ -83,6 +83,12 @@ public:
     // Queue sizes
     static constexpr int QUEUE_SIZE_SUB = 1;          // Subscriber queue size (use latest value)
     static constexpr int QUEUE_SIZE_PUB = 10;         // Publisher queue size
+
+    // ============================================================
+    // OUTPUTFILE PARAMETERS
+    // ============================================================
+
+    static constexpr bool LOG_DETAILS = false;         // Log detailed information (true) or only disturbance (false)
 };
 
 } // namespace quadruped

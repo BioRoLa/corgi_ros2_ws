@@ -452,7 +452,8 @@ int main(int argc, char** argv) {
             cutoff_freq,
             quadruped::Config::DOF,
             quadruped::Config::ENABLE_LOGGING,
-            quadruped::Config::CSV_FILENAME
+            quadruped::Config::CSV_FILENAME,
+            quadruped::Config::LOG_DETAILS
         );
         
         // Initialize data processor

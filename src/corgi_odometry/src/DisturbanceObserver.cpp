@@ -10,12 +10,14 @@ DisturbanceObserver::DisturbanceObserver(
     double cutoff_freq,
     int dof,
     bool logging,
-    const std::string& output_filename
+    const std::string& output_filename,
+    bool log_detail
 ) : dt_(dt), 
     cutoff_freq_(cutoff_freq), 
     dof_(dof),
     logging_(logging),
     output_filename_(output_filename),
+    log_detail_(log_detail),
     initialized_(false) 
 {
     validate_params(dt, cutoff_freq);
@@ -112,19 +114,28 @@ void DisturbanceObserver::initialize_logging() {
     
     column_names_.push_back("Index");
     
-    // Add columns for each state variable with all DOF suffixes
-    std::vector<std::string> state_names = {
-        "p_k", "Y_k", "Y_filtered_k", "S_T_tau", 
-        "C_q_dot", "g", "estimated_disturbance"
-    };
-    
-    for (const auto& state_name : state_names) {
-        for (const auto& suffix : dof_suffixes) {
-            column_names_.push_back(state_name + "_" + suffix);
+    if (log_detail_) {
+        // Add columns for all state variables with all DOF suffixes
+        std::vector<std::string> state_names = {
+            "p_k", "Y_k", "Y_filtered_k", "S_T_tau", 
+            "C_q_dot", "g", "estimated_disturbance"
+        };
+        
+        for (const auto& state_name : state_names) {
+            for (const auto& suffix : dof_suffixes) {
+                column_names_.push_back(state_name + "_" + suffix);
+            }
         }
+        
+        std::cout << "✓ Logging enabled (detailed mode)\n";
+    } else {
+        // Only log estimated_disturbance
+        for (const auto& suffix : dof_suffixes) {
+            column_names_.push_back("estimated_disturbance_" + suffix);
+        }
+        
+        std::cout << "✓ Logging enabled (simple mode - disturbance only)\n";
     }
-    
-    std::cout << "✓ Logging enabled\n";
 }
 
 Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
@@ -212,17 +223,25 @@ void DisturbanceObserver::log_details_to_file(
     // Write data row
     log_file_ << index;
     
-    std::vector<const Eigen::VectorXd*> arrays = {
-        &p_k, &Y_k, &Y_filtered_k, &S_T_tau, &C_q_dot, &g, &estimated_disturbance
-    };
-    
-    for (const auto* arr : arrays) {
-        for (int i = 0; i < arr->size(); ++i) {
-            log_file_ << "," << std::setprecision(10) << (*arr)(i);
+    if (log_detail_) {
+        // Log all detailed information
+        std::vector<const Eigen::VectorXd*> arrays = {
+            &p_k, &Y_k, &Y_filtered_k, &S_T_tau, &C_q_dot, &g, &estimated_disturbance
+        };
+        
+        for (const auto* arr : arrays) {
+            for (int i = 0; i < arr->size(); ++i) {
+                log_file_ << "," << std::setprecision(10) << (*arr)(i);
+            }
+        }
+    } else {
+        // Log only estimated_disturbance
+        for (int i = 0; i < estimated_disturbance.size(); ++i) {
+            log_file_ << "," << std::setprecision(10) << estimated_disturbance(i);
         }
     }
+    
     log_file_ << "\n";
     log_file_.flush();
 }
-
 } // namespace quadruped

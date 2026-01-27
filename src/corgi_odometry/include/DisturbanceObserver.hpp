@@ -29,13 +29,15 @@ public:
      * @param dof Degrees of freedom (default: 12)
      * @param logging Enable logging to CSV file
      * @param output_filename Base filename for output CSV (without path and extension)
+     * @param log_detail Log detailed information (true) or only disturbance (false)
      */
     DisturbanceObserver(
         double dt,
         double cutoff_freq,
         int dof = 12,
         bool logging = false,
-        const std::string& output_filename = "cpp_test"
+        const std::string& output_filename = "cpp_test",
+        bool log_detail = true
     );
     
     /**
@@ -79,6 +81,7 @@ private:
     int dof_;                            // Degrees of freedom
     bool logging_;                       // Enable logging
     std::string output_filename_;        // Output CSV filename base
+    bool log_detail_;                    // Log detailed info or only disturbance
     
     // Filter parameters
     double gamma_;                       // Z-domain pole
