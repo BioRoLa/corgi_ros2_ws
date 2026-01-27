@@ -26,6 +26,7 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
 ## System Architecture
 
 The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
+The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 
 ## System Requirements & Dependencies
 
@@ -87,7 +88,6 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     cd ~/corgi_ws/
     mkdir install/
     ```
-    
     1. **yaml-cpp**
     Clone the `yaml-cpp` repository and follow the installation instructions:
       ```bash
@@ -99,7 +99,6 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       make -j16
       sudo make install
       ```
-      
     2. **Eigen**
     Clone the `Eigen` repository and follow the installation instructions:
       ```bash
@@ -111,7 +110,6 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       make -j16
       sudo make install
       ```
-      
     3. **grpc_core**
     Install gRPC & grpc_core as follows: [**grpc_core**](https://github.com/BioRoLa/grpc_core)
 
@@ -186,7 +184,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     On the Jetson/PC, run the main launch file. This will start the **_panel_**, **_data recorder_**, **_force estimation_**, and **_IMU_** nodes.
 
     ```
-    ros2 launch corgi_panel corgi_control_panel.launch.py
+    ros2 launch corgi_panel corgi_control_panel_dev.launch
     ```
 
 3.  **Control Panel Operation Sequence** 
@@ -206,7 +204,7 @@ For more details on a specific package, please see its respective `README.md` fi
 
 - **Sensing & Estimation**
 
-  - [`corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
 
 - **Control & Planning**
   - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.

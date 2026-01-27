@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     
     std::string csv_file_path;
     csv_file_path = std::getenv("HOME");
-    csv_file_path += "/corgi_ws/corgi_ros_ws/input_csv/";
+    csv_file_path += "/corgi_ws/corgi_ros2_ws/input_csv/";
     csv_file_path += argv[1];
     csv_file_path += ".csv";
     
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
             cmd->kd_l = 1.75;
         }
         motor_cmd.header.stamp = node->now();
-        motor_cmd.header.seq = -1;
+        motor_cmd.header.seq = -4999+i;
 
         motor_cmd_pub->publish(motor_cmd);
 
@@ -138,6 +138,7 @@ int main(int argc, char **argv) {
                 }
 
                 motor_cmd.header.seq = seq;
+                motor_cmd.header.stamp = node->now();
 
                 motor_cmd_pub->publish(motor_cmd);
 
