@@ -131,9 +131,9 @@ class COLORS:
 class PATHS:
     """System paths for ROS 2 packages and executables"""
     # These can be overridden or made configurable
-    DEFAULT_CSV_DIR = '/home/biorola/corgi_ws/corgi_ros_ws/input_csv'
-    DEFAULT_OUTPUT_DIR = '/home/biorola/corgi_ws/output_data'
-    DEFAULT_LOG_DIR = '/home/biorola/corgi_ws/corgi_ros2_ws/log_file'
+    DEFAULT_CSV_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/input_csv'
+    DEFAULT_OUTPUT_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/output_data'
+    DEFAULT_LOG_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/log_file'
 
 
 # ============================================================================
