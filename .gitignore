@@ -22,3 +22,5 @@ output_data/*
 **/build
 **/log
 **/COLCON_IGNORE
+src/zed-ros2-examples/
+src/zed-ros2-wrapper/
