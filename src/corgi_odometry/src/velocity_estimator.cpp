@@ -149,8 +149,8 @@ public:
         // RCLCPP_INFO
 
         if (current_time.nanoseconds() == last_time_.nanoseconds()) {
-            RCLCPP_WARN(this->get_logger(), "Received identical timestamp");
-            RCLCPP_WARN(this->get_logger(), "  nanoseconds: %.9ld", current_time.nanoseconds());
+            RCLCPP_DEBUG(this->get_logger(), "Received identical timestamp");
+            RCLCPP_DEBUG(this->get_logger(), "  nanoseconds: %.9ld", current_time.nanoseconds());
             return;  // Skip this iteration
         }
                 

@@ -188,9 +188,23 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
 
     if (print_info) {
         std::cout << "=== Disturbance Observer Details (Index " << index << ") ===\n";
-        std::cout << "Estimated Disturbance Torque τ̂_d_k:\n" 
-                  << "x,\tz,\troll,\tpitch,\tbeta_a,\tRm_a,\tbeta_b,\tRm_b,\tbeta_c,\tRm_c,\tbeta_d,\tRm_d\n"
-                  << estimated_disturbance_.transpose() << "\n";
+        std::cout << "Base:\n";
+        std::cout << "  x:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(0) << "\n";
+        std::cout << "  z:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(1) << "\n";
+        std::cout << "  roll:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(2) << "\n";
+        std::cout << "  pitch: " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(3) << "\n";
+        std::cout << "Leg A (LF):\n";
+        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(4) << "\n";
+        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(5) << "\n";
+        std::cout << "Leg B (RF):\n";
+        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(6) << "\n";
+        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(7) << "\n";
+        std::cout << "Leg C (RH):\n";
+        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(8) << "\n";
+        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(9) << "\n";
+        std::cout << "Leg D (LH):\n";
+        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(10) << "\n";
+        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(11) << "\n";
         std::cout << "=============================================\n";
     }
     
