@@ -199,8 +199,12 @@ class ProcessManager:
                     # Graceful termination
                     proc.terminate()  # SIGTERM
                     try:
-                        proc.wait(timeout=timeout)
-                        self.logger.info(f"Process '{name}' terminated gracefully")
+                        terminate_result = proc.wait(timeout=timeout)
+                        if terminate_result is not None:
+                            self.logger.info(f"Process '{name}' terminated gracefully")
+                        else:
+                            # self.logger.warning(f"Process '{name}' did not terminate within timeout")
+                            raise subprocess.TimeoutExpired(proc.args, timeout)
                     except subprocess.TimeoutExpired:
                         # Timeout - force kill
                         self.logger.warning(f"Process '{name}' did not respond to SIGTERM, force killing")
