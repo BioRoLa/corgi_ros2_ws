@@ -54,10 +54,22 @@ int main(int argc, char **argv) {
     }
     
     std::string csv_file_path;
-    csv_file_path = std::getenv("HOME");
-    csv_file_path += "/corgi_ws/corgi_ros2_ws/input_csv/";
-    csv_file_path += argv[1];
-    csv_file_path += ".csv";
+    std::string input_arg = argv[1];
+
+    // If absolute/relative path is provided, use it directly
+    if (input_arg.find('/') != std::string::npos) {
+        csv_file_path = input_arg;
+        if (csv_file_path.size() < 4 || csv_file_path.substr(csv_file_path.size() - 4) != ".csv") {
+            csv_file_path += ".csv";
+        }
+    } else {
+        csv_file_path = std::getenv("HOME");
+        csv_file_path += "/corgi_ws/corgi_ros2_ws/input_csv/";
+        csv_file_path += input_arg;
+        if (csv_file_path.size() < 4 || csv_file_path.substr(csv_file_path.size() - 4) != ".csv") {
+            csv_file_path += ".csv";
+        }
+    }
     
 
     std::ifstream csv_file(csv_file_path);
@@ -80,10 +92,10 @@ int main(int argc, char **argv) {
         for (auto& cmd : motor_cmds){
             std::getline(ss, item, ',');
             cmd->theta = std::stod(item);
-            RCLCPP_INFO(node->get_logger(), item.c_str());
+            RCLCPP_DEBUG(node->get_logger(), item.c_str());
             std::getline(ss, item, ',');
             cmd->beta = std::stod(item);
-            RCLCPP_INFO(node->get_logger(), item.c_str());
+            RCLCPP_DEBUG(node->get_logger(), item.c_str());
 
             cmd->kp_r = 90;
             cmd->kp_l = 90;
@@ -97,7 +109,6 @@ int main(int argc, char **argv) {
 
         motor_cmd_pub->publish(motor_cmd);
 
-        // rate.sleep();
         next_time += period;
         if(!node->get_clock()->sleep_until(next_time)){
             RCLCPP_WARN(node->get_logger(), "Sleep until failed!");

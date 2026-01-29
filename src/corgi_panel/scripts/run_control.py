@@ -6,7 +6,10 @@ Entry point for: ros2 run corgi_panel corgi_control_panel
 import sys
 import os
 import signal
+import multiprocessing
+import subprocess
 from PyQt5.QtWidgets import QApplication
+
 
 # ROS 2 import (will be initialized by the panel itself)
 import rclpy
@@ -95,7 +98,7 @@ def main():
             rclpy.try_shutdown()
         except Exception:
             pass
-        
+
         sys.exit(exit_code)
         
     except ImportError as e:
