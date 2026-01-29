@@ -66,22 +66,10 @@ def signal_handler(sig, frame):
     QApplication.quit()
 
 
-def run_data_recorder():
-    """Run the data recorder"""
-    try:
-        subprocess.call(['ros2', 'run', 'corgi_data_recorder', 'corgi_data_recorder'])
-    except FileNotFoundError:
-        print("Error: 'ros2' command not found. Make sure ROS 2 is sourced.")
-        sys.exit(1)
-
 def main():
     """Main entry point for Control Panel"""
     # Setup signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
-
-    # Start data recorder in a separate process
-    data_recorder_process = multiprocessing.Process(target=run_data_recorder)
-    data_recorder_process.start()
     
     # Create QApplication
     app = QApplication(sys.argv)
@@ -110,11 +98,6 @@ def main():
             rclpy.try_shutdown()
         except Exception:
             pass
-        
-        # Terminate the data recorder process
-        if data_recorder_process.is_alive():
-            data_recorder_process.terminate()
-            data_recorder_process.join()
 
         sys.exit(exit_code)
         

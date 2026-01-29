@@ -60,8 +60,11 @@ class RosWorkerBase(QObject):
             if not rclpy.ok():
                 rclpy.init(args=None)
             
-            # Create node
-            self.node = rclpy.create_node(self.node_name)
+            # Create node (auto-declare parameter overrides like use_sim_time)
+            self.node = rclpy.create_node(
+                self.node_name,
+                automatically_declare_parameters_from_overrides=True
+            )
             
             # Setup publishers and subscribers (implemented by subclasses)
             self._setup_publishers()

@@ -62,6 +62,9 @@ class CorgiControlPanel(QWidget):
         self._pending_robot_mode = None
         self._last_confirmed_mode = None
         
+        # Check if running in simulation mode
+        self.use_sim_time = self._check_use_sim_time()
+        
         # ROS Worker (thread-safe communication layer)
         self.ros_worker = ControlPanelRosWorker()
         
@@ -84,9 +87,44 @@ class CorgiControlPanel(QWidget):
         
         # Connect ROS signals
         self._connect_ros_signals()
+
+        # Start ROS worker in simulation mode (no bridge)
+        if self.use_sim_time:
+            if self.ros_worker.start_ros():
+                self._log('ROS Worker Initialized (simulation mode)', LOGLEVEL.INFO, 'system')
         
         # Initialize state
         self.reset()
+
+        # Update button states after init
+        self._update_button_states()
+        
+        # Auto-start data recorder
+        self._start_data_recorder()
+    
+    def _check_use_sim_time(self) -> bool:
+        """Check if use_sim_time parameter is set to true"""
+        try:
+            import rclpy
+            if not rclpy.ok():
+                rclpy.init()
+            
+            # Create a temporary node with the same name as the panel node
+            temp_node = rclpy.create_node(
+                'corgi_control_panel',
+                automatically_declare_parameters_from_overrides=True
+            )
+            
+            if not temp_node.has_parameter('use_sim_time'):
+                temp_node.declare_parameter('use_sim_time', False)
+            
+            result = temp_node.get_parameter('use_sim_time').value
+            temp_node.destroy_node()
+            
+            return bool(result)
+        except Exception as e:
+            print(f"Warning: Could not check use_sim_time parameter: {e}")
+            return False
     
     def _setup_file_logger(self) -> logging.Logger:
         """Setup file logger for persistent logging"""
@@ -128,7 +166,10 @@ class CorgiControlPanel(QWidget):
         main_layout.addWidget(self._create_log_area())
         
         self.setLayout(main_layout)
-        self.setWindowTitle('Corgi Control Panel')
+        title = 'Corgi Control Panel'
+        if self.use_sim_time:
+            title += ' [SIMULATION MODE]'
+        self.setWindowTitle(title)
         self.resize(1024, 768)
         
         # Setup timer for periodic updates
@@ -198,6 +239,10 @@ class CorgiControlPanel(QWidget):
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
         self.btn_ros_bridge.setCheckable(True)
         self.btn_ros_bridge.clicked.connect(self._on_ros_bridge_clicked)
+        # Disable ROS bridge in simulation mode
+        if hasattr(self, 'use_sim_time') and self.use_sim_time:
+            self.btn_ros_bridge.setEnabled(False)
+            self.btn_ros_bridge.setToolTip('ROS Bridge disabled in simulation mode')
         sidebar.addWidget(self.btn_ros_bridge)
         
         # FSM Group
@@ -382,6 +427,29 @@ class CorgiControlPanel(QWidget):
         self.ros_worker.motor_state_updated.connect(self._handle_motor_state_update)
         self.ros_worker.log_updated.connect(self._handle_log_update)
     
+    def _start_data_recorder(self):
+        """Auto-start data recorder when panel opens"""
+        if self.process_manager.is_running('data_recorder'):
+            self._log('Data recorder already running', LOGLEVEL.INFO, 'system')
+            return
+        
+        # Build command with use_sim_time parameter if needed
+        cmd = ['ros2', 'run', 'corgi_data_recorder', 'corgi_data_recorder']
+        if self.use_sim_time:
+            cmd.extend(['--ros-args', '-p', 'use_sim_time:=true'])
+        
+        success = self.process_manager.start_process(
+            'data_recorder',
+            cmd,
+            capture_output=False
+        )
+        
+        if success:
+            mode_str = 'simulation' if self.use_sim_time else 'real'
+            self._log(f'Data recorder started ({mode_str} mode)', LOGLEVEL.INFO, 'system')
+        else:
+            self._log('Failed to start data recorder', LOGLEVEL.ERROR, 'system')
+    
     def _log(self, message: str, level=LOGLEVEL.INFO, source: str = "system"):
         """Unified logging method that writes to both GUI and file"""
         
@@ -397,6 +465,15 @@ class CorgiControlPanel(QWidget):
     
     def _on_ros_bridge_clicked(self):
         """Handle ROS Bridge button click"""
+        # Disable ROS bridge in simulation mode
+        if self.use_sim_time and self.btn_ros_bridge.isChecked():
+            self.log_widget.add_log(
+                'ROS Bridge disabled in simulation mode',
+                LOGLEVEL.WARN, 'system'
+            )
+            self.btn_ros_bridge.setChecked(False)
+            return
+        
         if self.btn_ros_bridge.isChecked():
             # Start ROS Bridge
             self.btn_ros_bridge.setText('Stop ROS Bridge')
@@ -580,23 +657,32 @@ class CorgiControlPanel(QWidget):
                 self.btn_csv_run.setText('Run')
                 return
             
-            # Extract filename without path and .csv extension
+            # Determine argument to pass (full path if provided)
             csv_filename = os.path.basename(csv_file)
             if csv_filename.endswith('.csv'):
                 csv_filename = csv_filename[:-4]
+            csv_arg = csv_file
+            if not os.path.isabs(csv_file) and '/' not in csv_file:
+                csv_arg = csv_filename
             
             if self.process_manager.is_running('csv_control'):
                 self.log_widget.add_log('CSV Control already running; skip start', LOGLEVEL.WARN, 'system')
                 return
             
+            # Build command with use_sim_time parameter if needed
+            cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg]
+            if self.use_sim_time:
+                cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg, '--ros-args', '-p', 'use_sim_time:=true']
+            
             success = self.process_manager.start_process(
                 'csv_control',
-                ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_filename],
+                cmd,
                 capture_output=False
             )
             
             if success:
-                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}', LOGLEVEL.INFO, 'system')
+                mode_str = ' (sim)' if self.use_sim_time else ''
+                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}{mode_str}', LOGLEVEL.INFO, 'system')
             else:
                 self.log_widget.add_log('Failed to start CSV Control', LOGLEVEL.ERROR, 'system')
                 self.btn_csv_run.setChecked(False)
@@ -814,12 +900,16 @@ class CorgiControlPanel(QWidget):
         """Update button enabled/disabled states based on current state"""
         bridge_on = self.btn_ros_bridge.isChecked()
         
+        # In simulation mode, enable basic buttons even without bridge
+        # In real mode, require bridge for all operations
+        enable_basic = bridge_on or self.use_sim_time
+        
         # Basic buttons
-        self.btn_estop.setEnabled(bridge_on)
-        self.btn_imu.setEnabled(bridge_on)
-        self.btn_trigger.setEnabled(bridge_on)
-        self.btn_csv_select.setEnabled(bridge_on)
-        self.btn_csv_run.setEnabled(bridge_on)
+        self.btn_estop.setEnabled(bridge_on)  # E-stop always requires bridge (safety critical)
+        self.btn_imu.setEnabled(enable_basic)
+        self.btn_trigger.setEnabled(enable_basic)
+        self.btn_csv_select.setEnabled(enable_basic)
+        self.btn_csv_run.setEnabled(enable_basic)
         
         # Set zero button (only in STANDBY mode)
         if hasattr(self, 'robot_state') and hasattr(self.robot_state, 'robot_mode'):
@@ -829,8 +919,8 @@ class CorgiControlPanel(QWidget):
         
         self.btn_set_zero.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
         
-        # FSM buttons
-        if not bridge_on:
+        # FSM buttons - disable in simulation mode or when bridge is off
+        if not bridge_on or self.use_sim_time:
             self.btn_systemon.setEnabled(False)
             self.btn_idle.setEnabled(False)
             self.btn_standby.setEnabled(False)
@@ -928,6 +1018,10 @@ class CorgiControlPanel(QWidget):
         
         # Reset and cleanup
         self.reset()
+        
+        # Stop data recorder
+        if self.process_manager.is_running('data_recorder'):
+            self.process_manager.stop_process('data_recorder', timeout=2.0)
         
         # Stop all processes
         self.process_manager.cleanup_all(timeout=2.0)
