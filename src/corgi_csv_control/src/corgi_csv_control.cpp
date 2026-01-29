@@ -32,8 +32,8 @@ int main(int argc, char **argv) {
         // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
-    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     // rclcpp::Rate rate(1000);
     // use_sim_time setting
     rclcpp::Duration period(0, 1000000); // 1ms
