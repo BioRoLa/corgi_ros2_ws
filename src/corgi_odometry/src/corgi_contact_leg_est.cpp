@@ -380,7 +380,7 @@ private:
     }
     
     /**
-     * @brief Detect contact state using Schmitt trigger and publish message
+     * @brief Detect contact state using thershold and publish message
      * @param disturbance Disturbance observer output vector
      */
     inline void publish_contact_state(const Eigen::VectorXd& disturbance) {
@@ -394,13 +394,14 @@ private:
         // Schmitt trigger for contact detection
         for (int i = 0; i < 4; ++i) {
             double rm_force = disturbance(rm_force_indices[i]);
+            double beta_torque = disturbance(beta_torque_indices[i]);
             
             if (!leg_contact_state_[i]) { // Currently no contact
-                if (std::abs(rm_force) > quadruped::Config::CONTACT_THRESHOLD_HIGH) {
+                if (std::abs(rm_force) > quadruped::Config::CONTACT_RM_THRESHOLD_HIGH || std::abs(beta_torque) > quadruped::Config::CONTACT_BETA_THRESHOLD_HIGH) {
                     leg_contact_state_[i] = true;
                 }
             } else { // Currently in contact
-                if (std::abs(rm_force) < quadruped::Config::CONTACT_THRESHOLD_LOW) {
+                if (std::abs(rm_force) < quadruped::Config::CONTACT_RM_THRESHOLD_LOW && std::abs(beta_torque) < quadruped::Config::CONTACT_BETA_THRESHOLD_LOW) {
                     leg_contact_state_[i] = false;
                 }
             }
