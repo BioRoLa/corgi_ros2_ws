@@ -64,6 +64,9 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
 
 ## Installation and Build Instructions
 
+> Docker image is created, see [Corgi_ws_-Docker_Version-
+](https://github.com/BioRoLa/Corgi_ws_-Docker_Version-.git)
+
 1.  **Create the Workspace Directory**
 
     Use this structure to keep all related projects organized.

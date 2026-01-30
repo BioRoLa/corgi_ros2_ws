@@ -32,8 +32,8 @@ int main(int argc, char **argv) {
         // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
-    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     // rclcpp::Rate rate(1000);
     // use_sim_time setting
     rclcpp::Duration period(0, 1000000); // 1ms
@@ -120,49 +120,63 @@ int main(int argc, char **argv) {
     RCLCPP_INFO(node->get_logger(), "Leg Transform Finished\n");
 
     
-    while (rclcpp::ok()){
+    while (rclcpp::ok() && !trigger) {
         rclcpp::spin_some(node);
+        rclcpp::sleep_for(std::chrono::milliseconds(1));
+    }
 
-        if (trigger){
-            RCLCPP_INFO(node->get_logger(), "CSV Trajectory Starts\n");
+    if (rclcpp::ok()) {
+        RCLCPP_INFO(node->get_logger(), "CSV Trajectory Starts\n");
 
-            int seq = 0;
-            next_time = node->now();
-            while (rclcpp::ok() && std::getline(csv_file, line)) {
-                std::vector<double> columns;
-                std::stringstream ss(line);
-                std::string item;
-                
-                for (auto& cmd : motor_cmds){
-                    std::getline(ss, item, ',');
-                    cmd->theta = std::stod(item);
+        int seq = 0;
+        next_time = node->now();
+        while (rclcpp::ok() && std::getline(csv_file, line)) {
+            rclcpp::spin_some(node);
 
-                    std::getline(ss, item, ',');
-                    cmd->beta = std::stod(item);
-
-                    cmd->kp_r = 90;
-                    cmd->kp_l = 90;
-                    cmd->ki_r = 0;
-                    cmd->ki_l = 0;
-                    cmd->kd_r = 1.75;
-                    cmd->kd_l = 1.75;
+            if (!trigger) {
+                RCLCPP_INFO(node->get_logger(), "Trigger False detect, CSV Trajectory pause\n");
+                while (rclcpp::ok() && !trigger) {
+                    rclcpp::spin_some(node);
+                    next_time += period;
+                    node->get_clock()->sleep_until(next_time);
                 }
-
-                motor_cmd.header.seq = seq;
-                motor_cmd.header.stamp = node->now();
-
-                motor_cmd_pub->publish(motor_cmd);
-
-                seq++;
-
-                // rate.sleep();
-                next_time += period;
-                if(!node->get_clock()->sleep_until(next_time)){
-                    RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+                if (!rclcpp::ok()) {
                     break;
                 }
             }
-            break;
+
+            std::vector<double> columns;
+            std::stringstream ss(line);
+            std::string item;
+            
+            for (auto& cmd : motor_cmds){
+                std::getline(ss, item, ',');
+                cmd->theta = std::stod(item);
+
+                std::getline(ss, item, ',');
+                cmd->beta = std::stod(item);
+
+                cmd->kp_r = 90;
+                cmd->kp_l = 90;
+                cmd->ki_r = 0;
+                cmd->ki_l = 0;
+                cmd->kd_r = 1.75;
+                cmd->kd_l = 1.75;
+            }
+
+            motor_cmd.header.seq = seq;
+            motor_cmd.header.stamp = node->now();
+
+            motor_cmd_pub->publish(motor_cmd);
+
+            seq++;
+
+            // rate.sleep();
+            next_time += period;
+            if(!node->get_clock()->sleep_until(next_time)){
+                RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+                break;
+            }
         }
     }
 
