@@ -7,6 +7,7 @@ import subprocess
 import signal
 import threading
 import logging
+import os
 from typing import Optional, Dict, List
 from enum import IntEnum
 
@@ -29,6 +30,7 @@ class ManagedProcess:
         self.process: Optional[subprocess.Popen] = None
         self.state = ProcessState.STOPPED
         self._lock = threading.Lock()
+        self.start_new_session = False
     
     @property
     def is_running(self) -> bool:
@@ -123,6 +125,7 @@ class ProcessManager:
                 kwargs = {
                     'cwd': cwd,
                     'shell': shell,
+                    'start_new_session': True,
                 }
                 
                 if capture_output:
@@ -141,6 +144,7 @@ class ProcessManager:
                 managed = ManagedProcess(name, command)
                 managed.process = proc
                 managed.state = ProcessState.RUNNING
+                managed.start_new_session = True
                 self._processes[name] = managed
                 
                 self.logger.info(f"Process '{name}' started successfully (PID: {proc.pid})")
@@ -190,23 +194,53 @@ class ProcessManager:
                 self.logger.info(f"Stopping process '{name}' (PID: {proc.pid})")
                 managed.state = ProcessState.STOPPING
                 
+                def _kill_process_group(sig: signal.Signals) -> bool:
+                    if not managed.start_new_session:
+                        return False
+                    try:
+                        pgid = os.getpgid(proc.pid)
+                    except Exception:
+                        return False
+                    try:
+                        os.killpg(pgid, sig)
+                        return True
+                    except Exception:
+                        return False
+
                 if force:
-                    # Force kill immediately
-                    proc.kill()  # SIGKILL
-                    proc.wait(timeout=timeout)
-                    self.logger.info(f"Process '{name}' force killed")
+                    # Force kill immediately (prefer process group)
+                    if _kill_process_group(signal.SIGKILL):
+                        proc.wait(timeout=timeout)
+                        self.logger.info(f"Process '{name}' force killed (group)")
+                    else:
+                        proc.kill()  # SIGKILL
+                        proc.wait(timeout=timeout)
+                        self.logger.info(f"Process '{name}' force killed")
                 else:
-                    # Graceful termination
-                    proc.terminate()  # SIGTERM
+                    # Graceful termination (SIGINT -> SIGTERM -> SIGKILL)
+                    sent_group = _kill_process_group(signal.SIGINT)
+                    if not sent_group:
+                        proc.send_signal(signal.SIGINT)
                     try:
                         proc.wait(timeout=timeout)
                         self.logger.info(f"Process '{name}' terminated gracefully")
                     except subprocess.TimeoutExpired:
-                        # Timeout - force kill
-                        self.logger.warning(f"Process '{name}' did not respond to SIGTERM, force killing")
-                        proc.kill()
-                        proc.wait(timeout=2.0)
-                        self.logger.info(f"Process '{name}' force killed")
+                        self.logger.warning(f"Process '{name}' did not respond to SIGINT, sending SIGTERM")
+                        sent_group = _kill_process_group(signal.SIGTERM)
+                        if not sent_group:
+                            proc.terminate()
+                        try:
+                            proc.wait(timeout=2.0)
+                            self.logger.info(f"Process '{name}' terminated")
+                        except subprocess.TimeoutExpired:
+                            self.logger.warning(f"Process '{name}' did not respond to SIGTERM, force killing")
+                            if _kill_process_group(signal.SIGKILL):
+                                proc.wait(timeout=2.0)
+                                self.logger.info(f"Process '{name}' force killed (group)")
+                            else:
+                                proc.kill()
+                                proc.wait(timeout=2.0)
+                                self.logger.info(f"Process '{name}' force killed")
                 
                 managed.state = ProcessState.STOPPED
                 del self._processes[name]

@@ -5,6 +5,7 @@ Centralized definitions for robot modes, log levels, error codes, and colors.
 """
 from enum import IntEnum
 import logging
+import os
 
 # ============================================================================
 # Robot State Enumerations
@@ -131,9 +132,10 @@ class COLORS:
 class PATHS:
     """System paths for ROS 2 packages and executables"""
     # These can be overridden or made configurable
-    DEFAULT_CSV_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/input_csv'
-    DEFAULT_OUTPUT_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/output_data'
-    DEFAULT_LOG_DIR = '/home/jetson/corgi_ws/corgi_ros2_ws/log_file'
+    HOME_DIR = os.path.expanduser('~')
+    DEFAULT_CSV_DIR = os.path.join(HOME_DIR, 'corgi_ws/corgi_ros2_ws/input_csv')
+    DEFAULT_OUTPUT_DIR = os.path.join(HOME_DIR, 'corgi_ws/corgi_ros2_ws/output_data')
+    DEFAULT_LOG_DIR = os.path.join(HOME_DIR, 'corgi_ws/corgi_ros2_ws/log_file')
 
 
 # ============================================================================
