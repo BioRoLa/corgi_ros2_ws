@@ -17,6 +17,7 @@ output_data/*
 /install
 /build
 /log_file
+bag/
 
 **/install
 **/build
