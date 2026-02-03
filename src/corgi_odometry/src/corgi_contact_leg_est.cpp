@@ -12,9 +12,9 @@
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
-#include "DisturbanceObserver.hpp"
+#include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "Config.hpp"
-#include "DataProcessor.hpp"
+#include "general_momentum_observer/DataProcessor.hpp"
 
 using namespace std::chrono_literals;
 

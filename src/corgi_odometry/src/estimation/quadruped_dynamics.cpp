@@ -1,4 +1,4 @@
-#include "quadruped_dynamics.hpp"
+#include "general_momentum_observer/quadruped_dynamics.hpp"
 
 namespace quadruped_dynamics {
 

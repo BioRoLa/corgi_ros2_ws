@@ -69,15 +69,15 @@ class VelocityEstimatorNode : public rclcpp::Node {
 public:
     VelocityEstimatorNode() 
         : Node("velocity_estimator"),
+          tf_buffer_(this->get_clock()),
+          tf_listener_(tf_buffer_),
           vx_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),  // 30 Hz cutoff, 1000 Hz sample rate
           vy_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),
           vz_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),
           position_initialized_(false),
           last_position_x_(0.0),
           last_position_y_(0.0),
-          last_position_z_(0.0),
-          tf_buffer_(this->get_clock()),
-          tf_listener_(tf_buffer_)
+          last_position_z_(0.0)
     {
         // Declare parameters
         this->declare_parameter<double>("cutoff_freq", 30.0);

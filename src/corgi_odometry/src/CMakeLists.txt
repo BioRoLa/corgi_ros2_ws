@@ -1,8 +1,8 @@
 # Build library for dynamics and observer
 add_library(quadruped_dynamics
-  quadruped_dynamics.cpp
-  DisturbanceObserver.cpp
-  DataProcessor.cpp
+  general_momentum_observer/quadruped_dynamics.cpp
+  general_momentum_observer/DisturbanceObserver.cpp
+  general_momentum_observer/DataProcessor.cpp
 )
 
 ament_target_dependencies(quadruped_dynamics
@@ -59,7 +59,7 @@ install(TARGETS corgi_contact_leg_est
 
 # Build executable for velocity estimator
 add_executable(velocity_estimator 
-  velocity_estimator.cpp
+  sim/velocity_estimator.cpp
 )
 
 ament_target_dependencies(velocity_estimator 
