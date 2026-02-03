@@ -2,6 +2,13 @@
 add_library(quadruped_dynamics
   quadruped_dynamics.cpp
   DisturbanceObserver.cpp
+  DataProcessor.cpp
+)
+
+ament_target_dependencies(quadruped_dynamics
+  rclcpp
+  geometry_msgs
+  corgi_msgs
 )
 
 target_link_libraries(quadruped_dynamics
