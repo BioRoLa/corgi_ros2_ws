@@ -22,10 +22,13 @@ public:
     static constexpr double BASE_LENGTH = 0.5;       // Base length [m]
     static constexpr double BASE_WIDTH = 0.2;        // Base width [m]
     static constexpr double BASE_HEIGHT = 0.1;       // Base height [m]
+    static constexpr double WHEEL_RADIUS = 0.10;     // [m]
+    static constexpr double WHEEL_WIDTH = 0.019;     // [m]
     
     // Geometric parameters
     static constexpr double LEG_X_OFFSET = 0.222;    // Leg offset in x-axis [m]
     static constexpr double LEG_Y_OFFSET = 0.193;    // Leg offset in y-axis [m]
+    static constexpr double LEG_Z_OFFSET = 0.0;      // Leg offset in z-axis [m]
     
     // Base inertias (computed from dimensions)
     static constexpr double BODY_I_XX = BASE_WEIGHT * (BASE_LENGTH * BASE_LENGTH + BASE_HEIGHT * BASE_HEIGHT) / 12.0;

@@ -25,9 +25,9 @@ rclcpp::Node::SharedPtr g_node = nullptr;
 /**
  * @brief Leg Odometry Node - Estimates robot pose using leg kinematics and contact state
  */
-class LegOdometry : public rclcpp::Node {
+class LegOdometryNode : public rclcpp::Node {
 public:
-    LegOdometry() 
+    LegOdometryNode() 
         : Node("leg_odometry"),
           processor_(corgi::Config::DT),
           observer_(
@@ -42,31 +42,31 @@ public:
         motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
             corgi::Config::TOPIC_MOTOR_STATE,
             corgi::Config::QUEUE_SIZE_SUB,
-            std::bind(&LegOdometry::cb_motor_state, this, std::placeholders::_1)
+            std::bind(&LegOdometryNode::cb_motor_state, this, std::placeholders::_1)
         );
         
         imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
             corgi::Config::TOPIC_IMU,
             corgi::Config::QUEUE_SIZE_SUB,
-            std::bind(&LegOdometry::cb_imu, this, std::placeholders::_1)
+            std::bind(&LegOdometryNode::cb_imu, this, std::placeholders::_1)
         );
         
         position_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
             corgi::Config::TOPIC_ODOMETRY_POSITION,
             corgi::Config::QUEUE_SIZE_SUB,
-            std::bind(&LegOdometry::cb_position, this, std::placeholders::_1)
+            std::bind(&LegOdometryNode::cb_position, this, std::placeholders::_1)
         );
         
         velocity_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
             corgi::Config::TOPIC_ODOMETRY_VELOCITY,
             corgi::Config::QUEUE_SIZE_SUB,
-            std::bind(&LegOdometry::cb_velocity, this, std::placeholders::_1)
+            std::bind(&LegOdometryNode::cb_velocity, this, std::placeholders::_1)
         );
         
         trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
             corgi::Config::TOPIC_TRIGGER,
             corgi::Config::QUEUE_SIZE_SUB,
-            std::bind(&LegOdometry::cb_trigger, this, std::placeholders::_1)
+            std::bind(&LegOdometryNode::cb_trigger, this, std::placeholders::_1)
         );
 
         // Create publishers
@@ -249,7 +249,13 @@ private:
     
     // Processing components
     DataProcessor processor_;
-    corgi::DisturbanceObserver observer;
+    corgi::DisturbanceObserver observer_;
+
+    //Legs model
+    Leg lf_leg{Eigen::Vector3f( corgi::Config::LEG_X_OFFSET,  corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
+    Leg rf_leg{Eigen::Vector3f( corgi::Config::LEG_X_OFFSET, -corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
+    Leg rh_leg{Eigen::Vector3f(-corgi::Config::LEG_X_OFFSET, -corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
+    Leg lh_leg{Eigen::Vector3f(-corgi::Config::LEG_X_OFFSET,  corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
     
     // TODO: Add leg kinematic models (one for each leg)
     // TODO: Add odometry state variables (pose, velocity)
@@ -291,7 +297,7 @@ int main(int argc, char** argv) {
     
     signal(SIGINT, handle_signal);
     
-    g_node = std::make_shared<LegOdometry>();
+    g_node = std::make_shared<LegOdometryNode>();
     
     // Wait for clock sync if using simulation time
     bool use_sim_time = false;
@@ -310,7 +316,7 @@ int main(int argc, char** argv) {
             rclcpp::spin_some(g_node);  // Process all pending callbacks
             
             // Process data if available
-            std::dynamic_pointer_cast<LegOdometry>(g_node)->process();
+            std::dynamic_pointer_cast<LegOdometryNode>(g_node)->process();
             
             // Sleep to maintain desired loop rate
             next_time += period;
