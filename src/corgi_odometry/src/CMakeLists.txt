@@ -1,8 +1,8 @@
 # Build library for dynamics and observer
 add_library(quadruped_dynamics
-  estimation/quadruped_dynamics.cpp
-  estimation/DisturbanceObserver.cpp
-  estimation/DataProcessor.cpp
+  general_momentum_observer/quadruped_dynamics.cpp
+  general_momentum_observer/DisturbanceObserver.cpp
+  general_momentum_observer/DataProcessor.cpp
 )
 
 ament_target_dependencies(quadruped_dynamics
