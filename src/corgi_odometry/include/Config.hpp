@@ -2,7 +2,7 @@
 
 #include <array>
 
-namespace quadruped {
+namespace corgi {
 
 class Config {
 public:
@@ -95,4 +95,4 @@ public:
     static constexpr bool LOG_DETAILS = false;         // Log detailed information (true) or only disturbance (false)
 };
 
-} // namespace quadruped
+} // namespace corgi

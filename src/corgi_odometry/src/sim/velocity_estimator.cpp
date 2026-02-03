@@ -71,9 +71,9 @@ public:
         : Node("velocity_estimator"),
           tf_buffer_(this->get_clock()),
           tf_listener_(tf_buffer_),
-          vx_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),  // 30 Hz cutoff, 1000 Hz sample rate
-          vy_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),
-          vz_filter_(30.0, quadruped::Config::ONLINE_LOOP_RATE),
+          vx_filter_(30.0, corgi::Config::ONLINE_LOOP_RATE),  // 30 Hz cutoff, 1000 Hz sample rate
+          vy_filter_(30.0, corgi::Config::ONLINE_LOOP_RATE),
+          vz_filter_(30.0, corgi::Config::ONLINE_LOOP_RATE),
           position_initialized_(false),
           last_position_x_(0.0),
           last_position_y_(0.0),
@@ -81,7 +81,7 @@ public:
     {
         // Declare parameters
         this->declare_parameter<double>("cutoff_freq", 30.0);
-        this->declare_parameter<double>("sample_rate", quadruped::Config::ONLINE_LOOP_RATE);
+        this->declare_parameter<double>("sample_rate", corgi::Config::ONLINE_LOOP_RATE);
         this->declare_parameter<std::string>("velocity_topic", "odometry/velocity");
         this->declare_parameter<std::string>("position_output_topic", "odometry/position");
         this->declare_parameter<std::string>("parent_frame", "odom");
@@ -135,7 +135,7 @@ public:
         } catch (const tf2::TransformException &ex) {
             // Only log warning periodically to avoid spam
             message_count_++;
-            if (message_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
+            if (message_count_ % int(corgi::Config::ONLINE_LOOP_RATE) == 0) {
                 RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
             }
             return;
@@ -206,7 +206,7 @@ public:
         
         // Log periodically
         message_count_++;
-        if (message_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
+        if (message_count_ % int(corgi::Config::ONLINE_LOOP_RATE) == 0) {
             RCLCPP_INFO(this->get_logger(), 
                 "Velocity [m/s]: vx=%.3f, vy=%.3f, vz=%.3f", 
                 filtered_vx, filtered_vy, filtered_vz);
@@ -288,7 +288,7 @@ int main(int argc, char** argv) {
     
     // Get sample rate for loop control
     auto node_ptr = std::dynamic_pointer_cast<VelocityEstimatorNode>(g_node);
-    rclcpp::Duration period(0, static_cast<int>(1e9 / quadruped::Config::ONLINE_LOOP_RATE));
+    rclcpp::Duration period(0, static_cast<int>(1e9 / corgi::Config::ONLINE_LOOP_RATE));
     try {
         // Manual spin loop with controlled rate
         rclcpp::Time next_time = g_node->now();

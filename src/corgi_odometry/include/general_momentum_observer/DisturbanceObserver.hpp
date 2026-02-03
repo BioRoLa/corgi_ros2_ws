@@ -9,10 +9,10 @@
 #include <cmath>
 #include "quadruped_dynamics.hpp"
 
-namespace quadruped {
+namespace corgi {
 
 /**
- * @brief Disturbance Observer for quadruped robot
+ * @brief Disturbance Observer for corgi robot
  * 
  * Implements discrete-time disturbance observer:
  * τ̂_d = β*p_k - LPF(β*p + S^T*τ + C^T*q̇ - g)
@@ -160,4 +160,4 @@ private:
     void initialize_logging();
 };
 
-} // namespace quadruped
+} // namespace corgi

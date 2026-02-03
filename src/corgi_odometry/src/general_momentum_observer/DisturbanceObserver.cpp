@@ -3,7 +3,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace quadruped {
+namespace corgi {
 
 DisturbanceObserver::DisturbanceObserver(
     double dt,

@@ -6,7 +6,7 @@
 namespace quadruped_dynamics {
 
 /**
- * @brief Compute dynamics matrices for 12-DOF quadruped robot
+ * @brief Compute dynamics matrices for 12-DOF corgi robot
  * 
  * State vector definition (12-dimensional):
  * q = [x, z, phi, psi, beta_lf, Rm_lf, beta_rf, Rm_rf, 

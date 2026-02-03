@@ -144,7 +144,7 @@ void DataProcessor::cal_quaternion_to_euler(double x, double y, double z, double
 }
 
 double DataProcessor::cal_theta_to_Rm(double theta) {
-    const auto& A = quadruped::Config::RM_COEFF;
+    const auto& A = corgi::Config::RM_COEFF;
     double Rm = 0.0;
     double theta_power = 1.0;
     for (int i = A.size() - 1; i >= 0; --i) {
@@ -155,7 +155,7 @@ double DataProcessor::cal_theta_to_Rm(double theta) {
 }
 
 double DataProcessor::cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
-    const auto& A = quadruped::Config::RM_COEFF;
+    const auto& A = corgi::Config::RM_COEFF;
     double dRm_dtheta = 0.0;
     double theta_power = 1.0;
     
@@ -168,7 +168,7 @@ double DataProcessor::cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
 }
 
 double DataProcessor::cal_theta_to_Ic(double theta) {
-    const auto& B = quadruped::Config::IC_COEFF;
+    const auto& B = corgi::Config::IC_COEFF;
     double Ic = 0.0;
     double theta_power = 1.0;
     for (int i = B.size() - 1; i >= 0; --i) {
@@ -180,7 +180,7 @@ double DataProcessor::cal_theta_to_Ic(double theta) {
 
 void DataProcessor::cal_motor_to_joint_torque(double theta, double torque_right, double torque_left,
                                     double& torque_beta, double& force_Rm) {
-    const auto& A = quadruped::Config::RM_COEFF;
+    const auto& A = corgi::Config::RM_COEFF;
     double dRm_dtheta = 0.0;
     double theta_power = 1.0;
     

@@ -132,7 +132,7 @@ class DataProcessor {
 public:
     DataProcessor(double dt) : dt_(dt), first_call_(true) {
         // Calculate low pass filter alpha from Config
-        low_pass_alpha_ = 1.0 - std::exp(-2.0 * M_PI * quadruped::Config::ENCODER_CUTOFF_FREQ * dt_);
+        low_pass_alpha_ = 1.0 - std::exp(-2.0 * M_PI * corgi::Config::ENCODER_CUTOFF_FREQ * dt_);
         
         // Initialize last state variables
         last_sim_pos_x_ = 0.0;
@@ -343,7 +343,7 @@ private:
     
     double cal_theta_to_Rm(double theta) {
         // Polynomial evaluation: Rm = A[0]*theta^4 + A[1]*theta^3 + ... + A[4]
-        const auto& A = quadruped::Config::RM_COEFF;
+        const auto& A = corgi::Config::RM_COEFF;
         double result = 0.0;
         double theta_power = 1.0;
         
@@ -357,7 +357,7 @@ private:
     
     double cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
         // Derivative of polynomial: dRm/dt = (dRm/dtheta) * (dtheta/dt)
-        const auto& A = quadruped::Config::RM_COEFF;
+        const auto& A = corgi::Config::RM_COEFF;
         double derivative = 0.0;
         double theta_power = 1.0;
         
@@ -371,7 +371,7 @@ private:
     
     double cal_theta_to_Ic(double theta) {
         // Polynomial evaluation: Ic = B[0]*theta^6 + B[1]*theta^5 + ... + B[6]
-        const auto& B = quadruped::Config::IC_COEFF;
+        const auto& B = corgi::Config::IC_COEFF;
         double result = 0.0;
         double theta_power = 1.0;
         
@@ -392,7 +392,7 @@ private:
         // Convert motor torques to joint space using virtual work method
         
         // J_theta = [[dRm/dtheta, 0], [0, 1]]
-        const auto& A = quadruped::Config::RM_COEFF;
+        const auto& A = corgi::Config::RM_COEFF;
         
         // Compute dRm/dtheta using polynomial derivative
         double dRm_dtheta = 0.0;
@@ -435,10 +435,10 @@ int main(int argc, char** argv) {
         // Configuration from Config.hpp
         // Build CSV path relative to this source file: package_root/data/<filename>.csv
         const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "data" /
-                       (std::string(quadruped::Config::CSV_FILENAME) + ".csv")).string();
-        const double dt = quadruped::Config::DT;
-        const double cutoff_freq = quadruped::Config::OBSERVER_CUTOFF_FREQ;
-        const int start_index = quadruped::Config::START_INDEX;
+                       (std::string(corgi::Config::CSV_FILENAME) + ".csv")).string();
+        const double dt = corgi::Config::DT;
+        const double cutoff_freq = corgi::Config::OBSERVER_CUTOFF_FREQ;
+        const int start_index = corgi::Config::START_INDEX;
         
         std::cout << "Loading data...\n";
         CSVReader reader;
@@ -447,13 +447,13 @@ int main(int argc, char** argv) {
         
         // Initialize observer
         std::cout << "\nInitializing observer...\n";
-        quadruped::DisturbanceObserver observer(
+        corgi::DisturbanceObserver observer(
             dt, 
             cutoff_freq,
-            quadruped::Config::DOF,
-            quadruped::Config::ENABLE_LOGGING,
-            quadruped::Config::CSV_FILENAME,
-            quadruped::Config::LOG_DETAILS
+            corgi::Config::DOF,
+            corgi::Config::ENABLE_LOGGING,
+            corgi::Config::CSV_FILENAME,
+            corgi::Config::LOG_DETAILS
         );
         
         // Initialize data processor
@@ -493,7 +493,7 @@ int main(int argc, char** argv) {
         std::chrono::duration<double> elapsed = end_time - start_time;
         
         std::cout << "\nProcessing complete\n";
-        std::cout << "Results saved to output_data/" << quadruped::Config::CSV_FILENAME << "_result.csv\n";
+        std::cout << "Results saved to output_data/" << corgi::Config::CSV_FILENAME << "_result.csv\n";
         
         // Display performance statistics
         std::cout << "\n========== Performance Statistics ==========\n";

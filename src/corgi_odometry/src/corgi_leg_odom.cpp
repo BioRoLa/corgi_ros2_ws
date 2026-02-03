@@ -29,54 +29,54 @@ class LegOdometry : public rclcpp::Node {
 public:
     LegOdometry() 
         : Node("leg_odometry"),
-          processor_(quadruped::Config::DT),
+          processor_(corgi::Config::DT),
           observer_(
-              quadruped::Config::DT,
-              quadruped::Config::OBSERVER_CUTOFF_FREQ,
-              quadruped::Config::DOF,
+              corgi::Config::DT,
+              corgi::Config::OBSERVER_CUTOFF_FREQ,
+              corgi::Config::DOF,
               false,  // CSV logging
               ""      // No CSV filename
           )
     {
         // Create subscribers
         motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-            quadruped::Config::TOPIC_MOTOR_STATE,
-            quadruped::Config::QUEUE_SIZE_SUB,
+            corgi::Config::TOPIC_MOTOR_STATE,
+            corgi::Config::QUEUE_SIZE_SUB,
             std::bind(&LegOdometry::cb_motor_state, this, std::placeholders::_1)
         );
         
         imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
-            quadruped::Config::TOPIC_IMU,
-            quadruped::Config::QUEUE_SIZE_SUB,
+            corgi::Config::TOPIC_IMU,
+            corgi::Config::QUEUE_SIZE_SUB,
             std::bind(&LegOdometry::cb_imu, this, std::placeholders::_1)
         );
         
         position_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
-            quadruped::Config::TOPIC_ODOMETRY_POSITION,
-            quadruped::Config::QUEUE_SIZE_SUB,
+            corgi::Config::TOPIC_ODOMETRY_POSITION,
+            corgi::Config::QUEUE_SIZE_SUB,
             std::bind(&LegOdometry::cb_position, this, std::placeholders::_1)
         );
         
         velocity_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
-            quadruped::Config::TOPIC_ODOMETRY_VELOCITY,
-            quadruped::Config::QUEUE_SIZE_SUB,
+            corgi::Config::TOPIC_ODOMETRY_VELOCITY,
+            corgi::Config::QUEUE_SIZE_SUB,
             std::bind(&LegOdometry::cb_velocity, this, std::placeholders::_1)
         );
         
         trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
-            quadruped::Config::TOPIC_TRIGGER,
-            quadruped::Config::QUEUE_SIZE_SUB,
+            corgi::Config::TOPIC_TRIGGER,
+            corgi::Config::QUEUE_SIZE_SUB,
             std::bind(&LegOdometry::cb_trigger, this, std::placeholders::_1)
         );
 
         // Create publishers
         contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
-            quadruped::Config::TOPIC_CONTACT_STATE,
-            quadruped::Config::QUEUE_SIZE_PUB
+            corgi::Config::TOPIC_CONTACT_STATE,
+            corgi::Config::QUEUE_SIZE_PUB
         );
         
         RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
-        RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", quadruped::Config::ONLINE_LOOP_RATE);
+        RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
         
         // TODO: Initialize leg kinematic models for each leg
         // TODO: Initialize odometry state (position, orientation, velocity)
@@ -95,7 +95,7 @@ public:
     void process() {
         // Check if all data is available
         if (!motor_state_received_ || !imu_received_ || !position_received_ || !velocity_received_) {
-            if (iteration_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
+            if (iteration_count_ % int(corgi::Config::ONLINE_LOOP_RATE) == 0) {
                 RCLCPP_WARN(this->get_logger(), 
                     "Waiting for data... Motor: %d, IMU: %d, Position: %d, Velocity: %d",
                     motor_state_received_, imu_received_, position_received_, velocity_received_);
@@ -105,7 +105,7 @@ public:
         }
 
         if (!is_triggered_) {
-            if (iteration_count_ % int(quadruped::Config::ONLINE_LOOP_RATE) == 0) {
+            if (iteration_count_ % int(corgi::Config::ONLINE_LOOP_RATE) == 0) {
                 RCLCPP_INFO(this->get_logger(), "Waiting for trigger...");
             }
             iteration_count_++;
@@ -127,14 +127,14 @@ public:
             true  // Don't print detailed info
         );
         
+        // Publish contact state
+        publish_contact_state(disturbance);
+        
         // TODO: Update leg kinematic models with current motor states
         // TODO: Compute foot positions in body frame for each leg
         // TODO: Estimate velocity using leg odometry with contact information
         // TODO: Integrate velocity to update position estimate
         // TODO: Publish odometry message (nav_msgs/Odometry)
-        
-        // Publish contact state
-        publish_contact_state(disturbance);
         
         iteration_count_++;
     }
@@ -187,11 +187,11 @@ private:
             double beta_torque = disturbance(beta_torque_indices[i]);
             
             if (!leg_contact_state_[i]) { // Currently no contact
-                if (std::abs(rm_force) > quadruped::Config::CONTACT_RM_THRESHOLD_HIGH || std::abs(beta_torque) > quadruped::Config::CONTACT_BETA_THRESHOLD_HIGH) {
+                if (std::abs(rm_force) > corgi::Config::CONTACT_RM_THRESHOLD_HIGH || std::abs(beta_torque) > corgi::Config::CONTACT_BETA_THRESHOLD_HIGH) {
                     leg_contact_state_[i] = true;
                 }
             } else { // Currently in contact
-                if (std::abs(rm_force) < quadruped::Config::CONTACT_RM_THRESHOLD_LOW && std::abs(beta_torque) < quadruped::Config::CONTACT_BETA_THRESHOLD_LOW) {
+                if (std::abs(rm_force) < corgi::Config::CONTACT_RM_THRESHOLD_LOW && std::abs(beta_torque) < corgi::Config::CONTACT_BETA_THRESHOLD_LOW) {
                     leg_contact_state_[i] = false;
                 }
             }
@@ -249,7 +249,7 @@ private:
     
     // Processing components
     DataProcessor processor_;
-    quadruped::DisturbanceObserver observer_;
+    corgi::DisturbanceObserver observer;
     
     // TODO: Add leg kinematic models (one for each leg)
     // TODO: Add odometry state variables (pose, velocity)
@@ -301,7 +301,7 @@ int main(int argc, char** argv) {
     }
     
     // Calculate loop period based on configured rate
-    rclcpp::Duration period(0, static_cast<int>(1e9 / quadruped::Config::ONLINE_LOOP_RATE)); // in nanoseconds
+    rclcpp::Duration period(0, static_cast<int>(1e9 / corgi::Config::ONLINE_LOOP_RATE)); // in nanoseconds
     
     try {
         // Manual spin loop with controlled rate
