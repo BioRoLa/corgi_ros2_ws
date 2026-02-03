@@ -1,8 +1,8 @@
 # Build library for dynamics and observer
 add_library(quadruped_dynamics
-  general_momentum_observer/quadruped_dynamics.cpp
-  general_momentum_observer/DisturbanceObserver.cpp
-  general_momentum_observer/DataProcessor.cpp
+  estimation/quadruped_dynamics.cpp
+  estimation/DisturbanceObserver.cpp
+  estimation/DataProcessor.cpp
 )
 
 ament_target_dependencies(quadruped_dynamics
@@ -55,6 +55,27 @@ target_link_libraries(corgi_contact_leg_est
 )
 
 install(TARGETS corgi_contact_leg_est
+  DESTINATION lib/${PROJECT_NAME})
+
+# Build executable
+add_executable(corgi_leg_odom 
+  corgi_leg_odom.cpp
+)
+
+ament_target_dependencies(corgi_leg_odom 
+  rclcpp 
+  std_msgs 
+  rosgraph_msgs 
+  geometry_msgs 
+  corgi_msgs
+)
+
+target_link_libraries(corgi_leg_odom
+  quadruped_dynamics
+  Eigen3::Eigen
+)
+
+install(TARGETS corgi_leg_odom
   DESTINATION lib/${PROJECT_NAME})
 
 # Build executable for velocity estimator
