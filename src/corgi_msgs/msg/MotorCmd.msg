@@ -1,10 +1,15 @@
 float64 theta
 float64 beta
+float64 gamma
 float64 kp_r
 float64 kp_l
+float64 kp_h
 float64 ki_r
 float64 ki_l
+float64 ki_h
 float64 kd_r
 float64 kd_l
+float64 kd_h
 float64 torque_r
 float64 torque_l
+float64 torque_h
