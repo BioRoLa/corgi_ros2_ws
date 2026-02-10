@@ -19,6 +19,17 @@ int main(int argc, char **argv) {
     auto node = rclcpp::Node::make_shared("corgi_walk");
     
     RCLCPP_INFO(node->get_logger(), "Corgi Walk Starts");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     ModelPredictiveController mpc;
     mpc.load_config();
@@ -28,7 +39,8 @@ int main(int argc, char **argv) {
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
     
-    rclcpp::Rate rate(1000);
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
     corgi_msgs::msg::ContactStateStamped contact_state;
@@ -98,7 +110,8 @@ int main(int argc, char **argv) {
     
     if (!sim) {
         for (int i=0; i<3000; i++) {
-            rate.sleep();
+            next_time += period;
+            node->get_clock()->sleep_until(next_time);
         }
     }
 
@@ -112,7 +125,8 @@ int main(int argc, char **argv) {
         }
         motor_cmd.header.stamp = node->now();
         motor_cmd_pub->publish(motor_cmd);
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
 
     RCLCPP_INFO(node->get_logger(), "Transform Finished");
@@ -122,7 +136,8 @@ int main(int argc, char **argv) {
         rclcpp::spin_some(node);
         motor_cmd.header.stamp = node->now();
         motor_cmd_pub->publish(motor_cmd);
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
 
     while (rclcpp::ok()) {
@@ -138,7 +153,8 @@ int main(int argc, char **argv) {
                         state->contact = true;
                     }
                     contact_pub->publish(contact_state);
-                    rate.sleep();
+                    next_time += period;
+                    node->get_clock()->sleep_until(next_time);
                 }
             }
 
@@ -203,11 +219,16 @@ int main(int argc, char **argv) {
                 loop_count++;
                 if (loop_count >= mpc.target_loop*10) break;
 
-                rate.sleep();
+                next_time += period;
+                if(!node->get_clock()->sleep_until(next_time)){
+                    RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+                    break;
+                }
             }
             break;
         }
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
     return 0;
 }

@@ -58,6 +58,17 @@ int main(int argc, char **argv){
     auto node = rclcpp::Node::make_shared("corgi_mpc");
     
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     ModelPredictiveController mpc;
     mpc.load_config();
@@ -74,7 +85,8 @@ int main(int argc, char **argv){
     auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
 
-    rclcpp::Rate rate(mpc.freq);
+    rclcpp::Duration period(0, 1000000000.0 / mpc.freq);
+    rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
     corgi_msgs::msg::ContactStateStamped contact_state;
@@ -151,7 +163,8 @@ int main(int argc, char **argv){
     
     if (!sim) {
         for (int i=0; i<int(3*mpc.freq); i++) {
-            rate.sleep();
+            next_time += period;
+            node->get_clock()->sleep_until(next_time);
         }
     }
 
@@ -164,7 +177,8 @@ int main(int argc, char **argv){
         }
         imp_cmd.header.stamp = node->now();
         imp_cmd_pub->publish(imp_cmd);
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
 
     RCLCPP_INFO(node->get_logger(), "Transform Finished");
@@ -174,7 +188,8 @@ int main(int argc, char **argv){
         rclcpp::spin_some(node);
         imp_cmd.header.stamp = node->now();
         imp_cmd_pub->publish(imp_cmd);
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
     
 
@@ -189,7 +204,8 @@ int main(int argc, char **argv){
                         state->contact = true;
                     }
                     contact_pub->publish(contact_state);
-                    rate.sleep();
+                    next_time += period;
+                    node->get_clock()->sleep_until(next_time);
                 }
             }
             else {
@@ -198,7 +214,8 @@ int main(int argc, char **argv){
                         state->contact = true;
                     }
                     contact_pub->publish(contact_state);
-                    rate.sleep();
+                    next_time += period;
+                    node->get_clock()->sleep_until(next_time);
                 }
             }
 
@@ -374,11 +391,16 @@ int main(int argc, char **argv){
                 loop_count++;
                 if (loop_count >= mpc.target_loop) std::cout << "Finished" << std::endl;
 
-                rate.sleep();
+                next_time += period;
+                if(!node->get_clock()->sleep_until(next_time)){
+                    RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+                    break;
+                }
             }
             break;
         }
-        rate.sleep();
+        next_time += period;
+        node->get_clock()->sleep_until(next_time);
     }
     return 0;
 }
