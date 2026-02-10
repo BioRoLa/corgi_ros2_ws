@@ -222,7 +222,7 @@ private:
         return Leg{
             Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET, y_sign * Config::LEG_Y_OFFSET, Config::LEG_Z_OFFSET),
             Config::WHEEL_RADIUS,
-            Config::WHEEL_WIDTH
+            Config::TIRE_SKIN_RADIUS
         };
     }
     
