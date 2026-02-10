@@ -1,17 +1,17 @@
 # Build library for dynamics and observer
-add_library(quadruped_dynamics
-  general_momentum_observer/quadruped_dynamics.cpp
+add_library(simplify_dynamics
+  general_momentum_observer/simplify_dynamics.cpp
   general_momentum_observer/DisturbanceObserver.cpp
   general_momentum_observer/DataProcessor.cpp
 )
 
-ament_target_dependencies(quadruped_dynamics
+ament_target_dependencies(simplify_dynamics
   rclcpp
   geometry_msgs
   corgi_msgs
 )
 
-target_link_libraries(quadruped_dynamics
+target_link_libraries(simplify_dynamics
   Eigen3::Eigen
 )
 
@@ -29,7 +29,7 @@ ament_target_dependencies(offline_test
 )
 
 target_link_libraries(offline_test
-  quadruped_dynamics
+  simplify_dynamics
   Eigen3::Eigen
 )
 
@@ -50,7 +50,7 @@ ament_target_dependencies(corgi_contact_leg_est
 )
 
 target_link_libraries(corgi_contact_leg_est
-  quadruped_dynamics
+  simplify_dynamics
   Eigen3::Eigen
 )
 
@@ -71,7 +71,8 @@ ament_target_dependencies(corgi_leg_odom
 )
 
 target_link_libraries(corgi_leg_odom
-  quadruped_dynamics
+  simplify_dynamics
+  esekf_estimation
   Eigen3::Eigen
 )
 

@@ -7,7 +7,7 @@
 #include <string>
 #include <iomanip>
 #include <cmath>
-#include "quadruped_dynamics.hpp"
+#include "simplify_dynamics.hpp"
 
 namespace corgi {
 

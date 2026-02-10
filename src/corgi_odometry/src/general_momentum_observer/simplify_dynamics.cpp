@@ -1,4 +1,4 @@
-#include "general_momentum_observer/quadruped_dynamics.hpp"
+#include "general_momentum_observer/simplify_dynamics.hpp"
 
 namespace simplify_dynamics {
 
