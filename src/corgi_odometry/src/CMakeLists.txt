@@ -57,6 +57,17 @@ target_link_libraries(corgi_contact_leg_est
 install(TARGETS corgi_contact_leg_est
   DESTINATION lib/${PROJECT_NAME})
 
+# ES-EKF estimation library (leg kinematics + filter)
+add_library(esekf_estimation
+  es_ekf/ESEKF.cpp
+  kinematic/Leg.cpp
+  kinematic/LinkLegModel.cpp
+)
+
+target_link_libraries(esekf_estimation
+  Eigen3::Eigen
+)
+
 # Build executable
 add_executable(corgi_leg_odom 
   corgi_leg_odom.cpp
