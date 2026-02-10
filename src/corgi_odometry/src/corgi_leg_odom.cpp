@@ -110,7 +110,7 @@ void LegOdometryNode::process() {
 
     auto disturbance = observer_.estimate_disturbance(
         processed.q, processed.q_dot, processed.tau, processed.I_c,
-        iteration_count_, true);
+        iteration_count_, false);
 
     publish_contact_state(disturbance);
 
@@ -144,7 +144,7 @@ void LegOdometryNode::process() {
         static_cast<float>(imu_.linear_acceleration.y),
         static_cast<float>(imu_.linear_acceleration.z));
     Eigen::Vector3f w_m(
-        0.0f,  // roll rate zeroed (same as original ROS1 convention)
+        static_cast<float>(imu_.angular_velocity.x),
         static_cast<float>(imu_.angular_velocity.y),
         static_cast<float>(imu_.angular_velocity.z));
 
