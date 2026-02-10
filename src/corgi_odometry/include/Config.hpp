@@ -23,6 +23,7 @@ public:
     static constexpr double BASE_WIDTH = 0.2;        // Base width [m]
     static constexpr double BASE_HEIGHT = 0.1;       // Base height [m]
     static constexpr double WHEEL_RADIUS = 0.10;     // [m]
+    static constexpr double TIRE_SKIN_RADIUS = 0.0125;   // [m]
     static constexpr double WHEEL_WIDTH = 0.019;     // [m]
     
     // Geometric parameters
