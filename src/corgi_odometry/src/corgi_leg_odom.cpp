@@ -74,6 +74,12 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
     ekf_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("ekf", corgi::Config::QUEUE_SIZE_PUB);
 
+    // --- Debug Publishers ---
+    debug_leg_obs_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
+        "debug/leg_obs", corgi::Config::QUEUE_SIZE_PUB);
+    debug_zleg_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
+        "debug/z_leg", corgi::Config::QUEUE_SIZE_PUB);
+
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
     RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
 }
@@ -170,6 +176,52 @@ void LegOdometryNode::process() {
         auto obs = build_leg_observation(*modules[i], legs_[i], i, w_y);
         exclude_flags[i] = !obs.in_contact;
         observations.push_back(obs);
+    }
+
+    // --- Debug: publish per-leg observation inputs ---
+    // Layout: for each leg i (4 legs × 9 values = 36 floats):
+    //   [theta, theta_d, beta, beta_d, contact_beta, alpha, rim, in_contact, contact_flag]
+    {
+        std_msgs::msg::Float64MultiArray dbg;
+        for (int i = 0; i < 4; ++i) {
+            const auto& o = observations[i];
+            dbg.data.push_back(o.theta);
+            dbg.data.push_back(o.theta_d);
+            dbg.data.push_back(o.beta);
+            dbg.data.push_back(o.beta_d);
+            dbg.data.push_back(contact_beta_[i]);
+            dbg.data.push_back(o.alpha);
+            dbg.data.push_back(static_cast<double>(o.rim));
+            dbg.data.push_back(o.in_contact ? 1.0 : 0.0);
+            dbg.data.push_back(leg_contact_state_[i] ? 1.0 : 0.0);
+        }
+        debug_leg_obs_pub_->publish(dbg);
+    }
+
+    // --- Debug: compute and publish z_leg for each leg ---
+    // z_leg = "observed body velocity from encoder kinematics"
+    // Layout: 4 legs × 6 values = 24 floats
+    //   [z_leg.x, z_leg.y, z_leg.z, contact_pt.x, contact_pt.y, contact_pt.z]
+    {
+        std_msgs::msg::Float64MultiArray dbg;
+        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;
+        for (int i = 0; i < 4; ++i) {
+            auto& o = observations[i];
+            // Recompute FK + contact for debug (same as ESEKF::update_leg)
+            o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
+            o.leg->PointContact(o.rim, o.alpha);
+            Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
+            o.leg->PointVelocity(v_zero, w_corrected, o.rim, o.alpha, true);
+            Eigen::Vector3f z_leg = -o.leg->contact_velocity;
+
+            dbg.data.push_back(z_leg.x());
+            dbg.data.push_back(z_leg.y());
+            dbg.data.push_back(z_leg.z());
+            dbg.data.push_back(o.leg->contact_point.x());
+            dbg.data.push_back(o.leg->contact_point.y());
+            dbg.data.push_back(o.leg->contact_point.z());
+        }
+        debug_zleg_pub_->publish(dbg);
     }
 
     // --- 4. Update (sequential per-leg velocity constraint) ---

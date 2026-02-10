@@ -75,7 +75,7 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //    biases:  unchanged
     // ----------------------------------------------------------
     x_nom_.p += R_body * x_nom_.v * dt_;
-    x_nom_.v  = R_delta * (x_nom_.v + a_hat * dt_ + g_body * dt_);
+    x_nom_.v  = R_delta * x_nom_.v + (a_hat + g_body) * dt_;
     x_nom_.q  = (x_nom_.q * Eigen::Quaternionf(R_delta)).normalized();
     // ba, bw, bv: constant (random walk, corrected in update)
 

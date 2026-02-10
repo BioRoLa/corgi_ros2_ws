@@ -13,6 +13,8 @@
 #include <corgi_msgs/msg/trigger_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 
+#include <std_msgs/msg/float64_multi_array.hpp>
+
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
 #include "kinematic/ContactMap.hpp"
@@ -146,6 +148,13 @@ private:
 
     /// Whether the ESEKF has been initialized (on first triggered tick)
     bool esekf_initialized_ = false;
+
+    // ============================================================
+    // Debug publishers
+    // ============================================================
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_leg_obs_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_imu_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_zleg_pub_;
 
     // ============================================================
     // Misc
