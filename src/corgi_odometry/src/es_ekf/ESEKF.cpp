@@ -41,11 +41,17 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     // 1. Bias-corrected IMU measurements
     // ----------------------------------------------------------
+    // Gravity in world frame
+    static const Eigen::Vector3f g_world(0.0f, 0.0f, -9.81f);
+    
     Eigen::Vector3f a_hat = a_m - x_nom_.ba;   // corrected acceleration
     Eigen::Vector3f w_hat = w_m - x_nom_.bw;   // corrected angular velocity
 
     // Current body-to-world rotation
     Eigen::Matrix3f R_body = x_nom_.q.toRotationMatrix();
+
+    Eigen::Vector3f g_body = R_body.transpose() * g_world;  // gravity in body frame
+
 
     // ----------------------------------------------------------
     // 2. Rotation increment R_delta = Exp(w_hat * dt)
@@ -69,7 +75,7 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //    biases:  unchanged
     // ----------------------------------------------------------
     x_nom_.p += R_body * x_nom_.v * dt_;
-    x_nom_.v  = R_delta * x_nom_.v + R_delta * a_hat * dt_;
+    x_nom_.v  = R_delta * (x_nom_.v + a_hat * dt_ + g_body * dt_);
     x_nom_.q  = (x_nom_.q * Eigen::Quaternionf(R_delta)).normalized();
     // ba, bw, bv: constant (random walk, corrected in update)
 
@@ -94,7 +100,8 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
 
     // δv row
     Fx.block<3,3>(V_IDX, V_IDX)   =  R_delta;
-    Fx.block<3,3>(V_IDX, TH_IDX)  = -R_delta * skew(a_hat) * dt_;
+    Eigen::Vector3f a_total = a_hat + g_body;
+    Fx.block<3,3>(V_IDX, TH_IDX)  = -R_delta * skew(a_total) * dt_;
     Fx.block<3,3>(V_IDX, BA_IDX)  = -R_delta * dt_;
 
     // δθ row
