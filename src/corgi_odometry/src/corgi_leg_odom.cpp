@@ -2,6 +2,7 @@
 #include <chrono>
 #include <signal.h>
 #include "rclcpp/rclcpp.hpp"
+#include <nav_msgs/msg/odometry.hpp>
 #include "LegOdometryNode.hpp"
 #include "Config.hpp"
 
@@ -44,7 +45,8 @@ LegOdometryNode::LegOdometryNode()
           corgi::Config::DOF,
           false,   // CSV logging
           ""       // No CSV filename
-      )
+      ),
+      esekf_(static_cast<float>(corgi::Config::DT))
 {
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
@@ -70,9 +72,7 @@ LegOdometryNode::LegOdometryNode()
     // --- Publishers ---
     contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
-    // TODO: Create nav_msgs/Odometry publisher
-
-    // TODO: Initialize ESEKF
+    ekf_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("ekf", corgi::Config::QUEUE_SIZE_PUB);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
     RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
@@ -101,6 +101,7 @@ void LegOdometryNode::process() {
         }
         iteration_count_++;
         observer_.reset();
+        esekf_initialized_ = false;
         return;
     }
 
@@ -113,13 +114,108 @@ void LegOdometryNode::process() {
 
     publish_contact_state(disturbance);
 
-    // TODO: Extract IMU measurements (a_m, w_m) from imu_ msg
-    // TODO: Extract encoder states (theta, theta_d, beta, beta_d) per leg from motor_state_
-    // TODO: Build LegObservation per leg using ContactMap::lookup
-    // TODO: esekf_.predict(a_m, w_m)
-    // TODO: esekf_.update_all_legs(observations, w_m, exclude)
-    // TODO: esekf_.inject_and_reset()
-    // TODO: Publish odometry from esekf_.nominal()
+    // ==========================================================
+    // ES-EKF pipeline
+    // ==========================================================
+
+    // --- Initialize ESEKF on first triggered tick ---
+    if (!esekf_initialized_) {
+        estimation_model::NominalState x0;
+        // Start at zero position/velocity; attitude from IMU quaternion
+        x0.q = Eigen::Quaternionf(
+            static_cast<float>(imu_.orientation.w),
+            static_cast<float>(imu_.orientation.x),
+            static_cast<float>(imu_.orientation.y),
+            static_cast<float>(imu_.orientation.z)).normalized();
+        esekf_.init(x0);
+
+        // Reset per-leg contact_beta accumulators
+        contact_beta_.fill(0.f);
+
+        esekf_initialized_ = true;
+        RCLCPP_INFO(this->get_logger(), "ES-EKF initialized");
+    }
+
+    // --- 1. Extract IMU measurements (raw, in sensor frame) ---
+    // NOTE: Following original convention — filter operates in IMU sensor frame.
+    //       Roll rate (w.x) is zeroed to match the original system.
+    Eigen::Vector3f a_m(
+        static_cast<float>(imu_.linear_acceleration.x),
+        static_cast<float>(imu_.linear_acceleration.y),
+        static_cast<float>(imu_.linear_acceleration.z));
+    Eigen::Vector3f w_m(
+        0.0f,  // roll rate zeroed (same as original ROS1 convention)
+        static_cast<float>(imu_.angular_velocity.y),
+        static_cast<float>(imu_.angular_velocity.z));
+
+    // --- 2. Predict (IMU propagation) ---
+    esekf_.predict(a_m, w_m);
+
+    // --- 3. Build per-leg observations ---
+    const float w_y = static_cast<float>(imu_.angular_velocity.y);  // pitch rate
+
+    // Module order: [LF=a, RF=b, RH=c, LH=d] → leg_idx [0,1,2,3]
+    const corgi_msgs::msg::MotorState* modules[4] = {
+        &motor_state_.module_a,
+        &motor_state_.module_b,
+        &motor_state_.module_c,
+        &motor_state_.module_d
+    };
+
+    std::vector<estimation_model::LegObservation> observations;
+    observations.reserve(4);
+    std::array<bool, 4> exclude_flags{};
+
+    for (int i = 0; i < 4; ++i) {
+        auto obs = build_leg_observation(*modules[i], legs_[i], i, w_y);
+        exclude_flags[i] = !obs.in_contact;
+        observations.push_back(obs);
+    }
+
+    // --- 4. Update (sequential per-leg velocity constraint) ---
+    esekf_.update_all_legs(observations, w_m, exclude_flags);
+
+    // --- 5. Inject error state into nominal + reset ---
+    esekf_.inject_and_reset();
+
+    // --- 6. Publish ESEKF state ---
+    {
+        const auto& st = esekf_.nominal();
+        nav_msgs::msg::Odometry odom_msg;
+        odom_msg.header.stamp    = this->now();
+        odom_msg.header.frame_id = "odom";
+        odom_msg.child_frame_id  = "base_link";
+
+        // Position (world frame)
+        odom_msg.pose.pose.position.x = st.p.x();
+        odom_msg.pose.pose.position.y = st.p.y();
+        odom_msg.pose.pose.position.z = st.p.z();
+
+        // Orientation (body→world quaternion)
+        odom_msg.pose.pose.orientation.w = st.q.w();
+        odom_msg.pose.pose.orientation.x = st.q.x();
+        odom_msg.pose.pose.orientation.y = st.q.y();
+        odom_msg.pose.pose.orientation.z = st.q.z();
+
+        // Velocity (body frame)
+        odom_msg.twist.twist.linear.x = st.v.x();
+        odom_msg.twist.twist.linear.y = st.v.y();
+        odom_msg.twist.twist.linear.z = st.v.z();
+
+        // Angular velocity (bias-corrected gyro)
+        Eigen::Vector3f w_corrected = w_m - st.bw;
+        odom_msg.twist.twist.angular.x = w_corrected.x();
+        odom_msg.twist.twist.angular.y = w_corrected.y();
+        odom_msg.twist.twist.angular.z = w_corrected.z();
+
+        ekf_pub_->publish(odom_msg);
+    }
+
+    // TODO: Once EKF output is validated and stable:
+    //       - Remove position_sub_ and velocity_sub_ (and their callbacks)
+    //       - Feed ESEKF position/velocity into the disturbance observer
+    //         instead of the external topics, making this a fully
+    //         closed-loop estimation node.
 
     iteration_count_++;
 }
@@ -150,6 +246,51 @@ void LegOdometryNode::cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr m
 
 void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
     is_triggered_ = msg->enable;
+}
+
+// ============================================================
+// Build per-leg observation for ES-EKF update
+// ============================================================
+
+estimation_model::LegObservation LegOdometryNode::build_leg_observation(
+    const corgi_msgs::msg::MotorState& module,
+    Leg* leg, int leg_idx, float w_y)
+{
+    const float dt = static_cast<float>(corgi::Config::DT);
+
+    // --- Extract theta (opening angle) ---
+    float theta   = static_cast<float>(module.theta);
+
+    // --- Extract beta (rotation angle) with sign convention ---
+    // Right-side legs (RF=1, RH=2) have negated beta
+    bool is_right_side = (leg_idx == 1 || leg_idx == 2);
+    float beta    = is_right_side ? -static_cast<float>(module.beta)
+                                  :  static_cast<float>(module.beta);
+
+    // --- Motor velocities → joint velocities ---
+    // theta_d = (-velocity_r + velocity_l) / 2
+    // beta_d  = ( velocity_r + velocity_l) / 2   (negated for right-side legs)
+    float theta_d = static_cast<float>((-module.velocity_r + module.velocity_l) / 2.0);
+    float beta_d  = static_cast<float>(( module.velocity_r + module.velocity_l) / 2.0);
+    if (is_right_side) beta_d = -beta_d;
+
+    // --- Accumulate contact_beta ---
+    // contact_beta += (beta_d + omega_y) * dt
+    // Tracks the absolute ground-contact angle of the wheel rim
+    contact_beta_[leg_idx] += (beta_d + w_y) * dt;
+
+    // --- Determine contact rim via ContactMap ---
+    RIM rim = contact_map_.lookup(theta, contact_beta_[leg_idx]);
+
+    // --- Contact angle relative to body frame ---
+    float alpha = contact_beta_[leg_idx] - beta;
+
+    // --- Contact flag from Schmitt trigger ---
+    bool in_contact = leg_contact_state_[leg_idx] && (rim != NO_CONTACT);
+
+    return estimation_model::LegObservation{
+        leg, theta, theta_d, beta, beta_d, rim, alpha, in_contact
+    };
 }
 
 // ============================================================

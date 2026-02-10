@@ -11,10 +11,12 @@
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
 #include "kinematic/ContactMap.hpp"
+#include "es_ekf/ESEKF.hpp"
 #include "Config.hpp"
 
 /**
@@ -23,7 +25,13 @@
  * Responsibilities:
  *   1. Subscribe to IMU, motor state, position, velocity, trigger
  *   2. Run disturbance observer → publish contact state
- *   3. (TODO) Run ES-EKF for odometry estimation → publish odometry
+ *   3. Run ES-EKF for odometry estimation
+ *
+ * TODO: Once ES-EKF output is validated, remove position_sub_ and
+ *       velocity_sub_ (currently only used by disturbance observer).
+ *       Publish nav_msgs/Odometry so this node becomes a fully
+ *       closed-loop estimator that does not depend on external
+ *       position/velocity topics.
  */
 class LegOdometryNode : public rclcpp::Node {
 public:
@@ -50,6 +58,22 @@ private:
     void publish_contact_state(const Eigen::VectorXd& disturbance);
 
     // ============================================================
+    // ES-EKF helpers
+    // ============================================================
+
+    /// @brief Extract per-leg encoder state from motor_state_ message
+    ///        and build LegObservation for ES-EKF update.
+    ///        Handles sign conventions per leg side.
+    /// @param module   motor state of one leg module
+    /// @param leg      pointer to corresponding Leg kinematic model
+    /// @param leg_idx  index in the 4-leg array (0=LF,1=RF,2=RH,3=LH)
+    /// @param w_y      IMU pitch angular velocity [rad/s]
+    /// @return fully populated LegObservation
+    estimation_model::LegObservation build_leg_observation(
+        const corgi_msgs::msg::MotorState& module,
+        Leg* leg, int leg_idx, float w_y);
+
+    // ============================================================
     // Leg factory
     // ============================================================
     static Leg createLeg(double x_sign, double y_sign);
@@ -62,17 +86,23 @@ private:
     Leg rh_leg_ = createLeg(-1, -1);
     Leg lh_leg_ = createLeg(-1,  1);
 
+    /// Leg pointers in indexed order [LF, RF, RH, LH]
+    std::array<Leg*, 4> legs_ = {&lf_leg_, &rf_leg_, &rh_leg_, &lh_leg_};
+
     // ============================================================
     // ROS subscribers & publishers
     // ============================================================
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr          imu_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr      trigger_sub_;
 
+    // TODO: Remove position/velocity subs once ESEKF output is validated
+    //       and disturbance observer is decoupled or fed from ESEKF state.
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
+
     rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr    contact_state_pub_;
-    // TODO: Add nav_msgs/Odometry publisher
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 ekf_pub_;
 
     // ============================================================
     // Latest message storage
@@ -97,13 +127,25 @@ private:
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
 
     // ============================================================
-    // Processing components
+    // Processing components — disturbance observer
     // ============================================================
     DataProcessor              processor_;
     corgi::DisturbanceObserver observer_;
 
-    // TODO: Add ESEKF instance
-    // TODO: Add ContactMap instances (one per leg)
+    // ============================================================
+    // ES-EKF
+    // ============================================================
+    estimation_model::ESEKF esekf_;
+
+    /// ContactMap (shared, stateless lookup — one instance is enough)
+    estimation_model::ContactMap contact_map_;
+
+    /// Per-leg accumulated contact_beta [rad]
+    /// contact_beta += (beta_d + omega_y) * dt
+    std::array<float, 4> contact_beta_{{0.f, 0.f, 0.f, 0.f}};
+
+    /// Whether the ESEKF has been initialized (on first triggered tick)
+    bool esekf_initialized_ = false;
 
     // ============================================================
     // Misc

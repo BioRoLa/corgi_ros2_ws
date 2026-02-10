@@ -78,6 +78,7 @@ ament_target_dependencies(corgi_leg_odom
   std_msgs 
   rosgraph_msgs 
   geometry_msgs 
+  nav_msgs
   corgi_msgs
 )
 
