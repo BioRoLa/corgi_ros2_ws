@@ -53,7 +53,7 @@ void convert_force_to_local(double *f_global, const Eigen::Matrix3d& R_T) {
 }
 
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv){
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_mpc");
     
@@ -207,6 +207,7 @@ int main(int argc, char **argv) {
                 cmd->by = mpc.By_stance;
                 cmd->kx = mpc.Kx_stance;
                 cmd->ky = mpc.Ky_stance;
+            }
 
             RCLCPP_INFO(node->get_logger(), "MPC Controller Starts ...");
 
