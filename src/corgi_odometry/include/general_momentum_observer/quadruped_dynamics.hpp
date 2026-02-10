@@ -3,7 +3,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 
-namespace quadruped_dynamics {
+namespace simplify_dynamics {
 
 /**
  * @brief Compute dynamics matrices for 12-DOF corgi robot
@@ -39,4 +39,4 @@ void compute_mass_matrix(
     Eigen::Ref<Eigen::MatrixXd> M
 );
 
-} // namespace quadruped_dynamics
+} // namespace simplify_dynamics

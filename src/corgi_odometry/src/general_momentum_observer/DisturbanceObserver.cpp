@@ -158,7 +158,7 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
     }
     
     // Compute robot dynamics
-    quadruped_dynamics::compute_dynamics(q, q_dot, I_c, M_, C_, G_, D_);
+    simplify_dynamics::compute_dynamics(q, q_dot, I_c, M_, C_, G_, D_);
     
     // === Discrete-time Disturbance Observer Core Algorithm ===
     

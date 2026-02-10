@@ -1,6 +1,6 @@
 #include "general_momentum_observer/quadruped_dynamics.hpp"
 
-namespace quadruped_dynamics {
+namespace simplify_dynamics {
 
 void compute_dynamics(
     const Eigen::Ref<const Eigen::VectorXd>& q,
@@ -410,4 +410,4 @@ void compute_mass_matrix(
     compute_dynamics(q, q_dot_dummy, I_c, M, C_dummy, G_dummy, D_dummy);
 }
 
-} // namespace quadruped_dynamics
+} // namespace simplify_dynamics
