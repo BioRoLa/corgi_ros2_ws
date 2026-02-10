@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""
+Launch file for Contact Leg Estimator and Velocity Estimator (Online Version)
+"""
+
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+
+
+def generate_launch_description():
+    """Generate launch description for contact leg estimator and velocity estimator."""
+    
+    cutoff_freq_arg = DeclareLaunchArgument(
+        'cutoff_freq',
+        default_value='30.0',
+        description='Low-pass filter cutoff frequency (Hz)'
+    )
+    
+    # Create velocity estimator node
+    velocity_estimator_node = Node(
+        package='corgi_odometry',
+        executable='velocity_estimator',
+        name='velocity_estimator',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'cutoff_freq': LaunchConfiguration('cutoff_freq'),
+            'sample_rate': 1000.0,
+            'position_topic': 'sim/data',
+            'velocity_topic': 'odometry/velocity',
+            'position_output_topic': 'odometry/position',
+        }]
+    )
+    
+    # Create leg odom node
+    corgi_leg_odom_node = Node(
+        package='corgi_odometry',
+        executable='corgi_leg_odom',
+        name='corgi_leg_odom',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+        }],
+        remappings=[
+            # Uncomment and modify if you need to remap topics
+            # ('motor/state', '/custom/motor/state'),
+            # ('imu', '/custom/imu/filtered'),
+            # ('odometry/position', '/custom/odometry/position'),
+        ]
+    )
+    return LaunchDescription([
+        cutoff_freq_arg,
+        velocity_estimator_node,
+        corgi_leg_odom_node,
+    ])
