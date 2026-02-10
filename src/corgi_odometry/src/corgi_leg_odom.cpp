@@ -217,6 +217,21 @@ private:
         contact_state_pub_->publish(contact_msg);
     }
     
+    static Leg createLeg(double x_sign, double y_sign) {
+        using corgi::Config;
+        return Leg{
+            Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET, y_sign * Config::LEG_Y_OFFSET, Config::LEG_Z_OFFSET),
+            Config::WHEEL_RADIUS,
+            Config::WHEEL_WIDTH
+        };
+    }
+    
+    // (x, y) signs for leg positions
+    Leg lf_leg = createLeg( 1,  1);
+    Leg rf_leg = createLeg( 1, -1);
+    Leg rh_leg = createLeg(-1, -1);
+    Leg lh_leg = createLeg(-1,  1);
+
     // ROS2 publishers and subscribers
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
@@ -251,13 +266,6 @@ private:
     DataProcessor processor_;
     corgi::DisturbanceObserver observer_;
 
-    //Legs model
-    Leg lf_leg{Eigen::Vector3f( corgi::Config::LEG_X_OFFSET,  corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
-    Leg rf_leg{Eigen::Vector3f( corgi::Config::LEG_X_OFFSET, -corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
-    Leg rh_leg{Eigen::Vector3f(-corgi::Config::LEG_X_OFFSET, -corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
-    Leg lh_leg{Eigen::Vector3f(-corgi::Config::LEG_X_OFFSET,  corgi::Config::LEG_Y_OFFSET, corgi::Config::LEG_Z_OFFSET), corgi::Config::WHEEL_RADIUS, corgi::Config::WHEEL_WIDTH};
-    
-    // TODO: Add leg kinematic models (one for each leg)
     // TODO: Add odometry state variables (pose, velocity)
     // TODO: Add odometry publisher (nav_msgs/Odometry)
     
