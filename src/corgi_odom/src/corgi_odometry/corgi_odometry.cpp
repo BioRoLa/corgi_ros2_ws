@@ -158,6 +158,17 @@ void Encoder::init(float dt){
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("corgi_odometry");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     // ROS Publishers
     auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/velocity", 10);
@@ -178,7 +189,9 @@ int main(int argc, char **argv) {
 
     node_logger = node->get_logger();
     Eigen::initParallel();
-    rclcpp::Rate rate(ODOM_ESTIMATOR_RATE);
+    
+    rclcpp::Duration period(0, 1000000000.0 / ODOM_ESTIMATOR_RATE); // Convert Hz to nanoseconds
+    rclcpp::Time next_time = node->now();
 
     /* Estimate model initialization */
 
@@ -387,7 +400,12 @@ int main(int argc, char **argv) {
         if(counter > 0 && !trigger){
             break;
         }
-        rate.sleep();
+        
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node_logger, "Sleep until failed!");
+            break;
+        }
     }
 
     rclcpp::shutdown();

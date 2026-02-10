@@ -119,6 +119,17 @@ double low_pass_filter(double value, double prev_value, double cutoff_freq, doub
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("corgi_z_position");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     // ROS Publishers
     auto z_position_pub = node->create_publisher<std_msgs::msg::Float64>("odometry/z_position_hip", 10);
@@ -134,7 +145,9 @@ int main(int argc, char **argv) {
         "odometry/contact", 10, contact_cb);
     
     node_logger = node->get_logger();
-    rclcpp::Rate rate(Z_POS_ANALYSIS_RATE);
+    
+    rclcpp::Duration period(0, 1000000000.0 / Z_POS_ANALYSIS_RATE); // Convert Hz to nanoseconds
+    rclcpp::Time next_time = node->now();
 
     Eigen::Quaterniond q;
     double roll = 0;
@@ -227,8 +240,12 @@ int main(int argc, char **argv) {
                 }
                 logger.logState(state);
             }
-
-            rate.sleep();
+        }
+        
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node_logger, "Sleep until failed!");
+            break;
         }
     }
     
