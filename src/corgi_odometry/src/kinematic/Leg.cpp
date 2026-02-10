@@ -140,7 +140,8 @@ void Leg::PointContact(RIM rim, float alpha) {
 }
 
 void Leg::PointVelocity(Eigen::Vector3f v, Eigen::Vector3f w, RIM rim, float alpha, bool inbody_coord) {
-    float rim_radius = rim == G_POINT? this->r : this->r + this->R;
+    // float rim_radius = rim == G_POINT? this->r : this->r + this->R; // legacy calculation
+    float rim_radius = this->r + this->R;
     if (this->offset(1) < 0) link_w = O2_w_; // right side leg, left side lower rim
     else link_w = O2_w;
     rim_p = std::polar((float) rim_radius, (float)(M_PI_F + alpha));
