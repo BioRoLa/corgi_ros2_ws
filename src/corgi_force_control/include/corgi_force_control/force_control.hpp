@@ -24,6 +24,7 @@
 class ForceControlNode : public rclcpp::Node {
 public:
     ForceControlNode();
+    void run();
 
 private:
     // Callback functions
@@ -65,7 +66,6 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Publisher<corgi_msgs::msg::MotorCmdStamped>::SharedPtr motor_cmd_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
     
     // State variables
     std::vector<Eigen::MatrixXd> phi_vel_prev_modules_;

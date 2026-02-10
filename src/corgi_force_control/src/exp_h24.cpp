@@ -46,6 +46,17 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
       h_(0.0)
 {
     RCLCPP_INFO(this->get_logger(), "Impedance Command Publisher Starts");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        if (this->now().seconds() > 0.0) {
+            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     imp_cmd_pub_ = this->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
     trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -95,6 +106,9 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
     LegModel& legmodel = kinematics_.get_leg_model();
     std::array<double, 2> eta;
     
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+    
     for (int i=0; i<2000; i++){
         s_ = 0.12;
         h_ = 0.12;
@@ -120,10 +134,15 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         imp_cmd_modules_[3]->fy = f_hind;
 
         imp_cmd_.header.seq = -1;
+        imp_cmd_.header.stamp = this->now();
 
         imp_cmd_pub_->publish(imp_cmd_);
 
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        next_time += period;
+        if(!this->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
+            break;
+        }
     }
 }
 
@@ -131,6 +150,9 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
     LegModel& legmodel = kinematics_.get_leg_model();
     std::array<double, 2> eta;
     double ds = 0.0;
+    
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
     
     int loop_count = 0;
     while (rclcpp::ok()) {
@@ -183,17 +205,25 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
         }
 
         imp_cmd_.header.seq = loop_count;
+        imp_cmd_.header.stamp = this->now();
 
         imp_cmd_pub_->publish(imp_cmd_);
 
         loop_count++;
 
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        next_time += period;
+        if(!this->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
+            break;
+        }
     }
 }
 
 void ImpedanceCmdPublisherNode::run() {
     execute_initialization_phase();
+    
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
     
     while (rclcpp::ok()) {
         rclcpp::spin_some(this->get_node_base_interface());
@@ -203,7 +233,8 @@ void ImpedanceCmdPublisherNode::run() {
             break;
         }
 
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        next_time += period;
+        this->get_clock()->sleep_until(next_time);
     }
 }
 
