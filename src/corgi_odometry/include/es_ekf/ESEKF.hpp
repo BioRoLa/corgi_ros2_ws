@@ -49,8 +49,10 @@ struct NoiseParams {
     Eigen::Vector3f sigma_bw = {1e-5f, 1e-5f, 1e-5f};             // gyro bias
     Eigen::Vector3f sigma_bv = {1e-6f, 1e-6f, 1e-6f};             // velocity bias
 
-    // Leg measurement noise (from original system: dL = 2.5e-7)
-    float sigma_leg = 2.5e-7f;
+    // Leg measurement noise
+    // NOTE: 2.5e-7 was far too small (filter over-trusts leg obs → bias divergence)
+    //       1e-3 gives ~0.03 m/s std, balancing IMU predict vs leg update
+    float sigma_leg = 1e-3f;
 };
 
 // ============================================================
