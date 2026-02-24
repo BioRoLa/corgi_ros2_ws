@@ -19,9 +19,7 @@
 #include "sensor_msgs/msg/range.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
-#include "geometry_msgs/msg/vector3.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
-#include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
@@ -41,9 +39,6 @@ corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::msg::ForceStateStamped force_state;
 geometry_msgs::msg::TransformStamped tf_data;
 bool tf_data_valid = false;
-geometry_msgs::msg::Vector3 odom_pos;
-geometry_msgs::msg::Vector3 odom_vel;
-double odom_z;
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -143,9 +138,6 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
-                        << "odom_pos_x" << "," << "odom_pos_y" << "," << "odom_pos_z" << ","
-                        << "odom_vel_x" << "," << "odom_vel_y" << "," << "odom_vel_z" << ","
-
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
                         << "v_0" << "," << "i_0" << ","
                         << "v_1" << "," << "i_1" << ","
@@ -205,18 +197,6 @@ void imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr cmd){
 
 void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr state){
     force_state = *state;
-}
-
-void odom_pos_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
-    odom_pos = *msg;
-}
-
-void odom_vel_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
-    odom_vel = *msg;
-}
-
-void odom_z_cb(const std_msgs::msg::Float64::SharedPtr msg){
-    odom_z = msg->data;
 }
 
 void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
@@ -302,9 +282,6 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << tf_data.transform.translation.x << "," << tf_data.transform.translation.y << "," << tf_data.transform.translation.z << ","
                 << tf_data.transform.rotation.x << "," << tf_data.transform.rotation.y << "," << tf_data.transform.rotation.z << "," << tf_data.transform.rotation.w << ","
 
-                << odom_pos.x << "," << odom_pos.y << "," << odom_z << ","
-                << odom_vel.x << "," << odom_vel.y << "," << odom_vel.z << ","
-
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -355,9 +332,6 @@ int main(int argc, char **argv) {
     tf2_ros::Buffer tfBuffer(node->get_clock());
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/position", 1000, odom_pos_cb);
-    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/velocity", 1000, odom_vel_cb);
-    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
     auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 1000, stair_info_cb);
     auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 1000, range_1_cb);
     auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 1000, range_2_cb);
