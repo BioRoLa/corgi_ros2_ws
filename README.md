@@ -130,11 +130,11 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     6. **MIP_SDK**
     Clone the `mip_sdk` repository and follow the installation instructions:
       ```bash
-      cd corgi_ws
+      cd corgi_ws/install
       git clone --branch fix-install-interface --single-branch https://github.com/hiho817/mip_sdk.git
       cd mip_sdk
       mkdir build && cd build
-      cmake .. -DMIP_USE_SERIAL=ON
+      cmake .. -DMIP_USE_SERIAL=ON -DCMAKE_PREFIX_PATH=$HOME/corgi_ws/install -DCMAKE_INSTALL_PREFIX=$HOME/corgi_ws/install
       make -j16
       sudo make install
       ```
