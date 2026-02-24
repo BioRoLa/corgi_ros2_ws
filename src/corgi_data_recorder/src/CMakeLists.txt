@@ -7,6 +7,7 @@ ament_target_dependencies(corgi_data_recorder
   geometry_msgs
   sensor_msgs
   corgi_msgs
+  tf2_ros
 )
 
 install(TARGETS corgi_data_recorder
