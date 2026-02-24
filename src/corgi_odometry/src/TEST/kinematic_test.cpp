@@ -304,7 +304,7 @@ int main(int argc, char** argv) {
             leg.PointContact(rim, alpha);
 
             Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
-            Eigen::Vector3f w_vec(w_x, w_y, w_z);
+            Eigen::Vector3f w_vec(0.0f, w_y, 0.0f);  // only w_y; w_x/w_z zeroed (XZ-plane robot)
             leg.PointVelocity(v_zero, w_vec, rim, alpha, true);
             Eigen::Vector3f pv_vel = -leg.contact_velocity;
 
