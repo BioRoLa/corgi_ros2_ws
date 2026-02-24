@@ -154,7 +154,12 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     obs.leg->PointContact(obs.rim, obs.alpha);
 
     // Use bias-corrected gyro for the ω×r term
+    // Zero w_x/w_z: robot moves in XZ-plane, only pitch rate (w_y) is
+    // meaningful. Noise in roll/yaw gyro × large y-offset creates
+    // spurious velocity in the observation.
     Eigen::Vector3f w_corrected = w_m - x_nom_.bw;
+    w_corrected.x() = 0.0f;
+    w_corrected.z() = 0.0f;
     Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
     obs.leg->PointVelocity(v_zero, w_corrected, obs.rim, obs.alpha, true);
 

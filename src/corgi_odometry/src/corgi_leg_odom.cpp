@@ -204,7 +204,9 @@ void LegOdometryNode::process() {
     //   [z_leg.x, z_leg.y, z_leg.z, contact_pt.x, contact_pt.y, contact_pt.z]
     {
         std_msgs::msg::Float64MultiArray dbg;
-        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;
+        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;        // Zero w_x/w_z: XZ-plane robot, only pitch rate matters for leg kinematics
+        w_corrected.x() = 0.0f;
+        w_corrected.z() = 0.0f;        
         for (int i = 0; i < 4; ++i) {
             auto& o = observations[i];
             // Recompute FK + contact for debug (same as ESEKF::update_leg)
