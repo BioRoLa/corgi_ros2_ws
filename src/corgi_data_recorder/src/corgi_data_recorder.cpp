@@ -253,7 +253,7 @@ void write_data(rclcpp::Node::SharedPtr node) {
         return;
     }
 
-    output_file << node->now().nanoseconds() / 10e9 << ","
+    output_file << node->now().nanoseconds() / 1e9 << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << ","
@@ -343,7 +343,21 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
     auto node = rclcpp::Node::make_shared("corgi_data_recorder");
-
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        rclcpp::spin_some(node);
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
     auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
