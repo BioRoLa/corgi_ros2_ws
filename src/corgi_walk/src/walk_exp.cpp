@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 
     /* Behavior loop */
     // --- Synchronization Setup ---
-    // Define 1ms control period (1,000,000 nanoseconds)
+    // Define control period for the behavior loop
     rclcpp::Duration period(0, 1000000);
 
     // Wait for the ROS 2 clock to start (important if simulation is paused)
