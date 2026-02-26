@@ -84,9 +84,9 @@ int main(int argc, char **argv)
         next_time += period;
         if (!node->get_clock()->sleep_until(next_time))
         {
-            // If the clock jumps or we miss a cycle, warn but continue
+            // If the clock jumps or we miss a cycle, warn and exit the loop for consistency
             RCLCPP_WARN(node->get_logger(), "Missed control cycle or clock jump");
-            next_time = node->now(); // Reset baseline
+            break;
         }
     }
 
