@@ -45,17 +45,17 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
     while (rclcpp::ok())
     {
-        // 1. 處理一下 callback，嘗試接收 /clock
+        // 1. Process callbacks to try receiving the /clock topic
         rclcpp::spin_some(node);
 
-        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        // 2. Check whether the current time is greater than 0 (indicates /clock has been received)
         if (node->now().seconds() > 0.0)
         {
             RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
-            break; // 成功對時，跳出等待
+            break; // Clock synchronized successfully; exit the wait loop
         }
 
-        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        // 3. Sleep briefly to avoid 100% CPU usage (Wall time is fine here since we're only waiting for the connection)
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
     auto start_time = node->now();
