@@ -74,7 +74,6 @@ int main(int argc, char **argv)
     double max_cal_time = 0.0;
 
     /* Initial variable */
-    rclcpp::WallRate rate(std::chrono::milliseconds(1000 / sampling_rate));
     WalkGait walk_gait(false, CoM_bias[0], sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
                                                       {INIT_BETA, INIT_BETA, INIT_BETA, INIT_BETA}}}; // init eta (wheel mode)
@@ -86,7 +85,29 @@ int main(int argc, char **argv)
     int command_count;
 
     /* Behavior loop */
-    auto start = std::chrono::high_resolution_clock::now();
+    // --- Synchronization Setup ---
+    // Define control period based on sampling_rate (seconds = 1 / sampling_rate)
+    rclcpp::Duration period = rclcpp::Duration::from_seconds(1.0 / static_cast<double>(sampling_rate));
+
+    // Wait for the ROS 2 clock to start (important if simulation is paused)
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    while (rclcpp::ok())
+    {
+        // 1. Process callbacks to try to receive /clock messages
+        rclcpp::spin_some(node);
+
+        // 2. Check if the current time is greater than 0 (indicates that the clock has been received)
+        if (node->now().seconds() > 0.0)
+        {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // Successfully synchronized, exit waiting loop
+        }
+
+        // 3. Sleep briefly to avoid 100% CPU usage (Wall time is fine while waiting for the connection)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+    auto start_time = node->now();
+    rclcpp::Time next_time = start_time;
     walk_gait.set_velocity(velocity);
     walk_gait.set_stand_height(stand_height);
     walk_gait.set_step_length(step_length);
@@ -185,12 +206,22 @@ int main(int argc, char **argv)
             max_cal_time = one_loop_duration.count();
             std::cout << "max time: " << max_cal_time << " us" << std::endl;
         } // end if
-        rate.sleep();
+
+        // --- Synchronized Sleep ---
+        next_time += period;
+        if (!node->get_clock()->sleep_until(next_time))
+        {
+            // If the clock jumps or we miss a cycle, warn but continue
+            RCLCPP_WARN(node->get_logger(), "Missed control cycle or clock jump");
+            next_time = node->now(); // Reset baseline
+        }
     } // end while
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    auto end_time = node->now();
+    auto duration = end_time - start_time;
+
     std::cout << "max time: " << max_cal_time << " us" << std::endl;
-    std::cout << "time: " << duration.count() << " ms" << std::endl;
+    std::cout << "time: " << duration.seconds() << " seconds" << std::endl;
     std::cout << "total count: " << command_count << std::endl;
 
     rclcpp::shutdown();
