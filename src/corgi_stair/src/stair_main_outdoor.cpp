@@ -57,7 +57,21 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("stair_climb");
-
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        rclcpp::spin_some(node);
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
     auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto camera_sub = node->create_subscription<corgi_msgs::msg::StairPlanes>("stair_planes", 10, camera_cb);
@@ -112,7 +126,10 @@ int main(int argc, char **argv)
     const double min_step_length = 0.2;
 
     /* Initial variable */
-    rclcpp::WallRate rate(std::chrono::milliseconds(1000 / sampling_rate));
+    //rclcpp::WallRate rate(std::chrono::milliseconds(1000 / sampling_rate));
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1e9 / sampling_rate); // 1ms
+    rclcpp::Time next_time = node->now();
     WalkGait walk_gait(false, CoM_bias[0], sampling_rate);
     StairClimb stair_climb(false, CoM_bias, sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
@@ -431,7 +448,12 @@ int main(int argc, char **argv)
             max_cal_time = one_loop_duration.count();
             std::cout << "max time: " << max_cal_time << " us" << std::endl;
         } // end if
-        rate.sleep();
+        //rate.sleep();
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+            break;
+        }
     } // end while
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
