@@ -18,7 +18,7 @@
 #include "corgi_msgs/msg/force_state_stamped.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
-#include "sensor_msgs/msg/imu.hpp"
+#include "corgi_msgs/msg/imu_stamped.hpp"
 
 
 class ForceControlNode : public rclcpp::Node {
@@ -31,7 +31,7 @@ private:
     void imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg);
     void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg);
     void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg);
-    void imu_cb(const sensor_msgs::msg::Imu::SharedPtr msg);
+    void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg);
     void timer_cb();
     
     // Control functions
@@ -58,13 +58,13 @@ private:
     corgi_msgs::msg::ForceStateStamped force_state_;
     corgi_msgs::msg::MotorStateStamped motor_state_;
     corgi_msgs::msg::MotorCmdStamped motor_cmd_;
-    sensor_msgs::msg::Imu imu_;
+    corgi_msgs::msg::ImuStamped imu_;
     
     // ROS2 interfaces
     rclcpp::Subscription<corgi_msgs::msg::ImpedanceCmdStamped>::SharedPtr imp_cmd_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ForceStateStamped>::SharedPtr force_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Publisher<corgi_msgs::msg::MotorCmdStamped>::SharedPtr motor_cmd_pub_;
     
     // State variables

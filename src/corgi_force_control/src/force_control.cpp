@@ -31,7 +31,7 @@ ForceControlNode::ForceControlNode()
         "motor/state", 1000, 
         std::bind(&ForceControlNode::motor_state_cb, this, std::placeholders::_1));
     
-    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+    imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 1000, 
         std::bind(&ForceControlNode::imu_cb, this, std::placeholders::_1));
     
@@ -51,7 +51,7 @@ void ForceControlNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::
     motor_state_ = *msg;
 }
 
-void ForceControlNode::imu_cb(const sensor_msgs::msg::Imu::SharedPtr msg) {
+void ForceControlNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
     imu_ = *msg;
 }
 
