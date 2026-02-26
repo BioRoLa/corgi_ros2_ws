@@ -52,7 +52,7 @@ int main(int argc, char **argv)
     int count = 0;
 
     // --- Synchronization Setup ---
-    // Define control period based on sampling_rate (in Hz)
+    // Define control period based on sampling_rate (seconds = 1 / sampling_rate)
     rclcpp::Duration period = rclcpp::Duration::from_seconds(1.0 / static_cast<double>(sampling_rate));
 
     // Wait for the ROS 2 clock to start (important if simulation is paused)
