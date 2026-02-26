@@ -397,7 +397,7 @@ std::array<double, 2> find_pose(Robot &robot, LegModel &leg, double height, floa
     }
     return eta_ini;
 }
-void Send(Robot &robot)
+void Send(Robot &robot,rclcpp::Time &next_time,const rclcpp::Duration &period)
 {
     // next to current and send
     for (int i = 0; i < 4; i++)
@@ -421,7 +421,12 @@ void Send(Robot &robot)
     }
     motor_cmd.header.stamp = g_node->get_clock()->now();
     motor_cmd_pub_->publish(motor_cmd);
-    rate_ptr->sleep();
+    //rate.sleep();
+    next_time += period;
+    if(!g_node->get_clock()->sleep_until(next_time)){
+        RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
+        return;
+    }
 }
 void Print_current_Info(Robot &robot)
 {
@@ -1544,9 +1549,9 @@ int main(int argc, char **argv)
     robot.incre_duty = robot.dS / robot.initial_SL;
 
     // D. Ros
-    RCLCPP_INFO(g_node->get_logger(), "Test");
     rclcpp::init(argc, argv);
     g_node = rclcpp::Node::make_shared("corgi_zigzag_test");
+    RCLCPP_INFO(g_node->get_logger(), "Test");
     rclcpp::executors::SingleThreadedExecutor exec;
     exec.add_node(g_node);
     std::thread spin_thread([&exec]()
@@ -1556,15 +1561,34 @@ int main(int argc, char **argv)
         "/motor/state", robot.pub_rate, motor_state_cb);
     // motor cmd pub
     motor_cmd_pub_ = g_node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", robot.pub_rate);
-    rate_ptr = std::make_shared<rclcpp::Rate>(robot.pub_rate);
+
+    RCLCPP_INFO(g_node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        //exec.spin_some();
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (g_node->now().seconds() > 0.0) {
+            RCLCPP_INFO(g_node->get_logger(), "Clock synced! Sim Time: %.2f", g_node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = g_node->now();
 
     // 最佳化初始最佳姿態
     // swing 加上 td prediction
     Initialize(robot, leg_model, false, 0, file2);
-    Send(robot);
+    Send(robot,next_time,period);
     for (int i = 0; i < 10; ++i)
     {
-        Send(robot);
+        Send(robot,next_time,period);
     }
     csv(robot, leg_model, file2);
     // 加上control讓我可以控制什時候下一步
@@ -1574,7 +1598,7 @@ int main(int argc, char **argv)
         //     // std::cout << "robot position: " << robot.body_position[0] << std::endl;
         Step(robot, leg_model, file2);
         //     // std::cout << "Send " <<  std::endl;
-        Send(robot);
+        Send(robot,next_time,period);
         //     // std::cout << "Store " <<  std::endl;
         csv(robot, leg_model, file2);
     }
