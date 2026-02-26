@@ -60,7 +60,7 @@ int main(int argc, char **argv)
         // 1. Process callbacks to attempt receiving the /clock topic
         rclcpp::spin_some(node);
 
-        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        // 2. Check if current time is greater than 0 (indicates the clock has been received)
         if (node->now().seconds() > 0.0)
         {
             RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
