@@ -50,8 +50,8 @@ int main(int argc, char **argv)
     int count = 0;
 
     // --- Synchronization Setup ---
-    // Define 1ms control period (1,000,000 nanoseconds)
-    rclcpp::Duration period(0, 1000000);
+    // Define control period based on sampling_rate (seconds = 1 / sampling_rate)
+    rclcpp::Duration period = rclcpp::Duration::from_seconds(1.0 / static_cast<double>(sampling_rate));
 
     // Wait for the ROS 2 clock to start (important if simulation is paused)
     RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
