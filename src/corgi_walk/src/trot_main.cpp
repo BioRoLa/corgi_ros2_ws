@@ -117,7 +117,6 @@ int main(int argc, char **argv)
     auto end_time = node->now();
     auto duration = end_time - start_time;
 
-    std::cout << "Transformation complete." << std::endl;
     std::cout << "Total Simulation Time: " << duration.seconds() << " seconds" << std::endl;
 
     rclcpp::shutdown();
