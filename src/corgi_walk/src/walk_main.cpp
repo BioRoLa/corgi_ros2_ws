@@ -57,7 +57,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
     while (rclcpp::ok())
     {
-        // 1. 處理一下 callback，嘗試接收 /clock
+        // 1. Process callbacks to attempt receiving the /clock topic
         rclcpp::spin_some(node);
 
         // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
