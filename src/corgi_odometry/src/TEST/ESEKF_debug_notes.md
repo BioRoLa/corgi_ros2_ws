@@ -180,19 +180,91 @@ z_leg = -contact_velocity
 
 ---
 
-## 5. 建議的 Debug 順序
+## 5. 第二步：觸地判斷驗證 (Schmitt Trigger Tuning)
+
+### 5.1 實驗設計
+
+使用 `output_data/walk_3m_01m.csv` 錄製資料（行走 0.1 m/s 前進 3m）：
+- **資料**：31105 筆 (31.1s, 1kHz)，有效欄位為 motor state, imu, sim_pos
+- **Force / dst 欄位為空**，無 ground truth 接觸力
+- **驗證方式**：以 sim_pos 有限差分求 GT 速度，比較不同觸地判斷下的腿部里程計速度估測 RMSE
+
+### 5.2 Disturbance Observer 產出
+
+使用 `offline_test` 產生 disturbance 估測 (`walk_3m_01m_result.csv`)：
+- **觀察者架構**：General Momentum Observer (GMO), cutoff=15Hz, γ=0.91
+- **輸出**: 12 維 disturbance vector → 每腿取 `rm` (法向力) 和 `beta` (扭矩)
+- **Index 對應**: beta_a=4, rm_a=5, beta_b=6, rm_b=7, beta_c=8, rm_c=9, beta_d=10, rm_d=11
+
+#### 穩態訊號統計（跳過前 500 筆 transient）
+
+| 訊號 | 平均 |rm| | std |rm| | max |rm| | 平均 |β| | std |β| | max |β| |
+|------|---------|---------|---------|---------|---------|---------|
+| Leg A (LF) | 57.2 | 41.6 | 138.8 | 1.52 | 1.55 | 7.35 |
+| Leg B (RF) | 57.8 | 42.2 | 139.3 | 1.64 | 1.79 | 8.17 |
+
+> **觀察**：rm 值持續 >25（行走時四足幾乎總在接觸），beta 值較小（mean ~1.5, max ~8）。
+
+### 5.3 Schmitt Trigger 測試結果
+
+**測試腳本**: `src/TEST/contact_detection/tune_schmitt_trigger.py`
+
+#### 8 種閾值配置比較
+
+| Config | 邏輯 | rm_H | rm_L | β_H | β_L | RMSE_vx | 平均觸地腿數 | Coverage | 各腿觸地率 |
+|--------|------|------|------|-----|-----|---------|-------------|----------|-----------|
+| **Current OR (rm=25,β=10)** | OR | 25 | 15 | 10 | 1 | **4.5 mm/s** | 2.91 | 100% | 70/71/75/75% |
+| AND rm=50,β=2 | AND | 50 | 25 | 2 | 0.5 | 4.7 mm/s | 2.39 | 100% | 59/57/61/62% |
+| AND rm=40,β=2 | AND | 40 | 20 | 2 | 0.5 | 5.3 mm/s | 2.45 | 100% | 59/61/61/63% |
+| AND rm=25,β=2 | AND | 25 | 15 | 2 | 0.5 | 5.3 mm/s | 2.47 | 100% | 59/61/62/64% |
+| AND rm=30,β=1.5 | AND | 30 | 15 | 1.5 | 0.3 | 6.3 mm/s | 2.77 | 100% | 70/72/67/68% |
+| AND rm=25,β=1 | AND | 25 | 15 | 1 | 0.3 | 6.3 mm/s | 3.06 | 100% | 81/75/75/75% |
+| **Current AND (rm=25,β=10)** | AND | 25 | 15 | 10 | 1 | **68.5 mm/s** | 0.58 | 57.8% | 0/0/0/58% |
+| rm_only (rm=25) | OR | 25 | 15 | ∞ | 0 | **148.8 mm/s** | 4.00 | 100% | 100/100/100/100% |
+
+### 5.4 關鍵發現
+
+1. **現行 OR 邏輯 (rm=25,β=10) 在行走資料上表現最佳** (RMSE 4.5 mm/s)
+   - 因為 rm >> 25 所以 OR 條件幾乎總被 rm 滿足
+   - β threshold (10) 高於大部分 beta 值，但因為用 OR 所以不影響
+   - 實際行為等同於 rm-only trigger（但有 β<1 的 deactivation 條件保護）
+
+2. **AND 邏輯需要大幅降低 β threshold**：
+   - `β_HIGH=10`：失效（68.5 mm/s RMSE），因 beta 幾乎不超過 10，只有 leg d 偶爾觸發
+   - `β_HIGH=2`：可用（4.7~5.3 mm/s RMSE），觸地率 ~60%，更 selective
+   - `β_HIGH=1`：過於寬鬆，幾乎所有時刻都觸發 (75~81%)
+
+3. **純 rm 判斷不可行**：rm 在行走時恆 >25，導致全部 4 足永遠判為觸地
+   - 空中腿的錯誤速度觀測 → RMSE 148.8 mm/s
+
+4. **AND rm=50,β=2 是最佳 AND 配置**：
+   - RMSE 4.7 mm/s（僅比 OR 差 0.2 mm/s）
+   - 更 selective：平均 2.39 腿觸地（vs OR 的 2.91）
+   - rm 閾值提高到 50 可以更好地排除 swing phase
+
+### 5.5 結論與建議
+
+> **現行 OR 邏輯在穩定行走下表現良好**，觸地判斷本身不是 ESEKF 失敗的直接原因。
+>
+> 若要切換為 AND 邏輯（更 robust against false positive），建議：
+> - `CONTACT_BETA_THRESHOLD_HIGH` 降至 **2.0**（從 10）
+> - `CONTACT_BETA_THRESHOLD_LOW` 降至 **0.5**（從 1）
+> - `CONTACT_RM_THRESHOLD_HIGH` 可提高至 **40~50** 增加 selectivity
+>
+> 但優先排查其他問題（觀測噪聲/ESEKF 數值穩定性），因為觸地判斷表現尚可。
+
+---
+
+## 6. 建議的 Debug 順序
 
 ```
-Step 1 ✅  運動學計算驗證 → 通過（本次）
-
-Step 2 →  觸地判斷驗證
-          - 記錄 GMO + Schmitt Trigger 的觸地結果
-          - 與 ground truth 或 KLD 結果對比
-          - 在 ESEKF 中暫時使用 KLD 觸地結果測試
+Step 1 ✅  運動學計算驗證 → 通過
+Step 2 ✅  觸地判斷驗證 → 觸地判斷表現尚可，非主因
 
 Step 3 →  觀測噪聲調參
-          - 增大 sigma_leg
+          - 增大 sigma_leg（目前 1e-3 可能太小）
           - 比較不同噪聲參數下的收斂行為
+          - 注意：瞬時速度 noise 比平均速度高 ~10x
 
 Step 4 →  ESEKF 隔離測試
           - 用固定的（已知正確的）觸地狀態 + 運動學觀測
@@ -207,17 +279,24 @@ Step 5 →  ESEKF 數值穩定性
 
 ---
 
-## 6. 相關檔案
+## 7. 相關檔案
 
 | 檔案 | 說明 |
 |------|------|
-| `src/TEST/single_leg_contact_theta_beta.csv` | 單足觸地測試資料 |
-| `src/TEST/compare_velocity_methods.py` | 平均/瞬時速度比較腳本 |
-| `src/TEST/velocity_comparison.png` | 速度比較圖表 |
-| `src/TEST/velocity_error.png` | 估測誤差圖表 |
+| `src/TEST/kinematic_compare/compare_velocity_methods.py` | 平均/瞬時速度比較腳本 |
+| `src/TEST/kinematic_compare/velocity_comparison.png` | 速度比較圖表 |
+| `src/TEST/kinematic_compare/velocity_error.png` | 估測誤差圖表 |
+| `src/TEST/contact_detection/tune_schmitt_trigger.py` | Schmitt Trigger 離線調校腳本 |
+| `src/TEST/contact_detection/disturbance_signals.png` | 4 腿 disturbance 訊號圖 |
+| `src/TEST/contact_detection/contact_detection_comparison.png` | 8 種閾值觸地判斷比較圖 |
+| `src/TEST/contact_detection/velocity_estimation_comparison.png` | 前 4 名配置速度估測圖 |
+| `src/TEST/contact_detection/rm_beta_scatter.png` | |rm| vs |β| 散佈圖（閾值區域視覺化） |
+| `output_data/walk_3m_01m.csv` | 行走 3m 錄製資料 |
+| `output_data/walk_3m_01m_result.csv` | disturbance observer 離線產出 |
 | `src/es_ekf/ESEKF.cpp` | ES-EKF 實作 |
 | `src/corgi_leg_odom.cpp` | ROS2 腿部里程計節點 |
 | `legacy/src/KLD_estimation/InformationFilter.cpp` | 舊 Information Filter |
 | `legacy/src/corgi_odometry/corgi_odometry.cpp` | 舊里程計主程式 |
 | `src/kinematic/Leg.cpp` | 腿部運動學模型 |
 | `include/kinematic/ContactMap.hpp` | 接觸點映射 |
+| `include/Config.hpp` | 閾值與參數設定 |
