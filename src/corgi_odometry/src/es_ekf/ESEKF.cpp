@@ -75,7 +75,7 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //    biases:  unchanged
     // ----------------------------------------------------------
     x_nom_.p += R_body * x_nom_.v * dt_;
-    x_nom_.v  = R_delta * x_nom_.v + (a_hat + g_body) * dt_;
+    x_nom_.v  = R_delta.transpose() * x_nom_.v + (a_hat + g_body) * dt_;
     x_nom_.q  = (x_nom_.q * Eigen::Quaternionf(R_delta)).normalized();
     // ba, bw, bv: constant (random walk, corrected in update)
 
@@ -86,7 +86,7 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //
     //    Fx structure (block rows: δp, δv, δθ, δba, δbw, δbv):
     //      δp  row: I | R*dt | -R*[v]× dt |  0   |  0     | 0
-    //      δv  row: 0 | R_Δ  | -R_Δ[â]× dt| -R_Δ dt| 0    | 0
+    //      δv  row: 0 | R_Δ^T| -R_Δ^T[â]× dt| -R_Δ^T dt| 0  | 0
     //      δθ  row: 0 |  0   |  R_Δ^T     |  0   | -I*dt  | 0
     //      δba row: 0 |  0   |   0        |  I   |  0     | 0
     //      δbw row: 0 |  0   |   0        |  0   |  I     | 0
@@ -98,11 +98,11 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     Fx.block<3,3>(P_IDX, V_IDX)   =  R_body * dt_;
     Fx.block<3,3>(P_IDX, TH_IDX)  = -R_body * skew(x_nom_.v) * dt_;
 
-    // δv row
-    Fx.block<3,3>(V_IDX, V_IDX)   =  R_delta;
+    // δv row  (v_{k+1} = R_Δ^T v_k + ...)
+    Fx.block<3,3>(V_IDX, V_IDX)   =  R_delta.transpose();
     Eigen::Vector3f a_total = a_hat + g_body;
-    Fx.block<3,3>(V_IDX, TH_IDX)  = -R_delta * skew(a_total) * dt_;
-    Fx.block<3,3>(V_IDX, BA_IDX)  = -R_delta * dt_;
+    Fx.block<3,3>(V_IDX, TH_IDX)  = -R_delta.transpose() * skew(a_total) * dt_;
+    Fx.block<3,3>(V_IDX, BA_IDX)  = -R_delta.transpose() * dt_;
 
     // δθ row
     Fx.block<3,3>(TH_IDX, TH_IDX) =  R_delta.transpose();
@@ -179,11 +179,27 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     // 3. Observation Jacobian H (3×18)
     //
-    //    h(δx) = δv + δbv   →   H = [0 | I | 0 | 0 | 0 | I]
+    //    z_leg depends on ω_used = (0, w_m_y - bw_y, 0) through
+    //    the ω×r_c term.  Since w_x and w_z are zeroed, only bw_y
+    //    has a non-zero partial derivative:
+    //
+    //      ∂z_leg/∂δbw = -skew(r_c) · diag(0,-1,0)
+    //
+    //    which yields a matrix with only the bw_y column non-zero:
+    //      H_bw = [[0, -r_cz, 0],
+    //              [0,   0,   0],
+    //              [0,  r_cx, 0]]
+    //
+    //    h(δx) = δv + δbv + H_bw · δbw + noise
     // ----------------------------------------------------------
     Eigen::MatrixXf H = Eigen::MatrixXf::Zero(3, ERR_STATE_DIM);
     H.block<3,3>(0, V_IDX)  = Eigen::Matrix3f::Identity();  // ∂h/∂δv
     H.block<3,3>(0, BV_IDX) = Eigen::Matrix3f::Identity();  // ∂h/∂δbv
+    // ∂h/∂δbw: only bw_y column (index 1) is non-zero
+    //   since w_x and w_z are zeroed before computing z_leg
+    const Eigen::Vector3f& r_c = obs.leg->contact_point;
+    H(0, BW_IDX + 1) = -r_c.z();   // ∂z_leg_x / ∂δbw_y
+    H(2, BW_IDX + 1) =  r_c.x();   // ∂z_leg_z / ∂δbw_y
 
     // ----------------------------------------------------------
     // 4. Kalman gain & state/covariance update

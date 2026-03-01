@@ -158,7 +158,8 @@ void LegOdometryNode::process() {
     esekf_.predict(a_m, w_m);
 
     // --- 3. Build per-leg observations ---
-    const float w_y = static_cast<float>(imu_.angular_velocity.y);  // pitch rate
+    // Use bias-corrected pitch rate for contact_beta accumulation
+    const float w_y = static_cast<float>(imu_.angular_velocity.y) - static_cast<float>(esekf_.nominal().bw.y());
 
     // Module order: [LF=a, RF=b, RH=c, LH=d] → leg_idx [0,1,2,3]
     const corgi_msgs::msg::MotorState* modules[4] = {
