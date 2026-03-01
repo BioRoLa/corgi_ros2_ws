@@ -111,16 +111,3 @@ target_link_libraries(velocity_estimator
 
 install(TARGETS velocity_estimator
   DESTINATION lib/${PROJECT_NAME})
-
-# Kinematic test: PointVelocity vs travel2 comparison
-add_executable(kinematic_test
-  TEST/kinematic_test.cpp
-)
-
-target_link_libraries(kinematic_test
-  esekf_estimation
-  Eigen3::Eigen
-)
-
-install(TARGETS kinematic_test
-  DESTINATION lib/${PROJECT_NAME})
