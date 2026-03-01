@@ -13,6 +13,7 @@ GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
                                         BW(BW),
                                         BH(BH),
                                         pub_rate(pub_rate),
+                                        period(0,1000000),
                                         rng(rd()),
                                         dist(0, 359),
                                         currentGait(Gait::WHEELED)
@@ -51,6 +52,7 @@ GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
     next_body = body;
     next_hip = hip;
     next_foothold = foothold;
+    next_time = node_->now();
 }
 
 GaitSelector::~GaitSelector()
@@ -85,7 +87,12 @@ void GaitSelector::Send()
         }
     }
     motor_cmd_pub_->publish(motor_cmd);
-    rate_ptr->sleep();
+    //rate_ptr->sleep();
+    next_time += period;
+    if(!node_->get_clock()->sleep_until(next_time)){
+        RCLCPP_WARN(node_->get_logger(), "Sleep until failed!");
+        return;
+    }
 }
 
 void GaitSelector::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr state)
