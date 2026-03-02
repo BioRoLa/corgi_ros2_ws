@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <filesystem>
 #include "general_momentum_observer/DisturbanceObserver.hpp"
+#include "es_ekf/ESEKF.hpp"
+#include "kinematic/ContactMap.hpp"
+#include "kinematic/Leg.hpp"
 #include "Config.hpp"
 
 /**
@@ -22,12 +25,13 @@ public:
         // IMU data
         double imu_orien_x, imu_orien_y, imu_orien_z, imu_orien_w;
         double imu_ang_vel_x, imu_ang_vel_y, imu_ang_vel_z;
+        double imu_lin_acc_x, imu_lin_acc_y, imu_lin_acc_z;
         
         // Leg data (LF, RF, RH, LH)
-        double state_theta_a, state_beta_a, state_trq_r_a, state_trq_l_a;
-        double state_theta_b, state_beta_b, state_trq_r_b, state_trq_l_b;
-        double state_theta_c, state_beta_c, state_trq_r_c, state_trq_l_c;
-        double state_theta_d, state_beta_d, state_trq_r_d, state_trq_l_d;
+        double state_theta_a, state_beta_a, state_vel_r_a, state_vel_l_a, state_trq_r_a, state_trq_l_a;
+        double state_theta_b, state_beta_b, state_vel_r_b, state_vel_l_b, state_trq_r_b, state_trq_l_b;
+        double state_theta_c, state_beta_c, state_vel_r_c, state_vel_l_c, state_trq_r_c, state_trq_l_c;
+        double state_theta_d, state_beta_d, state_vel_r_d, state_vel_l_d, state_trq_r_d, state_trq_l_d;
     };
     
     std::vector<RobotData> read_csv(const std::string& filename) {
@@ -67,24 +71,35 @@ public:
             row.imu_ang_vel_x = values[column_indices.at("imu_ang_vel_x")];
             row.imu_ang_vel_y = values[column_indices.at("imu_ang_vel_y")];
             row.imu_ang_vel_z = values[column_indices.at("imu_ang_vel_z")];
+            row.imu_lin_acc_x = values[column_indices.at("imu_lin_acc_x")];
+            row.imu_lin_acc_y = values[column_indices.at("imu_lin_acc_y")];
+            row.imu_lin_acc_z = values[column_indices.at("imu_lin_acc_z")];
             
             row.state_theta_a = values[column_indices.at("state_theta_a")];
             row.state_beta_a = values[column_indices.at("state_beta_a")];
+            row.state_vel_r_a = values[column_indices.at("state_vel_r_a")];
+            row.state_vel_l_a = values[column_indices.at("state_vel_l_a")];
             row.state_trq_r_a = values[column_indices.at("state_trq_r_a")];
             row.state_trq_l_a = values[column_indices.at("state_trq_l_a")];
             
             row.state_theta_b = values[column_indices.at("state_theta_b")];
             row.state_beta_b = values[column_indices.at("state_beta_b")];
+            row.state_vel_r_b = values[column_indices.at("state_vel_r_b")];
+            row.state_vel_l_b = values[column_indices.at("state_vel_l_b")];
             row.state_trq_r_b = values[column_indices.at("state_trq_r_b")];
             row.state_trq_l_b = values[column_indices.at("state_trq_l_b")];
             
             row.state_theta_c = values[column_indices.at("state_theta_c")];
             row.state_beta_c = values[column_indices.at("state_beta_c")];
+            row.state_vel_r_c = values[column_indices.at("state_vel_r_c")];
+            row.state_vel_l_c = values[column_indices.at("state_vel_l_c")];
             row.state_trq_r_c = values[column_indices.at("state_trq_r_c")];
             row.state_trq_l_c = values[column_indices.at("state_trq_l_c")];
             
             row.state_theta_d = values[column_indices.at("state_theta_d")];
             row.state_beta_d = values[column_indices.at("state_beta_d")];
+            row.state_vel_r_d = values[column_indices.at("state_vel_r_d")];
+            row.state_vel_l_d = values[column_indices.at("state_vel_l_d")];
             row.state_trq_r_d = values[column_indices.at("state_trq_r_d")];
             row.state_trq_l_d = values[column_indices.at("state_trq_l_d")];
             
@@ -459,6 +474,59 @@ int main(int argc, char** argv) {
         // Initialize data processor
         DataProcessor processor(dt);
         
+        // ============================================================
+        // ES-EKF setup
+        // ============================================================
+        auto createLeg = [](double x_sign, double y_sign) -> Leg {
+            return Leg{
+                Eigen::Vector3f(x_sign * corgi::Config::LEG_X_OFFSET,
+                                y_sign * corgi::Config::LEG_Y_OFFSET,
+                                corgi::Config::LEG_Z_OFFSET),
+                static_cast<float>(corgi::Config::WHEEL_RADIUS),
+                static_cast<float>(corgi::Config::TIRE_SKIN_RADIUS)
+            };
+        };
+
+        Leg lf_leg = createLeg( 1,  1);
+        Leg rf_leg = createLeg( 1, -1);
+        Leg rh_leg = createLeg(-1, -1);
+        Leg lh_leg = createLeg(-1,  1);
+        Leg* legs[4] = {&lf_leg, &rf_leg, &rh_leg, &lh_leg};
+
+        estimation_model::ContactMap contact_map;
+        estimation_model::ESEKF esekf(static_cast<float>(dt));
+
+        // Override noise parameters for offline testing
+        {
+            estimation_model::NoiseParams np;
+            // Default noise parameters
+            np.sigma_a  = {0.008f, 0.008f, 0.008f};
+            np.sigma_w  = {0.01f, 0.01f, 0.01f};
+            np.sigma_ba = {3.924e-4f, 3.924e-4f, 3.924e-4f};
+            np.sigma_bw = {1e-5f, 1e-5f, 1e-5f};
+            np.sigma_bv = {1e-6f, 1e-6f, 1e-6f};
+            np.sigma_leg = 1e-3f;
+            esekf.set_noise_params(np);
+            std::cout << "Noise params: sigma_leg=" << np.sigma_leg << "\n";
+        }
+
+        std::array<bool, 4> leg_contact_state = {false, false, false, false};
+        std::array<float, 4> contact_beta = {0.f, 0.f, 0.f, 0.f};
+        bool esekf_initialized = false;
+
+        // Output CSV for ESEKF results
+        const auto output_dir = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / "output_data";
+        std::filesystem::create_directories(output_dir);
+        const auto esekf_out_path = output_dir / (std::string(corgi::Config::CSV_FILENAME) + "_esekf.csv");
+        std::ofstream esekf_out(esekf_out_path);
+        esekf_out << "Index,sim_pos_x,sim_pos_y,sim_pos_z,"
+                  << "est_pos_x,est_pos_y,est_pos_z,"
+                  << "est_vel_x,est_vel_y,est_vel_z,"
+                  << "contact_a,contact_b,contact_c,contact_d,"
+                  << "z_avg_x,z_avg_y,z_avg_z,"
+                  << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z\n";
+        esekf_out << std::fixed << std::setprecision(8);
+
         // Process data
         std::cout << "\nStarting data processing...\n";
         
@@ -484,7 +552,174 @@ int main(int argc, char** argv) {
                 false  // Don't print detailed info
             );
             
-            // Can use disturbance for further processing here
+            // ============================================================
+            // Schmitt trigger contact detection (same as online)
+            // ============================================================
+            {
+                constexpr int rm_idx[4]   = {5, 7, 9, 11};
+                constexpr int beta_idx[4] = {4, 6, 8, 10};
+                for (int j = 0; j < 4; ++j) {
+                    double rm        = disturbance(rm_idx[j]);
+                    double beta_dist = disturbance(beta_idx[j]);
+                    if (!leg_contact_state[j]) {
+                        if (std::abs(rm)   > corgi::Config::CONTACT_RM_THRESHOLD_HIGH ||
+                            std::abs(beta_dist) > corgi::Config::CONTACT_BETA_THRESHOLD_HIGH)
+                            leg_contact_state[j] = true;
+                    } else {
+                        if (std::abs(rm)   < corgi::Config::CONTACT_RM_THRESHOLD_LOW &&
+                            std::abs(beta_dist) < corgi::Config::CONTACT_BETA_THRESHOLD_LOW)
+                            leg_contact_state[j] = false;
+                    }
+                }
+            }
+
+            // ============================================================
+            // ES-EKF pipeline
+            // ============================================================
+
+            // --- Initialize on first iteration ---
+            if (!esekf_initialized) {
+                estimation_model::NominalState x0;
+                x0.q = Eigen::Quaternionf(
+                    static_cast<float>(data[i].imu_orien_w),
+                    static_cast<float>(data[i].imu_orien_x),
+                    static_cast<float>(data[i].imu_orien_y),
+                    static_cast<float>(data[i].imu_orien_z)).normalized();
+                esekf.init(x0);
+                contact_beta.fill(0.f);
+                esekf_initialized = true;
+                std::cout << "\nES-EKF initialized at index " << i << "\n";
+            }
+
+            // --- IMU measurements ---
+            Eigen::Vector3f a_m(
+                static_cast<float>(data[i].imu_lin_acc_x),
+                static_cast<float>(data[i].imu_lin_acc_y),
+                static_cast<float>(data[i].imu_lin_acc_z));
+            Eigen::Vector3f w_m(
+                static_cast<float>(data[i].imu_ang_vel_x),
+                static_cast<float>(data[i].imu_ang_vel_y),
+                static_cast<float>(data[i].imu_ang_vel_z));
+
+            // --- Predict ---
+            esekf.predict(a_m, w_m);
+
+            // --- Build per-leg observations ---
+            const float w_y = static_cast<float>(data[i].imu_ang_vel_y)
+                            - esekf.nominal().bw.y();
+
+            double thetas[4] = {data[i].state_theta_a, data[i].state_theta_b,
+                                data[i].state_theta_c, data[i].state_theta_d};
+            double betas[4]  = {data[i].state_beta_a,  data[i].state_beta_b,
+                                data[i].state_beta_c,  data[i].state_beta_d};
+            double vel_r[4]  = {data[i].state_vel_r_a, data[i].state_vel_r_b,
+                                data[i].state_vel_r_c, data[i].state_vel_r_d};
+            double vel_l[4]  = {data[i].state_vel_l_a, data[i].state_vel_l_b,
+                                data[i].state_vel_l_c, data[i].state_vel_l_d};
+
+            std::vector<estimation_model::LegObservation> observations;
+            observations.reserve(4);
+            std::array<bool, 4> exclude_flags{};
+
+            for (int j = 0; j < 4; ++j) {
+                const float fdt = static_cast<float>(dt);
+                bool is_right_side = (j == 1 || j == 2);
+
+                float theta   = static_cast<float>(thetas[j]);
+                float beta    = is_right_side
+                    ? -static_cast<float>(betas[j])
+                    :  static_cast<float>(betas[j]);
+                float theta_d = static_cast<float>((-vel_r[j] + vel_l[j]) / 2.0);
+                float beta_d  = -static_cast<float>(( vel_r[j] + vel_l[j]) / 2.0);
+                if (is_right_side) beta_d = -beta_d;
+
+                // --- Use beta directly for rim lookup (matching Python approach) ---
+                // The Python tune_schmitt_trigger.py uses contact_beta = beta, alpha = 0
+                // and achieves RMSE ~4.5mm/s. The accumulated contact_beta diverges
+                // because it starts from 0 while beta is already non-zero at start_index.
+                RIM rim = contact_map.lookup(theta, beta);
+                float alpha = 0.0f;
+
+                // Contact flag: Schmitt trigger AND rim in contact
+                bool in_contact = leg_contact_state[j] && (rim != NO_CONTACT);
+
+                observations.push_back(
+                    {legs[j], theta, theta_d, beta, beta_d, rim, alpha, in_contact});
+                exclude_flags[j] = !in_contact;
+            }
+
+            // --- Compute average z_leg for diagnostics (RAW, no ESEKF bias) ---
+            Eigen::Vector3f z_avg = Eigen::Vector3f::Zero();
+            Eigen::Vector3f z_avg_noW = Eigen::Vector3f::Zero();  // without w×r term
+            int n_contact = 0;
+            {
+                // Use raw w_m with only w_x/w_z zeroed (like the observation model)
+                Eigen::Vector3f w_raw(0.0f,
+                    static_cast<float>(data[i].imu_ang_vel_y),
+                    0.0f);
+                Eigen::Vector3f w_zero = Eigen::Vector3f::Zero();
+                for (int j = 0; j < 4; ++j) {
+                    if (!exclude_flags[j]) {
+                        auto& o = observations[j];
+                        o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
+                        o.leg->PointContact(o.rim, o.alpha);
+                        Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
+                        
+                        // With angular velocity
+                        o.leg->PointVelocity(v_zero, w_raw, o.rim, o.alpha, true);
+                        z_avg += -o.leg->contact_velocity;
+                        
+                        // Without angular velocity (pure kinematic)  
+                        o.leg->PointVelocity(v_zero, w_zero, o.rim, o.alpha, true);
+                        z_avg_noW += -o.leg->contact_velocity;
+                        
+                        n_contact++;
+                        
+                        // Debug first step: per-leg details
+                        if (i == static_cast<size_t>(start_index)) {
+                            const char* leg_names[] = {"LF", "RF", "RH", "LH"};
+                            Eigen::Vector3f cp = o.leg->contact_point;
+                            o.leg->PointVelocity(v_zero, w_raw, o.rim, o.alpha, true);
+                            Eigen::Vector3f z_w = -o.leg->contact_velocity;
+                            o.leg->PointVelocity(v_zero, w_zero, o.rim, o.alpha, true);
+                            Eigen::Vector3f z_nw = -o.leg->contact_velocity;
+                            std::cout << "[Step " << i << "] Leg " << leg_names[j]
+                                      << ": theta=" << o.theta << " beta=" << o.beta
+                                      << " theta_d=" << o.theta_d << " beta_d=" << o.beta_d
+                                      << "\n    contact_pt=(" << cp.x() << ", " << cp.y() << ", " << cp.z() << ")"
+                                      << " rim=" << o.rim << " alpha=" << o.alpha
+                                      << "\n    z_leg(w)=(" << z_w.x() << ", " << z_w.y() << ", " << z_w.z() << ")"
+                                      << "\n    z_leg(0)=(" << z_nw.x() << ", " << z_nw.y() << ", " << z_nw.z() << ")"
+                                      << "\n    w×cp=(" << (z_w.x()-z_nw.x()) << ", " << (z_w.y()-z_nw.y()) << ", " << (z_w.z()-z_nw.z()) << ")"
+                                      << "\n";
+                        }
+                    }
+                }
+                if (n_contact > 0) {
+                    z_avg /= static_cast<float>(n_contact);
+                    z_avg_noW /= static_cast<float>(n_contact);
+                }
+            }
+
+            // --- Update ---
+            esekf.update_all_legs(observations, w_m, exclude_flags);
+
+            // --- Inject & reset ---
+            esekf.inject_and_reset();
+
+            // --- Log ---
+            const auto& st = esekf.nominal();
+            esekf_out << i << ","
+                      << data[i].sim_pos_x << "," << data[i].sim_pos_y << "," << data[i].sim_pos_z << ","
+                      << st.p.x() << "," << st.p.y() << "," << st.p.z() << ","
+                      << st.v.x() << "," << st.v.y() << "," << st.v.z() << ","
+                      << leg_contact_state[0] << "," << leg_contact_state[1] << ","
+                      << leg_contact_state[2] << "," << leg_contact_state[3] << ","
+                      << z_avg.x() << "," << z_avg.y() << "," << z_avg.z() << ","
+                      << st.ba.x() << "," << st.ba.y() << "," << st.ba.z() << ","
+                      << st.bw.x() << "," << st.bw.y() << "," << st.bw.z() << ","
+                      << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << "\n";
+
             processed_count++;
         }
         
@@ -492,8 +727,11 @@ int main(int argc, char** argv) {
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end_time - start_time;
         
+        esekf_out.close();
+
         std::cout << "\nProcessing complete\n";
-        std::cout << "Results saved to output_data/" << corgi::Config::CSV_FILENAME << "_result.csv\n";
+        std::cout << "Disturbance results: output_data/" << corgi::Config::CSV_FILENAME << "_result.csv\n";
+        std::cout << "ESEKF results:       " << esekf_out_path.string() << "\n";
         
         // Display performance statistics
         std::cout << "\n========== Performance Statistics ==========\n";
@@ -502,6 +740,17 @@ int main(int argc, char** argv) {
         std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
         std::cout << "Average time per record: " << (elapsed.count() / processed_count) << " seconds\n";
         std::cout << "Processing speed: " << (processed_count / elapsed.count()) << " records/second\n";
+        std::cout << "==========================================\n";
+
+        // Final ESEKF state summary
+        const auto& final_st = esekf.nominal();
+        std::cout << "\n========== ESEKF Final State ==========\n";
+        std::cout << "Position: [" << final_st.p.x() << ", " << final_st.p.y() << ", " << final_st.p.z() << "]\n";
+        std::cout << "Velocity: [" << final_st.v.x() << ", " << final_st.v.y() << ", " << final_st.v.z() << "]\n";
+        std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
+        std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
+        std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
+        std::cout << "Sim end:  [" << data.back().sim_pos_x << ", " << data.back().sim_pos_y << ", " << data.back().sim_pos_z << "]\n";
         std::cout << "==========================================\n";
         
     } catch (const std::exception& e) {

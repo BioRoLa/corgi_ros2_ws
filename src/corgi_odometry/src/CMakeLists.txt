@@ -30,6 +30,7 @@ ament_target_dependencies(offline_test
 
 target_link_libraries(offline_test
   simplify_dynamics
+  esekf_estimation
   Eigen3::Eigen
 )
 
