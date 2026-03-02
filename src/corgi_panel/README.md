@@ -1,137 +1,155 @@
-# corgi_panel
+# Corgi Panel - Build and Installation Guide
 
-PyQt5 GUI control panel for the Corgi quadruped robot. This package is a ROS 2 (Humble) node that lets you power the system, select modes, trigger runs, and monitor status. It speaks the corgi_msgs message types and is compatible with simulation and real robot workflows.
+## Package Structure
+```
+corgi_panel/
+├── package.xml          # ROS 2 package manifest
+├── setup.py             # Python package setup
+├── resource/
+│   └── corgi_panel      # Package marker file
+├── scripts/
+│   ├── __init__.py
+│   ├── run_control.py   # Control Panel entry point
+│   └── run_config.py    # Config Panel entry point
+└── corgi_ui/            # Main package source
+    ├── __init__.py
+    ├── assets/
+    │   └── theme.qss
+    ├── core/
+    │   ├── constants.py
+    │   ├── motor_data.py
+    │   ├── process_manager.py
+    │   └── ros_worker.py
+    └── gui/
+        ├── control_panel.py
+        ├── config_panel.py
+        └── widgets/
+            └── log_widget.py
+```
 
-## Features
+## Build Instructions
 
-- One-click power sequencing: Digital → Signal → Power
-- Mode control: Rest, Set Zero, Hall Calibrate, Motor Mode, Steering Calibrate
-- RT vs CSV control mode selection
-- CSV playback with file picker (reads from `input_csv/`)
-- Trigger start/stop with output filename for logging
-- Status panel for power rails, mode, and per-motor status
-- Optional hardware trigger on Jetson GPIO pin 16 (if Jetson.GPIO available)
+### 1. Build the package
+```bash
+cd ~/corgi_ws/corgi_ros2_ws
+colcon build --packages-select corgi_panel
+```
 
-## Requirements
+### 2. Source the workspace
+```bash
+source install/setup.bash
+```
 
-- ROS 2 Humble (rclpy)
-- Python 3 with:
-  - PyQt5
-  - numpy
-- `corgi_msgs` built and sourced in the same workspace
+### 3. Run the panels
 
-These are declared in `package.xml` and resolved when building the workspace.
+**Control Panel:**
+```bash
+ros2 run corgi_panel corgi_control_panel
+```
 
-## Build
+**Configuration Panel:**
+```bash
+ros2 run corgi_panel corgi_config_panel
+```
 
-From the workspace root (`~/corgi_ws/corgi_ros_ws`):
+## Development Mode
+
+For development without reinstalling after each change:
 
 ```bash
+# Build with symlink install (Python changes take effect immediately)
+colcon build --packages-select corgi_panel --symlink-install
+
+# Source workspace
+source install/setup.bash
+```
+
+## Dependencies
+
+### ROS 2 Packages
+- rclpy
+- std_msgs
+- sensor_msgs
+- corgi_msgs (custom package)
+
+### Python Packages
+- PyQt5
+- numpy
+
+### System Requirements
+- ROS 2 (Humble or later)
+- Python 3.8+
+- Qt5
+
+## Troubleshooting
+
+### 1. Import errors
+If you see `ModuleNotFoundError: No module named 'corgi_ui'`:
+```bash
+# Make sure you've sourced the workspace
+source install/setup.bash
+
+# Verify package installation
+ros2 pkg list | grep corgi_panel
+```
+
+### 2. Theme not loading
+If the dark theme doesn't apply:
+```bash
+# Check if assets were installed
+ls install/corgi_panel/share/corgi_panel/assets/
+```
+
+### 3. Entry points not found
+If `ros2 run corgi_panel corgi_control_panel` fails:
+```bash
+# Rebuild and source again
 colcon build --packages-select corgi_panel
 source install/setup.bash
 ```
 
-## Run
+## Testing
 
-Recommended (launch):
-
+Run basic smoke test:
 ```bash
-ros2 launch corgi_panel corgi_control_panel.launch.py
+# Test import
+python3 -c "from corgi_ui.gui.control_panel import CorgiControlPanel; print('OK')"
+
+# Test entry point
+ros2 run corgi_panel corgi_control_panel --help
 ```
 
-Direct executable:
+## Clean Build
 
+If you encounter persistent issues:
 ```bash
-ros2 run corgi_panel corgi_control_panel.py
-```
+# Clean build artifacts
+rm -rf build/corgi_panel install/corgi_panel log/corgi_panel
 
-Notes:
-
-- The GUI is a ROS 2 node. Some external tools (e.g., `corgi_ros_bridge`) may still be ROS 1; the panel attempts to start the bridge with ROS 2 first and falls back to ROS 1 if available.
-- Always source the workspace before running.
-
-## GUI Controls
-
-- Run Bridge
-  - Starts the ROS ↔ FPGA bridge. Prefers `ros2 run corgi_ros_bridge corgi_ros_bridge.sh`; falls back to `rosrun` if ROS 1 is present.
-- Digital / Signal / Power
-  - Follow the sequence: Digital → Signal → Power. The panel enforces button enablement to guide the order.
-- Robot Mode Switch
-  - Rest Mode: safe idle
-  - Set Zero: calibrate home position
-  - Hall Calibrate: perform hall sensor calibration
-  - Motor Mode: enable control (choose RT or CSV)
-  - Steering Calibrate: available in wheeled mode when allowed by state
-- Motor Mode Selection
-  - RT: real-time control path (external nodes)
-  - CSV: playback of trajectories; enables CSV controls
-- CSV Controls
-  - Input File Name: choose a file from `input_csv/` via Select
-  - Run: start/stop CSV playback (ROS 2 `corgi_csv_control` node)
-- Output File Name (.csv)
-  - Used by downstream loggers/recorders when Trigger is enabled
-- Trigger
-  - Toggles run/record state; also toggles Jetson GPIO pin 16 if available
-- Reset
-  - Returns panel to a safe default state and sends corresponding commands
-
-## Topics
-
-Publishers:
-
-- `power/command` (corgi_msgs/PowerCmdStamped)
-- `motor/command` (corgi_msgs/MotorCmdStamped)
-- `trigger` (corgi_msgs/TriggerStamped)
-
-Subscribers:
-
-- `power/state` (corgi_msgs/PowerStateStamped)
-- `motor/state` (corgi_msgs/MotorStateStamped)
-- `steer/state` (corgi_msgs/SteeringStateStamped)
-
-Header stamps use ROS 2 time (`node.get_clock().now().to_msg()`).
-
-## CSV Control
-
-- Place CSVs in `~/corgi_ws/corgi_ros_ws/input_csv/`
-- Use the Select button to pick the file (the panel stores the basename without extension)
-- Press Run to start/stop the `corgi_csv_control` node with the selected input
-
-## Simulation vs Real Robot
-
-- Simulation (ROS 2): Use `corgi_sim` and CSV/RT modes without the hardware bridge
-- Real Robot (mixed ROS 1/2 during migration):
-  - Start the FPGA driver on the robot
-  - Use the panel sequence Digital → Signal → Power
-  - Set Zero → Hall Calibrate → (optional) Steering Calibrate → Motor Mode
-  - Choose RT or CSV and set output filename
-  - Trigger to start motion + recording
-
-## Notes & Known Issues
-
-- Qt runtime dir warning: `QStandardPaths: wrong permissions on /run/user/1000/` is harmless in development; fix by setting directory perms to `0700` if desired.
-- Thread safety: ROS callbacks use Qt signals to update the GUI on the main thread.
-- Jetson GPIO is optional: if `Jetson.GPIO` is not importable, GPIO features are disabled automatically.
-
-## Development
-
-- Package type: `ament_cmake` + `ament_cmake_python`
-- Executable installed to: `install/corgi_panel/lib/corgi_panel/corgi_control_panel.py`
-- Launch file: `launch/corgi_control_panel.launch.py`
-
-### Building just this package
-
-```bash
+# Rebuild
 colcon build --packages-select corgi_panel
-```
-
-### Running just the panel
-
-```bash
 source install/setup.bash
-ros2 run corgi_panel corgi_control_panel.py
 ```
 
-## License
+## Architecture Overview
 
-BSD-3-Clause (see package.xml)
+### MVC Pattern
+- **Model**: `corgi_ui/core/` (constants, motor_data, ros_worker, process_manager)
+- **View**: `corgi_ui/gui/` (control_panel, config_panel, widgets)
+- **Controller**: ROS Worker (thread-safe communication layer)
+
+### Key Features
+- ✅ Thread-safe ROS 2 communication via `RosWorker`
+- ✅ Centralized process management via `ProcessManager`
+- ✅ Reusable UI components (LogWidget)
+- ✅ Shared theme system (theme.qss)
+- ✅ Modular architecture (easy to test and extend)
+
+## Next Steps
+
+1. **Build the package**: `colcon build --packages-select corgi_panel`
+2. **Source workspace**: `source install/setup.bash`
+3. **Launch Control Panel**: `ros2 run corgi_panel corgi_control_panel`
+4. **Test functionality**: Start ROS Bridge, control robot FSM, monitor status
+
+Enjoy your refactored Corgi control system! 🐕🤖

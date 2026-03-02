@@ -19,10 +19,10 @@
 #include "sensor_msgs/msg/range.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
-#include "corgi_msgs/msg/sim_data_stamped.hpp"
-#include "geometry_msgs/msg/vector3.hpp"
-#include "std_msgs/msg/float64.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
 
 
 bool trigger = false;
@@ -37,10 +37,8 @@ sensor_msgs::msg::Range range_3;
 sensor_msgs::msg::Range range_4;
 corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::msg::ForceStateStamped force_state;
-corgi_msgs::msg::SimDataStamped sim_data;
-geometry_msgs::msg::Vector3 odom_pos;
-geometry_msgs::msg::Vector3 odom_vel;
-double odom_z;
+geometry_msgs::msg::TransformStamped tf_data;
+bool tf_data_valid = false;
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -48,13 +46,13 @@ std::string output_file_path = "";
 
 std_msgs::msg::Float32MultiArray camera;
 
-
+// Check if file exists
 bool file_exists(const std::string &filename) {
     struct stat buffer;
     return (stat(filename.c_str(), &buffer) == 0);
 }
 
-
+// Signal handler for graceful shutdown
 void signal_handler(int signum) {
     RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Interrupt received.");
 
@@ -67,14 +65,14 @@ void signal_handler(int signum) {
     exit(signum);
 }
 
-
+// Callback function for trigger topic
 void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
     trigger = msg.enable;
     
     output_file_name = msg.output_filename;
     
-    if (trigger && msg.output_filename != "") {
-        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+    if (trigger && msg.output_filename != "") { //triggered and output filename assigned
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros2_ws/output_data/" + output_file_name;
 
         int index = 1;
         std::string file_path_with_extension = output_file_path + ".csv";
@@ -135,13 +133,10 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "force_Fx_c" << "," << "force_Fy_c" << ","
                         << "force_Fx_d" << "," << "force_Fy_d" << ","
 
-                        << "sim_seq" << "," << "sim_sec" << "," << "sim_nsec" << ","
+                        << "sim_sec" << "," << "sim_nsec" << ","
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
-                        << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
-
-                        << "odom_pos_x" << "," << "odom_pos_y" << "," << "odom_pos_z" << ","
-                        << "odom_vel_x" << "," << "odom_vel_y" << "," << "odom_vel_z" << ","
+                        // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
                         << "v_0" << "," << "i_0" << ","
@@ -204,22 +199,6 @@ void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr state){
     force_state = *state;
 }
 
-void sim_data_cb(const corgi_msgs::msg::SimDataStamped::SharedPtr data){
-    sim_data = *data;
-}
-
-void odom_pos_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
-    odom_pos = *msg;
-}
-
-void odom_vel_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
-    odom_vel = *msg;
-}
-
-void odom_z_cb(const std_msgs::msg::Float64::SharedPtr msg){
-    odom_z = msg->data;
-}
-
 void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
     // Process stair information if needed
     // camera
@@ -245,14 +224,15 @@ void range_4_cb(const sensor_msgs::msg::Range::SharedPtr msg){
     range_4 = *msg;
 }
 
-void write_data() {
+// write data to CSV file
+void write_data(rclcpp::Node::SharedPtr node) {
     if (!output_file.is_open()){
         if (output_file_name != "") 
             RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Output file is not opened");
         return;
     }
 
-    output_file << rclcpp::Clock().now().nanoseconds() << ","
+    output_file << node->now().nanoseconds() / 1e9 << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << ","
@@ -298,12 +278,9 @@ void write_data() {
                 << force_state.module_c.fx    << "," << force_state.module_c.fy << ","
                 << force_state.module_d.fx    << "," << force_state.module_d.fy << ","
 
-                << sim_data.header.seq << "," << sim_data.header.stamp.sec << "," << sim_data.header.stamp.nanosec << ","
-                << sim_data.position.x << "," << sim_data.position.y << "," << sim_data.position.z << ","
-                << sim_data.orientation.x << "," << sim_data.orientation.y << "," << sim_data.orientation.z << "," << sim_data.orientation.w << ","
-
-                << odom_pos.x << "," << odom_pos.y << "," << odom_z << ","
-                << odom_vel.x << "," << odom_vel.y << "," << odom_vel.z << ","
+                << tf_data.header.stamp.sec << "," << tf_data.header.stamp.nanosec << ","
+                << tf_data.transform.translation.x << "," << tf_data.transform.translation.y << "," << tf_data.transform.translation.z << ","
+                << tf_data.transform.rotation.x << "," << tf_data.transform.rotation.y << "," << tf_data.transform.rotation.z << "," << tf_data.transform.rotation.w << ","
 
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
@@ -342,7 +319,21 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
     auto node = rclcpp::Node::make_shared("corgi_data_recorder");
-
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        rclcpp::spin_some(node);
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
     auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
@@ -351,28 +342,42 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
     auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
-    auto sim_data_sub = node->create_subscription<corgi_msgs::msg::SimDataStamped>("sim/data", 1000, sim_data_cb);
-    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/position", 1000, odom_pos_cb);
-    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/velocity", 1000, odom_vel_cb);
-    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
+    // TF listener for odom -> base_link transform
+    tf2_ros::Buffer tfBuffer(node->get_clock());
+    tf2_ros::TransformListener tfListener(tfBuffer);
+
     auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 1000, stair_info_cb);
     auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 1000, range_1_cb);
     auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 1000, range_2_cb);
     auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 1000, range_3_cb);
     auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 1000, range_4_cb);
 
-    rclcpp::Rate rate(1000);
+    // rclcpp::Rate rate(1000);
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node->now();//timer init
 
     signal(SIGINT, signal_handler);
 
     while (rclcpp::ok()) {
         rclcpp::spin_some(node);
 
-        if (trigger) {
-            write_data();
+        // Try to get TF data
+        try {
+            tf_data = tfBuffer.lookupTransform("odom", "base_link", tf2::TimePointZero);
+            tf_data_valid = true;
+        } catch (const tf2::TransformException &ex) {
+            // TF not available yet, keep previous value
         }
 
-        rate.sleep();
+        if (trigger) {
+            write_data(node);
+        }
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+            break;
+        }
+        // rate.sleep();
     }
 
     if (output_file.is_open()) {
