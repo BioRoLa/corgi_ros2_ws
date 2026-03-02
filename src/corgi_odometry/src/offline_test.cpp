@@ -499,11 +499,11 @@ int main(int argc, char** argv) {
         // Override noise parameters for offline testing
         {
             estimation_model::NoiseParams np;
-            // Default noise parameters
-            np.sigma_a  = {0.008f, 0.008f, 0.008f};
-            np.sigma_w  = {0.01f, 0.01f, 0.01f};
+            // Noise parameters tuned for offline testing
+            np.sigma_a  = {0.1f, 0.1f, 0.1f};        // moderate: balance IMU trust vs walking dynamics
+            np.sigma_w  = {0.001f, 0.01f, 0.001f};   // tight x/z: roll/yaw unobservable from legs
             np.sigma_ba = {3.924e-4f, 3.924e-4f, 3.924e-4f};
-            np.sigma_bw = {1e-5f, 1e-5f, 1e-5f};
+            np.sigma_bw = {1e-8f, 1e-5f, 1e-8f};     // freeze bw_x/bw_z: unobservable
             np.sigma_bv = {1e-6f, 1e-6f, 1e-6f};
             np.sigma_leg = 1e-3f;
             esekf.set_noise_params(np);
@@ -524,7 +524,9 @@ int main(int argc, char** argv) {
                   << "est_vel_x,est_vel_y,est_vel_z,"
                   << "contact_a,contact_b,contact_c,contact_d,"
                   << "z_avg_x,z_avg_y,z_avg_z,"
-                  << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z\n";
+                  << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z,"
+                  << "est_qw,est_qx,est_qy,est_qz,"
+                  << "gt_qw,gt_qx,gt_qy,gt_qz\n";
         esekf_out << std::fixed << std::setprecision(8);
 
         // Process data
@@ -533,6 +535,14 @@ int main(int argc, char** argv) {
         // Start timing
         auto start_time = std::chrono::high_resolution_clock::now();
         
+        // Velocity RMSE accumulators
+        double vel_sq_err_sum_x = 0.0, vel_sq_err_sum_y = 0.0, vel_sq_err_sum_z = 0.0;
+        double pos_sq_err_sum_x = 0.0, pos_sq_err_sum_y = 0.0, pos_sq_err_sum_z = 0.0;
+        double last_gt_px = data[start_index].sim_pos_x;
+        double last_gt_py = data[start_index].sim_pos_y;
+        double last_gt_pz = data[start_index].sim_pos_z;
+        size_t vel_count = 0;
+
         size_t processed_count = 0;
         for (size_t i = start_index; i < data.size(); ++i) {
             if (i % 100 == 0) {
@@ -653,7 +663,7 @@ int main(int argc, char** argv) {
             Eigen::Vector3f z_avg_noW = Eigen::Vector3f::Zero();  // without w×r term
             int n_contact = 0;
             {
-                // Use raw w_m with only w_x/w_z zeroed (like the observation model)
+                // Use raw w_m with only w_y (matching observation model)
                 Eigen::Vector3f w_raw(0.0f,
                     static_cast<float>(data[i].imu_ang_vel_y),
                     0.0f);
@@ -707,6 +717,38 @@ int main(int argc, char** argv) {
             // --- Inject & reset ---
             esekf.inject_and_reset();
 
+            // --- Accumulate position & velocity RMSE ---
+            {
+                const auto& st2 = esekf.nominal();
+                // Position error (world frame)
+                double ep_x = st2.p.x() - data[i].sim_pos_x;
+                double ep_y = st2.p.y() - data[i].sim_pos_y;
+                double ep_z = st2.p.z() - data[i].sim_pos_z;
+                pos_sq_err_sum_x += ep_x * ep_x;
+                pos_sq_err_sum_y += ep_y * ep_y;
+                pos_sq_err_sum_z += ep_z * ep_z;
+
+                // GT velocity (world frame, finite difference)
+                double gt_vx = (data[i].sim_pos_x - last_gt_px) / dt;
+                double gt_vy = (data[i].sim_pos_y - last_gt_py) / dt;
+                double gt_vz = (data[i].sim_pos_z - last_gt_pz) / dt;
+                last_gt_px = data[i].sim_pos_x;
+                last_gt_py = data[i].sim_pos_y;
+                last_gt_pz = data[i].sim_pos_z;
+
+                // Estimated velocity in world frame: v_world = R * v_body
+                Eigen::Matrix3f R_est = st2.q.toRotationMatrix();
+                Eigen::Vector3f v_world = R_est * st2.v;
+
+                double ev_x = v_world.x() - gt_vx;
+                double ev_y = v_world.y() - gt_vy;
+                double ev_z = v_world.z() - gt_vz;
+                vel_sq_err_sum_x += ev_x * ev_x;
+                vel_sq_err_sum_y += ev_y * ev_y;
+                vel_sq_err_sum_z += ev_z * ev_z;
+                vel_count++;
+            }
+
             // --- Log ---
             const auto& st = esekf.nominal();
             esekf_out << i << ","
@@ -718,7 +760,10 @@ int main(int argc, char** argv) {
                       << z_avg.x() << "," << z_avg.y() << "," << z_avg.z() << ","
                       << st.ba.x() << "," << st.ba.y() << "," << st.ba.z() << ","
                       << st.bw.x() << "," << st.bw.y() << "," << st.bw.z() << ","
-                      << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << "\n";
+                      << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << ","
+                      << st.q.w() << "," << st.q.x() << "," << st.q.y() << "," << st.q.z() << ","
+                      << data[i].imu_orien_w << "," << data[i].imu_orien_x << ","
+                      << data[i].imu_orien_y << "," << data[i].imu_orien_z << "\n";
 
             processed_count++;
         }
@@ -752,6 +797,25 @@ int main(int argc, char** argv) {
         std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
         std::cout << "Sim end:  [" << data.back().sim_pos_x << ", " << data.back().sim_pos_y << ", " << data.back().sim_pos_z << "]\n";
         std::cout << "==========================================\n";
+
+        // Position & Velocity RMSE
+        if (vel_count > 0) {
+            double n = static_cast<double>(vel_count);
+            std::cout << "\n========== RMSE Statistics ==========\n";
+            std::cout << "Position RMSE (m):  ["
+                      << std::sqrt(pos_sq_err_sum_x / n) << ", "
+                      << std::sqrt(pos_sq_err_sum_y / n) << ", "
+                      << std::sqrt(pos_sq_err_sum_z / n) << "]\n";
+            std::cout << "Velocity RMSE (m/s):["
+                      << std::sqrt(vel_sq_err_sum_x / n) << ", "
+                      << std::sqrt(vel_sq_err_sum_y / n) << ", "
+                      << std::sqrt(vel_sq_err_sum_z / n) << "]\n";
+            double pos_rmse_total = std::sqrt((pos_sq_err_sum_x + pos_sq_err_sum_y + pos_sq_err_sum_z) / n);
+            double vel_rmse_total = std::sqrt((vel_sq_err_sum_x + vel_sq_err_sum_y + vel_sq_err_sum_z) / n);
+            std::cout << "Position RMSE total: " << pos_rmse_total << " m\n";
+            std::cout << "Velocity RMSE total: " << vel_rmse_total << " m/s\n";
+            std::cout << "====================================\n";
+        }
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

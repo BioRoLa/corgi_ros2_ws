@@ -26,6 +26,12 @@ ESEKF::ESEKF(float dt) : dt_(dt) {
     P_ = Eigen::MatrixXf::Identity(ERR_STATE_DIM, ERR_STATE_DIM) * 1e-4f;
     P_.block<3,3>(P_IDX, P_IDX)  *= 100.0f;   // position uncertainty
     P_.block<3,3>(V_IDX, V_IDX)  *= 100.0f;   // velocity uncertainty
+    // Roll/yaw attitude: very small since unobservable from legs
+    P_(TH_IDX + 0, TH_IDX + 0) = 1e-8f;  // roll:  trust IMU integration
+    P_(TH_IDX + 2, TH_IDX + 2) = 1e-8f;  // yaw:   trust IMU integration
+    // bw_x/bw_z: very small since unobservable
+    P_(BW_IDX + 0, BW_IDX + 0) = 1e-10f;
+    P_(BW_IDX + 2, BW_IDX + 2) = 1e-10f;
 }
 
 void ESEKF::init(const NominalState& x0) {
@@ -100,9 +106,12 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
 
     // δv row  (v_{k+1} = R_Δ^T v_k + ...)
     Fx.block<3,3>(V_IDX, V_IDX)   =  R_delta.transpose();
-    Eigen::Vector3f a_total = a_hat + g_body;
-    Fx.block<3,3>(V_IDX, TH_IDX)  = -R_delta.transpose() * skew(a_total) * dt_;
-    Fx.block<3,3>(V_IDX, BA_IDX)  = -R_delta.transpose() * dt_;
+    // ∂v/∂δθ: only g_body depends on attitude (a_hat = a_m - ba is measurement, no θ)
+    //   δ(g_body) = [g_body]× · δθ   ⇒   Fx(V,TH) = R_Δ^T · [g_body]× · dt
+    // NOTE: The previous formula used -[a_hat + g_body]× which ≈ 0 (gravity cancels
+    //       specific force), destroying attitude–velocity coupling and observability.
+    Fx.block<3,3>(V_IDX, TH_IDX)  =  R_delta.transpose() * skew(g_body) * dt_;
+    Fx.block<3,3>(V_IDX, BA_IDX)  = -Eigen::Matrix3f::Identity() * dt_;
 
     // δθ row
     Fx.block<3,3>(TH_IDX, TH_IDX) =  R_delta.transpose();
@@ -153,10 +162,11 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0);
     obs.leg->PointContact(obs.rim, obs.alpha);
 
-    // Use bias-corrected gyro for the ω×r term
-    // Zero w_x/w_z: robot moves in XZ-plane, only pitch rate (w_y) is
-    // meaningful. Noise in roll/yaw gyro × large y-offset creates
-    // spurious velocity in the observation.
+    // Use bias-corrected gyro for the ω×r term (pitch-only)
+    // Only w_y (pitch rate) is used: the leg model is planar (XZ), so
+    // roll/yaw gyro × large y-offset produces spurious velocity that
+    // destabilises the filter.  Yaw observability requires external
+    // heading reference (magnetometer, vision).
     Eigen::Vector3f w_corrected = w_m - x_nom_.bw;
     w_corrected.x() = 0.0f;
     w_corrected.z() = 0.0f;
@@ -169,34 +179,27 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     // 2. Innovation (residual)
     //
-    //    Observation model:  z_leg = v + bv + noise
-    //    Predicted:          z_hat = x_nom.v + x_nom.bv
-    //    Innovation:         y = z_leg - z_hat
+    //    Observation model:  z_leg = v + noise
+    //    NOTE: bv removed from observation to preserve observability.
+    //    Include accumulated δx for correct sequential multi-leg update.
     // ----------------------------------------------------------
-    Eigen::Vector3f z_predicted = x_nom_.v + x_nom_.bv;
-    Eigen::Vector3f innovation = z_leg - z_predicted;
+    Eigen::Vector3f v_pred = x_nom_.v + dx_.segment<3>(V_IDX);
+    Eigen::Vector3f innovation = z_leg - v_pred;
 
     // ----------------------------------------------------------
     // 3. Observation Jacobian H (3×18)
     //
-    //    z_leg depends on ω_used = (0, w_m_y - bw_y, 0) through
-    //    the ω×r_c term.  Since w_x and w_z are zeroed, only bw_y
-    //    has a non-zero partial derivative:
-    //
-    //      ∂z_leg/∂δbw = -skew(r_c) · diag(0,-1,0)
-    //
-    //    which yields a matrix with only the bw_y column non-zero:
-    //      H_bw = [[0, -r_cz, 0],
-    //              [0,   0,   0],
-    //              [0,  r_cx, 0]]
-    //
-    //    h(δx) = δv + δbv + H_bw · δbw + noise
+    //    Only w_y is used ⇒ only bw_y column of H_bw is non-zero.
+    //    z_leg = -(w×r_c + ...), ∂z/∂δbw_y:
+    //      δw_y = -δbw_y
+    //      (δw × r_c)_x = δw_y · r_cz  →  δz_x = -(δw_y · r_cz) = +δbw_y · r_cz
+    //      (δw × r_c)_z = -δw_y · r_cx →  δz_z = -(-δw_y · r_cx) = -δbw_y · r_cx
+    //    ⇒  ∂z_x/∂δbw_y = +r_c.z()
+    //    ⇒  ∂z_z/∂δbw_y = -r_c.x()
     // ----------------------------------------------------------
     Eigen::MatrixXf H = Eigen::MatrixXf::Zero(3, ERR_STATE_DIM);
-    H.block<3,3>(0, V_IDX)  = Eigen::Matrix3f::Identity();  // ∂h/∂δv
-    H.block<3,3>(0, BV_IDX) = Eigen::Matrix3f::Identity();  // ∂h/∂δbv
-    // ∂h/∂δbw: only bw_y column (index 1) is non-zero
-    //   since w_x and w_z are zeroed before computing z_leg
+    H.block<3,3>(0, V_IDX) = Eigen::Matrix3f::Identity();  // ∂h/∂δv
+    // NOTE: bv deliberately excluded from H to preserve observability
     const Eigen::Vector3f& r_c = obs.leg->contact_point;
     H(0, BW_IDX + 1) = -r_c.z();   // ∂z_leg_x / ∂δbw_y
     H(2, BW_IDX + 1) =  r_c.x();   // ∂z_leg_z / ∂δbw_y
@@ -204,13 +207,11 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     // 4. Kalman gain & state/covariance update
     //
-    //    S = H P H^T + R_leg
+    //    S = H P H^T + R_leg        (3×3)
     //    K = P H^T S^{-1}           (18×3)
     //    δx += K * innovation
-    //    P  = (I - KH) P (I - KH)^T + K R_leg K^T   (Joseph form)
+    //    P  = (I - KH) P (I - KH)^T + K R K^T   (Joseph form)
     // ----------------------------------------------------------
-
-    // TODO: Consider per-leg or state-dependent measurement noise
     Eigen::Matrix3f R_leg = Eigen::Matrix3f::Identity() * noise_.sigma_leg;
 
     Eigen::Matrix3f S = H * P_ * H.transpose() + R_leg;
