@@ -3,6 +3,7 @@ devel
 logs
 .*
 *.csv
+*.pyc
 input_csv/*
 !input_csv/README.md
 !input_csv/demo_transform_sim.csv
