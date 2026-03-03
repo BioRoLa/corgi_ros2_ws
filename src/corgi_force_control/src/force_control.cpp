@@ -20,23 +20,23 @@ ForceControlNode::ForceControlNode()
     }
 
     imp_cmd_sub_ = this->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>(
-        "impedance/command", 1000, 
+        "impedance/command", 10, 
         std::bind(&ForceControlNode::imp_cmd_cb, this, std::placeholders::_1));
     
     force_state_sub_ = this->create_subscription<corgi_msgs::msg::ForceStateStamped>(
-        "force/state", 1000, 
+        "force/state", 10, 
         std::bind(&ForceControlNode::force_state_cb, this, std::placeholders::_1));
     
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "motor/state", 1000, 
+        "motor/state", 10, 
         std::bind(&ForceControlNode::motor_state_cb, this, std::placeholders::_1));
     
     imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
-        "imu", 1000, 
+        "imu", 10, 
         std::bind(&ForceControlNode::imu_cb, this, std::placeholders::_1));
     
     motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>(
-        "motor/command", 1000);
+        "motor/command", 10);
 }
 
 void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
