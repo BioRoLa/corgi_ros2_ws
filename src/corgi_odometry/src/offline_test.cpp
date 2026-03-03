@@ -152,26 +152,10 @@ public:
         // Initialize last state variables
         last_sim_pos_x_ = 0.0;
         last_sim_pos_z_ = 0.0;
-        last_theta_a_ = 0.0;
-        last_theta_b_ = 0.0;
-        last_theta_c_ = 0.0;
-        last_theta_d_ = 0.0;
-        last_beta_a_ = 0.0;
-        last_beta_b_ = 0.0;
-        last_beta_c_ = 0.0;
-        last_beta_d_ = 0.0;
         
         // Initialize last velocity variables
         last_x_dot_ = 0.0;
         last_z_dot_ = 0.0;
-        last_theta_a_dot_ = 0.0;
-        last_theta_b_dot_ = 0.0;
-        last_theta_c_dot_ = 0.0;
-        last_theta_d_dot_ = 0.0;
-        last_beta_a_dot_ = 0.0;
-        last_beta_b_dot_ = 0.0;
-        last_beta_c_dot_ = 0.0;
-        last_beta_d_dot_ = 0.0;
     }
     
     struct ProcessedData {
@@ -235,26 +219,19 @@ public:
         result.q_dot(2) = data.imu_ang_vel_x;  // roll rate
         result.q_dot(3) = data.imu_ang_vel_y;  // pitch rate
         
-        // Leg joint velocities with low-pass filtering
-        double theta_a_dot = calculate_velocity(data.state_theta_a, last_theta_a_);
-        double beta_a_dot = calculate_velocity(data.state_beta_a, last_beta_a_);
-        double theta_b_dot = calculate_velocity(data.state_theta_b, last_theta_b_);
-        double beta_b_dot = calculate_velocity(-data.state_beta_b, last_beta_b_);  // Note: negated
-        double theta_c_dot = calculate_velocity(data.state_theta_c, last_theta_c_);
-        double beta_c_dot = calculate_velocity(-data.state_beta_c, last_beta_c_);  // Note: negated
-        double theta_d_dot = calculate_velocity(data.state_theta_d, last_theta_d_);
-        double beta_d_dot = calculate_velocity(data.state_beta_d, last_beta_d_);
-        
-        if (!first_call_) {
-            theta_a_dot = (1.0 - low_pass_alpha_) * last_theta_a_dot_ + low_pass_alpha_ * theta_a_dot;
-            beta_a_dot = (1.0 - low_pass_alpha_) * last_beta_a_dot_ + low_pass_alpha_ * beta_a_dot;
-            theta_b_dot = (1.0 - low_pass_alpha_) * last_theta_b_dot_ + low_pass_alpha_ * theta_b_dot;
-            beta_b_dot = (1.0 - low_pass_alpha_) * last_beta_b_dot_ + low_pass_alpha_ * beta_b_dot;
-            theta_c_dot = (1.0 - low_pass_alpha_) * last_theta_c_dot_ + low_pass_alpha_ * theta_c_dot;
-            beta_c_dot = (1.0 - low_pass_alpha_) * last_beta_c_dot_ + low_pass_alpha_ * beta_c_dot;
-            theta_d_dot = (1.0 - low_pass_alpha_) * last_theta_d_dot_ + low_pass_alpha_ * theta_d_dot;
-            beta_d_dot = (1.0 - low_pass_alpha_) * last_beta_d_dot_ + low_pass_alpha_ * beta_d_dot;
-        }
+        // Leg joint velocities from motor velocities (matching corgi_leg_odom.cpp)
+        // theta_d = (-velocity_r + velocity_l) / 2
+        // beta_d  = -(velocity_r + velocity_l) / 2   (negated for right-side legs)
+        double theta_a_dot = (-data.state_vel_r_a + data.state_vel_l_a) / 2.0;
+        double beta_a_dot  = -(data.state_vel_r_a + data.state_vel_l_a) / 2.0;
+        double theta_b_dot = (-data.state_vel_r_b + data.state_vel_l_b) / 2.0;
+        double beta_b_dot  = -(data.state_vel_r_b + data.state_vel_l_b) / 2.0;
+        beta_b_dot = -beta_b_dot;  // RF is right-side, negate beta_d
+        double theta_c_dot = (-data.state_vel_r_c + data.state_vel_l_c) / 2.0;
+        double beta_c_dot  = -(data.state_vel_r_c + data.state_vel_l_c) / 2.0;
+        beta_c_dot = -beta_c_dot;  // RH is right-side, negate beta_d
+        double theta_d_dot = (-data.state_vel_r_d + data.state_vel_l_d) / 2.0;
+        double beta_d_dot  = -(data.state_vel_r_d + data.state_vel_l_d) / 2.0;
         
         // Convert theta_dot to Rm_dot
         result.q_dot(4) = beta_a_dot;
@@ -266,24 +243,7 @@ public:
         result.q_dot(10) = beta_d_dot;
         result.q_dot(11) = cal_theta_dot_to_Rm_dot(data.state_theta_d, theta_d_dot);
         
-        // Update last values
-        last_theta_a_ = data.state_theta_a;
-        last_beta_a_ = data.state_beta_a;
-        last_theta_b_ = data.state_theta_b;
-        last_beta_b_ = -data.state_beta_b;
-        last_theta_c_ = data.state_theta_c;
-        last_beta_c_ = -data.state_beta_c;
-        last_theta_d_ = data.state_theta_d;
-        last_beta_d_ = data.state_beta_d;
-        
-        last_theta_a_dot_ = theta_a_dot;
-        last_beta_a_dot_ = beta_a_dot;
-        last_theta_b_dot_ = theta_b_dot;
-        last_beta_b_dot_ = beta_b_dot;
-        last_theta_c_dot_ = theta_c_dot;
-        last_beta_c_dot_ = beta_c_dot;
-        last_theta_d_dot_ = theta_d_dot;
-        last_beta_d_dot_ = beta_d_dot;
+        // No need to update last theta/beta values since we now use motor velocities directly
         
         // CRITICAL: Convert motor torques to joint space torques
         // Motor torques (trq_r, trq_l) need to be converted to (torque_beta, force_Rm)
@@ -327,13 +287,9 @@ private:
     
     // Last state variables for velocity calculation
     double last_sim_pos_x_, last_sim_pos_z_;
-    double last_theta_a_, last_theta_b_, last_theta_c_, last_theta_d_;
-    double last_beta_a_, last_beta_b_, last_beta_c_, last_beta_d_;
     
     // Last velocity variables for low-pass filtering
     double last_x_dot_, last_z_dot_;
-    double last_theta_a_dot_, last_theta_b_dot_, last_theta_c_dot_, last_theta_d_dot_;
-    double last_beta_a_dot_, last_beta_b_dot_, last_beta_c_dot_, last_beta_d_dot_;
     
     double calculate_velocity(double current, double last) {
         return (current - last) / dt_;
@@ -541,6 +497,10 @@ int main(int argc, char** argv) {
         double last_gt_px = data[start_index].sim_pos_x;
         double last_gt_py = data[start_index].sim_pos_y;
         double last_gt_pz = data[start_index].sim_pos_z;
+        // Low-pass filtered GT velocity (10 Hz cutoff)
+        const double gt_vel_alpha = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
+        double gt_vx_filt = 0.0, gt_vy_filt = 0.0, gt_vz_filt = 0.0;
+        const size_t rmse_skip = 2000;  // skip 2s warmup for GT filter + ESEKF settling
         size_t vel_count = 0;
 
         size_t processed_count = 0;
@@ -724,29 +684,39 @@ int main(int argc, char** argv) {
                 double ep_x = st2.p.x() - data[i].sim_pos_x;
                 double ep_y = st2.p.y() - data[i].sim_pos_y;
                 double ep_z = st2.p.z() - data[i].sim_pos_z;
-                pos_sq_err_sum_x += ep_x * ep_x;
-                pos_sq_err_sum_y += ep_y * ep_y;
-                pos_sq_err_sum_z += ep_z * ep_z;
 
-                // GT velocity (world frame, finite difference)
-                double gt_vx = (data[i].sim_pos_x - last_gt_px) / dt;
-                double gt_vy = (data[i].sim_pos_y - last_gt_py) / dt;
-                double gt_vz = (data[i].sim_pos_z - last_gt_pz) / dt;
+                // GT velocity (world frame, finite difference + LPF)
+                double gt_vx_raw = (data[i].sim_pos_x - last_gt_px) / dt;
+                double gt_vy_raw = (data[i].sim_pos_y - last_gt_py) / dt;
+                double gt_vz_raw = (data[i].sim_pos_z - last_gt_pz) / dt;
                 last_gt_px = data[i].sim_pos_x;
                 last_gt_py = data[i].sim_pos_y;
                 last_gt_pz = data[i].sim_pos_z;
+
+                // 10 Hz low-pass filter on GT velocity (raw diff at 1kHz is too noisy)
+                gt_vx_filt = (1.0 - gt_vel_alpha) * gt_vx_filt + gt_vel_alpha * gt_vx_raw;
+                gt_vy_filt = (1.0 - gt_vel_alpha) * gt_vy_filt + gt_vel_alpha * gt_vy_raw;
+                gt_vz_filt = (1.0 - gt_vel_alpha) * gt_vz_filt + gt_vel_alpha * gt_vz_raw;
 
                 // Estimated velocity in world frame: v_world = R * v_body
                 Eigen::Matrix3f R_est = st2.q.toRotationMatrix();
                 Eigen::Vector3f v_world = R_est * st2.v;
 
-                double ev_x = v_world.x() - gt_vx;
-                double ev_y = v_world.y() - gt_vy;
-                double ev_z = v_world.z() - gt_vz;
-                vel_sq_err_sum_x += ev_x * ev_x;
-                vel_sq_err_sum_y += ev_y * ev_y;
-                vel_sq_err_sum_z += ev_z * ev_z;
-                vel_count++;
+                // Accumulate error only after warmup
+                if (processed_count >= rmse_skip) {
+                    double ev_x = v_world.x() - gt_vx_filt;
+                    double ev_y = v_world.y() - gt_vy_filt;
+                    double ev_z = v_world.z() - gt_vz_filt;
+                    vel_sq_err_sum_x += ev_x * ev_x;
+                    vel_sq_err_sum_y += ev_y * ev_y;
+                    vel_sq_err_sum_z += ev_z * ev_z;
+
+                    pos_sq_err_sum_x += ep_x * ep_x;
+                    pos_sq_err_sum_y += ep_y * ep_y;
+                    pos_sq_err_sum_z += ep_z * ep_z;
+
+                    vel_count++;
+                }
             }
 
             // --- Log ---
