@@ -497,6 +497,10 @@ int main(int argc, char** argv) {
         double last_gt_px = data[start_index].sim_pos_x;
         double last_gt_py = data[start_index].sim_pos_y;
         double last_gt_pz = data[start_index].sim_pos_z;
+        // GT initial position offset (ESEKF starts at origin)
+        const double gt_offset_x = data[start_index].sim_pos_x;
+        const double gt_offset_y = data[start_index].sim_pos_y;
+        const double gt_offset_z = data[start_index].sim_pos_z;
         // Low-pass filtered GT velocity (10 Hz cutoff)
         const double gt_vel_alpha = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
         double gt_vx_filt = 0.0, gt_vy_filt = 0.0, gt_vz_filt = 0.0;
@@ -680,10 +684,10 @@ int main(int argc, char** argv) {
             // --- Accumulate position & velocity RMSE ---
             {
                 const auto& st2 = esekf.nominal();
-                // Position error (world frame)
-                double ep_x = st2.p.x() - data[i].sim_pos_x;
-                double ep_y = st2.p.y() - data[i].sim_pos_y;
-                double ep_z = st2.p.z() - data[i].sim_pos_z;
+                // Position error (world frame, offset-corrected)
+                double ep_x = st2.p.x() - (data[i].sim_pos_x - gt_offset_x);
+                double ep_y = st2.p.y() - (data[i].sim_pos_y - gt_offset_y);
+                double ep_z = st2.p.z() - (data[i].sim_pos_z - gt_offset_z);
 
                 // GT velocity (world frame, finite difference + LPF)
                 double gt_vx_raw = (data[i].sim_pos_x - last_gt_px) / dt;
@@ -765,7 +769,7 @@ int main(int argc, char** argv) {
         std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
         std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
         std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
-        std::cout << "Sim end:  [" << data.back().sim_pos_x << ", " << data.back().sim_pos_y << ", " << data.back().sim_pos_z << "]\n";
+        std::cout << "GT (off): [" << data.back().sim_pos_x - gt_offset_x << ", " << data.back().sim_pos_y - gt_offset_y << ", " << data.back().sim_pos_z - gt_offset_z << "]\n";
         std::cout << "==========================================\n";
 
         // Position & Velocity RMSE
