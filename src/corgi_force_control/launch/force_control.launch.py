@@ -2,7 +2,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    common_params = [{'use_sim_time': True}]
+    common_params = [{'use_sim_time': False}]
 
     return LaunchDescription([
 
@@ -14,9 +14,9 @@ def generate_launch_description():
         ),
 
         Node(
-            package='corgi_force_control',
-            executable='exp_h24_node',
-            name='exp_h24_node',
+            package='corgi_force_estimation',
+            executable='force_estimation_node',
+            name='force_estimation_node',
             parameters=common_params
         )
     ])
