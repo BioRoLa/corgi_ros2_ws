@@ -490,16 +490,31 @@ def compute_average_velocity(times, thetas, betas, dt, J):
 # 6. Instantaneous velocity (ES-EKF approach)
 # =====================================================================
 
-def compute_instantaneous_velocity(times, thetas, betas, dt):
+def iir_lpf(x, cutoff_hz, dt):
+    """Apply 1st-order IIR low-pass filter."""
+    a = 1.0 - np.exp(-2 * np.pi * cutoff_hz * dt)
+    y = x.copy()
+    for i in range(1, len(y)):
+        y[i] = (1 - a) * y[i-1] + a * y[i]
+    return y
+
+
+def compute_instantaneous_velocity(times, thetas, betas, dt, lpf_cutoff=None):
     """
     Emulate ESEKF::update_leg observation.
 
     At each timestep:
       1. Compute theta_d, beta_d from finite differences
-      2. Run forward kinematics (Leg::Calculate)
-      3. PointContact(rim, alpha)
-      4. PointVelocity(v=0, w=0, rim, alpha, inbody=True)
-      5. z_leg = -contact_velocity
+      2. Optionally apply LPF to theta_d, beta_d
+      3. Run forward kinematics (Leg::Calculate)
+      4. PointContact(rim, alpha)
+      5. PointVelocity(v=0, w=0, rim, alpha, inbody=True)
+      6. z_leg = -contact_velocity
+
+    Parameters
+    ----------
+    lpf_cutoff : float or None
+        If not None, apply IIR LPF at this cutoff (Hz) to theta_d/beta_d.
 
     Returns v_inst_x, v_inst_z arrays.
     """
@@ -513,6 +528,11 @@ def compute_instantaneous_velocity(times, thetas, betas, dt):
     for i in range(1, N):
         theta_d_arr[i] = (thetas[i] - thetas[i-1]) / dt
         beta_d_arr[i]  = (betas[i]  - betas[i-1])  / dt
+
+    # Optionally filter theta_d, beta_d
+    if lpf_cutoff is not None:
+        theta_d_arr = iir_lpf(theta_d_arr, lpf_cutoff, dt)
+        beta_d_arr  = iir_lpf(beta_d_arr,  lpf_cutoff, dt)
 
     # Accumulate contact_beta
     contact_betas = np.zeros(N)
@@ -553,133 +573,96 @@ def main():
     thetas = df['theta'].values
     betas  = -df['beta'].values          # negate beta to match body-frame convention
     gt_vx  = df['hip_vx'].values
-    gt_vz  = df['hip_vz'].values
 
-    dt = times[1] - times[0]             # should be ~0.001s = 1 kHz
-    print(f"Loaded {len(times)} samples, dt = {dt:.6f} s")
+    dt   = times[1] - times[0]          # should be ~0.001s = 1 kHz
+    N    = len(times)
+    SKIP = 100                           # skip first 100 samples (filter warm-up)
+    print(f"Loaded {N} samples, dt = {dt:.6f} s  (skip first {SKIP} for warm-up)")
 
-    # --- Average velocity with different window sizes ---
-    J_values = [5, 10, 20]
-    avg_results = {}
-    for J in J_values:
-        print(f"Computing average velocity (J={J}) ...")
-        vx, vz = compute_average_velocity(times, thetas, betas, dt, J)
-        avg_results[J] = (vx, vz)
+    # --- Average velocity (diff-pos, J=10 only) ---
+    J = 10
+    print(f"Computing average velocity (diff-pos J={J}) ...")
+    v_avg_x, _ = compute_average_velocity(times, thetas, betas, dt, J)
 
     # --- Instantaneous velocity ---
     print("Computing instantaneous velocity ...")
-    v_inst_x, v_inst_z = compute_instantaneous_velocity(times, thetas, betas, dt)
+    v_raw_x, _ = compute_instantaneous_velocity(times, thetas, betas, dt, lpf_cutoff=None)
 
-    # --- Plot ---
-    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-    fig.suptitle("Velocity Estimation Comparison: Average vs Instantaneous\n"
-                 "(Single Leg Contact Phase, no IMU rotation)", fontsize=14)
+    # (label, vx_array, color, linestyle, alpha)
+    methods = [
+        ('Inst. velocity',  v_raw_x, 'r', '-',  0.8),
+        (f'Diff-pos J={J}', v_avg_x, 'b', '--', 1.0),
+    ]
 
-    # --- Vx plot ---
-    ax = axes[0]
-    ax.plot(times, gt_vx, 'k-', linewidth=2, label='Ground Truth', alpha=0.8)
-    colors = ['C0', 'C1', 'C2']
-    for idx, J in enumerate(J_values):
-        vx, vz = avg_results[J]
-        ax.plot(times, vx, color=colors[idx], linestyle='--', linewidth=1.2,
-                label=f'Average (J={J})', alpha=0.8)
-    ax.plot(times, v_inst_x, 'r-', linewidth=1.0, label='Instantaneous', alpha=0.7)
-    ax.set_ylabel("$v_x$ [m/s]")
-    ax.set_title("X-direction Velocity (forward)")
-    ax.legend(loc='upper right')
-    ax.grid(True, alpha=0.3)
+    # ================================================================
+    # RMSE / Bias / Std  (warm-up samples excluded)
+    # ================================================================
+    print("\n" + "="*60)
+    print(f"vx Error Statistics  (skip first {SKIP} samples, units: mm/s)")
+    print("="*60)
+    print(f"{'Method':<20s}  {'RMSE':>8s}  {'Bias':>8s}  {'Std':>8s}  {'N':>6s}")
+    print("-"*60)
 
-    # --- Vz plot ---
-    ax = axes[1]
-    ax.plot(times, gt_vz, 'k-', linewidth=2, label='Ground Truth', alpha=0.8)
-    for idx, J in enumerate(J_values):
-        vx, vz = avg_results[J]
-        ax.plot(times, vz, color=colors[idx], linestyle='--', linewidth=1.2,
-                label=f'Average (J={J})', alpha=0.8)
-    ax.plot(times, v_inst_z, 'r-', linewidth=1.0, label='Instantaneous', alpha=0.7)
-    ax.set_ylabel("$v_z$ [m/s]")
+    for label, vx, *_ in methods:
+        valid = ~np.isnan(vx)
+        valid[:SKIP] = False
+        ex = (vx[valid] - gt_vx[valid]) * 1000
+        rmse = np.sqrt(np.mean(ex**2))
+        bias = np.mean(ex)
+        std  = np.std(ex)
+        print(f"{label:<20s}  {rmse:>8.2f}  {bias:>+8.2f}  {std:>8.2f}  {valid.sum():>6d}")
+
+    print("="*60)
+
+    # ================================================================
+    # Plot 1: vx comparison  (warm-up excluded)
+    # ================================================================
+    t_plot = times[SKIP:]
+
+    fig, ax = plt.subplots(figsize=(12, 9))
+    fig.suptitle("Vx Estimation: Diff-Pos (J=10) vs Instantaneous\n"
+                 "(Single Leg Contact Phase, w=0)", fontsize=13)
+
+    ax.plot(t_plot, gt_vx[SKIP:] * 1000, 'k-', linewidth=2, label='Ground Truth', alpha=0.8)
+    for label, vx, color, ls, alpha in methods:
+        valid = ~np.isnan(vx)
+        mask  = valid & (np.arange(N) >= SKIP)
+        ax.plot(times[mask], vx[mask] * 1000, color=color, linestyle=ls,
+                linewidth=1.0, label=label, alpha=alpha)
+    ax.set_ylabel("$v_x$ [mm/s]")
     ax.set_xlabel("Time [s]")
-    ax.set_title("Z-direction Velocity (vertical)")
-    ax.legend(loc='upper right')
+    ax.legend(loc='upper right', fontsize=9)
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     out_path = Path(__file__).parent / "velocity_comparison.png"
     plt.savefig(out_path, dpi=150)
-    print(f"\nPlot saved to: {out_path}")
+    print(f"\nVelocity plot saved to: {out_path}")
+    plt.close(fig)
 
-    # --- Print sample values for debugging ---
-    print("\n" + "="*60)
-    print("Sample values at mid-point (index 1200)")
-    print("="*60)
-    mid = 1200
-    print(f"  Ground truth:   vx = {gt_vx[mid]:.6f},  vz = {gt_vz[mid]:.6f}")
-    print(f"  Instantaneous:  vx = {v_inst_x[mid]:.6f},  vz = {v_inst_z[mid]:.6f}")
-    for J in J_values:
-        vx, vz = avg_results[J]
-        if not np.isnan(vx[mid]):
-            print(f"  Average(J={J:>3d}):  vx = {vx[mid]:.6f},  vz = {vz[mid]:.6f}")
+    # ================================================================
+    # Plot 2: vx error time-series  (warm-up excluded)
+    # ================================================================
+    fig2, ax2 = plt.subplots(figsize=(12, 9))
+    fig2.suptitle("Vx Estimation Error vs Ground Truth", fontsize=13)
 
-    # --- Print error statistics ---
-    print("\n" + "="*60)
-    print("Error Statistics (RMS error vs ground truth)")
-    print("="*60)
-
-    valid_inst = ~np.isnan(v_inst_x)
-    rmse_inst_x = np.sqrt(np.nanmean((v_inst_x[valid_inst] - gt_vx[valid_inst])**2))
-    rmse_inst_z = np.sqrt(np.nanmean((v_inst_z[valid_inst] - gt_vz[valid_inst])**2))
-    print(f"Instantaneous:       RMSE_vx = {rmse_inst_x:.6f} m/s,  RMSE_vz = {rmse_inst_z:.6f} m/s")
-
-    for J in J_values:
-        vx, vz = avg_results[J]
+    for label, vx, color, ls, alpha in methods:
         valid = ~np.isnan(vx)
-        rmse_vx = np.sqrt(np.nanmean((vx[valid] - gt_vx[valid])**2))
-        rmse_vz = np.sqrt(np.nanmean((vz[valid] - gt_vz[valid])**2))
-        print(f"Average (J={J:>3d}):     RMSE_vx = {rmse_vx:.6f} m/s,  RMSE_vz = {rmse_vz:.6f} m/s")
-
-    # --- Mean value comparison ---
-    print("\n" + "="*60)
-    print("Mean estimated velocity (should be ≈ GT mean)")
-    print("="*60)
-    print(f"  Ground truth mean:  vx = {np.mean(gt_vx):.6f},  vz = {np.mean(gt_vz):.6f}")
-    print(f"  Instantaneous mean: vx = {np.nanmean(v_inst_x):.6f},  vz = {np.nanmean(v_inst_z):.6f}")
-    for J in J_values:
-        vx, vz = avg_results[J]
-        print(f"  Average(J={J:>3d}) mean: vx = {np.nanmean(vx):.6f},  vz = {np.nanmean(vz):.6f}")
-
-    # --- Additional diagnostic: plot instantaneous velocity error over time ---
-    fig2, axes2 = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
-    fig2.suptitle("Velocity Estimation Error vs Ground Truth", fontsize=14)
-
-    ax = axes2[0]
-    ax.plot(times[valid_inst], v_inst_x[valid_inst] - gt_vx[valid_inst], 'r-', linewidth=0.8, label='Instantaneous err', alpha=0.7)
-    for idx, J in enumerate(J_values):
-        vx, _ = avg_results[J]
-        valid = ~np.isnan(vx)
-        ax.plot(times[valid], vx[valid] - gt_vx[valid], color=colors[idx], linestyle='--', linewidth=0.8, label=f'Avg (J={J}) err', alpha=0.7)
-    ax.set_ylabel("$\\Delta v_x$ [m/s]")
-    ax.set_title("X-direction Velocity Error")
-    ax.legend(loc='upper right')
-    ax.grid(True, alpha=0.3)
-    ax.axhline(0, color='k', linewidth=0.5)
-
-    ax = axes2[1]
-    ax.plot(times[valid_inst], v_inst_z[valid_inst] - gt_vz[valid_inst], 'r-', linewidth=0.8, label='Instantaneous err', alpha=0.7)
-    for idx, J in enumerate(J_values):
-        _, vz = avg_results[J]
-        valid = ~np.isnan(vz)
-        ax.plot(times[valid], vz[valid] - gt_vz[valid], color=colors[idx], linestyle='--', linewidth=0.8, label=f'Avg (J={J}) err', alpha=0.7)
-    ax.set_ylabel("$\\Delta v_z$ [m/s]")
-    ax.set_xlabel("Time [s]")
-    ax.set_title("Z-direction Velocity Error")
-    ax.legend(loc='upper right')
-    ax.grid(True, alpha=0.3)
-    ax.axhline(0, color='k', linewidth=0.5)
+        mask  = valid & (np.arange(N) >= SKIP)
+        ax2.plot(times[mask], (vx[mask] - gt_vx[mask]) * 1000,
+                 color=color, linestyle=ls, linewidth=0.8,
+                 label=label, alpha=alpha * 0.8)
+    ax2.axhline(0, color='k', linewidth=0.5)
+    ax2.set_ylabel("$\\Delta v_x$ [mm/s]")
+    ax2.set_xlabel("Time [s]")
+    ax2.legend(loc='upper right', fontsize=9)
+    ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
     out_path2 = Path(__file__).parent / "velocity_error.png"
     plt.savefig(out_path2, dpi=150)
     print(f"Error plot saved to: {out_path2}")
+    plt.close(fig2)
 
 
 if __name__ == "__main__":
