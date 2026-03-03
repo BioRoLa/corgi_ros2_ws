@@ -163,14 +163,14 @@ ForceEstimationNode::ForceEstimationNode()
     RCLCPP_INFO(this->get_logger(), "Force Estimation Starts");
 
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "motor/state", 1000, 
+        "motor/state", 10, 
         std::bind(&ForceEstimationNode::motor_state_cb, this, std::placeholders::_1));
     
     imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
-        "imu", 1000, 
+        "imu", 1, 
         std::bind(&ForceEstimationNode::imu_cb, this, std::placeholders::_1));
     
-    force_state_pub_ = this->create_publisher<corgi_msgs::msg::ForceStateStamped>("force/state", 1000);
+    force_state_pub_ = this->create_publisher<corgi_msgs::msg::ForceStateStamped>("force/state", 10);
     
     auto rate = std::chrono::milliseconds(1);
     timer_ = this->create_wall_timer(
