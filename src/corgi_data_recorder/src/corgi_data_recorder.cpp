@@ -334,23 +334,23 @@ int main(int argc, char **argv) {
         // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
-    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
-    auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
-    auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 1000, power_state_cb);
-    auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
-    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
-    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 100, trigger_cb);
+    auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 100, motor_cmd_cb);
+    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 100, motor_state_cb);
+    auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 100, power_cmd_cb);
+    auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 100, power_state_cb);
+    auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 100, imu_cb);
+    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 100, imp_cmd_cb);
+    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 100, force_state_cb);
     // TF listener for odom -> base_link transform
     tf2_ros::Buffer tfBuffer(node->get_clock());
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 1000, stair_info_cb);
-    auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 1000, range_1_cb);
-    auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 1000, range_2_cb);
-    auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 1000, range_3_cb);
-    auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 1000, range_4_cb);
+    auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 100, stair_info_cb);
+    auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 100, range_1_cb);
+    auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 100, range_2_cb);
+    auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 100, range_3_cb);
+    auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 100, range_4_cb);
 
     // rclcpp::Rate rate(1000);
     rclcpp::Duration period(0, 1000000); // 1ms

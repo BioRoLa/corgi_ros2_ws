@@ -19,11 +19,11 @@ GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
                                         currentGait(Gait::WHEELED)
 {
     motor_state_sub_ = node_->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "/motor/state", 1000, std::bind(&GaitSelector::motor_state_cb, this, std::placeholders::_1));
-    motor_cmd_pub_ = node_->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", pub_rate);
-    marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("stable_triangle", pub_rate);
+        "/motor/state", 5, std::bind(&GaitSelector::motor_state_cb, this, std::placeholders::_1));
+    motor_cmd_pub_ = node_->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 5);
+    marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("stable_triangle", 5);
     trigger_sub_ = node_->create_subscription<corgi_msgs::msg::TriggerStamped>(
-        "trigger", 1000, std::bind(&GaitSelector::trigger_cb, this, std::placeholders::_1));
+        "trigger", 5, std::bind(&GaitSelector::trigger_cb, this, std::placeholders::_1));
     rate_ptr = new rclcpp::WallRate(pub_rate);
 
     // Initialize dS & incre_duty

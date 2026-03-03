@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 
     imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS1", 921600, 1000, 500);
 
-    auto pub = node->create_publisher<corgi_msgs::msg::ImuStamped>("imu", 1000);
+    auto pub = node->create_publisher<corgi_msgs::msg::ImuStamped>("imu", 5);
 
     auto srv = node->create_service<corgi_msgs::srv::Imu>(
         "imu_service",

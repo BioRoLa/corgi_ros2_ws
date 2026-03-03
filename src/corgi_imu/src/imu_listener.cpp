@@ -98,10 +98,10 @@ int main(int argc, char **argv)
     auto node = std::make_shared<rclcpp::Node>("imu_node_listener");
 
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
-        "trigger", 1000, trigger_cb);
+        "trigger", 5, trigger_cb);
     
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
-        "imu", 1000, imu_info_cb);
+        "imu", 5, imu_info_cb);
 
     rclcpp::Rate rate(1000);
 
