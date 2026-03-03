@@ -28,7 +28,7 @@ from pathlib import Path
 # 1. Link-leg mechanism parameters (from LinkLegModel / Leg)
 # =====================================================================
 R_wheel  = 0.10           # big rim radius [m]  (from Config.hpp)
-r_tire   = 0.0125         # tire skin radius [m]
+r_tire   = 0.019          # tire skin radius [m]  (sim=False in generate_contact_csv)
 l1 = 0.8  * R_wheel
 l2 = 0.9  * R_wheel
 l3 = 1.3  * R_wheel
@@ -387,8 +387,9 @@ def compensate_rolling(fk, rim, alpha, theta_d_val, dt, y_offset):
     """
     Port of ContactMap::compensate2 for a single step.
     Rolling compensation from theta_d (link mechanism angular velocity).
+    Only use linkage-only omega; beta_d part is already in travel_continuous.
     """
-    link_w = rim_omega(fk, rim, y_offset)
+    link_w = rim_omega(fk, rim, y_offset) - fk.get('beta_d', 0.0)
     r = rim_radius(rim)
     rolling_distance = r * link_w * dt     # simplified: single step
     angle_body = alpha  # contact_beta - beta = alpha

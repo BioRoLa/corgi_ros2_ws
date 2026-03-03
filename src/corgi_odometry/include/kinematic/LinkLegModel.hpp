@@ -27,7 +27,7 @@ inline float to_radians(float degrees) {
 class LinkLegModel
 {
     public:
-    LinkLegModel(float r = 0.0125, float R = 0.1) {
+    LinkLegModel(float r = 0.019, float R = 0.1) {
         this->R = R;
         this->r = r;
         this->l1 = 0.8 * this->R;

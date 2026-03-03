@@ -33,7 +33,7 @@ from pathlib import Path
 DT = 0.001               # 1 kHz
 START_INDEX = 5000        # Same as Config::START_INDEX used in offline_test
 R_wheel = 0.10
-r_tire  = 0.0125
+r_tire  = 0.019
 
 LEG_NAMES = ['a', 'b', 'c', 'd']
 LEG_LABELS = ['LF (a)', 'RF (b)', 'RH (c)', 'LH (d)']

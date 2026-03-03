@@ -6,7 +6,7 @@
 class Leg : public LinkLegModel
 {
     public:
-    Leg(Eigen::Vector3f offset, float R = 0.1, float r = 0.0125)
+    Leg(Eigen::Vector3f offset, float R = 0.1, float r = 0.019)
     : LinkLegModel(r, R)
     {
         this->offset = offset;
