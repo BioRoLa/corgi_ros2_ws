@@ -461,6 +461,13 @@ int main(int argc, char** argv) {
             np.sigma_ba = {3.924e-4f, 3.924e-4f, 3.924e-4f};
             np.sigma_bw = {1e-8f, 1e-5f, 1e-8f};     // freeze bw_x/bw_z: unobservable
             np.sigma_bv = {1e-6f, 1e-6f, 1e-6f};
+            // sigma_leg is measurement VARIANCE (R_leg = I * sigma_leg).
+            // Sweep results (sigma_a=0.1 fixed):
+            //   1e-3 → vx=19.75mm/s, ba=-0.47 (BEST)
+            //   5e-4 → vx=21.0mm/s,  ba=-0.85
+            //   1e-4 → vx=24.3mm/s,  ba=-2.18 (ba unstable)
+            //   1e-5 → diverges (mean vx~87mm/s)
+            // Tightening increases leg FK systematic bias influence → ba blows up.
             np.sigma_leg = 1e-3f;
             esekf.set_noise_params(np);
             std::cout << "Noise params: sigma_leg=" << np.sigma_leg << "\n";
@@ -471,7 +478,7 @@ int main(int argc, char** argv) {
         bool esekf_initialized = false;
 
         // Output CSV for ESEKF results
-        const auto output_dir = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / "output_data";
+        const auto output_dir = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "output_data";
         std::filesystem::create_directories(output_dir);
         const auto esekf_out_path = output_dir / (std::string(corgi::Config::CSV_FILENAME) + "_esekf.csv");
         std::ofstream esekf_out(esekf_out_path);
