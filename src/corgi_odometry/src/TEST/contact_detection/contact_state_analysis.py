@@ -257,14 +257,15 @@ def rim_radius(rim):
 def contact_velocity_noslip(fk, rim, alpha, w_body, leg_offset, y_offset):
     """PointVelocity with v=0 (no-slip), return -cv => body velocity estimate."""
     r = rim_radius(rim)
-    cp = rim_center_pos(fk, rim, leg_offset)
     rv = rim_center_vel(fk, rim)
     link_w = rim_omega(fk, rim, y_offset)
     rim_p = r * np.exp(1j * (np.pi + alpha))
+    rp_vec = np.array([rim_p.imag, 0.0, rim_p.real])
+    # contact_point = offset + rim_center + rp  (matching C++ Leg::PointContact)
+    cp = rim_center_pos(fk, rim, leg_offset) + rp_vec
     w_rim = np.array([0.0, link_w, 0.0])
-    r_rim = np.array([rim_p.imag, 0.0, rim_p.real])
-    # cv = v + w×cp + rv + w_rim×r_rim  (v=0 for no-slip)
-    cv = np.cross(w_body, cp) + rv + np.cross(w_rim, r_rim)
+    # cv = v + w×cp + rv + w_rim×rp  (v=0 for no-slip)
+    cv = np.cross(w_body, cp) + rv + np.cross(w_rim, rp_vec)
     return -cv   # body velocity = -contact_velocity(v=0)
 
 
@@ -315,6 +316,16 @@ def schmitt_trigger(rm_array, beta_array, rm_high, rm_low, beta_high, beta_low,
 
 
 # =====================================================================
+# Quaternion → rotation matrix
+# =====================================================================
+def quat_to_rotmat(qw, qx, qy, qz):
+    return np.array([
+        [1-2*(qy*qy+qz*qz), 2*(qx*qy-qz*qw),   2*(qx*qz+qy*qw)],
+        [2*(qx*qy+qz*qw),   1-2*(qx*qx+qz*qz),  2*(qy*qz-qx*qw)],
+        [2*(qx*qz-qy*qw),   2*(qy*qz+qx*qw),     1-2*(qx*qx+qy*qy)]])
+
+
+# =====================================================================
 # Main
 # =====================================================================
 def main():
@@ -333,45 +344,59 @@ def main():
     # raw rows [START_INDEX : START_INDEX + len(dist)] correspond to dist rows
     raw_aligned = raw.iloc[START_INDEX : START_INDEX + len(dist)].reset_index(drop=True)
     
-    # Skip transient (first 500 samples)
-    SKIP = 500
-    raw_aligned = raw_aligned.iloc[SKIP:].reset_index(drop=True)
-    dist        = dist.iloc[SKIP:].reset_index(drop=True)
+    # Limit to first 12s (12000 samples) to cover raw 5000-17000
+    # Eval window will be [2000:12000] = raw 7000-17000 (first 10s after movement)
+    ANALYSIS_SAMPLES = 12000
+    raw_aligned = raw_aligned.iloc[:ANALYSIS_SAMPLES].reset_index(drop=True)
+    dist        = dist.iloc[:ANALYSIS_SAMPLES].reset_index(drop=True)
     N = len(dist)
     t = np.arange(N) * DT
     
-    print(f"  After alignment & skip: {N} samples ({N*DT:.1f}s)")
+    print(f"  After alignment: {N} samples ({N*DT:.1f}s)")
+    print(f"  Eval window: raw [{START_INDEX+2000}:{START_INDEX+N}] = {(N-2000)*DT:.1f}s")
     
     # ---- Extract disturbance signals ----
     rm_signals   = {n: dist[f'estimated_disturbance_rm_{n}'].values   for n in LEG_NAMES}
     beta_signals = {n: dist[f'estimated_disturbance_beta_{n}'].values for n in LEG_NAMES}
     
-    # ---- Ground truth velocity from sim_pos (finite diff + LPF) ----
-    sim_x = raw_aligned['sim_pos_x'].values
-    sim_z = raw_aligned['sim_pos_z'].values
-    gt_vx = np.gradient(sim_x, DT)
-    gt_vz = np.gradient(sim_z, DT)
-    # Low-pass filter
-    alpha_lpf = 1.0 - np.exp(-2.0 * np.pi * 5.0 * DT)  # 5 Hz cutoff for GT
+    # ---- Ground truth velocity: world-frame finite diff + LPF → rotate to body frame ----
+    gt_vx_w = np.gradient(raw_aligned['sim_pos_x'].values, DT)
+    gt_vy_w = np.gradient(raw_aligned['sim_pos_y'].values, DT)
+    gt_vz_w = np.gradient(raw_aligned['sim_pos_z'].values, DT)
+    # 10 Hz IIR LPF in world frame
+    alpha_lpf = 1.0 - np.exp(-2.0 * np.pi * 10.0 * DT)  # 10 Hz cutoff for GT
     for i in range(1, N):
-        gt_vx[i] = (1 - alpha_lpf) * gt_vx[i-1] + alpha_lpf * gt_vx[i]
-        gt_vz[i] = (1 - alpha_lpf) * gt_vz[i-1] + alpha_lpf * gt_vz[i]
+        gt_vx_w[i] = (1 - alpha_lpf) * gt_vx_w[i-1] + alpha_lpf * gt_vx_w[i]
+        gt_vy_w[i] = (1 - alpha_lpf) * gt_vy_w[i-1] + alpha_lpf * gt_vy_w[i]
+        gt_vz_w[i] = (1 - alpha_lpf) * gt_vz_w[i-1] + alpha_lpf * gt_vz_w[i]
+    # Rotate world → body frame using GT quaternion (R^T * v_world)
+    gt_vb = np.zeros((N, 3))
+    for i in range(N):
+        R_gt = quat_to_rotmat(raw_aligned['sim_orien_w'].iloc[i],
+                               raw_aligned['sim_orien_x'].iloc[i],
+                               raw_aligned['sim_orien_y'].iloc[i],
+                               raw_aligned['sim_orien_z'].iloc[i])
+        gt_vb[i] = R_gt.T @ [gt_vx_w[i], gt_vy_w[i], gt_vz_w[i]]
+    gt_vx = gt_vb[:, 0]  # body-frame forward velocity
+    gt_vz = gt_vb[:, 2]  # body-frame vertical velocity
     
-    # ---- Extract leg joint data ----
+    # ---- Extract leg joint data (using vel_r/vel_l, matching C++ offline_test) ----
     def get_leg_data(leg_name, x_sign, y_sign):
         theta = raw_aligned[f'state_theta_{leg_name}'].values
         beta  = raw_aligned[f'state_beta_{leg_name}'].values
+        vel_r = raw_aligned[f'state_vel_r_{leg_name}'].values
+        vel_l = raw_aligned[f'state_vel_l_{leg_name}'].values
+        
+        is_right = leg_name in ['b', 'c']
         # Right-side legs (b, c) need beta negation
-        if leg_name in ['b', 'c']:
+        if is_right:
             beta = -beta
         
-        # Numerically differentiate with LPF
-        alpha_enc = 1.0 - np.exp(-2.0 * np.pi * 30.0 * DT)
-        theta_d = np.gradient(theta, DT)
-        beta_d  = np.gradient(beta, DT)
-        for i in range(1, len(theta_d)):
-            theta_d[i] = (1 - alpha_enc) * theta_d[i-1] + alpha_enc * theta_d[i]
-            beta_d[i]  = (1 - alpha_enc) * beta_d[i-1]  + alpha_enc * beta_d[i]
+        # Compute theta_d, beta_d from motor velocities (matching C++ offline_test)
+        theta_d = (-vel_r + vel_l) / 2.0
+        beta_d  = -(vel_r + vel_l) / 2.0
+        if is_right:
+            beta_d = -beta_d
         
         offset = np.array([x_sign * OFFSET_X, y_sign * OFFSET_Y, 0.0])
         return theta, beta, theta_d, beta_d, offset, y_sign * OFFSET_Y
@@ -389,13 +414,6 @@ def main():
     configs = [
         # (label, rm_high, rm_low, beta_high, beta_low, use_and)
         ("Current OR (rm=25,β=10)",       25,  15,  10,   1, False),
-        ("Current AND (rm=25,β=10)",      25,  15,  10,   1, True),
-        ("AND rm=25,β=2",                 25,  15,   2, 0.5, True),
-        ("AND rm=25,β=1",                 25,  15,   1, 0.3, True),
-        ("AND rm=40,β=2",                 40,  20,   2, 0.5, True),
-        ("AND rm=50,β=2",                 50,  25,   2, 0.5, True),
-        ("rm_only (rm=25)",               25,  15, 1e9,   0, False),  # effectively rm-only
-        ("AND rm=30,β=1.5",              30,  15, 1.5, 0.3, True),
     ]
     
     results = []
@@ -448,13 +466,9 @@ def main():
                 vz_est[i] = vz_sum / cnt
             n_contact[i] = cnt
         
-        # Apply LPF to velocity estimate
+        # No LPF applied to velocity estimate
         vx_filt = vx_est.copy()
         vz_filt = vz_est.copy()
-        alpha_v = 1.0 - np.exp(-2.0 * np.pi * 5.0 * DT)
-        for i in range(1, N):
-            vx_filt[i] = (1 - alpha_v) * vx_filt[i-1] + alpha_v * vx_filt[i]
-            vz_filt[i] = (1 - alpha_v) * vz_filt[i-1] + alpha_v * vz_filt[i]
         
         # Metrics (skip first 2s after skip for filter warmup)
         eval_start = 2000
@@ -478,7 +492,8 @@ def main():
             'n_contact': n_contact,
         })
         
-        print(f"  [{cfg_label}] RMSE_vx={rmse_vx*1000:.1f} mm/s, "
+        print(f"  [{cfg_label}] (rm: HIGH={rm_h}, LOW={rm_l} | beta: HIGH={beta_h}, LOW={beta_l})")
+        print(f"    RMSE_vx={rmse_vx*1000:.1f} mm/s, "
               f"avg_legs={mean_contact:.2f}, coverage={contact_ratio*100:.1f}%, "
               f"per_leg=[{total_per_leg['a']:.2f},{total_per_leg['b']:.2f},"
               f"{total_per_leg['c']:.2f},{total_per_leg['d']:.2f}]")
@@ -493,21 +508,19 @@ def main():
         ax_rm = axes[idx, 0]
         ax_beta = axes[idx, 1]
         
-        ax_rm.plot(t, rm_signals[name], 'b-', linewidth=0.3, alpha=0.7)
+        ax_rm.plot(t, np.abs(rm_signals[name]), 'b-', linewidth=0.3, alpha=0.7)
         ax_rm.axhline(25, color='r', linestyle='--', linewidth=0.8, label='HIGH=25')
-        ax_rm.axhline(-25, color='r', linestyle='--', linewidth=0.8)
         ax_rm.axhline(15, color='orange', linestyle=':', linewidth=0.8, label='LOW=15')
-        ax_rm.axhline(-15, color='orange', linestyle=':', linewidth=0.8)
-        ax_rm.set_ylabel(f'{label}\nrm [N]')
+        ax_rm.set_ylabel(f'{label}\n|rm| [N]')
+        ax_rm.set_ylim(0, 200)
         ax_rm.legend(loc='upper right', fontsize=7)
         ax_rm.grid(True, alpha=0.3)
         
-        ax_beta.plot(t, beta_signals[name], 'g-', linewidth=0.3, alpha=0.7)
+        ax_beta.plot(t, np.abs(beta_signals[name]), 'g-', linewidth=0.3, alpha=0.7)
         ax_beta.axhline(10, color='r', linestyle='--', linewidth=0.8, label='HIGH=10')
-        ax_beta.axhline(-10, color='r', linestyle='--', linewidth=0.8)
         ax_beta.axhline(1, color='orange', linestyle=':', linewidth=0.8, label='LOW=1')
-        ax_beta.axhline(-1, color='orange', linestyle=':', linewidth=0.8)
-        ax_beta.set_ylabel(f'{label}\nbeta [Nm]')
+        ax_beta.set_ylabel(f'{label}\n|beta| [Nm]')
+        ax_beta.set_ylim(0, 30)
         ax_beta.legend(loc='upper right', fontsize=7)
         ax_beta.grid(True, alpha=0.3)
     
@@ -519,60 +532,41 @@ def main():
     plt.close(fig)
     
     # =================================================================
-    # Plot 2: Contact detection comparison (top configs)
+    # Plot 2: Contact detection (single subplot, 4:3)
     # =================================================================
-    n_cfg = len(results)
-    fig, axes = plt.subplots(n_cfg + 1, 1, figsize=(18, 3 * (n_cfg + 1)), sharex=True)
-    fig.suptitle("Schmitt Trigger Contact Detection Comparison", fontsize=14)
-    
-    # GT velocity
-    ax = axes[0]
-    ax.plot(t, gt_vx, 'k-', linewidth=0.8, label='GT vx')
-    ax.set_ylabel('vx [m/s]')
-    ax.set_title('Ground Truth Velocity (from sim_pos)')
-    ax.legend(loc='upper right')
-    ax.grid(True, alpha=0.3)
-    
-    for ci, res in enumerate(results):
-        ax = axes[ci + 1]
-        for li, (name, label) in enumerate(zip(LEG_NAMES, LEG_LABELS)):
-            contact = res['leg_contacts'][name].astype(float)
-            ax.fill_between(t, li, li + contact * 0.8, alpha=0.6, label=label)
-        ax.set_ylim(-0.2, 4.5)
-        ax.set_yticks([0.4, 1.4, 2.4, 3.4])
-        ax.set_yticklabels(LEG_LABELS)
-        rmse_str = f"RMSE={res['rmse_vx']*1000:.1f}mm/s"
-        ax.set_title(f"{res['label']}  —  {rmse_str}, avg_legs={res['mean_n_contact']:.2f}")
-        ax.grid(True, alpha=0.3, axis='x')
-    
-    axes[-1].set_xlabel('Time [s]')
+    res = results[0]
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))  # 4:3
+    for li, (name, label) in enumerate(zip(LEG_NAMES, LEG_LABELS)):
+        contact = res['leg_contacts'][name].astype(float)
+        ax.fill_between(t, li, li + contact * 0.8, alpha=0.6, label=label)
+    ax.set_ylim(-0.2, 4.5)
+    ax.set_yticks([0.4, 1.4, 2.4, 3.4])
+    ax.set_yticklabels(LEG_LABELS)
+    rmse_str = f"RMSE={res['rmse_vx']*1000:.1f}mm/s"
+    ax.set_title(f"{res['label']}  —  {rmse_str}, avg_legs={res['mean_n_contact']:.2f}")
+    ax.set_xlabel('Time [s]')
+    ax.grid(True, alpha=0.3, axis='x')
     plt.tight_layout()
     fig.savefig(out_dir / "contact_detection_comparison.png", dpi=150)
     print(f"Saved contact_detection_comparison.png")
     plt.close(fig)
     
     # =================================================================
-    # Plot 3: Velocity estimation comparison
+    # Plot 3: Velocity estimation comparison (5-15s, 4:3)
     # =================================================================
-    n_show = min(4, n_cfg)  # show top configs by lowest RMSE
-    sorted_results = sorted(results, key=lambda r: r['rmse_vx'])
+    res = results[0]
+    t_mask = (t >= 5.0) & (t <= 15.0)
     
-    fig, axes = plt.subplots(n_show, 1, figsize=(18, 4 * n_show), sharex=True)
-    if n_show == 1:
-        axes = [axes]
-    fig.suptitle("Velocity Estimation with Different Contact Detections", fontsize=14)
-    
-    for ci, res in enumerate(sorted_results[:n_show]):
-        ax = axes[ci]
-        ax.plot(t, gt_vx, 'k-', linewidth=0.8, label='GT vx', alpha=0.7)
-        ax.plot(t, res['vx_filt'], 'r-', linewidth=0.5, alpha=0.7, 
-                label=f"est vx (RMSE={res['rmse_vx']*1000:.1f}mm/s)")
-        ax.set_ylabel('vx [m/s]')
-        ax.set_title(res['label'])
-        ax.legend(loc='upper right')
-        ax.grid(True, alpha=0.3)
-    
-    axes[-1].set_xlabel('Time [s]')
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))  # 4:3
+    ax.plot(t[t_mask], gt_vx[t_mask], 'k-', linewidth=0.8, label='GT vx', alpha=0.7)
+    ax.plot(t[t_mask], res['vx_filt'][t_mask], 'r-', linewidth=0.5, alpha=0.7,
+            label=f"est vx (RMSE={res['rmse_vx']*1000:.1f}mm/s)")
+    ax.set_ylabel('vx [m/s]')
+    ax.set_xlabel('Time [s]')
+    ax.set_title(f"Velocity Estimation")
+    ax.set_xlim(5, 12)
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
     plt.tight_layout()
     fig.savefig(out_dir / "velocity_estimation_comparison.png", dpi=150)
     print(f"Saved velocity_estimation_comparison.png")
@@ -626,6 +620,12 @@ def main():
         p = res['per_leg']
         print(f"{res['label']:<30} {res['rmse_vx']*1000:>8.1f}mm {res['mean_n_contact']:>10.2f} "
               f"{res['contact_ratio']*100:>9.1f}% {p['a']:>5.0%} {p['b']:>5.0%} {p['c']:>5.0%} {p['d']:>5.0%}")
+    print("\nSchmitt Trigger Thresholds (absolute value):")
+    for cfg_label, rm_h, rm_l, beta_h, beta_l, use_and in configs:
+        logic = "AND" if use_and else "OR"
+        print(f"  {cfg_label}: logic={logic}")
+        print(f"    |rm|  → HIGH (activate)={rm_h}, LOW (deactivate)={rm_l}")
+        print(f"    |beta|→ HIGH (activate)={beta_h}, LOW (deactivate)={beta_l}")
     print("=" * 90)
     
     print(f"\nAll plots saved to: {out_dir}/")
