@@ -512,10 +512,11 @@ int main(int argc, char** argv) {
         const double gt_vel_alpha = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
         double gt_vx_filt = 0.0, gt_vy_filt = 0.0, gt_vz_filt = 0.0;
         const size_t rmse_skip = 2000;  // skip 2s warmup for GT filter + ESEKF settling
+        const size_t max_processed = 12000;  // limit to 12s (raw 5000-17000), eval raw 7000-17000
         size_t vel_count = 0;
 
         size_t processed_count = 0;
-        for (size_t i = start_index; i < data.size(); ++i) {
+        for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
             if (i % 100 == 0) {
                 std::cout << "Processing index: " << i << " / " << data.size() << "\r" << std::flush;
             }
