@@ -9,9 +9,11 @@ from pathlib import Path
 import sys
 
 # Locate output
-ws = Path(__file__).resolve().parents[2]  # corgi_ros2_ws/src -> corgi_ros2_ws
+ws = Path(__file__).resolve().parents[5]
 output_dir = ws / "output_data"
 esekf_file = output_dir / "walk_3m_01m_esekf.csv"
+
+output_dir = Path(__file__).resolve().parents[0]
 
 if not esekf_file.exists():
     print(f"File not found: {esekf_file}")
@@ -23,7 +25,16 @@ dt = 0.001
 t = np.arange(N) * dt
 
 print(f"Loaded {N} samples ({t[-1]:.1f}s)")
-print(f"\n--- Ground Truth ---")
+# Subtract GT initial offset so both start from origin
+gt_offset_x = df.sim_pos_x.iloc[0]
+gt_offset_y = df.sim_pos_y.iloc[0]
+gt_offset_z = df.sim_pos_z.iloc[0]
+df['sim_pos_x'] = df['sim_pos_x'] - gt_offset_x
+df['sim_pos_y'] = df['sim_pos_y'] - gt_offset_y
+df['sim_pos_z'] = df['sim_pos_z'] - gt_offset_z
+
+print(f"\n--- Ground Truth (offset-corrected) ---")
+print(f"  Offset: ({gt_offset_x:.4f}, {gt_offset_y:.4f}, {gt_offset_z:.4f})")
 print(f"  Start: ({df.sim_pos_x.iloc[0]:.4f}, {df.sim_pos_y.iloc[0]:.4f}, {df.sim_pos_z.iloc[0]:.4f})")
 print(f"  End:   ({df.sim_pos_x.iloc[-1]:.4f}, {df.sim_pos_y.iloc[-1]:.4f}, {df.sim_pos_z.iloc[-1]:.4f})")
 print(f"\n--- ESEKF Estimate ---")

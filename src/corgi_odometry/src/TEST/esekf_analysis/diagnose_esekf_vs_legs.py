@@ -57,9 +57,11 @@ DT = 0.001
 # =====================================================================
 # Load data
 # =====================================================================
-ws = Path(__file__).resolve().parents[2]
+ws = Path(__file__).resolve().parents[5]
 output_dir = ws / "output_data"
 esekf_file = output_dir / "walk_3m_01m_esekf.csv"
+
+output_dir = Path(__file__).resolve().parents[0]
 
 df = pd.read_csv(esekf_file)
 N = len(df)
@@ -292,7 +294,7 @@ ax.legend(fontsize=7)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-out_fig = Path(__file__).resolve().parent / "esekf_vs_legs_diagnosis.png"
+out_fig = output_dir / "esekf_vs_legs_diagnosis.png"
 plt.savefig(out_fig, dpi=150)
 print(f"\nPlot saved to {out_fig}")
 plt.close()
