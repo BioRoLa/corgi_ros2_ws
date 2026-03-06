@@ -19,8 +19,9 @@
 class CSVReader {
 public:
     struct RobotData {
-        // Base position
+        // Base position and orientation (Ground Truth)
         double sim_pos_x, sim_pos_y, sim_pos_z;
+        double sim_orien_x, sim_orien_y, sim_orien_z, sim_orien_w;
         
         // IMU data
         double imu_orien_x, imu_orien_y, imu_orien_z, imu_orien_w;
@@ -63,6 +64,10 @@ public:
             row.sim_pos_x = values[column_indices.at("sim_pos_x")];
             row.sim_pos_y = values[column_indices.at("sim_pos_y")];
             row.sim_pos_z = values[column_indices.at("sim_pos_z")];
+            row.sim_orien_x = values[column_indices.at("sim_orien_x")];
+            row.sim_orien_y = values[column_indices.at("sim_orien_y")];
+            row.sim_orien_z = values[column_indices.at("sim_orien_z")];
+            row.sim_orien_w = values[column_indices.at("sim_orien_w")];
             
             row.imu_orien_x = values[column_indices.at("imu_orien_x")];
             row.imu_orien_y = values[column_indices.at("imu_orien_y")];
@@ -455,22 +460,22 @@ int main(int argc, char** argv) {
         // Override noise parameters for offline testing
         {
             estimation_model::NoiseParams np;
-            // Noise parameters tuned for offline testing
-            np.sigma_a  = {0.1f, 0.1f, 0.1f};        // moderate: balance IMU trust vs walking dynamics
-            np.sigma_w  = {0.001f, 0.01f, 0.001f};   // tight x/z: roll/yaw unobservable from legs
-            np.sigma_ba = {3.924e-4f, 3.924e-4f, 3.924e-4f};
-            np.sigma_bw = {1e-8f, 1e-5f, 1e-8f};     // freeze bw_x/bw_z: unobservable
+            // Tuning sweep results (2026-03-06, sigma_ba=1e-5 for all):
+            //   sigma_a=0.1, sl=1e-3 → Vx=16.1, Vy=22.5, ba_x≈0.01  ← BEST
+            //   sigma_a=0.1, sl=5e-4 → Vx=16.7, Vy=24.8, ba_x≈0.02
+            //   sigma_a=0.3, sl=1e-3 → Vx=17.3, Vy=30.3, ba_x≈0.003
+            //   sigma_a=0.5, sl=1e-4 → Vx=21.2, Vy=34.9  (worst)
+            // Key finding: constraining sigma_ba (3.924e-4→1e-5) is the
+            // dominant improvement. ba_x went from -0.35 to ~0.01 m/s².
+            np.sigma_a  = {0.1f, 0.1f, 0.1f};
+            np.sigma_w  = {0.001f, 0.01f, 0.001f};
+            np.sigma_ba = {1e-5f, 1e-5f, 1e-5f};
+            np.sigma_bw = {1e-8f, 1e-5f, 1e-8f};
             np.sigma_bv = {1e-6f, 1e-6f, 1e-6f};
-            // sigma_leg is measurement VARIANCE (R_leg = I * sigma_leg).
-            // Sweep results (sigma_a=0.1 fixed):
-            //   1e-3 → vx=19.75mm/s, ba=-0.47 (BEST)
-            //   5e-4 → vx=21.0mm/s,  ba=-0.85
-            //   1e-4 → vx=24.3mm/s,  ba=-2.18 (ba unstable)
-            //   1e-5 → diverges (mean vx~87mm/s)
-            // Tightening increases leg FK systematic bias influence → ba blows up.
             np.sigma_leg = 1e-3f;
             esekf.set_noise_params(np);
-            std::cout << "Noise params: sigma_leg=" << np.sigma_leg << "\n";
+            std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
+                      << "], sigma_leg=" << np.sigma_leg << "\n";
         }
 
         std::array<bool, 4> leg_contact_state = {false, false, false, false};
@@ -501,19 +506,45 @@ int main(int argc, char** argv) {
         // Velocity RMSE accumulators
         double vel_sq_err_sum_x = 0.0, vel_sq_err_sum_y = 0.0, vel_sq_err_sum_z = 0.0;
         double pos_sq_err_sum_x = 0.0, pos_sq_err_sum_y = 0.0, pos_sq_err_sum_z = 0.0;
-        double last_gt_px = data[start_index].sim_pos_x;
-        double last_gt_py = data[start_index].sim_pos_y;
-        double last_gt_pz = data[start_index].sim_pos_z;
         // GT initial position offset (ESEKF starts at origin)
         const double gt_offset_x = data[start_index].sim_pos_x;
         const double gt_offset_y = data[start_index].sim_pos_y;
         const double gt_offset_z = data[start_index].sim_pos_z;
-        // Low-pass filtered GT velocity (10 Hz cutoff)
-        const double gt_vel_alpha = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
-        double gt_vx_filt = 0.0, gt_vy_filt = 0.0, gt_vz_filt = 0.0;
         const size_t rmse_skip = 2000;  // skip 2s warmup for GT filter + ESEKF settling
         const size_t max_processed = 12000;  // limit to 12s (raw 5000-17000), eval raw 7000-17000
         size_t vel_count = 0;
+
+        // ----------------------------------------------------------------
+        // Pre-compute GT velocity: central difference + 10 Hz IIR LPF
+        // Matches Python: np.gradient(sim_pos, DT) + iir_lpf(10 Hz)
+        // Central difference is non-causal (bilateral), consistent with
+        // np.gradient used in all Python analysis scripts.
+        // ----------------------------------------------------------------
+        const size_t N_data = data.size();
+        std::vector<double> gt_vx_w(N_data, 0.0), gt_vy_w(N_data, 0.0), gt_vz_w(N_data, 0.0);
+        for (size_t k = 0; k < N_data; ++k) {
+            size_t km = (k == 0) ? 0 : k - 1;
+            size_t kp = (k == N_data - 1) ? N_data - 1 : k + 1;
+            double denom = (k == 0 || k == N_data - 1) ? dt : 2.0 * dt;
+            gt_vx_w[k] = (data[kp].sim_pos_x - data[km].sim_pos_x) / denom;
+            gt_vy_w[k] = (data[kp].sim_pos_y - data[km].sim_pos_y) / denom;
+            gt_vz_w[k] = (data[kp].sim_pos_z - data[km].sim_pos_z) / denom;
+        }
+        // Causal 10 Hz IIR LPF forward pass (same formula as Python iir_lpf)
+        const double gt_vel_alpha = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
+        for (size_t k = 1; k < N_data; ++k) {
+            gt_vx_w[k] = (1.0 - gt_vel_alpha) * gt_vx_w[k-1] + gt_vel_alpha * gt_vx_w[k];
+            gt_vy_w[k] = (1.0 - gt_vel_alpha) * gt_vy_w[k-1] + gt_vel_alpha * gt_vy_w[k];
+            gt_vz_w[k] = (1.0 - gt_vel_alpha) * gt_vz_w[k-1] + gt_vel_alpha * gt_vz_w[k];
+        }
+
+        // For GT acceleration
+        Eigen::Vector3f last_gt_pos(data[start_index].sim_pos_x, data[start_index].sim_pos_y, data[start_index].sim_pos_z);
+        Eigen::Vector3f last_gt_vw(0.0f, 0.0f, 0.0f);
+        Eigen::Vector3f gt_vw_filt(0.0f, 0.0f, 0.0f);
+        Eigen::Vector3f gt_aw_filt(0.0f, 0.0f, 0.0f);
+        double f_alpha_v = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
+        double f_alpha_a = 1.0 - std::exp(-2.0 * M_PI * 5.0 * dt);
 
         size_t processed_count = 0;
         for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
@@ -535,25 +566,34 @@ int main(int argc, char** argv) {
             );
             
             // ============================================================
-            // Schmitt trigger contact detection (same as online)
+            // Schmitt trigger contact detection
+            // Logic: OR (same as contact_state_analysis.py)
+            // Thresholds from Config.hpp:
+            //   rm_high=25, rm_low=15, beta_high=10, beta_low=1
+            // Disturbance vector layout (0-indexed):
+            //   [4]=beta_a [5]=rm_a [6]=beta_b [7]=rm_b
+            //   [8]=beta_c [9]=rm_c [10]=beta_d [11]=rm_d
             // ============================================================
             {
-                constexpr int rm_idx[4]   = {5, 7, 9, 11};
-                constexpr int beta_idx[4] = {4, 6, 8, 10};
+                constexpr int rm_idx[4]   = {5, 7, 9, 11};   // rm_a, rm_b, rm_c, rm_d
+                constexpr int beta_idx[4] = {4, 6, 8, 10};   // beta_a, beta_b, beta_c, beta_d
                 for (int j = 0; j < 4; ++j) {
                     double rm        = disturbance(rm_idx[j]);
                     double beta_dist = disturbance(beta_idx[j]);
                     if (!leg_contact_state[j]) {
-                        if (std::abs(rm)   > corgi::Config::CONTACT_RM_THRESHOLD_HIGH ||
+                        // OR logic: either rm OR beta exceeding HIGH activates contact
+                        if (std::abs(rm)        > corgi::Config::CONTACT_RM_THRESHOLD_HIGH ||
                             std::abs(beta_dist) > corgi::Config::CONTACT_BETA_THRESHOLD_HIGH)
                             leg_contact_state[j] = true;
                     } else {
-                        if (std::abs(rm)   < corgi::Config::CONTACT_RM_THRESHOLD_LOW &&
+                        // Deactivate only when BOTH rm AND beta drop below LOW
+                        if (std::abs(rm)        < corgi::Config::CONTACT_RM_THRESHOLD_LOW &&
                             std::abs(beta_dist) < corgi::Config::CONTACT_BETA_THRESHOLD_LOW)
                             leg_contact_state[j] = false;
                     }
                 }
             }
+
 
             // ============================================================
             // ES-EKF pipeline
@@ -582,6 +622,33 @@ int main(int argc, char** argv) {
                 static_cast<float>(data[i].imu_ang_vel_x),
                 static_cast<float>(data[i].imu_ang_vel_y),
                 static_cast<float>(data[i].imu_ang_vel_z));
+
+            // --- GT Acceleration Override ---
+            Eigen::Vector3f curr_gt_pos(data[i].sim_pos_x, data[i].sim_pos_y, data[i].sim_pos_z);
+            Eigen::Vector3f curr_gt_vw = (curr_gt_pos - last_gt_pos) / static_cast<float>(dt);
+            gt_vw_filt = (1.0f - static_cast<float>(f_alpha_v)) * gt_vw_filt + static_cast<float>(f_alpha_v) * curr_gt_vw;
+            
+            Eigen::Vector3f curr_gt_aw = (gt_vw_filt - last_gt_vw) / static_cast<float>(dt);
+            gt_aw_filt = (1.0f - static_cast<float>(f_alpha_a)) * gt_aw_filt + static_cast<float>(f_alpha_a) * curr_gt_aw;
+            
+            last_gt_pos = curr_gt_pos;
+            last_gt_vw = gt_vw_filt;
+
+            // Convert GT world acceleration to GT IMU proper acceleration (a_m_gt)
+            Eigen::Quaternionf q_gt(
+                static_cast<float>(data[i].sim_orien_w),
+                static_cast<float>(data[i].sim_orien_x),
+                static_cast<float>(data[i].sim_orien_y),
+                static_cast<float>(data[i].sim_orien_z));
+            q_gt.normalize();
+            Eigen::Vector3f g_w(0.0f, 0.0f, -9.81f); // Webots Gravity
+            Eigen::Vector3f gt_am = q_gt.toRotationMatrix().transpose() * (gt_aw_filt - g_w);
+
+            // Use GT acceleration for testing instead of noisy IMU
+            bool use_gt_acc = false;
+            if (use_gt_acc && processed_count > 10) { // skip first few steps for filter settling
+                a_m = gt_am;
+            }
 
             // --- Predict ---
             esekf.predict(a_m, w_m);
@@ -697,28 +764,27 @@ int main(int argc, char** argv) {
                 double ep_y = st2.p.y() - (data[i].sim_pos_y - gt_offset_y);
                 double ep_z = st2.p.z() - (data[i].sim_pos_z - gt_offset_z);
 
-                // GT velocity (world frame, finite difference + LPF)
-                double gt_vx_raw = (data[i].sim_pos_x - last_gt_px) / dt;
-                double gt_vy_raw = (data[i].sim_pos_y - last_gt_py) / dt;
-                double gt_vz_raw = (data[i].sim_pos_z - last_gt_pz) / dt;
-                last_gt_px = data[i].sim_pos_x;
-                last_gt_py = data[i].sim_pos_y;
-                last_gt_pz = data[i].sim_pos_z;
+                // GT velocity in body frame: R_gt^T * v_world_gt
+                // Uses pre-computed central-diff + LPF (consistent with Python np.gradient)
+                Eigen::Quaternionf q_gt_rmse(
+                    static_cast<float>(data[i].sim_orien_w),
+                    static_cast<float>(data[i].sim_orien_x),
+                    static_cast<float>(data[i].sim_orien_y),
+                    static_cast<float>(data[i].sim_orien_z));
+                q_gt_rmse.normalize();
+                Eigen::Vector3f gt_vw_i(
+                    static_cast<float>(gt_vx_w[i]),
+                    static_cast<float>(gt_vy_w[i]),
+                    static_cast<float>(gt_vz_w[i]));
+                // Rotate GT world velocity into GT body frame
+                Eigen::Vector3f gt_vb_i = q_gt_rmse.toRotationMatrix().transpose() * gt_vw_i;
 
-                // 10 Hz low-pass filter on GT velocity (raw diff at 1kHz is too noisy)
-                gt_vx_filt = (1.0 - gt_vel_alpha) * gt_vx_filt + gt_vel_alpha * gt_vx_raw;
-                gt_vy_filt = (1.0 - gt_vel_alpha) * gt_vy_filt + gt_vel_alpha * gt_vy_raw;
-                gt_vz_filt = (1.0 - gt_vel_alpha) * gt_vz_filt + gt_vel_alpha * gt_vz_raw;
-
-                // Estimated velocity in world frame: v_world = R * v_body
-                Eigen::Matrix3f R_est = st2.q.toRotationMatrix();
-                Eigen::Vector3f v_world = R_est * st2.v;
-
+                // st2.v is already body-frame — compare directly (no frame conversion needed)
                 // Accumulate error only after warmup
                 if (processed_count >= rmse_skip) {
-                    double ev_x = v_world.x() - gt_vx_filt;
-                    double ev_y = v_world.y() - gt_vy_filt;
-                    double ev_z = v_world.z() - gt_vz_filt;
+                    double ev_x = st2.v.x() - gt_vb_i.x();
+                    double ev_y = st2.v.y() - gt_vb_i.y();
+                    double ev_z = st2.v.z() - gt_vb_i.z();
                     vel_sq_err_sum_x += ev_x * ev_x;
                     vel_sq_err_sum_y += ev_y * ev_y;
                     vel_sq_err_sum_z += ev_z * ev_z;
@@ -777,7 +843,9 @@ int main(int argc, char** argv) {
         std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
         std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
         std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
-        std::cout << "GT (off): [" << data.back().sim_pos_x - gt_offset_x << ", " << data.back().sim_pos_y - gt_offset_y << ", " << data.back().sim_pos_z - gt_offset_z << "]\n";
+        std::cout << "GT (off): [" << (data[start_index + processed_count - 1].sim_pos_x - gt_offset_x) << ", " 
+              << (data[start_index + processed_count - 1].sim_pos_y - gt_offset_y) << ", " 
+              << (data[start_index + processed_count - 1].sim_pos_z - gt_offset_z) << "]\n";
         std::cout << "==========================================\n";
 
         // Position & Velocity RMSE
@@ -788,7 +856,7 @@ int main(int argc, char** argv) {
                       << std::sqrt(pos_sq_err_sum_x / n) << ", "
                       << std::sqrt(pos_sq_err_sum_y / n) << ", "
                       << std::sqrt(pos_sq_err_sum_z / n) << "]\n";
-            std::cout << "Velocity RMSE (m/s):["
+            std::cout << "Velocity RMSE body(m/s):["
                       << std::sqrt(vel_sq_err_sum_x / n) << ", "
                       << std::sqrt(vel_sq_err_sum_y / n) << ", "
                       << std::sqrt(vel_sq_err_sum_z / n) << "]\n";
