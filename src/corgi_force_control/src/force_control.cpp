@@ -172,7 +172,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd phi_des(2, 1);
     phi_des << eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI,
                eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI;
-
+    // TODO: 這邊phi_r跟phi_l的定義可能相反了 要在確認看看
     Eigen::MatrixXd phi_fb(2, 1);
     phi_fb << motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
               motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI;
