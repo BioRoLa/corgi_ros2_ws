@@ -71,6 +71,7 @@ private:
 class ForceEstimationNode : public rclcpp::Node {
 public:
     ForceEstimationNode();
+    void run();
 
 private:
     void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg);
@@ -93,15 +94,15 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Publisher<corgi_msgs::msg::ForceStateStamped>::SharedPtr force_state_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
     
     // Physical parameters
     const double mass_ = 0.68;
     const double gravity_ = -9.81;
-    const bool sim_ = false;
+    const bool sim_ = true;
     
     // Dynamic friction compensation coefficients (AR, AL, BR, BL, CR, CL, DR, DL)
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
+    
     
     // Previous phi values for each module [phi_r, phi_l]
     std::vector<Eigen::MatrixXd> phi_prev_modules_;

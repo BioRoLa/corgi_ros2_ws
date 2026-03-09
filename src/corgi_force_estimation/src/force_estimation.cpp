@@ -161,6 +161,17 @@ ForceEstimationNode::ForceEstimationNode()
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(2, 1))
 {
     RCLCPP_INFO(this->get_logger(), "Force Estimation Starts");
+    
+    // Wait for clock synchronization
+    RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        if (this->now().seconds() > 0.0) {
+            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         "motor/state", 10, 
@@ -276,10 +287,27 @@ void ForceEstimationNode::timer_cb() {
     force_state_pub_->publish(force_state_);
 }
 
+void ForceEstimationNode::run() {
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+    
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        
+        timer_cb();
+        
+        next_time += period;
+        if(!this->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
+            break;
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<ForceEstimationNode>();
-    rclcpp::spin(node);
+    node->run();
     rclcpp::shutdown();
     return 0;
 }
