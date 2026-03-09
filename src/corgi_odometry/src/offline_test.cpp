@@ -460,22 +460,33 @@ int main(int argc, char** argv) {
         // Override noise parameters for offline testing
         {
             estimation_model::NoiseParams np;
-            // Tuning sweep results (2026-03-06, sigma_ba=1e-5 for all):
-            //   sigma_a=0.1, sl=1e-3 → Vx=16.1, Vy=22.5, ba_x≈0.01  ← BEST
-            //   sigma_a=0.1, sl=5e-4 → Vx=16.7, Vy=24.8, ba_x≈0.02
-            //   sigma_a=0.3, sl=1e-3 → Vx=17.3, Vy=30.3, ba_x≈0.003
-            //   sigma_a=0.5, sl=1e-4 → Vx=21.2, Vy=34.9  (worst)
-            // Key finding: constraining sigma_ba (3.924e-4→1e-5) is the
-            // dominant improvement. ba_x went from -0.35 to ~0.01 m/s².
-            np.sigma_a  = {0.1f, 0.1f, 0.1f};
-            np.sigma_w  = {0.001f, 0.01f, 0.001f};
-            np.sigma_ba = {1e-5f, 1e-5f, 1e-5f};
-            np.sigma_bw = {1e-8f, 1e-5f, 1e-8f};
-            np.sigma_bv = {1e-6f, 1e-6f, 1e-6f};
-            np.sigma_leg = 1e-3f;
+            // ── Tuning history ──────────────────────────────────────────────
+            // Phase 0 (original):                      Vx=17.25mm/s, ba_x=-0.35 m/s²
+            // Phase 1 (sigma_ba 3.924e-4→1e-5):        Vx=15.62mm/s, ba_x=+0.011 m/s²
+            // Phase 2 (2026-03-06, iso Z=8):            Vx=10.11mm/s, ba_x≈0, bw_y≈0
+            //   BUT: Vz=17.96mm/s (Z too loose → pure IMU integration → pitch residual)
+            // Phase 3 (2026-03-09, aniso Z=1.2):        Vx=9.38mm/s,  Vz=10.78mm/s ✔
+            //   Key changes vs Phase 1:
+            //   1. R_leg = diag(sigma_leg_vec²) — σ→σ² semantic fix + per-axis
+            //   2. sigma_a 0.1→1.0: larger Q_v grows P(V,BA) faster →
+            //      leg FK update calibrates ba_x via cross-covariance
+            //   3. sigma_bw ALL 1e-8 + P_bw init=1e-10: locks bw_y at ~0
+            //   4. sigma_leg_vec anisotropic [X=8, Y=0.1, Z=1.2]:
+            //      X loose (K~0.2%) → relies on ba-calibration, not direct FK
+            //      Y loose → prevents lateral FK noise contaminating X via P
+            //      Z moderate (K~7%) → controls pitch-residual Z drift
+            // ────────────────────────────────────────────────────────────────
+            // sigma_leg_vec: per-axis leg FK noise std [m/s]; R_leg = diag(σ²)
+            // sigma_a:       per-sample accel noise std [m/s²]; Q_v = σ_a² × dt²
+            np.sigma_a       = {1.0f,  1.0f,  1.0f};
+            np.sigma_w       = {0.001f, 0.01f, 0.001f};
+            np.sigma_ba      = {1e-5f, 1e-5f, 1e-5f};
+            np.sigma_bw      = {1e-8f, 1e-8f, 1e-8f};  // all tight: locks bw at ~0
+            np.sigma_bv      = {1e-6f, 1e-6f, 1e-6f};
+            np.sigma_leg_vec = {8.0f,  0.1f,  1.2f};   // [X, Y, Z] m/s
             esekf.set_noise_params(np);
             std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
-                      << "], sigma_leg=" << np.sigma_leg << "\n";
+                      << "], sigma_leg_vec=[" << np.sigma_leg_vec.transpose() << "]\n";
         }
 
         std::array<bool, 4> leg_contact_state = {false, false, false, false};
@@ -651,7 +662,13 @@ int main(int argc, char** argv) {
             }
 
             // --- Predict ---
-            esekf.predict(a_m, w_m);
+            // Diagnostic flag: set true to skip IMU propagation and run update-only.
+            // If RMSE approaches Leg FK (~10.5mm/s) with skip_predict=true,
+            // the bottleneck is in the predict step (IMU noise dominating over update).
+            bool skip_predict = false;
+            if (!skip_predict) {
+                esekf.predict(a_m, w_m);
+            }
 
             // --- Build per-leg observations ---
             const float w_y = static_cast<float>(data[i].imu_ang_vel_y)

@@ -49,10 +49,16 @@ struct NoiseParams {
     Eigen::Vector3f sigma_bw = {1e-5f, 1e-5f, 1e-5f};             // gyro bias
     Eigen::Vector3f sigma_bv = {1e-6f, 1e-6f, 1e-6f};             // velocity bias
 
-    // Leg measurement noise
-    // NOTE: 2.5e-7 was far too small (filter over-trusts leg obs → bias divergence)
-    //       1e-3 gives ~0.03 m/s std, balancing IMU predict vs leg update
-    float sigma_leg = 1e-3f;
+    // Leg measurement noise per axis: sigma_leg_vec = [std_x, std_y, std_z] [m/s].
+    // R_leg = diag(sigma_leg_vec.sq())  (per-axis variance, NOT std).
+    //
+    // Motivation for anisotropic R:
+    //   X/Z: Leg FK RMSE ≈ 10.5 mm/s → sigma ≈ 0.011 (tight, trustworthy)
+    //   Y:   Leg FK has large lateral error due to y-offset coupling
+    //         → sigma_y = 0.1 (10x looser, prevents Y noise contaminating X)
+    //
+    // Previous bug: scalar sigma_leg=1e-3 used directly as variance (std≈31.6mm/s).
+    Eigen::Vector3f sigma_leg_vec = {0.011f, 0.1f, 0.011f};
 };
 
 // ============================================================

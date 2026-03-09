@@ -29,8 +29,12 @@ ESEKF::ESEKF(float dt) : dt_(dt) {
     // Roll/yaw attitude: very small since unobservable from legs
     P_(TH_IDX + 0, TH_IDX + 0) = 1e-8f;  // roll:  trust IMU integration
     P_(TH_IDX + 2, TH_IDX + 2) = 1e-8f;  // yaw:   trust IMU integration
-    // bw_x/bw_z: very small since unobservable
+    // bw: all tiny.  bw_y (pitch gyro bias) is partially observable via the
+    // H(bw_y) Jacobian, but in simulation the real bias is 0.  Starting with
+    // large P_bw_y (1e-4) allows early spurious drift that corrupts attitude.
+    // Setting all to 1e-10 locks bw_y, consistent with sigma_bw=1e-8.
     P_(BW_IDX + 0, BW_IDX + 0) = 1e-10f;
+    P_(BW_IDX + 1, BW_IDX + 1) = 1e-10f;  // was 1e-4: caused bw_y→0.017 rad/s divergence
     P_(BW_IDX + 2, BW_IDX + 2) = 1e-10f;
 }
 
@@ -126,8 +130,12 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     Eigen::MatrixXf Qc = Eigen::MatrixXf::Zero(ERR_STATE_DIM, ERR_STATE_DIM);
 
-    // TODO: Verify noise scaling — current: element-wise σ² * dt²
-    //       Alternatively use σ² * dt for continuous-time discretization
+    // Discrete-time noise: Q = σ² * dt².
+    // Derivation: velocity error from accel noise is δv = n_a * dt, so
+    // Var(δv) = σ_a² * dt².  This is correct for per-sample discrete noise.
+    // NOTE: σ_a here is the per-sample std (m/s²), not spectral density.
+    // With σ_a=0.1, dt=0.001 → Q_v = 1e-8.  Steady-state Kalman gain ≈ 0.9%.
+    // To get higher gain, increase σ_a (e.g. 1.0 → Q_v=1e-6, gain≈9%).
     Qc.block<3,3>(V_IDX, V_IDX)   = noise_.sigma_a.array().square().matrix().asDiagonal() * (dt_ * dt_);
     Qc.block<3,3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt_ * dt_);
     Qc.block<3,3>(BA_IDX, BA_IDX) = noise_.sigma_ba.array().square().matrix().asDiagonal();
@@ -212,7 +220,10 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     //    δx += K * innovation
     //    P  = (I - KH) P (I - KH)^T + K R K^T   (Joseph form)
     // ----------------------------------------------------------
-    Eigen::Matrix3f R_leg = Eigen::Matrix3f::Identity() * noise_.sigma_leg;
+    // R_leg is per-axis measurement noise COVARIANCE (m²/s²).
+    // sigma_leg_vec holds std devs [m/s]; R_leg = diag(sigma²).
+    // Anisotropic: trust X/Z more (small σ), Y less (large σ).
+    Eigen::Matrix3f R_leg = noise_.sigma_leg_vec.array().square().matrix().asDiagonal();
 
     Eigen::Matrix3f S = H * P_ * H.transpose() + R_leg;
     Eigen::MatrixXf K = P_ * H.transpose() * S.inverse();  // 18×3
