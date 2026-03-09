@@ -52,10 +52,10 @@ class CorgiControlPanel(QWidget):
         
         # Initialize GPIO if available
         if GPIO_defined:
-            self.trigger_pin = 16
+            self.trigger_pin = 11
             GPIO.setmode(GPIO.BOARD)
             GPIO.setup(self.trigger_pin, GPIO.OUT)
-            GPIO.output(self.trigger_pin, GPIO.LOW)
+            GPIO.output(self.trigger_pin, GPIO.HIGH)
         
         # Initialize instance variables
         self._robot_cmd_seq = 0
@@ -720,7 +720,7 @@ class CorgiControlPanel(QWidget):
         if GPIO_defined:
             GPIO.output(
                 self.trigger_pin,
-                GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW
+                GPIO.LOW if self.btn_trigger.isChecked() else GPIO.HIGH
             )
         
         if self.btn_trigger.isChecked():
