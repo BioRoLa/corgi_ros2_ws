@@ -94,6 +94,7 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Publisher<corgi_msgs::msg::ForceStateStamped>::SharedPtr force_state_pub_;
+    rclcpp::TimerBase::SharedPtr timer_;
     
     // Physical parameters
     const double mass_ = 0.68;
