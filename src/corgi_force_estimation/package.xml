@@ -13,6 +13,7 @@
   <depend>eigen</depend>
   <depend>corgi_utils</depend>
   <depend>corgi_msgs</depend>
+  <depend>corgi_walk</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
