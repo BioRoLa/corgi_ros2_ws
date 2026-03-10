@@ -699,11 +699,20 @@ int main(int argc, char** argv) {
                 float beta_d  = -static_cast<float>(( vel_r[j] + vel_l[j]) / 2.0);
                 if (is_right_side) beta_d = -beta_d;
 
-                // --- Use beta directly for rim lookup (matching Python approach) ---
-                // The Python tune_schmitt_trigger.py uses contact_beta = beta, alpha = 0
-                // and achieves RMSE ~4.5mm/s. The accumulated contact_beta diverges
-                // because it starts from 0 while beta is already non-zero at start_index.
-                RIM rim = contact_map.lookup(theta, beta);
+                // --- Use pitch compensated beta for rim lookup ---
+                // Get pitch from ESEKF nominal quaternion
+                float w = esekf.nominal().q.w();
+                float x = esekf.nominal().q.x();
+                float y = esekf.nominal().q.y();
+                float z = esekf.nominal().q.z();
+                float sinp = 2.0f * (w * y - z * x);
+                float pitch = std::abs(sinp) >= 1.0f ? std::copysign(static_cast<float>(M_PI) / 2.0f, sinp) : std::asin(sinp);
+
+                // Apply contact_beta compensation: right side -(beta), left side +(beta)
+                // Right motor's Y axis is opposite to body Y axis.
+                float compensated_beta = is_right_side ? (beta - pitch) : (beta + pitch);
+                
+                RIM rim = contact_map.lookup(theta, compensated_beta);
                 float alpha = 0.0f;
 
                 // Contact flag: Schmitt trigger AND rim in contact
