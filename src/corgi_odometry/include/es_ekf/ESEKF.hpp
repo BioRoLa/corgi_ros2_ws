@@ -41,12 +41,12 @@ struct NominalState {
 // ============================================================
 struct NoiseParams {
     // IMU noise (from original system: da, dw)
-    Eigen::Vector3f sigma_a  = {0.008f, 0.008f, 0.008f};          // accel noise std
-    Eigen::Vector3f sigma_w  = {0.01f, 0.01f, 0.01f};             // gyro noise std
+    Eigen::Vector3f sigma_a  = {1.0f,  1.0f,  1.0f};          // accel noise std
+    Eigen::Vector3f sigma_w  = {0.001f, 0.01f, 0.001f};             // gyro noise std
 
     // Bias random walk (from original system: dba, new: dbw, dbv)
-    Eigen::Vector3f sigma_ba = {3.924e-4f, 3.924e-4f, 3.924e-4f}; // accel bias
-    Eigen::Vector3f sigma_bw = {1e-5f, 1e-5f, 1e-5f};             // gyro bias
+    Eigen::Vector3f sigma_ba = {1e-5f, 1e-5f, 1e-5f}; // accel bias
+    Eigen::Vector3f sigma_bw = {1e-8f, 1e-8f, 1e-8f};             // gyro bias
     Eigen::Vector3f sigma_bv = {1e-6f, 1e-6f, 1e-6f};             // velocity bias
 
     // Leg measurement noise per axis: sigma_leg_vec = [std_x, std_y, std_z] [m/s].
@@ -58,7 +58,7 @@ struct NoiseParams {
     //         → sigma_y = 0.1 (10x looser, prevents Y noise contaminating X)
     //
     // Previous bug: scalar sigma_leg=1e-3 used directly as variance (std≈31.6mm/s).
-    Eigen::Vector3f sigma_leg_vec = {0.011f, 0.1f, 0.011f};
+    Eigen::Vector3f sigma_leg_vec = {8.0f,  0.1f,  1.2f};
 };
 
 // ============================================================

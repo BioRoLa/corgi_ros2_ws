@@ -150,8 +150,16 @@ private:
     bool esekf_initialized_ = false;
 
     // ============================================================
-    // Debug publishers
+    // Debug
     // ============================================================
+
+    /// @brief Publish per-leg observation inputs and z_leg debug topics.
+    /// @param observations  4-leg observation vector (const ref, but FK is re-run internally)
+    /// @param w_m           raw IMU angular velocity [rad/s]
+    void publish_debug(
+        std::vector<estimation_model::LegObservation>& observations,
+        const Eigen::Vector3f& w_m);
+
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_leg_obs_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_imu_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_zleg_pub_;

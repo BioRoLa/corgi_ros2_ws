@@ -135,9 +135,7 @@ void LegOdometryNode::process() {
             static_cast<float>(imu_.orientation.z)).normalized();
         esekf_.init(x0);
 
-        // Reset per-leg contact_beta accumulators
-        contact_beta_.fill(0.f);
-
+        // Remove esekf contact_beta_ accumulations as we just use current state beta + pitch
         esekf_initialized_ = true;
         RCLCPP_INFO(this->get_logger(), "ES-EKF initialized");
     }
@@ -179,53 +177,8 @@ void LegOdometryNode::process() {
         observations.push_back(obs);
     }
 
-    // --- Debug: publish per-leg observation inputs ---
-    // Layout: for each leg i (4 legs × 9 values = 36 floats):
-    //   [theta, theta_d, beta, beta_d, contact_beta, alpha, rim, in_contact, contact_flag]
-    {
-        std_msgs::msg::Float64MultiArray dbg;
-        for (int i = 0; i < 4; ++i) {
-            const auto& o = observations[i];
-            dbg.data.push_back(o.theta);
-            dbg.data.push_back(o.theta_d);
-            dbg.data.push_back(o.beta);
-            dbg.data.push_back(o.beta_d);
-            dbg.data.push_back(contact_beta_[i]);
-            dbg.data.push_back(o.alpha);
-            dbg.data.push_back(static_cast<double>(o.rim));
-            dbg.data.push_back(o.in_contact ? 1.0 : 0.0);
-            dbg.data.push_back(leg_contact_state_[i] ? 1.0 : 0.0);
-        }
-        debug_leg_obs_pub_->publish(dbg);
-    }
-
-    // --- Debug: compute and publish z_leg for each leg ---
-    // z_leg = "observed body velocity from encoder kinematics"
-    // Layout: 4 legs × 6 values = 24 floats
-    //   [z_leg.x, z_leg.y, z_leg.z, contact_pt.x, contact_pt.y, contact_pt.z]
-    {
-        std_msgs::msg::Float64MultiArray dbg;
-        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;        // Zero w_x/w_z: XZ-plane robot, only pitch rate matters for leg kinematics
-        w_corrected.x() = 0.0f;
-        w_corrected.z() = 0.0f;        
-        for (int i = 0; i < 4; ++i) {
-            auto& o = observations[i];
-            // Recompute FK + contact for debug (same as ESEKF::update_leg)
-            o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
-            o.leg->PointContact(o.rim, o.alpha);
-            Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
-            o.leg->PointVelocity(v_zero, w_corrected, o.rim, o.alpha, true);
-            Eigen::Vector3f z_leg = -o.leg->contact_velocity;
-
-            dbg.data.push_back(z_leg.x());
-            dbg.data.push_back(z_leg.y());
-            dbg.data.push_back(z_leg.z());
-            dbg.data.push_back(o.leg->contact_point.x());
-            dbg.data.push_back(o.leg->contact_point.y());
-            dbg.data.push_back(o.leg->contact_point.z());
-        }
-        debug_zleg_pub_->publish(dbg);
-    }
+    // --- Debug: publish per-leg observation inputs and z_leg ---
+    publish_debug(observations, w_m);
 
     // --- 4. Update (sequential per-leg velocity constraint) ---
     esekf_.update_all_legs(observations, w_m, exclude_flags);
@@ -331,15 +284,26 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     if (is_right_side) beta_d = -beta_d;
 
     // --- Accumulate contact_beta ---
-    // contact_beta += (beta_d + omega_y) * dt
-    // Tracks the absolute ground-contact angle of the wheel rim
-    contact_beta_[leg_idx] += (beta_d + w_y) * dt;
+    // Deprecated: Accumulating contact_beta causes divergence starting from arbitrary joint angles.
+    // Use pitch compensated beta for rim lookup.
+    // Get pitch from ESEKF nominal quaternion
+    float w = esekf_.nominal().q.w();
+    float x = esekf_.nominal().q.x();
+    float y = esekf_.nominal().q.y();
+    float z = esekf_.nominal().q.z();
+    float sinp = 2.0f * (w * y - z * x);
+    float pitch = std::abs(sinp) >= 1.0f ? std::copysign(static_cast<float>(M_PI) / 2.0f, sinp) : std::asin(sinp);
+
+    // Apply contact_beta compensation: right side -(beta), left side +(beta)
+    // Need to subtract pitch for right side, add pitch for left side
+    float compensated_beta = is_right_side ? (beta - pitch) : (beta + pitch);
 
     // --- Determine contact rim via ContactMap ---
-    RIM rim = contact_map_.lookup(theta, contact_beta_[leg_idx]);
+    RIM rim = contact_map_.lookup(theta, compensated_beta);
 
     // --- Contact angle relative to body frame ---
-    float alpha = contact_beta_[leg_idx] - beta;
+    // Alpha is now 0.0f
+    float alpha = 0.0f;
 
     // --- Contact flag from Schmitt trigger ---
     bool in_contact = leg_contact_state_[leg_idx] && (rim != NO_CONTACT);
@@ -347,6 +311,65 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     return estimation_model::LegObservation{
         leg, theta, theta_d, beta, beta_d, rim, alpha, in_contact
     };
+}
+
+// ============================================================
+// Debug publisher
+// ============================================================
+
+void LegOdometryNode::publish_debug(
+    std::vector<estimation_model::LegObservation>& observations,
+    const Eigen::Vector3f& w_m)
+{
+    // --- debug/leg_obs ---
+    // Layout: 4 legs × 9 values = 36 floats
+    //   [theta, theta_d, beta, beta_d, contact_beta(0), alpha, rim, in_contact, contact_flag]
+    {
+        std_msgs::msg::Float64MultiArray dbg;
+        for (int i = 0; i < 4; ++i) {
+            const auto& o = observations[i];
+            dbg.data.push_back(o.theta);
+            dbg.data.push_back(o.theta_d);
+            dbg.data.push_back(o.beta);
+            dbg.data.push_back(o.beta_d);
+            dbg.data.push_back(0.0);  // contact_beta deprecated, placeholder
+            dbg.data.push_back(o.alpha);
+            dbg.data.push_back(static_cast<double>(o.rim));
+            dbg.data.push_back(o.in_contact ? 1.0 : 0.0);
+            dbg.data.push_back(leg_contact_state_[i] ? 1.0 : 0.0);
+        }
+        debug_leg_obs_pub_->publish(dbg);
+    }
+
+    // --- debug/z_leg ---
+    // z_leg = observed body velocity from encoder kinematics
+    // Layout: 4 legs × 6 values = 24 floats
+    //   [z_leg.x, z_leg.y, z_leg.z, contact_pt.x, contact_pt.y, contact_pt.z]
+    {
+        std_msgs::msg::Float64MultiArray dbg;
+        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;
+        // Zero w_x/w_z: XZ-plane robot, only pitch rate matters for leg kinematics
+        w_corrected.x() = 0.0f;
+        w_corrected.z() = 0.0f;
+
+        for (int i = 0; i < 4; ++i) {
+            auto& o = observations[i];
+            // Recompute FK + contact for debug (same as ESEKF::update_leg)
+            o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
+            o.leg->PointContact(o.rim, o.alpha);
+            Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
+            o.leg->PointVelocity(v_zero, w_corrected, o.rim, o.alpha, true);
+            Eigen::Vector3f z_leg = -o.leg->contact_velocity;
+
+            dbg.data.push_back(z_leg.x());
+            dbg.data.push_back(z_leg.y());
+            dbg.data.push_back(z_leg.z());
+            dbg.data.push_back(o.leg->contact_point.x());
+            dbg.data.push_back(o.leg->contact_point.y());
+            dbg.data.push_back(o.leg->contact_point.z());
+        }
+        debug_zleg_pub_->publish(dbg);
+    }
 }
 
 // ============================================================
