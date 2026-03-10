@@ -1,4 +1,5 @@
 #include "corgi_force_estimation/force_estimation.hpp"
+#include <chrono>
 
 class CorgiWheelNode : public rclcpp::Node {
 public:
@@ -27,7 +28,7 @@ private:
     double velocity_;
     
     // Parameters
-    const bool sim_ = false;
+    const bool sim_ = true;
     const int target_loop_ = 8000;
     const double init_eta_[8] = {
         0.29670597283903605, -0.0, 
@@ -65,6 +66,17 @@ CorgiWheelNode::CorgiWheelNode()
     
     // Initialize motor command
     initialize_motor_command();
+
+    // Wait for simulation clock synchronization
+    RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
+    while (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        if (this->now().seconds() > 0.0) {
+            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+            break;
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 void CorgiWheelNode::trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
@@ -93,30 +105,54 @@ void CorgiWheelNode::initialize_motor_command() {
 void CorgiWheelNode::execute_transform_phase() {
     RCLCPP_INFO(this->get_logger(), "Transform Starts");
     
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+
     for (int i=0; i<3000; i++) {
+        rclcpp::spin_some(this->get_node_base_interface());
+
         for (int j=0; j<4; j++) {
             motor_cmd_modules_[j]->theta += (init_eta_[2*j] - 17/180.0*M_PI) / 3000.0;
             motor_cmd_modules_[j]->beta += init_eta_[2*j+1] / 3000.0;
         }
+        
+        motor_cmd_.header.stamp = this->now();
         motor_cmd_.header.seq = -1;
         motor_cmd_pub_->publish(motor_cmd_);
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        
+        next_time += period;
+        if (!this->get_clock()->sleep_until(next_time)) {
+            break;
+        }
     }
     
     RCLCPP_INFO(this->get_logger(), "Transform Finished");
 }
 
 void CorgiWheelNode::execute_stay_phase() {
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+
     for (int i=0; i<2000; i++) {
+        rclcpp::spin_some(this->get_node_base_interface());
+
+        motor_cmd_.header.stamp = this->now();
         motor_cmd_.header.seq = -1;
         motor_cmd_pub_->publish(motor_cmd_);
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        
+        next_time += period;
+        if (!this->get_clock()->sleep_until(next_time)) {
+            break;
+        }
     }
 }
 
 void CorgiWheelNode::execute_control_phase() {
     RCLCPP_INFO(this->get_logger(), "Controller Starts ...");
     
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+
     int loop_count = 0;
     while (rclcpp::ok()) {
         rclcpp::spin_some(this->get_node_base_interface());
@@ -134,26 +170,40 @@ void CorgiWheelNode::execute_control_phase() {
         motor_cmd_modules_[2]->beta -= velocity_ / 1000.0 / radius / 2.0;
         motor_cmd_modules_[3]->beta += velocity_ / 1000.0 / radius / 2.0;
 
+        motor_cmd_.header.stamp = this->now();
         motor_cmd_.header.seq = loop_count;
         motor_cmd_pub_->publish(motor_cmd_);
 
         loop_count++;
         if (loop_count >= target_loop_) break;
 
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        next_time += period;
+        if (!this->get_clock()->sleep_until(next_time)) {
+            break;
+        }
     }
 }
 
 void CorgiWheelNode::run() {
+    // 1. Proceed with routines using simulation sleep (clock synced in constructor)
     execute_transform_phase();
     execute_stay_phase();
+    
+    // 2. Wait for trigger
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+
     while (rclcpp::ok()) {
         rclcpp::spin_some(this->get_node_base_interface());
         if (trigger_) {
             execute_control_phase();
             break;
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(1));
+        
+        next_time += period;
+        if (!this->get_clock()->sleep_until(next_time)) {
+            break;
+        }
     }
 }
 
