@@ -39,6 +39,8 @@ LegModel::LegModel(bool sim) :
     ang_BCF(std::acos((l3*l3 + l7*l7 - l_BF*l_BF) / (2.0*l3*l7)))
 {
     // Initialize positions
+    this->gamma = 0.0;
+    this->d_wheel = 0.05; // TODO: update actual value after determination
     this->forward(theta0, 0.0);
 }//end LegModel
 
@@ -190,6 +192,13 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             double y_new = contact_p[0]*sin(slope) + contact_p[1]*cos(slope);
             contact_p = {x_new, y_new};
         }//end if
+
+        double sin_g = std::sin(gamma);
+        double cos_g = std::cos(gamma);
+
+        contact_p_3d[0] = contact_p[0];
+        contact_p_3d[1] = d_wheel * cos_g - contact_p[1] * sin_g;
+        contact_p_3d[2] = d_wheel * sin_g + contact_p[1] * cos_g;
 }//end contact_map
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {

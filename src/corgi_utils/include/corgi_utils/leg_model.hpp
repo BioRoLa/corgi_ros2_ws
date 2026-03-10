@@ -44,12 +44,15 @@ public:
     // Current theta and beta
     double theta;
     double beta;
+    double gamma;
+    double d_wheel;
 
     // Contact map variable
     int rim = 3; // 1 -> 2 -> 3 -> 4 -> 5 -> 0:
                  // U_l -> L_l -> G -> L_r -> U_r -> None
     double alpha;
     std::array<double, 2> contact_p;
+    std::array<double, 3> contact_p_3d;
     // Eigen::Vector2d pointOnRimByGamma(
     //     double theta, double beta,
     //     int rim,     // 1=left upper,2=left lower,3=G,4=right lower,5=right upper
