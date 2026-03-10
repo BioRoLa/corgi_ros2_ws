@@ -51,9 +51,9 @@ CorgiWheelNode::CorgiWheelNode()
     RCLCPP_INFO(this->get_logger(), "Corgi Wheel Starts");
     
     // Create publisher and subscriber
-    motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
+    motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
     trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
-        "trigger", 1000, 
+        "trigger", 10, 
         std::bind(&CorgiWheelNode::trigger_cb, this, std::placeholders::_1));
     
     // Initialize motor command module pointers
