@@ -111,6 +111,41 @@ Eigen::MatrixXd KinematicsHelper::calculate_jacobian(const Eigen::MatrixXd& P_th
     return jacobian;
 }
 
+Eigen::MatrixXd KinematicsHelper::calculate_jacobian_3d(const Eigen::MatrixXd& P_theta, 
+                                                      const Eigen::MatrixXd& P_theta_deriv, 
+                                                      double beta,
+                                                      double gamma,
+                                                      double d_wheel) {
+    double cos_beta = cos(beta);
+    double sin_beta = sin(beta);
+
+    double dtheta_dphiR = -0.5;
+    double dtheta_dphiL =  0.5;
+    double dbeta_dphiR  =  0.5;
+    double dbeta_dphiL  =  0.5;
+
+    double dPx_dtheta = P_theta_deriv(0, 0)*cos_beta - P_theta_deriv(1, 0)*sin_beta;
+    double dPy_dtheta = P_theta_deriv(0, 0)*sin_beta + P_theta_deriv(1, 0)*cos_beta;
+    double dPx_dbeta  = P_theta(0, 0)*(-sin_beta) - P_theta(1, 0)*cos_beta;
+    double dPy_dbeta  = P_theta(0, 0)*cos_beta + P_theta(1, 0)*(-sin_beta);
+
+    double J11 = dPx_dtheta * dtheta_dphiL + dPx_dbeta * dbeta_dphiL;
+    double J12 = dPx_dtheta * dtheta_dphiR + dPx_dbeta * dbeta_dphiR;
+    double J21 = dPy_dtheta * dtheta_dphiL + dPy_dbeta * dbeta_dphiL;
+    double J22 = dPy_dtheta * dtheta_dphiR + dPy_dbeta * dbeta_dphiR;
+
+    double sin_g = std::sin(gamma);
+    double cos_g = std::cos(gamma);
+    double z_2D = P_theta(1,0);
+
+    Eigen::MatrixXd jacobian(3, 3);
+    jacobian << J11, J12, 0,
+               -J21 * sin_g, -J22 * sin_g, -d_wheel * sin_g - z_2D * cos_g,
+                J21 * cos_g,  J22 * cos_g,  d_wheel * cos_g - z_2D * sin_g;
+
+    return jacobian;
+}
+
 // ============================================================================
 // ForceEstimator Implementation
 // ============================================================================

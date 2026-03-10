@@ -33,6 +33,11 @@ public:
     Eigen::MatrixXd calculate_jacobian(const Eigen::MatrixXd& P_theta, 
                                        const Eigen::MatrixXd& P_theta_deriv, 
                                        double beta);
+    Eigen::MatrixXd calculate_jacobian_3d(const Eigen::MatrixXd& P_theta, 
+                                          const Eigen::MatrixXd& P_theta_deriv, 
+                                          double beta, 
+                                          double gamma,
+                                          double d_wheel = 0.0);
     
     // Accessors
     LegModel& get_leg_model() { return leg_model_; }
