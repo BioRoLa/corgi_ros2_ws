@@ -58,7 +58,4 @@ find_library(CORGI_HYBRID corgi_hybrid)
 
 add_subdirectory(src)
 
-install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}/)
-
 ament_package()
