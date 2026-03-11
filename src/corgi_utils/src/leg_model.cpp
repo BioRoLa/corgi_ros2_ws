@@ -17,7 +17,7 @@ LegModel::LegModel(bool sim) :
     beta0(M_PI * 90.0 / 180.0),
     // Wheel radius
     R(0.1), // 10 cm
-    r(sim? 0.0125 : 0.019), // No tire : With tire
+    r(sim? 0.019 : 0.019), // No tire 0.0125: With tire 0.019// they are now the same in webots
     radius(R + r),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
