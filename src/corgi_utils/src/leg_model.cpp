@@ -192,6 +192,12 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             double y_new = contact_p[0]*sin(slope) + contact_p[1]*cos(slope);
             contact_p = {x_new, y_new};
         }//end if
+}//end contact_map
+
+void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope, bool contact_upper, bool contact_lower) {
+        this->contact_map(theta_in, beta_in, slope, contact_upper, contact_lower);
+        
+        this->gamma = gamma_in;
 
         double sin_g = std::sin(gamma);
         double cos_g = std::cos(gamma);
@@ -199,7 +205,7 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
         contact_p_3d[0] = contact_p[0];
         contact_p_3d[1] = d_wheel * cos_g - contact_p[1] * sin_g;
         contact_p_3d[2] = d_wheel * sin_g + contact_p[1] * cos_g;
-}//end contact_map
+}//end contact_map_3d
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
         using namespace std::complex_literals;

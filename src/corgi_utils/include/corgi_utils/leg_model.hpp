@@ -22,6 +22,7 @@ public:
 
     // Contact map
     void contact_map(double theta_in, double beta_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
+    void contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
 
     // Move
     std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper = true, bool contact_lower = true, double tol = 1e-14, size_t max_iter = 100);
