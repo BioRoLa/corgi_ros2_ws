@@ -16,6 +16,9 @@ find_package(rclcpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(corgi_utils REQUIRED)
 find_package(corgi_msgs REQUIRED)
+find_package(corgi_walk REQUIRED)
+
+find_library(CORGI_WALK corgi_walk)
 
 # Include directories
 include_directories(
@@ -43,6 +46,7 @@ ament_export_dependencies(
   Eigen3
   corgi_utils
   corgi_msgs
+  corgi_walk
 )
 
 # Add subdirectory for executables
