@@ -37,6 +37,8 @@ set(msg_files
   "msg/SensorEnableStamped.msg"
   "msg/SimContactPoint.msg"
   "msg/SimDataStamped.msg"
+  "msg/SimLegContact.msg"
+  "msg/SimLegContactStamped.msg"
   "msg/StairPlanes.msg"
   "msg/SteeringCmdStamped.msg"
   "msg/SteeringStateStamped.msg"
