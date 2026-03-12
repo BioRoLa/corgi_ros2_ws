@@ -35,7 +35,6 @@ set(msg_files
   "msg/RobotCmdStamped.msg"
   "msg/RobotStateStamped.msg"
   "msg/SensorEnableStamped.msg"
-  "msg/SimContactPoint.msg"
   "msg/SimDataStamped.msg"
   "msg/SimLegContact.msg"
   "msg/SimLegContactStamped.msg"
