@@ -88,10 +88,10 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
         cmd->mx = 0;
         cmd->my = 0;
         if (sim_) {
-            cmd->bx = 80; //200
-            cmd->by = 10; //200
-            cmd->kx = 2000; //2000
-            cmd->ky = 100; //2000
+            cmd->bx = 200; //200
+            cmd->by = 200; //200
+            cmd->kx = 4000; //2000
+            cmd->ky = 4000; //2000
         }
         else {
             cmd->bx = 80;
