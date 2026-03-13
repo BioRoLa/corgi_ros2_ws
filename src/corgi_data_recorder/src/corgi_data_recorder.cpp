@@ -19,6 +19,7 @@
 #include "sensor_msgs/msg/range.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
+#include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <tf2_ros/transform_listener.h>
@@ -37,6 +38,7 @@ sensor_msgs::msg::Range range_3;
 sensor_msgs::msg::Range range_4;
 corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::msg::ForceStateStamped force_state;
+corgi_msgs::msg::SimLegContactStamped sim_leg_contact_state;
 geometry_msgs::msg::TransformStamped tf_data;
 bool tf_data_valid = false;
 
@@ -136,6 +138,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "sim_sec" << "," << "sim_nsec" << ","
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
+                        << "sim_contact_state_a" << "," << "sim_contact_state_b" << "," << "sim_contact_state_c" << "," << "sim_contact_state_d" << ","
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
@@ -197,6 +200,10 @@ void imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr cmd){
 
 void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr state){
     force_state = *state;
+}
+
+void sim_leg_contact_state_cb(const corgi_msgs::msg::SimLegContactStamped::SharedPtr state){
+    sim_leg_contact_state = *state;
 }
 
 void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
@@ -282,6 +289,11 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << tf_data.transform.translation.x << "," << tf_data.transform.translation.y << "," << tf_data.transform.translation.z << ","
                 << tf_data.transform.rotation.x << "," << tf_data.transform.rotation.y << "," << tf_data.transform.rotation.z << "," << tf_data.transform.rotation.w << ","
 
+                << sim_leg_contact_state.module_a.contact << ","
+                << sim_leg_contact_state.module_b.contact << ","
+                << sim_leg_contact_state.module_c.contact << ","
+                << sim_leg_contact_state.module_d.contact << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -342,6 +354,7 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 100, imu_cb);
     auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 100, imp_cmd_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 100, force_state_cb);
+    auto sim_leg_contact_state_sub = node->create_subscription<corgi_msgs::msg::SimLegContactStamped>("sim/leg_contact", 100, sim_leg_contact_state_cb);
     // TF listener for odom -> base_link transform
     tf2_ros::Buffer tfBuffer(node->get_clock());
     tf2_ros::TransformListener tfListener(tfBuffer);
