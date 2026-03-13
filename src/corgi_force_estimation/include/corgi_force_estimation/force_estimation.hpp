@@ -97,9 +97,9 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     
     // Physical parameters
-    const double mass_ = 0.68;
-    const double gravity_ = -9.81;
     const bool sim_ = true;
+    const double mass_ = sim_ ? 0.9 : 0.68;
+    const double gravity_ = -9.81;
     
     // Dynamic friction compensation coefficients (AR, AL, BR, BL, CR, CL, DR, DL)
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
