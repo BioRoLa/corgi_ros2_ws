@@ -52,7 +52,7 @@ int main(int argc, char **argv)
              << ",c_theta,c_beta,c_kp_r,c_kp_l,c_ki_r,c_ki_l,c_kd_r,c_kd_l,c_torque_r,c_torque_l"
              << ",d_theta,d_beta,d_kp_r,d_kp_l,d_ki_r,d_ki_l,d_kd_r,d_kd_l,d_torque_r,d_torque_l\n";
 
-    auto sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, callback);
+    auto sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 5, callback);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1, trigger_cb);
 
     rclcpp::spin(node);

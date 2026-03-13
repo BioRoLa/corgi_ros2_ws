@@ -5,17 +5,17 @@ Wheeled::Wheeled()
     : Node("wheel_control")
 {
     // Publishers
-    motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 1000);
+    motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 5);
 
     // Subscribers
     wheel_cmd_sub_ = this->create_subscription<corgi_msgs::msg::WheelCmd>(
-        "/wheel_cmd", 1000,
+        "/wheel_cmd", 5,
         std::bind(&Wheeled::wheelCmdCallback, this, std::placeholders::_1));
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "/motor/state", 1000,
+        "/motor/state", 5,
         std::bind(&Wheeled::motorsStateCallback, this, std::placeholders::_1));
     steer_cmd_sub_ = this->create_subscription<corgi_msgs::msg::SteeringCmdStamped>(
-        "/steer/command", 1000,
+        "/steer/command", 5,
         std::bind(&Wheeled::steerStateCallback, this, std::placeholders::_1));
 }
 

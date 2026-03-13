@@ -13,16 +13,17 @@ GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
                                         BW(BW),
                                         BH(BH),
                                         pub_rate(pub_rate),
+                                        period(0,1000000),
                                         rng(rd()),
                                         dist(0, 359),
                                         currentGait(Gait::WHEELED)
 {
     motor_state_sub_ = node_->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "/motor/state", 1000, std::bind(&GaitSelector::motor_state_cb, this, std::placeholders::_1));
-    motor_cmd_pub_ = node_->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", pub_rate);
-    marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("stable_triangle", pub_rate);
+        "/motor/state", 5, std::bind(&GaitSelector::motor_state_cb, this, std::placeholders::_1));
+    motor_cmd_pub_ = node_->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 5);
+    marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("stable_triangle", 5);
     trigger_sub_ = node_->create_subscription<corgi_msgs::msg::TriggerStamped>(
-        "trigger", 1000, std::bind(&GaitSelector::trigger_cb, this, std::placeholders::_1));
+        "trigger", 5, std::bind(&GaitSelector::trigger_cb, this, std::placeholders::_1));
     rate_ptr = new rclcpp::WallRate(pub_rate);
 
     // Initialize dS & incre_duty
@@ -51,6 +52,7 @@ GaitSelector::GaitSelector(rclcpp::Node::SharedPtr node,
     next_body = body;
     next_hip = hip;
     next_foothold = foothold;
+    next_time = node_->now();
 }
 
 GaitSelector::~GaitSelector()
@@ -85,7 +87,12 @@ void GaitSelector::Send()
         }
     }
     motor_cmd_pub_->publish(motor_cmd);
-    rate_ptr->sleep();
+    //rate_ptr->sleep();
+    next_time += period;
+    if(!node_->get_clock()->sleep_until(next_time)){
+        RCLCPP_WARN(node_->get_logger(), "Sleep until failed!");
+        return;
+    }
 }
 
 void GaitSelector::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr state)

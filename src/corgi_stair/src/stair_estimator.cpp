@@ -98,6 +98,21 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     node_ptr = std::make_shared<rclcpp::Node>("plane_segmentation_node");
+    RCLCPP_INFO(node_ptr->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        rclcpp::spin_some(node_ptr);
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node_ptr->now().seconds() > 0.0) {
+            RCLCPP_INFO(node_ptr->get_logger(), "Clock synced! Sim Time: %.2f", node_ptr->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
     auto cloud_sub = node_ptr->create_subscription<sensor_msgs::msg::PointCloud2>(
         "/zedxm/zed_node/point_cloud/cloud_registered", 1, cloud_cb);
     auto trigger_sub = node_ptr->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -111,7 +126,10 @@ int main(int argc, char **argv)
 
     plane_segmentation = new PlaneSegmentation;
     plane_pub = node_ptr->create_publisher<corgi_msgs::msg::StairPlanes>("/stair_planes", 1);
-    rclcpp::WallRate rate(10);
+    //rclcpp::WallRate rate(10);
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node_ptr->now();
 
     std::ofstream plane_csv("plane_distances.csv");
     plane_csv << "Time,";
@@ -205,7 +223,12 @@ int main(int argc, char **argv)
         } // end for
         stair_csv << "\n";
 
-        rate.sleep();
+        //rate.sleep();
+        next_time += period;
+        if(!node_ptr->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node_ptr->get_logger(), "Sleep until failed!");
+                break;
+        }
     } // end while
 
     plane_csv.close();

@@ -119,10 +119,30 @@ int main(int argc, char **argv)
     rclcpp::executors::SingleThreadedExecutor exec;
     exec.add_node(node);
 
-    auto motor_cmd_pub_ = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 1000);
+    auto motor_cmd_pub_ = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 5);
     auto motor_state_sub_ = node->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "/motor/state", 1000, motorsStateCallback);
-    rclcpp::Rate rate(1000);
+        "/motor/state", 5, motorsStateCallback);
+
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    
+    while (rclcpp::ok()) {
+        // 1. 處理一下 callback，嘗試接收 /clock
+        exec.spin_some();
+        
+        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
+        if (node->now().seconds() > 0.0) {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // 成功對時，跳出等待
+        }
+        
+        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    //rclcpp::Rate rate(1000);
+    // use_sim_time setting
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = node->now();
 
     // Start the keyboard input thread
     std::thread input_thread(keyboardInputThread);
@@ -167,7 +187,12 @@ int main(int argc, char **argv)
 
         // Publish the command continuously
         motor_cmd_pub_->publish(current_motor_cmd_);
-        rate.sleep();
+        //rate.sleep();
+        next_time += period;
+        if(!node->get_clock()->sleep_until(next_time)){
+            RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
+            break;
+        }
     }
 
     // Join the input thread before exiting
