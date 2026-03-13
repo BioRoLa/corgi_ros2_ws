@@ -34,7 +34,7 @@ private:
     double h_;
     
     // Physical parameters
-    const bool sim_ = false;
+    const bool sim_ = true;
 };
 
 ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
