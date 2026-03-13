@@ -72,7 +72,7 @@ private:
     std::vector<Eigen::MatrixXd> phi_prev_modules_;
     
     // Physical parameters
-    const bool sim_ = false;
+    const bool sim_ = true;
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
     
     int loop_count_ = 0;
