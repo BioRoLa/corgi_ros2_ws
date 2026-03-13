@@ -102,10 +102,10 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
-        motor_cmd_->kp_r = 50;
-        motor_cmd_->kp_l = 50;
-        motor_cmd_->kd_r = 1;
-        motor_cmd_->kd_l = 1;
+        motor_cmd_->kp_r = 95;
+        motor_cmd_->kp_l = 95;
+        motor_cmd_->kd_r = 1.75;
+        motor_cmd_->kd_l = 1.75;
         motor_cmd_->torque_r = 0;
         motor_cmd_->torque_l = 0;
         return;
@@ -230,10 +230,10 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                         corgi_msgs::msg::MotorCmd* motor_cmd_) {
     motor_cmd_->theta = imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
-    motor_cmd_->kp_r = 50;
-    motor_cmd_->kp_l = 50;
-    motor_cmd_->kd_r = 1;
-    motor_cmd_->kd_l = 1;
+    motor_cmd_->kp_r = 95;
+    motor_cmd_->kp_l = 95;
+    motor_cmd_->kd_r = 1.75;
+    motor_cmd_->kd_l = 1.75;
     motor_cmd_->torque_r = 0;
     motor_cmd_->torque_l = 0;
 }
