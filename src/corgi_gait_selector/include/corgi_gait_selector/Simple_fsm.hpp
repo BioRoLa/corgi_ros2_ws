@@ -53,6 +53,8 @@ public:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
     rclcpp::WallRate *rate_ptr;
+    rclcpp::Time next_time;
+    rclcpp::Duration period;
     std::random_device rd;
     std::mt19937 rng;
     std::uniform_int_distribution<int> dist;
