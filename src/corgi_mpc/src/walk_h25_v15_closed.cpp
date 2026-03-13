@@ -4,7 +4,6 @@
 
 
 bool trigger = false;
-corgi_msgs::msg::SimDataStamped sim_data;
 corgi_msgs::msg::ForceStateStamped force_state;
 corgi_msgs::msg::MotorStateStamped motor_state;
 geometry_msgs::msg::Vector3 odom_pos;
@@ -14,10 +13,6 @@ corgi_msgs::msg::ImuStamped imu;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
-}
-
-void sim_data_cb(const corgi_msgs::msg::SimDataStamped::SharedPtr msg){
-    sim_data = *msg;
 }
 
 void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg){
@@ -76,7 +71,6 @@ int main(int argc, char **argv) {
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
     auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 1000);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto sim_data_sub = node->create_subscription<corgi_msgs::msg::SimDataStamped>("sim/data", 1000, sim_data_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
     auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/position", 1000, odom_pos_cb);
@@ -276,22 +270,14 @@ int main(int argc, char **argv) {
                 }
 
                 // update state
-                // mpc.robot_vel[0] = odom_vel.x;
-                // mpc.robot_vel[1] = odom_vel.y;
-                // mpc.robot_vel[2] = odom_vel.z;
+                mpc.robot_vel[0] = odom_vel.x;
+                mpc.robot_vel[1] = odom_vel.y;
+                mpc.robot_vel[2] = odom_vel.z;
                 
-                // mpc.robot_pos[0] = odom_pos.x;
-                // mpc.robot_pos[1] = odom_pos.y;
-                // // mpc.robot_pos[2] = odom_pos.z;
-                // mpc.robot_pos[2] = odom_z;
-
-                mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
-                mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
-                mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
-                
-                mpc.robot_pos[0] = sim_data.position.x;
-                mpc.robot_pos[1] = sim_data.position.y;
-                mpc.robot_pos[2] = sim_data.position.z;
+                mpc.robot_pos[0] = odom_pos.x;
+                mpc.robot_pos[1] = odom_pos.y;
+                // mpc.robot_pos[2] = odom_pos.z;
+                mpc.robot_pos[2] = odom_z;
 
                 mpc.robot_ang.x() = imu.orientation.x;
                 mpc.robot_ang.y() = imu.orientation.y;
