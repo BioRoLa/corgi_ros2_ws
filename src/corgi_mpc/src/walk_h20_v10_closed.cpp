@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
     walk_gait.step_length = 0.2;
     walk_gait.step_height = 0.06;
 
-    walk_gait.initialize(init_eta);
+    walk_gait.initialize(init_eta, walk_gait.step_length);
     walk_gait.set_velocity(mpc.target_vel_x);
 
     bool touched[4] = {true, true, true, true};
