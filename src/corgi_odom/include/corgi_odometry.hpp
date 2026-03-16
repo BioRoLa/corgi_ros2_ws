@@ -2,7 +2,7 @@
 
 /*******  switch *******/ 
 // true → simulation, false → real robot
-inline constexpr bool SIM = false;
+inline constexpr bool SIM = true;
 // [Hz]
 inline constexpr bool FILTE_VEL = false;        
 // use KLD or not (if KLD is not used, need to input the contact state for EKF estimation)
@@ -58,7 +58,7 @@ inline constexpr double MOTOR_OFFSET_Y = 0.193;   // [m]
 inline constexpr double MOTOR_OFFSET_Z = 0.0;     // [m]
 
 inline constexpr double WHEEL_RADIUS = 0.10;     // [m]
-inline constexpr double WHEEL_WIDTH_SIM  = 0.012; // [m]
+inline constexpr double WHEEL_WIDTH_SIM  = 0.019; // [m]
 inline constexpr double WHEEL_WIDTH_REAL = 0.019; // [m]
 inline constexpr double WHEEL_WIDTH = SIM ? WHEEL_WIDTH_SIM : WHEEL_WIDTH_REAL;
 
