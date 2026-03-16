@@ -59,6 +59,12 @@ struct NoiseParams {
     //
     // Previous bug: scalar sigma_leg=1e-3 used directly as variance (std≈31.6mm/s).
     Eigen::Vector3f sigma_leg_vec = {8.0f,  0.1f,  1.2f};
+
+    // Mahalanobis distance threshold for leg outlier rejection (Bloesch et al. 2013).
+    // Rejects leg observations where D² = yᵀ S⁻¹ y exceeds this value.
+    // Default 16.27 corresponds to χ²(3) @ 99.9% confidence.
+    // Set to std::numeric_limits<float>::max() to disable outlier rejection.
+    float mahalanobis_threshold = 16.27f;
 };
 
 // ============================================================

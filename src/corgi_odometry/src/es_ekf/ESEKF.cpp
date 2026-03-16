@@ -226,7 +226,14 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     Eigen::Matrix3f R_leg = noise_.sigma_leg_vec.array().square().matrix().asDiagonal();
 
     Eigen::Matrix3f S = H * P_ * H.transpose() + R_leg;
-    Eigen::MatrixXf K = P_ * H.transpose() * S.inverse();  // 18×3
+    Eigen::Matrix3f S_inv = S.inverse();
+
+    // Mahalanobis distance outlier rejection (Bloesch et al. 2013)
+    // D² = yᵀ S⁻¹ y; reject if D² > threshold (χ²(3) @ 99.9% = 16.27)
+    float d_squared = (innovation.transpose() * S_inv * innovation).value();
+    if (d_squared > noise_.mahalanobis_threshold) return;
+
+    Eigen::MatrixXf K = P_ * H.transpose() * S_inv;  // 18×3
 
     dx_ += K * innovation;
 

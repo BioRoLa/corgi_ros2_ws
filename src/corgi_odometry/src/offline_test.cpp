@@ -7,6 +7,7 @@
 #include <chrono>
 #include <iomanip>
 #include <filesystem>
+#include <limits>
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "es_ekf/ESEKF.hpp"
 #include "kinematic/ContactMap.hpp"
@@ -484,6 +485,7 @@ int main(int argc, char** argv) {
             np.sigma_bw      = {1e-8f, 1e-8f, 1e-8f};  // all tight: locks bw at ~0
             np.sigma_bv      = {1e-6f, 1e-6f, 1e-6f};
             np.sigma_leg_vec = {8.0f,  0.1f,  1.2f};   // [X, Y, Z] m/s
+            np.mahalanobis_threshold = 16.27f;  // χ²(3) @ 99.9%: Bloesch et al. 2013
             esekf.set_noise_params(np);
             std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
                       << "], sigma_leg_vec=[" << np.sigma_leg_vec.transpose() << "]\n";
