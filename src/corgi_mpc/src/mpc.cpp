@@ -2,7 +2,7 @@
 #include <stdexcept>
 
 // Global variables for walk_*.cpp files
-bool sim = false;
+bool sim = true;
 LegModel legmodel;
 
 void ModelPredictiveController::load_config() {
