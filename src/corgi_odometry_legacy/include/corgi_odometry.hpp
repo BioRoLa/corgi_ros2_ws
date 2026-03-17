@@ -22,7 +22,6 @@ inline constexpr Method Z_POS_METHOD = AVG;
 inline constexpr float ODOM_ESTIMATOR_RATE = 500.0; //Hz
 inline constexpr float THRESHOLD = 0.08; //threshold of KLD
 inline constexpr float ODOM_ESTIMATION_TIME_RANGE = 10.0; // matrix size
-inline constexpr float FILTE_VEL_CUT_OFF_FREQ = 10.0; //Hz
 
 /******* std lib *******/
 #include <iostream>
@@ -63,9 +62,7 @@ inline constexpr double WHEEL_WIDTH = SIM ? WHEEL_WIDTH_SIM : WHEEL_WIDTH_REAL;
 inline constexpr double GRAVITY        = 9.80665; // [m/s²]
 
 /******* odometry data logging *******/ 
-inline constexpr int DATA_SIZE_ORIGIN = 39;
-inline constexpr int DATA_SIZE_FILTER = 45;
-inline constexpr int ODOM_DATA_SIZE = FILTE_VEL ? DATA_SIZE_FILTER : DATA_SIZE_ORIGIN; 
+inline constexpr int ODOM_DATA_SIZE = 39;
 
 /******* z_position data logging *******/ 
 inline constexpr int Z_POS_DATA_SIZE = 9; 
