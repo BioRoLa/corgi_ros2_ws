@@ -10,7 +10,6 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include "rclcpp/rclcpp.hpp"
 #include <yaml-cpp/yaml.h>
-#include "corgi_msgs/msg/sim_data_stamped.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
