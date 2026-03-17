@@ -9,6 +9,7 @@ endif()
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Dependencies
 find_package(ament_cmake REQUIRED)
