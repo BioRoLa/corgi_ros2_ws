@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
     mpc.load_config();
 
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     

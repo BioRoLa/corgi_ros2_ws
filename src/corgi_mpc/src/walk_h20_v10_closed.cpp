@@ -69,13 +69,13 @@ int main(int argc, char **argv) {
     mpc.target_loop = 2250;
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 10, motor_state_cb);
-    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/position", 10, odom_pos_cb);
-    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/velocity", 10, odom_vel_cb);
-    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/z_position_hip", 10, odom_z_cb);
+    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/position", 10, odom_pos_cb);
+    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 10, odom_vel_cb);
+    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/legacy/z_position_hip", 10, odom_z_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 10, imu_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq); // Convert Hz to nanoseconds
