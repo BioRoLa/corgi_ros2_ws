@@ -9,6 +9,7 @@ import signal
 import multiprocessing
 import subprocess
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QTimer
 
 
 # ROS 2 import (will be initialized by the panel itself)
@@ -61,16 +62,16 @@ def load_stylesheet() -> str:
 
 
 def signal_handler(sig, frame):
-    """Handle Ctrl+C gracefully"""
-    print("\nShutting down Corgi Control Panel...")
+    """Handle Ctrl+C / SIGTERM gracefully — triggers closeEvent so child processes are cleaned up"""
+    print(f"\nShutting down Corgi Control Panel (signal {sig})...")
+    # closeAllWindows() triggers each window's closeEvent, which calls
+    # process_manager.cleanup_all() to terminate csv_control / data_recorder etc.
+    QApplication.closeAllWindows()
     QApplication.quit()
 
 
 def main():
     """Main entry point for Control Panel"""
-    # Setup signal handler for Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
-    
     # Create QApplication
     app = QApplication(sys.argv)
     
@@ -79,9 +80,6 @@ def main():
     if stylesheet:
         app.setStyleSheet(stylesheet)
     
-    # Allow Ctrl+C to work
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-    
     # Import and create control panel
     try:
         from corgi_ui.gui.control_panel import CorgiControlPanel
@@ -89,6 +87,18 @@ def main():
         # Create main window
         window = CorgiControlPanel()
         window.show()
+
+        # Set up signal handlers AFTER the window exists so closeEvent can run.
+        # Reset to SIG_DFL first so Python receives the signal at all (Qt blocks it
+        # otherwise), then install our handler.
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        # QTimer that fires every 500 ms — this gives the Python interpreter a
+        # chance to process the signal even while Qt's event loop is running.
+        noop_timer = QTimer()
+        noop_timer.timeout.connect(lambda: None)
+        noop_timer.start(500)
         
         # Run application
         exit_code = app.exec_()
