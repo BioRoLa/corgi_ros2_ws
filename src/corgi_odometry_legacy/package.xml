@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>corgi_odom</name>
+  <name>corgi_odometry_legacy</name>
   <version>0.0.0</version>
-  <description>The corgi_odom package</description>
+  <description>The corgi_odometry_legacy package</description>
   <maintainer email="kenny0817123@gmail.com">hiho817</maintainer>
   <license>TODO</license>
 

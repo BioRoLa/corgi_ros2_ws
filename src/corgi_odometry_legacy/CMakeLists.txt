@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-project(corgi_odom LANGUAGES C CXX)
+project(corgi_odometry_legacy LANGUAGES C CXX)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)

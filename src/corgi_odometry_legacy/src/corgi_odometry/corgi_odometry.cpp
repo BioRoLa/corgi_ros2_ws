@@ -58,7 +58,7 @@ Eigen::Matrix3f P_cov;
 corgi_msgs::msg::MotorStateStamped motor_state;
 corgi_msgs::msg::ImuStamped imu;
 
-rclcpp::Logger node_logger = rclcpp::get_logger("corgi_odometry");
+rclcpp::Logger node_logger = rclcpp::get_logger("corgi_odometry_legacy");
 
 // Callbacks
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
@@ -157,7 +157,7 @@ void Encoder::init(float dt){
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<rclcpp::Node>("corgi_odometry");
+    auto node = std::make_shared<rclcpp::Node>("corgi_odometry_legacy");
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -171,11 +171,11 @@ int main(int argc, char **argv) {
     }
 
     // ROS Publishers
-    auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/velocity", 10);
-    auto position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/position", 10);
-    auto filtered_velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/filtered_velocity", 10);
-    auto filtered_position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/filtered_position", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 10);
+    auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 10);
+    auto position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/position", 10);
+    auto filtered_velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/filtered_velocity", 10);
+    auto filtered_position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/filtered_position", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
 
     // ROS Subscribers
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 10, imu_cb);
     auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>(
-        "odometry/contact", 10, contact_cb);
+        "odometry/legacy/contact", 10, contact_cb);
 
     node_logger = node->get_logger();
     Eigen::initParallel();

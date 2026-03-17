@@ -23,7 +23,7 @@ std::string output_file_path;
 std::string output_file_name = "";
 Eigen::VectorXf state = Eigen::VectorXf::Zero(Z_POS_DATA_SIZE);
 
-rclcpp::Logger node_logger = rclcpp::get_logger("corgi_z_position");
+rclcpp::Logger node_logger = rclcpp::get_logger("corgi_z_position_legacy");
 
 // Callbacks
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
@@ -118,7 +118,7 @@ double low_pass_filter(double value, double prev_value, double cutoff_freq, doub
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<rclcpp::Node>("corgi_z_position");
+    auto node = std::make_shared<rclcpp::Node>("corgi_z_position_legacy");
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
     }
 
     // ROS Publishers
-    auto z_position_pub = node->create_publisher<std_msgs::msg::Float64>("odometry/z_position_hip", 10);
+    auto z_position_pub = node->create_publisher<std_msgs::msg::Float64>("odometry/legacy/z_position_hip", 10);
     
     // ROS Subscribers
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 10, imu_cb);
     auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>(
-        "odometry/contact", 10, contact_cb);
+        "odometry/legacy/contact", 10, contact_cb);
     
     node_logger = node->get_logger();
     

@@ -7,17 +7,17 @@ def generate_launch_description():
     return LaunchDescription([
 
         Node(
-            package='corgi_odom',
-            executable='corgi_odometry',
-            name='corgi_odometry',
+            package='corgi_odometry_legacy',
+            executable='corgi_odometry_legacy',
+            name='corgi_odometry_legacy',
             parameters=common_params,
             output='screen'
         ),
 
         Node(
-            package='corgi_odom',
-            executable='corgi_z_position',
-            name='corgi_z_position',
+            package='corgi_odometry_legacy',
+            executable='corgi_z_position_legacy',
+            name='corgi_z_position_legacy',
             parameters=common_params,
             output='screen'
         )
