@@ -83,7 +83,7 @@ private:
                                     double& yaw);
 
     // Force estimator
-    ForceEstimator estimator_;
+    std::unique_ptr<ForceEstimator> estimator_;
     
     // Message
     corgi_msgs::msg::MotorStateStamped motor_state_;
@@ -97,8 +97,8 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     
     // Physical parameters
-    const bool sim_ = true;
-    const double mass_ = sim_ ? 0.9 : 0.68;
+    bool sim_;
+    double mass_;
     const double gravity_ = -9.81;
     
     // Dynamic friction compensation coefficients (AR, AL, BR, BL, CR, CL, DR, DL)

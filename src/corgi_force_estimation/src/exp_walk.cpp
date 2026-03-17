@@ -2,6 +2,7 @@
 #include "corgi_walk/walk_gait.hpp"
 
 #include <chrono>
+#include <memory>
 
 class CorgiWalkNode : public rclcpp::Node {
 public:
@@ -35,7 +36,7 @@ private:
     double step_height_;
 
     // Parameters
-    const bool sim_ = true;
+    bool sim_;
     const int target_loop_ = 20000;
 
     // sim, h25, sl0.3
@@ -62,7 +63,7 @@ private:
     //                        1.1354779956465793, -0.16425262030677687,
     //                        1.4863321792421085, -0.6075431293162905};
 
-    WalkGait walk_gait_;
+    std::unique_ptr<WalkGait> walk_gait_;
 };
 
 CorgiWalkNode::CorgiWalkNode()
@@ -72,9 +73,12 @@ CorgiWalkNode::CorgiWalkNode()
       stand_height_(0.25),
       step_length_(0.3),
       step_height_(0.04),
-      walk_gait_(sim_, 0, 1000)
+      sim_(false)
 {
     RCLCPP_INFO(this->get_logger(), "Corgi Walk Starts");
+
+    this->get_parameter_or("use_sim_time", sim_, false);
+    walk_gait_ = std::make_unique<WalkGait>(sim_, 0, 1000);
 
     motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
     trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -90,21 +94,24 @@ CorgiWalkNode::CorgiWalkNode()
 
     initialize_motor_command();
 
-    walk_gait_.initialize(init_eta_);
-    walk_gait_.set_velocity(velocity_);
-    walk_gait_.set_stand_height(stand_height_);
-    walk_gait_.set_step_length(step_length_);
-    walk_gait_.set_step_height(step_height_);
+    walk_gait_->initialize(init_eta_);
+    walk_gait_->set_velocity(velocity_);
+    walk_gait_->set_stand_height(stand_height_);
+    walk_gait_->set_step_length(step_length_);
+    walk_gait_->set_step_height(step_height_);
 
-    // Wait for simulation clock synchronization
-    RCLCPP_INFO(this->get_logger(), "Waiting for clock...");
-    while (rclcpp::ok()) {
-        rclcpp::spin_some(this->get_node_base_interface());
-        if (this->now().seconds() > 0.0) {
-            RCLCPP_INFO(this->get_logger(), "Clock synced! Time: %.2f", this->now().seconds());
-            break;
+    if (sim_) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            if (this->now().seconds() > 0.0) {
+                RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+                break;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Real hardware mode: using system wall clock.");
     }
 }
 
@@ -193,7 +200,7 @@ void CorgiWalkNode::execute_control_phase() {
         // }
 
         // get next eta
-        eta_list = walk_gait_.step();
+        eta_list = walk_gait_->step();
 
         for (int i = 0; i < 4; i++) {
             if (eta_list[0][i] > M_PI * 160.0 / 180.0) {
