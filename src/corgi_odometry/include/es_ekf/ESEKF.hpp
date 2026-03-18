@@ -68,6 +68,17 @@ struct NoiseParams {
 };
 
 // ============================================================
+// Per-leg update diagnostics (populated by update_leg)
+// ============================================================
+struct LegUpdateDiag {
+    float d_squared = 0.0f;                                    // Mahalanobis distance D²
+    Eigen::Vector3f innovation = Eigen::Vector3f::Zero();      // y = z_leg - v_pred
+    Eigen::Vector3f S_diag = Eigen::Vector3f::Zero();          // diagonal of S = HPH^T + R
+    bool rejected = false;                                     // true if D² > threshold
+    bool skipped  = false;                                     // true if leg not in contact / excluded
+};
+
+// ============================================================
 // Per-leg observation data for the update step
 // ============================================================
 struct LegObservation {
@@ -109,7 +120,9 @@ public:
     ///   where z_leg = -PointVelocity(v=0, w_imu) from encoder kinematics
     /// @param obs  leg observation data (encoder state + contact info)
     /// @param w_m  raw gyroscope measurement (needed for ω×r term)
-    void update_leg(LegObservation& obs, const Eigen::Vector3f& w_m);
+    /// @param diag optional pointer to diagnostic struct (filled if non-null)
+    void update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
+                    LegUpdateDiag* diag = nullptr);
 
     /// @brief Update all legs sequentially
     /// @param obs       vector of 4 leg observations [LF, RF, RH, LH]
@@ -128,6 +141,9 @@ public:
     /// @brief Get current error-state covariance (read-only)
     const Eigen::MatrixXf& covariance() const { return P_; }
 
+    /// @brief Get per-leg update diagnostics from last update_all_legs call
+    const std::array<LegUpdateDiag, 4>& leg_diag() const { return leg_diag_; }
+
     /// @brief Set noise parameters (optional, has defaults)
     void set_noise_params(const NoiseParams& params) { noise_ = params; }
 
@@ -144,6 +160,9 @@ private:
     // --- Parameters ---
     float dt_;
     NoiseParams noise_;
+
+    // --- Diagnostics ---
+    std::array<LegUpdateDiag, 4> leg_diag_;   // filled by update_all_legs
 };
 
 } // namespace estimation_model

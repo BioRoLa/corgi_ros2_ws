@@ -152,8 +152,12 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
 // Update — single leg (sequential EKF)
 // ============================================================
 
-void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
-    if (!obs.in_contact) return;
+void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
+                       LegUpdateDiag* diag) {
+    if (!obs.in_contact) {
+        if (diag) { *diag = LegUpdateDiag{}; diag->skipped = true; }
+        return;
+    }
 
     // ----------------------------------------------------------
     // 1. Compute observation z_leg from encoder kinematics
@@ -231,6 +235,16 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m) {
     // Mahalanobis distance outlier rejection (Bloesch et al. 2013)
     // D² = yᵀ S⁻¹ y; reject if D² > threshold (χ²(3) @ 99.9% = 16.27)
     float d_squared = (innovation.transpose() * S_inv * innovation).value();
+
+    // Populate diagnostics before potential early return
+    if (diag) {
+        diag->d_squared  = d_squared;
+        diag->innovation = innovation;
+        diag->S_diag     = S.diagonal();
+        diag->rejected   = (d_squared > noise_.mahalanobis_threshold);
+        diag->skipped    = false;
+    }
+
     if (d_squared > noise_.mahalanobis_threshold) return;
 
     Eigen::MatrixXf K = P_ * H.transpose() * S_inv;  // 18×3
@@ -251,7 +265,10 @@ void ESEKF::update_all_legs(std::vector<LegObservation>& obs,
                             const std::array<bool, 4>& exclude) {
     for (int i = 0; i < 4; i++) {
         if (!exclude[i]) {
-            update_leg(obs[i], w_m);
+            update_leg(obs[i], w_m, &leg_diag_[i]);
+        } else {
+            leg_diag_[i] = LegUpdateDiag{};
+            leg_diag_[i].skipped = true;
         }
     }
 }
