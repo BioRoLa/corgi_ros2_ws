@@ -229,15 +229,15 @@ public:
         // theta_d = (-velocity_r + velocity_l) / 2
         // beta_d  = -(velocity_r + velocity_l) / 2   (negated for right-side legs)
         double theta_a_dot = (-data.state_vel_r_a + data.state_vel_l_a) / 2.0;
-        double beta_a_dot  = -(data.state_vel_r_a + data.state_vel_l_a) / 2.0;
+        double beta_a_dot  = (data.state_vel_r_a + data.state_vel_l_a) / 2.0;
         double theta_b_dot = (-data.state_vel_r_b + data.state_vel_l_b) / 2.0;
-        double beta_b_dot  = -(data.state_vel_r_b + data.state_vel_l_b) / 2.0;
+        double beta_b_dot  = (data.state_vel_r_b + data.state_vel_l_b) / 2.0;
         beta_b_dot = -beta_b_dot;  // RF is right-side, negate beta_d
         double theta_c_dot = (-data.state_vel_r_c + data.state_vel_l_c) / 2.0;
-        double beta_c_dot  = -(data.state_vel_r_c + data.state_vel_l_c) / 2.0;
+        double beta_c_dot  = (data.state_vel_r_c + data.state_vel_l_c) / 2.0;
         beta_c_dot = -beta_c_dot;  // RH is right-side, negate beta_d
         double theta_d_dot = (-data.state_vel_r_d + data.state_vel_l_d) / 2.0;
-        double beta_d_dot  = -(data.state_vel_r_d + data.state_vel_l_d) / 2.0;
+        double beta_d_dot  = (data.state_vel_r_d + data.state_vel_l_d) / 2.0;
         
         // Convert theta_dot to Rm_dot
         result.q_dot(4) = beta_a_dot;
@@ -698,7 +698,7 @@ int main(int argc, char** argv) {
                     ? -static_cast<float>(betas[j])
                     :  static_cast<float>(betas[j]);
                 float theta_d = static_cast<float>((-vel_r[j] + vel_l[j]) / 2.0);
-                float beta_d  = -static_cast<float>(( vel_r[j] + vel_l[j]) / 2.0);
+                float beta_d  = static_cast<float>(( vel_r[j] + vel_l[j]) / 2.0);
                 if (is_right_side) beta_d = -beta_d;
 
                 // --- Use pitch compensated beta for rim lookup ---
