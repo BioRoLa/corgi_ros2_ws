@@ -409,8 +409,8 @@ int main(int argc, char** argv) {
     try {
         // ── CLI argument parsing for parameter sweep ─────────────────────
         // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [quiet]
-        float cli_sigma_a_x   = 1.0f;
-        float cli_sigma_leg_x = 8.0f;
+        float cli_sigma_a_x   = 5.0f;
+        float cli_sigma_leg_x = 0.05f;
         float cli_sigma_leg_z = 1.2f;
         float cli_threshold   = 16.27f;
         bool  quiet           = false;
@@ -528,7 +528,8 @@ int main(int argc, char** argv) {
                   << "S_xx_b,S_yy_b,S_zz_b,"
                   << "S_xx_c,S_yy_c,S_zz_c,"
                   << "S_xx_d,S_yy_d,S_zz_d,"
-                  << "P_vx,P_vy,P_vz\n";
+                  << "P_vx,P_vy,P_vz,"
+                  << "imu_pos_x,imu_pos_y,imu_pos_z,imu_vel_bx,imu_vel_by,imu_vel_bz\n";
         esekf_out << std::fixed << std::setprecision(8);
 
         // Process data
@@ -547,6 +548,12 @@ int main(int argc, char** argv) {
         const size_t rmse_skip = 0;  // no warmup: robot starts from rest
         const size_t max_processed = 12000;  // limit to 12s (raw 5000-17000), eval raw 7000-17000
         size_t vel_count = 0;
+
+        // IMU pure integration state (GT attitude, no bias subtraction)
+        Eigen::Vector3f imu_vel_w = Eigen::Vector3f::Zero();
+        Eigen::Vector3f imu_pos_w = Eigen::Vector3f::Zero();
+        double imu_vel_sq_err_sum_x = 0.0, imu_vel_sq_err_sum_y = 0.0, imu_vel_sq_err_sum_z = 0.0;
+        double imu_pos_sq_err_sum_x = 0.0, imu_pos_sq_err_sum_y = 0.0, imu_pos_sq_err_sum_z = 0.0;
 
         // ----------------------------------------------------------------
         // Pre-compute GT velocity: central difference + 10 Hz IIR LPF
@@ -682,6 +689,14 @@ int main(int argc, char** argv) {
             bool use_gt_acc = false;
             if (use_gt_acc && processed_count > 10) { // skip first few steps for filter settling
                 a_m = gt_am;
+            }
+
+            // --- IMU pure integration (GT attitude, no bias subtraction) ---
+            // a_world = R_gt * a_m + g_w  (Webots Z-up: g_w=[0,0,-9.81])
+            {
+                Eigen::Vector3f a_world_imu = q_gt.toRotationMatrix() * a_m + g_w;
+                imu_vel_w += a_world_imu * static_cast<float>(dt);
+                imu_pos_w += imu_vel_w * static_cast<float>(dt);
             }
 
             // --- Predict ---
@@ -843,6 +858,22 @@ int main(int argc, char** argv) {
                     pos_sq_err_sum_z += ep_z * ep_z;
 
                     vel_count++;
+
+                    // IMU pure integration errors
+                    Eigen::Vector3f imu_vel_b_rmse = q_gt_rmse.toRotationMatrix().transpose() * imu_vel_w;
+                    double imu_ev_x = imu_vel_b_rmse.x() - gt_vb_i.x();
+                    double imu_ev_y = imu_vel_b_rmse.y() - gt_vb_i.y();
+                    double imu_ev_z = imu_vel_b_rmse.z() - gt_vb_i.z();
+                    imu_vel_sq_err_sum_x += imu_ev_x * imu_ev_x;
+                    imu_vel_sq_err_sum_y += imu_ev_y * imu_ev_y;
+                    imu_vel_sq_err_sum_z += imu_ev_z * imu_ev_z;
+
+                    double imu_ep_x = imu_pos_w.x() - (data[i].sim_pos_x - gt_offset_x);
+                    double imu_ep_y = imu_pos_w.y() - (data[i].sim_pos_y - gt_offset_y);
+                    double imu_ep_z = imu_pos_w.z() - (data[i].sim_pos_z - gt_offset_z);
+                    imu_pos_sq_err_sum_x += imu_ep_x * imu_ep_x;
+                    imu_pos_sq_err_sum_y += imu_ep_y * imu_ep_y;
+                    imu_pos_sq_err_sum_z += imu_ep_z * imu_ep_z;
                 }
             }
 
@@ -872,7 +903,13 @@ int main(int argc, char** argv) {
                 esekf_out << diag[j].S_diag.x() << "," << diag[j].S_diag.y() << "," << diag[j].S_diag.z() << ",";
             esekf_out << Pcov(estimation_model::V_IDX, estimation_model::V_IDX) << ","
                       << Pcov(estimation_model::V_IDX+1, estimation_model::V_IDX+1) << ","
-                      << Pcov(estimation_model::V_IDX+2, estimation_model::V_IDX+2) << "\n";
+                      << Pcov(estimation_model::V_IDX+2, estimation_model::V_IDX+2) << ",";
+            // IMU pure integration: position (world frame) and velocity (body frame)
+            {
+                Eigen::Vector3f imu_vel_b_log = q_gt.toRotationMatrix().transpose() * imu_vel_w;
+                esekf_out << imu_pos_w.x() << "," << imu_pos_w.y() << "," << imu_pos_w.z() << ","
+                          << imu_vel_b_log.x() << "," << imu_vel_b_log.y() << "," << imu_vel_b_log.z() << "\n";
+            }
 
             processed_count++;
         }
@@ -938,6 +975,19 @@ int main(int argc, char** argv) {
             double vel_rmse_total = std::sqrt((vel_sq_err_sum_x + vel_sq_err_sum_y + vel_sq_err_sum_z) / n);
             std::cout << "Position RMSE total: " << pos_rmse_total << " m\n";
             std::cout << "Velocity RMSE total: " << vel_rmse_total << " m/s\n";
+            std::cout << "--- IMU pure integration (GT q, no bias) ---\n";
+            std::cout << "IMU Pos RMSE (m):     ["
+                      << std::sqrt(imu_pos_sq_err_sum_x / n) << ", "
+                      << std::sqrt(imu_pos_sq_err_sum_y / n) << ", "
+                      << std::sqrt(imu_pos_sq_err_sum_z / n) << "]\n";
+            std::cout << "IMU Vel RMSE body(m/s):["
+                      << std::sqrt(imu_vel_sq_err_sum_x / n) << ", "
+                      << std::sqrt(imu_vel_sq_err_sum_y / n) << ", "
+                      << std::sqrt(imu_vel_sq_err_sum_z / n) << "]\n";
+            double imu_pos_rmse_total = std::sqrt((imu_pos_sq_err_sum_x + imu_pos_sq_err_sum_y + imu_pos_sq_err_sum_z) / n);
+            double imu_vel_rmse_total = std::sqrt((imu_vel_sq_err_sum_x + imu_vel_sq_err_sum_y + imu_vel_sq_err_sum_z) / n);
+            std::cout << "IMU Pos RMSE total:  " << imu_pos_rmse_total << " m\n";
+            std::cout << "IMU Vel RMSE total:  " << imu_vel_rmse_total << " m/s\n";
             std::cout << "====================================\n";
         }
         

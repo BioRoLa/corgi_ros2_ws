@@ -68,6 +68,10 @@ N = len(df)
 t = np.arange(N) * DT
 print(f"Loaded {N} samples ({t[-1]:.1f}s)")
 
+# IMU pure integration columns (written by offline_test C++)
+imu_pos   = np.column_stack([df.imu_pos_x,  df.imu_pos_y,  df.imu_pos_z])
+imu_vel_b = np.column_stack([df.imu_vel_bx, df.imu_vel_by, df.imu_vel_bz])
+
 # =====================================================================
 # 1. Attitude analysis: extract Euler angles from both quaternions
 # =====================================================================
@@ -156,6 +160,9 @@ print(f"  est_vel_z vs GT_body_vz:  {rmse(est_v_body[:,2], gt_v_body[:,2])*1000:
 print(f"  z_avg_x   vs GT_body_vx:  {rmse(z_avg[:,0], gt_v_body[:,0])*1000:.1f} mm/s")
 print(f"  z_avg_y   vs GT_body_vy:  {rmse(z_avg[:,1], gt_v_body[:,1])*1000:.1f} mm/s")
 print(f"  z_avg_z   vs GT_body_vz:  {rmse(z_avg[:,2], gt_v_body[:,2])*1000:.1f} mm/s")
+print(f"  imu_vel_bx vs GT_body_vx: {rmse(imu_vel_b[:,0], gt_v_body[:,0])*1000:.1f} mm/s")
+print(f"  imu_vel_by vs GT_body_vy: {rmse(imu_vel_b[:,1], gt_v_body[:,1])*1000:.1f} mm/s")
+print(f"  imu_vel_bz vs GT_body_vz: {rmse(imu_vel_b[:,2], gt_v_body[:,2])*1000:.1f} mm/s")
 
 print(f"\n--- World-frame Velocity RMSE ---")
 print(f"  est_v_world_x vs GT:      {rmse(est_v_world[:,0], gt_vx_world)*1000:.1f} mm/s")
@@ -194,6 +201,8 @@ print(f"\n--- Position RMSE ---")
 print(f"  ESEKF x:             {rmse(est_pos[:,0], gt_pos[:,0])*1000:.0f} mm")
 print(f"  Pure leg (GT q) x:   {rmse(pure_leg_pos[:,0], gt_pos[:,0])*1000:.0f} mm")
 print(f"  Pure leg (EST q) x:  {rmse(pure_leg_pos_est_q[:,0], gt_pos[:,0])*1000:.0f} mm")
+print(f"  IMU integ x:         {rmse(imu_pos[:,0], gt_pos[:,0])*1000:.0f} mm")
+print(f"  IMU integ total:     {np.sqrt(np.mean((imu_pos - gt_pos)**2))*1000:.0f} mm")
 
 # =====================================================================
 # 7. Yaw drift impact analysis
@@ -227,6 +236,7 @@ ax.grid(True, alpha=0.3)
 ax = axes[0, 1]
 ax.plot(t, (est_v_body[:, 0] - gt_v_body[:, 0]) * 1000, 'r-', lw=0.3, alpha=0.6, label='ESEKF - GT')
 ax.plot(t, (z_avg[:, 0] - gt_v_body[:, 0]) * 1000, 'b-', lw=0.3, alpha=0.5, label='z_avg - GT')
+ax.plot(t, (imu_vel_b[:, 0] - gt_v_body[:, 0]) * 1000, 'c-', lw=0.3, alpha=0.5, label='IMU - GT')
 ax.axhline(0, color='k', lw=0.5)
 ax.set_ylabel('error [mm/s]')
 ax.set_title('Body-frame Velocity X Error')
@@ -256,6 +266,7 @@ ax.plot(t, gt_pos[:, 0], 'k-', lw=1, label='GT')
 ax.plot(t, est_pos[:, 0], 'r--', lw=0.8, label='ESEKF')
 ax.plot(t, pure_leg_pos[:, 0], 'b--', lw=0.8, label='Pure leg (GT q)')
 ax.plot(t, pure_leg_pos_est_q[:, 0], 'g--', lw=0.8, label='Pure leg (EST q)')
+ax.plot(t, imu_pos[:, 0], 'm--', lw=0.8, label='IMU integ (GT q)')
 ax.set_ylabel('X [m]')
 ax.set_title('Position X')
 ax.legend(fontsize=7)
@@ -267,6 +278,7 @@ ax.plot(t, gt_pos[:, 1], 'k-', lw=1, label='GT')
 ax.plot(t, est_pos[:, 1], 'r--', lw=0.8, label='ESEKF')
 ax.plot(t, pure_leg_pos[:, 1], 'b--', lw=0.8, label='Pure leg (GT q)')
 ax.plot(t, pure_leg_pos_est_q[:, 1], 'g--', lw=0.8, label='Pure leg (EST q)')
+ax.plot(t, imu_pos[:, 1], 'm--', lw=0.8, label='IMU integ (GT q)')
 ax.set_ylabel('Y [m]')
 ax.set_title('Position Y')
 ax.legend(fontsize=7)
@@ -320,4 +332,10 @@ print(f"")
 print(f"Yaw drift (EST - GT) final                    : {yaw_err_deg[-1]:.2f}°")
 print(f"ba_x final                                    : {df.ba_x.iloc[-1]:.4f} m/s²")
 print(f"bw_z final (yaw bias)                         : {df.bw_z.iloc[-1]:.6f} rad/s")
+print(f"")
+print(f"IMU integ body vx RMSE                        : "
+      f"{rmse(imu_vel_b[:,0], gt_v_body[:,0])*1000:.1f} mm/s")
+print(f"IMU integ final pos x                         : {imu_pos[-1,0]:.3f} m")
+print(f"IMU integ pos RMSE total                      : "
+      f"{np.sqrt(np.mean((imu_pos - gt_pos)**2))*1000:.0f} mm")
 print(f"{'='*70}")

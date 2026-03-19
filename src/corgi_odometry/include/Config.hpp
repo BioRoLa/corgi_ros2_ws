@@ -66,7 +66,7 @@ public:
     // ============================================================
     
     // CSV file configuration
-    static constexpr const char* CSV_FILENAME = "walk_obs"; // walk_obs // walk_2m_01
+    static constexpr const char* CSV_FILENAME = "walk_2m_01"; // walk_obs // walk_2m_01
     static constexpr int START_INDEX = 0;             // Starting index for offline data processing
     static constexpr bool ENABLE_LOGGING = true;      // Enable CSV logging for offline mode
     
