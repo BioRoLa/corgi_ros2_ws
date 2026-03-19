@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-Launch file for Contact Leg Estimator and Velocity Estimator (Online Version)
+Launch file for Leg Odometry with IMU noise simulation (Simulation Version)
+
+Nodes launched:
+  1. velocity_estimator  — derives velocity from TF (odom→base_link)
+  2. imu_noise_sim       — adds realistic 3DM-CX5-AHRS noise to clean sim IMU
+  3. corgi_leg_odom      — leg odometry + ES-EKF (subscribes to noisy IMU)
+
+Topic wiring:
+  simulator → "imu"  →(remap to imu_raw)→ imu_noise_sim → "imu_noisy"
+  corgi_leg_odom subscribes to "imu_noisy" (remapped from "imu")
 """
 
 from launch import LaunchDescription
@@ -33,8 +42,29 @@ def generate_launch_description():
             'position_output_topic': 'odometry/position',
         }]
     )
+
+    # IMU noise simulator node
+    # Subscribes to clean sim IMU ("imu" remapped to "imu_raw"), publishes noisy IMU to "imu_noisy"
+    imu_noise_sim_node = Node(
+        package='corgi_odometry',
+        executable='imu_noise_sim',
+        name='imu_noise_sim',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'seed': 0,
+            'sample_rate': 1000.0,
+            'input_topic': 'imu_raw',
+            'output_topic': 'imu_noisy',
+        }],
+        remappings=[
+            # Simulator publishes ground-truth IMU on "imu";
+            # remap so the noise node reads it as "imu_raw"
+            ('imu_raw', 'imu'),
+        ]
+    )
     
-    # Create leg odom node
+    # Create leg odom node — subscribes to "imu_noisy" instead of "imu"
     corgi_leg_odom_node = Node(
         package='corgi_odometry',
         executable='corgi_leg_odom',
@@ -44,14 +74,12 @@ def generate_launch_description():
             'use_sim_time': True,
         }],
         remappings=[
-            # Uncomment and modify if you need to remap topics
-            # ('motor/state', '/custom/motor/state'),
-            # ('imu', '/custom/imu/filtered'),
-            # ('odometry/position', '/custom/odometry/position'),
+            ('imu', 'imu_noisy'),
         ]
     )
     return LaunchDescription([
         cutoff_freq_arg,
         velocity_estimator_node,
+        imu_noise_sim_node,
         corgi_leg_odom_node,
     ])

@@ -112,3 +112,20 @@ target_link_libraries(velocity_estimator
 
 install(TARGETS velocity_estimator
   DESTINATION lib/${PROJECT_NAME})
+
+# Build executable for IMU noise simulator (simulation only)
+add_executable(imu_noise_sim
+  sim/imu_noise_sim.cpp
+)
+
+ament_target_dependencies(imu_noise_sim
+  rclcpp
+  corgi_msgs
+)
+
+target_link_libraries(imu_noise_sim
+  Eigen3::Eigen
+)
+
+install(TARGETS imu_noise_sim
+  DESTINATION lib/${PROJECT_NAME})

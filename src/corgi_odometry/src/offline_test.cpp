@@ -13,6 +13,7 @@
 #include "kinematic/ContactMap.hpp"
 #include "kinematic/Leg.hpp"
 #include "Config.hpp"
+#include "ImuNoiseSimulator.hpp"
 
 /**
  * @brief CSV Reader with column name support
@@ -408,17 +409,19 @@ private:
 int main(int argc, char** argv) {
     try {
         // ── CLI argument parsing for parameter sweep ─────────────────────
-        // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [quiet]
+        // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [imu_noise] [quiet]
         float cli_sigma_a_x   = 5.0f;
         float cli_sigma_leg_x = 0.05f;
         float cli_sigma_leg_z = 1.2f;
         float cli_threshold   = 16.27f;
+        bool  simulate_imu_noise = false;
         bool  quiet           = false;
-        if (argc >= 2) cli_sigma_a_x   = std::stof(argv[1]);
-        if (argc >= 3) cli_sigma_leg_x = std::stof(argv[2]);
-        if (argc >= 4) cli_sigma_leg_z = std::stof(argv[3]);
-        if (argc >= 5) cli_threshold   = std::stof(argv[4]);
-        if (argc >= 6) quiet           = (std::string(argv[5]) == "1");
+        if (argc >= 2) cli_sigma_a_x       = std::stof(argv[1]);
+        if (argc >= 3) cli_sigma_leg_x     = std::stof(argv[2]);
+        if (argc >= 4) cli_sigma_leg_z     = std::stof(argv[3]);
+        if (argc >= 5) cli_threshold       = std::stof(argv[4]);
+        if (argc >= 6) simulate_imu_noise  = (std::string(argv[5]) == "1");
+        if (argc >= 7) quiet               = (std::string(argv[6]) == "1");
         // Configuration from Config.hpp
         // Build CSV path relative to this source file: package_root/data/<filename>.csv
         const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "data" /
@@ -579,13 +582,12 @@ int main(int argc, char** argv) {
             gt_vz_w[k] = (1.0 - gt_vel_alpha) * gt_vz_w[k-1] + gt_vel_alpha * gt_vz_w[k];
         }
 
-        // For GT acceleration
-        Eigen::Vector3f last_gt_pos(data[start_index].sim_pos_x, data[start_index].sim_pos_y, data[start_index].sim_pos_z);
-        Eigen::Vector3f last_gt_vw(0.0f, 0.0f, 0.0f);
-        Eigen::Vector3f gt_vw_filt(0.0f, 0.0f, 0.0f);
-        Eigen::Vector3f gt_aw_filt(0.0f, 0.0f, 0.0f);
-        double f_alpha_v = 1.0 - std::exp(-2.0 * M_PI * 10.0 * dt);
-        double f_alpha_a = 1.0 - std::exp(-2.0 * M_PI * 5.0 * dt);
+        // IMU noise simulator (optional, for offline testing with synthetic noise)
+        std::unique_ptr<ImuNoiseSimulator> imu_noise_sim;
+        if (simulate_imu_noise) {
+            imu_noise_sim = std::make_unique<ImuNoiseSimulator>(dt, 42);
+            if (!quiet) std::cout << "IMU noise simulation ENABLED (seed=42, fs=" << (1.0/dt) << " Hz)\n";
+        }
 
         size_t processed_count = 0;
         for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
@@ -664,18 +666,12 @@ int main(int argc, char** argv) {
                 static_cast<float>(data[i].imu_ang_vel_y),
                 static_cast<float>(data[i].imu_ang_vel_z));
 
-            // --- GT Acceleration Override ---
-            Eigen::Vector3f curr_gt_pos(data[i].sim_pos_x, data[i].sim_pos_y, data[i].sim_pos_z);
-            Eigen::Vector3f curr_gt_vw = (curr_gt_pos - last_gt_pos) / static_cast<float>(dt);
-            gt_vw_filt = (1.0f - static_cast<float>(f_alpha_v)) * gt_vw_filt + static_cast<float>(f_alpha_v) * curr_gt_vw;
-            
-            Eigen::Vector3f curr_gt_aw = (gt_vw_filt - last_gt_vw) / static_cast<float>(dt);
-            gt_aw_filt = (1.0f - static_cast<float>(f_alpha_a)) * gt_aw_filt + static_cast<float>(f_alpha_a) * curr_gt_aw;
-            
-            last_gt_pos = curr_gt_pos;
-            last_gt_vw = gt_vw_filt;
+            // --- Optional IMU noise injection ---
+            if (imu_noise_sim) {
+                imu_noise_sim->apply(a_m, w_m);
+            }
 
-            // Convert GT world acceleration to GT IMU proper acceleration (a_m_gt)
+            // --- GT quaternion (used for IMU pure integration & RMSE logging) ---
             Eigen::Quaternionf q_gt(
                 static_cast<float>(data[i].sim_orien_w),
                 static_cast<float>(data[i].sim_orien_x),
@@ -683,13 +679,6 @@ int main(int argc, char** argv) {
                 static_cast<float>(data[i].sim_orien_z));
             q_gt.normalize();
             Eigen::Vector3f g_w(0.0f, 0.0f, -9.81f); // Webots Gravity
-            Eigen::Vector3f gt_am = q_gt.toRotationMatrix().transpose() * (gt_aw_filt - g_w);
-
-            // Use GT acceleration for testing instead of noisy IMU
-            bool use_gt_acc = false;
-            if (use_gt_acc && processed_count > 10) { // skip first few steps for filter settling
-                a_m = gt_am;
-            }
 
             // --- IMU pure integration (GT attitude, no bias subtraction) ---
             // a_world = R_gt * a_m + g_w  (Webots Z-up: g_w=[0,0,-9.81])
