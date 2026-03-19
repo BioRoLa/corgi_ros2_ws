@@ -59,7 +59,7 @@ DT = 0.001
 # =====================================================================
 ws = Path(__file__).resolve().parents[5]
 output_dir = ws / "output_data"
-esekf_file = output_dir / "walk_3m_01m_esekf.csv"
+esekf_file = output_dir / "walk_2m_01_esekf.csv"
 
 output_dir = Path(__file__).resolve().parents[0]
 
@@ -142,9 +142,9 @@ for i in range(N):
     z_avg_world_est[i] = R_est @ z_avg[i]
 
 # =====================================================================
-# 5. Body-frame velocity RMSEs (skip warmup)
+# 5. Body-frame velocity RMSEs
 # =====================================================================
-SKIP = 2000  # 2 seconds warmup
+SKIP = 0
 
 def rmse(a, b, skip=SKIP):
     return np.sqrt(np.mean((a[skip:] - b[skip:])**2))

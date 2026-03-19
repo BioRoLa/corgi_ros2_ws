@@ -53,7 +53,7 @@ def main():
     output_dir = ws / "output_data"
     fig_dir    = Path(__file__).resolve().parent
 
-    esekf_file = output_dir / "walk_3m_01m_esekf.csv"
+    esekf_file = output_dir / "walk_2m_01_esekf.csv"
     print(f"Loading {esekf_file} …")
     df = pd.read_csv(esekf_file)
     N  = len(df)

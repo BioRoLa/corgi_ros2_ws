@@ -11,7 +11,7 @@ import sys
 # Locate output
 ws = Path(__file__).resolve().parents[5]
 output_dir = ws / "output_data"
-esekf_file = output_dir / "walk_3m_01m_esekf.csv"
+esekf_file = output_dir / "walk_2m_01_esekf.csv"
 
 output_dir = Path(__file__).resolve().parents[0]
 

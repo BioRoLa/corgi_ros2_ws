@@ -407,8 +407,18 @@ private:
 
 int main(int argc, char** argv) {
     try {
-        (void)argc;
-        (void)argv;
+        // ── CLI argument parsing for parameter sweep ─────────────────────
+        // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [quiet]
+        float cli_sigma_a_x   = 1.0f;
+        float cli_sigma_leg_x = 8.0f;
+        float cli_sigma_leg_z = 1.2f;
+        float cli_threshold   = 16.27f;
+        bool  quiet           = false;
+        if (argc >= 2) cli_sigma_a_x   = std::stof(argv[1]);
+        if (argc >= 3) cli_sigma_leg_x = std::stof(argv[2]);
+        if (argc >= 4) cli_sigma_leg_z = std::stof(argv[3]);
+        if (argc >= 5) cli_threshold   = std::stof(argv[4]);
+        if (argc >= 6) quiet           = (std::string(argv[5]) == "1");
         // Configuration from Config.hpp
         // Build CSV path relative to this source file: package_root/data/<filename>.csv
         const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "data" /
@@ -417,13 +427,13 @@ int main(int argc, char** argv) {
         const double cutoff_freq = corgi::Config::OBSERVER_CUTOFF_FREQ;
         const int start_index = corgi::Config::START_INDEX;
         
-        std::cout << "Loading data...\n";
+        if (!quiet) std::cout << "Loading data...\n";
         CSVReader reader;
         auto data = reader.read_csv(csv_file_path);
-        std::cout << "✓ Loaded " << data.size() << " records\n";
+        if (!quiet) std::cout << "✓ Loaded " << data.size() << " records\n";
         
         // Initialize observer
-        std::cout << "\nInitializing observer...\n";
+        if (!quiet) std::cout << "\nInitializing observer...\n";
         corgi::DisturbanceObserver observer(
             dt, 
             cutoff_freq,
@@ -479,15 +489,15 @@ int main(int argc, char** argv) {
             // ────────────────────────────────────────────────────────────────
             // sigma_leg_vec: per-axis leg FK noise std [m/s]; R_leg = diag(σ²)
             // sigma_a:       per-sample accel noise std [m/s²]; Q_v = σ_a² × dt²
-            np.sigma_a       = {1.0f,  1.0f,  1.0f};
+            np.sigma_a       = {cli_sigma_a_x,  1.0f,  1.0f};
             np.sigma_w       = {0.001f, 0.01f, 0.001f};
             np.sigma_ba      = {1e-5f, 1e-5f, 1e-5f};
             np.sigma_bw      = {1e-8f, 1e-8f, 1e-8f};  // all tight: locks bw at ~0
             np.sigma_bv      = {1e-6f, 1e-6f, 1e-6f};
-            np.sigma_leg_vec = {8.0f,  0.1f,  1.2f};   // [X, Y, Z] m/s
-            np.mahalanobis_threshold = 16.27f;  // χ²(3) @ 99.9%: Bloesch et al. 2013
+            np.sigma_leg_vec = {cli_sigma_leg_x,  0.1f,  cli_sigma_leg_z};   // [X, Y, Z] m/s
+            np.mahalanobis_threshold = cli_threshold;  // CLI override
             esekf.set_noise_params(np);
-            std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
+            if (!quiet) std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
                       << "], sigma_leg_vec=[" << np.sigma_leg_vec.transpose() << "]\n";
         }
 
@@ -507,11 +517,22 @@ int main(int argc, char** argv) {
                   << "z_avg_x,z_avg_y,z_avg_z,"
                   << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z,"
                   << "est_qw,est_qx,est_qy,est_qz,"
-                  << "gt_qw,gt_qx,gt_qy,gt_qz\n";
+                  << "gt_qw,gt_qx,gt_qy,gt_qz,"
+                  << "d2_a,d2_b,d2_c,d2_d,"
+                  << "rejected_a,rejected_b,rejected_c,rejected_d,"
+                  << "innov_x_a,innov_y_a,innov_z_a,"
+                  << "innov_x_b,innov_y_b,innov_z_b,"
+                  << "innov_x_c,innov_y_c,innov_z_c,"
+                  << "innov_x_d,innov_y_d,innov_z_d,"
+                  << "S_xx_a,S_yy_a,S_zz_a,"
+                  << "S_xx_b,S_yy_b,S_zz_b,"
+                  << "S_xx_c,S_yy_c,S_zz_c,"
+                  << "S_xx_d,S_yy_d,S_zz_d,"
+                  << "P_vx,P_vy,P_vz\n";
         esekf_out << std::fixed << std::setprecision(8);
 
         // Process data
-        std::cout << "\nStarting data processing...\n";
+        if (!quiet) std::cout << "\nStarting data processing...\n";
         
         // Start timing
         auto start_time = std::chrono::high_resolution_clock::now();
@@ -523,7 +544,7 @@ int main(int argc, char** argv) {
         const double gt_offset_x = data[start_index].sim_pos_x;
         const double gt_offset_y = data[start_index].sim_pos_y;
         const double gt_offset_z = data[start_index].sim_pos_z;
-        const size_t rmse_skip = 2000;  // skip 2s warmup for GT filter + ESEKF settling
+        const size_t rmse_skip = 0;  // no warmup: robot starts from rest
         const size_t max_processed = 12000;  // limit to 12s (raw 5000-17000), eval raw 7000-17000
         size_t vel_count = 0;
 
@@ -561,7 +582,7 @@ int main(int argc, char** argv) {
 
         size_t processed_count = 0;
         for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
-            if (i % 100 == 0) {
+            if (!quiet && i % 100 == 0) {
                 std::cout << "Processing index: " << i << " / " << data.size() << "\r" << std::flush;
             }
             
@@ -623,7 +644,7 @@ int main(int argc, char** argv) {
                 esekf.init(x0);
                 contact_beta.fill(0.f);
                 esekf_initialized = true;
-                std::cout << "\nES-EKF initialized at index " << i << "\n";
+                if (!quiet) std::cout << "\nES-EKF initialized at index " << i << "\n";
             }
 
             // --- IMU measurements ---
@@ -753,7 +774,7 @@ int main(int argc, char** argv) {
                         n_contact++;
                         
                         // Debug first step: per-leg details
-                        if (i == static_cast<size_t>(start_index)) {
+                        if (!quiet && i == static_cast<size_t>(start_index)) {
                             const char* leg_names[] = {"LF", "RF", "RH", "LH"};
                             Eigen::Vector3f cp = o.leg->contact_point;
                             o.leg->PointVelocity(v_zero, w_raw, o.rim, o.alpha, true);
@@ -827,6 +848,8 @@ int main(int argc, char** argv) {
 
             // --- Log ---
             const auto& st = esekf.nominal();
+            const auto& diag = esekf.leg_diag();
+            const auto& Pcov = esekf.covariance();
             esekf_out << i << ","
                       << data[i].sim_pos_x << "," << data[i].sim_pos_y << "," << data[i].sim_pos_z << ","
                       << st.p.x() << "," << st.p.y() << "," << st.p.z() << ","
@@ -839,7 +862,17 @@ int main(int argc, char** argv) {
                       << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << ","
                       << st.q.w() << "," << st.q.x() << "," << st.q.y() << "," << st.q.z() << ","
                       << data[i].imu_orien_w << "," << data[i].imu_orien_x << ","
-                      << data[i].imu_orien_y << "," << data[i].imu_orien_z << "\n";
+                      << data[i].imu_orien_y << "," << data[i].imu_orien_z << ",";
+            // Per-leg Mahalanobis diagnostics
+            for (int j = 0; j < 4; ++j) esekf_out << diag[j].d_squared << ",";
+            for (int j = 0; j < 4; ++j) esekf_out << (diag[j].rejected ? 1 : 0) << ",";
+            for (int j = 0; j < 4; ++j)
+                esekf_out << diag[j].innovation.x() << "," << diag[j].innovation.y() << "," << diag[j].innovation.z() << ",";
+            for (int j = 0; j < 4; ++j)
+                esekf_out << diag[j].S_diag.x() << "," << diag[j].S_diag.y() << "," << diag[j].S_diag.z() << ",";
+            esekf_out << Pcov(estimation_model::V_IDX, estimation_model::V_IDX) << ","
+                      << Pcov(estimation_model::V_IDX+1, estimation_model::V_IDX+1) << ","
+                      << Pcov(estimation_model::V_IDX+2, estimation_model::V_IDX+2) << "\n";
 
             processed_count++;
         }
@@ -850,33 +883,46 @@ int main(int argc, char** argv) {
         
         esekf_out.close();
 
-        std::cout << "\nProcessing complete\n";
-        std::cout << "Disturbance results: output_data/" << corgi::Config::CSV_FILENAME << "_result.csv\n";
-        std::cout << "ESEKF results:       " << esekf_out_path.string() << "\n";
+        if (!quiet) {
+            std::cout << "\nProcessing complete\n";
+            std::cout << "Disturbance results: output_data/" << corgi::Config::CSV_FILENAME << "_result.csv\n";
+            std::cout << "ESEKF results:       " << esekf_out_path.string() << "\n";
+        }
         
         // Display performance statistics
-        std::cout << "\n========== Performance Statistics ==========\n";
-        std::cout << std::fixed << std::setprecision(6);
-        std::cout << "Processed records: " << processed_count << "\n";
-        std::cout << "Elapsed time: " << elapsed.count() << " seconds\n";
-        std::cout << "Average time per record: " << (elapsed.count() / processed_count) << " seconds\n";
-        std::cout << "Processing speed: " << (processed_count / elapsed.count()) << " records/second\n";
-        std::cout << "==========================================\n";
+        if (!quiet) {
+            std::cout << "\n========== Performance Statistics ==========";
+            std::cout << std::fixed << std::setprecision(6);
+            std::cout << "\nProcessed records: " << processed_count;
+            std::cout << "\nElapsed time: " << elapsed.count() << " seconds";
+            std::cout << "\nAverage time per record: " << (elapsed.count() / processed_count) << " seconds";
+            std::cout << "\nProcessing speed: " << (processed_count / elapsed.count()) << " records/second";
+            std::cout << "\n==========================================\n";
+        }
 
         // Final ESEKF state summary
         const auto& final_st = esekf.nominal();
-        std::cout << "\n========== ESEKF Final State ==========\n";
-        std::cout << "Position: [" << final_st.p.x() << ", " << final_st.p.y() << ", " << final_st.p.z() << "]\n";
-        std::cout << "Velocity: [" << final_st.v.x() << ", " << final_st.v.y() << ", " << final_st.v.z() << "]\n";
-        std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
-        std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
-        std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
-        std::cout << "GT (off): [" << (data[start_index + processed_count - 1].sim_pos_x - gt_offset_x) << ", " 
-              << (data[start_index + processed_count - 1].sim_pos_y - gt_offset_y) << ", " 
-              << (data[start_index + processed_count - 1].sim_pos_z - gt_offset_z) << "]\n";
-        std::cout << "==========================================\n";
+        if (!quiet) {
+            std::cout << "\n========== ESEKF Final State ==========\n";
+            std::cout << "Position: [" << final_st.p.x() << ", " << final_st.p.y() << ", " << final_st.p.z() << "]\n";
+            std::cout << "Velocity: [" << final_st.v.x() << ", " << final_st.v.y() << ", " << final_st.v.z() << "]\n";
+            std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
+            std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
+            std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
+            const size_t final_idx = start_index + processed_count - 1;
+            double gt_final_x = data[final_idx].sim_pos_x - gt_offset_x;
+            double gt_final_y = data[final_idx].sim_pos_y - gt_offset_y;
+            double gt_final_z = data[final_idx].sim_pos_z - gt_offset_z;
+            std::cout << "GT (off): [" << gt_final_x << ", " << gt_final_y << ", " << gt_final_z << "]\n";
+            std::cout << "GT - Est: ["
+                      << (gt_final_x - final_st.p.x()) << ", "
+                      << (gt_final_y - final_st.p.y()) << ", "
+                      << (gt_final_z - final_st.p.z()) << "]\n";
+            std::cout << "==========================================\n";
+        }
 
         // Position & Velocity RMSE
+        std::cout << std::fixed << std::setprecision(6);
         if (vel_count > 0) {
             double n = static_cast<double>(vel_count);
             std::cout << "\n========== RMSE Statistics ==========\n";

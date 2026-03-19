@@ -31,7 +31,7 @@ from pathlib import Path
 # Constants
 # =====================================================================
 DT = 0.001               # 1 kHz
-START_INDEX = 5000        # Same as Config::START_INDEX used in offline_test
+START_INDEX = 0
 R_wheel = 0.10
 r_tire  = 0.019
 
@@ -332,8 +332,8 @@ def main():
     base = Path(__file__).resolve().parents[5]  # corgi_ros2_ws root
     out_dir = Path(__file__).resolve().parent
     
-    raw_csv  = base / 'output_data' / 'walk_3m_01m.csv'
-    dist_csv = base / 'output_data' / 'walk_3m_01m_result.csv'
+    raw_csv  = base / 'output_data' / 'walk_2m_01.csv'
+    dist_csv = base / 'output_data' / 'walk_2m_01_result.csv'
     
     print("Loading data...")
     raw  = pd.read_csv(raw_csv)
@@ -344,8 +344,6 @@ def main():
     # raw rows [START_INDEX : START_INDEX + len(dist)] correspond to dist rows
     raw_aligned = raw.iloc[START_INDEX : START_INDEX + len(dist)].reset_index(drop=True)
     
-    # Limit to first 12s (12000 samples) to cover raw 5000-17000
-    # Eval window will be [2000:12000] = raw 7000-17000 (first 10s after movement)
     ANALYSIS_SAMPLES = 12000
     raw_aligned = raw_aligned.iloc[:ANALYSIS_SAMPLES].reset_index(drop=True)
     dist        = dist.iloc[:ANALYSIS_SAMPLES].reset_index(drop=True)
@@ -353,7 +351,7 @@ def main():
     t = np.arange(N) * DT
     
     print(f"  After alignment: {N} samples ({N*DT:.1f}s)")
-    print(f"  Eval window: raw [{START_INDEX+2000}:{START_INDEX+N}] = {(N-2000)*DT:.1f}s")
+    print(f"  Eval window: raw [{START_INDEX}:{START_INDEX+N}] = {(N)*DT:.1f}s")
     
     # ---- Extract disturbance signals ----
     rm_signals   = {n: dist[f'estimated_disturbance_rm_{n}'].values   for n in LEG_NAMES}
@@ -394,7 +392,7 @@ def main():
         
         # Compute theta_d, beta_d from motor velocities (matching C++ offline_test)
         theta_d = (-vel_r + vel_l) / 2.0
-        beta_d  = -(vel_r + vel_l) / 2.0
+        beta_d  =  (vel_r + vel_l) / 2.0
         if is_right:
             beta_d = -beta_d
         
@@ -502,7 +500,7 @@ def main():
     # Plot 1: Disturbance signals overview
     # =================================================================
     fig, axes = plt.subplots(4, 2, figsize=(18, 14), sharex=True)
-    fig.suptitle("Disturbance Observer Output — walk_3m_01m", fontsize=14)
+    fig.suptitle("Disturbance Observer Output — walk_2m_01", fontsize=14)
     
     for idx, (name, label) in enumerate(zip(LEG_NAMES, LEG_LABELS)):
         ax_rm = axes[idx, 0]
