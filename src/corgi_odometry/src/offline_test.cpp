@@ -497,7 +497,7 @@ int main(int argc, char** argv) {
             np.sigma_ba      = {1e-5f, 1e-5f, 1e-5f};
             np.sigma_bw      = {1e-8f, 1e-8f, 1e-8f};  // all tight: locks bw at ~0
             np.sigma_bv      = {1e-6f, 1e-6f, 1e-6f};
-            np.sigma_leg_vec = {cli_sigma_leg_x,  0.1f,  cli_sigma_leg_z};   // [X, Y, Z] m/s
+            np.sigma_leg_vec = {cli_sigma_leg_x,  1.5f,  cli_sigma_leg_z};   // [X, Y, Z] m/s
             np.mahalanobis_threshold = cli_threshold;  // CLI override
             esekf.set_noise_params(np);
             if (!quiet) std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
