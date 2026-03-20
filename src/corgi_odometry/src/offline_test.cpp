@@ -409,19 +409,22 @@ private:
 int main(int argc, char** argv) {
     try {
         // ── CLI argument parsing for parameter sweep ─────────────────────
-        // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [imu_noise] [quiet]
+        // Usage: offline_test [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [threshold] [imu_noise] [quiet] [use_esekf]
+        //   use_esekf: 0=GT position/velocity (default), 1=ESEKF estimated state for GMO input
         float cli_sigma_a_x   = 5.0f;
         float cli_sigma_leg_x = 0.05f;
         float cli_sigma_leg_z = 1.2f;
         float cli_threshold   = 16.27f;
         bool  simulate_imu_noise = false;
         bool  quiet           = false;
+        bool  use_esekf_state = false;
         if (argc >= 2) cli_sigma_a_x       = std::stof(argv[1]);
         if (argc >= 3) cli_sigma_leg_x     = std::stof(argv[2]);
         if (argc >= 4) cli_sigma_leg_z     = std::stof(argv[3]);
         if (argc >= 5) cli_threshold       = std::stof(argv[4]);
         if (argc >= 6) simulate_imu_noise  = (std::string(argv[5]) == "1");
         if (argc >= 7) quiet               = (std::string(argv[6]) == "1");
+        if (argc >= 8) use_esekf_state     = (std::string(argv[7]) == "1");
         // Configuration from Config.hpp
         // Build CSV path relative to this source file: package_root/data/<filename>.csv
         const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "data" /
@@ -502,6 +505,7 @@ int main(int argc, char** argv) {
             esekf.set_noise_params(np);
             if (!quiet) std::cout << "Noise params: sigma_a=[" << np.sigma_a.transpose() 
                       << "], sigma_leg_vec=[" << np.sigma_leg_vec.transpose() << "]\n";
+            if (!quiet) std::cout << "GMO input:   " << (use_esekf_state ? "ESEKF estimated state" : "Ground truth (sim_pos)") << "\n";
         }
 
         std::array<bool, 4> leg_contact_state = {false, false, false, false};
@@ -597,7 +601,21 @@ int main(int argc, char** argv) {
             
             // Process raw data
             auto processed = processor.process_record_data(data[i]);
-            
+
+            // Override base position/velocity with ESEKF estimated state (argv[7]=1)
+            // Falls back to GT on first step (before esekf_initialized) automatically.
+            if (use_esekf_state && esekf_initialized) {
+                const auto& est = esekf.nominal();
+                // Position: ESEKF relative coords (origin = start_index), XZ world frame
+                processed.q(0) = static_cast<double>(est.p.x());
+                processed.q(1) = static_cast<double>(est.p.z());
+                // Velocity: body frame → world frame
+                Eigen::Matrix3f R_est = est.q.toRotationMatrix();
+                Eigen::Vector3f v_world = R_est * est.v;
+                processed.q_dot(0) = static_cast<double>(v_world.x());
+                processed.q_dot(1) = static_cast<double>(v_world.z());
+            }
+
             // Estimate disturbance
             auto disturbance = observer.estimate_disturbance(
                 processed.q,
