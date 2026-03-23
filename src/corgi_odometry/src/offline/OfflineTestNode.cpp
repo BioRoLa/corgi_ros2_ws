@@ -106,7 +106,11 @@ int OfflineTestNode::run() {
               << "S_xx_c,S_yy_c,S_zz_c,"
               << "S_xx_d,S_yy_d,S_zz_d,"
               << "P_vx,P_vy,P_vz,"
-              << "imu_pos_x,imu_pos_y,imu_pos_z,imu_vel_bx,imu_vel_by,imu_vel_bz\n";
+              << "imu_pos_x,imu_pos_y,imu_pos_z,imu_vel_bx,imu_vel_by,imu_vel_bz,"
+              << "pred_vel_x,pred_vel_y,pred_vel_z,"
+              << "imu_gyro_pos_x,imu_gyro_pos_y,imu_gyro_pos_z,"
+              << "imu_gyro_vel_bx,imu_gyro_vel_by,imu_gyro_vel_bz,"
+              << "imu_gyro_qw,imu_gyro_qx,imu_gyro_qy,imu_gyro_qz\n";
     esekf_out << std::fixed << std::setprecision(8);
 
     // ── GT offset (ESEKF starts at origin) ──────────────────────
@@ -118,9 +122,15 @@ int OfflineTestNode::run() {
     RmseAccumulator pos_rmse, vel_rmse;
     RmseAccumulator imu_pos_rmse, imu_vel_rmse;
 
-    // IMU pure integration state
+    // IMU pure integration state (GT quaternion)
     Eigen::Vector3f imu_vel_w = Eigen::Vector3f::Zero();
     Eigen::Vector3f imu_pos_w = Eigen::Vector3f::Zero();
+
+    // IMU pure integration state (gyro-integrated attitude)
+    Eigen::Quaternionf imu_gyro_q = Eigen::Quaternionf::Identity(); // will init from first IMU reading
+    Eigen::Vector3f imu_gyro_vel_w = Eigen::Vector3f::Zero();
+    Eigen::Vector3f imu_gyro_pos_w = Eigen::Vector3f::Zero();
+    bool imu_gyro_initialized = false;
 
     if (!quiet) std::cout << "\nStarting data processing...\n";
     if (!quiet) std::cout << "Noise params: sigma_a=[" << params_.sigma_a.transpose()
@@ -180,11 +190,33 @@ int OfflineTestNode::run() {
         q_gt.normalize();
         Eigen::Vector3f g_w(0.0f, 0.0f, -9.81f);
 
-        // IMU pure integration
+        // IMU pure integration (GT quaternion — existing)
         {
             Eigen::Vector3f a_world_imu = q_gt.toRotationMatrix() * a_m + g_w;
             imu_vel_w += a_world_imu * static_cast<float>(dt);
             imu_pos_w += imu_vel_w * static_cast<float>(dt);
+        }
+
+        // IMU pure integration (gyro-integrated attitude)
+        {
+            if (!imu_gyro_initialized) {
+                imu_gyro_q = Eigen::Quaternionf(
+                    static_cast<float>(d.imu_orien_w),
+                    static_cast<float>(d.imu_orien_x),
+                    static_cast<float>(d.imu_orien_y),
+                    static_cast<float>(d.imu_orien_z)).normalized();
+                imu_gyro_initialized = true;
+            }
+            // Integrate gyro for attitude: q_{k+1} = q_k * q(w_m * dt)
+            Eigen::Vector3f dw_gyro = w_m * static_cast<float>(dt);
+            float angle_gyro = dw_gyro.norm();
+            if (angle_gyro > 1e-8f) {
+                Eigen::Quaternionf dq_gyro(Eigen::AngleAxisf(angle_gyro, dw_gyro / angle_gyro));
+                imu_gyro_q = (imu_gyro_q * dq_gyro).normalized();
+            }
+            Eigen::Vector3f a_world_gyro = imu_gyro_q.toRotationMatrix() * a_m + g_w;
+            imu_gyro_vel_w += a_world_gyro * static_cast<float>(dt);
+            imu_gyro_pos_w += imu_gyro_vel_w * static_cast<float>(dt);
         }
 
         // ── Pipeline step ───────────────────────────────────────
@@ -256,7 +288,16 @@ int OfflineTestNode::run() {
             {
                 Eigen::Vector3f imu_vel_b_log = q_gt.toRotationMatrix().transpose() * imu_vel_w;
                 esekf_out << imu_pos_w.x() << "," << imu_pos_w.y() << "," << imu_pos_w.z() << ","
-                          << imu_vel_b_log.x() << "," << imu_vel_b_log.y() << "," << imu_vel_b_log.z() << "\n";
+                          << imu_vel_b_log.x() << "," << imu_vel_b_log.y() << "," << imu_vel_b_log.z() << ",";
+            }
+            // pred_vel (prediction-only, before measurement update)
+            esekf_out << result.pred_vel.x() << "," << result.pred_vel.y() << "," << result.pred_vel.z() << ",";
+            // IMU gyro-integrated state
+            {
+                Eigen::Vector3f imu_gyro_vel_b_log = imu_gyro_q.toRotationMatrix().transpose() * imu_gyro_vel_w;
+                esekf_out << imu_gyro_pos_w.x() << "," << imu_gyro_pos_w.y() << "," << imu_gyro_pos_w.z() << ","
+                          << imu_gyro_vel_b_log.x() << "," << imu_gyro_vel_b_log.y() << "," << imu_gyro_vel_b_log.z() << ","
+                          << imu_gyro_q.w() << "," << imu_gyro_q.x() << "," << imu_gyro_q.y() << "," << imu_gyro_q.z() << "\n";
             }
         }
 

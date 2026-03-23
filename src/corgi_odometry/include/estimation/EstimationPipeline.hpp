@@ -26,6 +26,7 @@ struct StepResult {
     std::array<estimation_model::LegUpdateDiag, 4> diag{};
     Eigen::MatrixXf P;
     Eigen::Vector3f z_avg = Eigen::Vector3f::Zero();
+    Eigen::Vector3f pred_vel = Eigen::Vector3f::Zero();  // velocity after predict, before update
 };
 
 /**

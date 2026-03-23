@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────
+# Analysis config — WITHOUT Mahalanobis gating
+# Run: ./offline_test --config config/config_analysis_no_maha.yaml
+# Output: output_data/walk_2m_01_no_maha_esekf.csv
+#
+# Identical to config_analysis_maha.yaml except:
+#   - mahalanobis_threshold = 1e+30 (effectively disabled)
+#   - csv_filename includes _no_maha suffix for distinct output
+# NOTE: Input CSV is still data/walk_2m_01.csv (symlink or copy needed)
+# ─────────────────────────────────────────────────────────────────
+
+esekf:
+  sigma_a:       [5.0, 1.0, 1.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-5, 1.0e-5]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_bv:      [1.0e-6, 1.0e-6, 1.0e-6]
+  sigma_leg_vec: [0.05, 1.5, 1.2]
+  mahalanobis_threshold: 1.0e+30
+
+observer:
+  cutoff_freq:        15.0
+  encoder_cutoff_freq: 30.0
+
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+simulate_imu_noise: true
+use_esekf_state:    true
+quiet:              false
+
+offline:
+  csv_filename:  walk_2m_01_no_maha
+  start_index:   0
+  max_processed: 12000
+  rmse_skip:     0
+  enable_logging: false
+  log_details:   false
+  imu_noise_seed: 42
+
+gt_velocity_lpf_cutoff: 10.0

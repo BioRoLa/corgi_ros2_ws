@@ -100,6 +100,9 @@ StepResult EstimationPipeline::step(
     // ── ESEKF predict ───────────────────────────────────────────
     esekf_.predict(a_m, w_m);
 
+    // Capture prediction-only velocity (before measurement update)
+    result.pred_vel = esekf_.nominal().v;
+
     // ── Build per-leg observations ──────────────────────────────
     double thetas[4] = {raw.state_theta_a, raw.state_theta_b,
                         raw.state_theta_c, raw.state_theta_d};
