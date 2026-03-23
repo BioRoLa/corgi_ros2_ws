@@ -481,6 +481,12 @@ Published Topics
   ekf            (corgi_leg_odom)
 ```
 
+> **TODO (online node):** Once the ES-EKF output is validated, remove the `odometry/position` and
+> `odometry/velocity` subscriptions from `LegOdometryNode` and feed the ES-EKF state (position, velocity)
+> directly into `DataProcessor` / `DisturbanceObserver` — closing the loop without depending on an
+> external velocity estimator.  The feedback path is already implemented in `offline_test`; the same
+> change is needed in `corgi_leg_odom.cpp` (see TODO comment near line 239).
+
 The **ES-EKF** maintains a 19-dimensional nominal state (position, velocity, attitude quaternion, accel bias, gyro bias, velocity bias) and an 18-dimensional error state (substituting a rotation vector for the quaternion error).
 At each update step the per-leg no-slip constraint provides a velocity observation:
 
