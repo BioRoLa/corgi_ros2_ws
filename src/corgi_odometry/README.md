@@ -430,47 +430,55 @@ gt_velocity_lpf_cutoff: 10.0  # [Hz]
 
 ## Algorithm Overview
 
+The GMO (Disturbance Observer) requires world-frame position and velocity as inputs.
+In the intended steady-state design these are supplied by the **ES-EKF output** (closed feedback loop).
+External `odometry/position` and `odometry/velocity` topics are currently used as a **temporary substitute** while the ES-EKF output is being validated; once validated they will be removed and the node will become fully self-contained.
+
 ```
-Subscribed Topics (1 000 Hz callbacks)
-        │
-        ▼
-┌─────────────────────────────────┐
-│ DataProcessor                   │
-│ ROS msgs → (q, q̇, τ, Ic)       │
-│ Low-pass filter on encoder vel  │
-└──────────────┬──────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│ DisturbanceObserver (GMO)           │
-│ τ̂_d = β·p_k − LPF(β·p + Sᵀτ       │
-│                + Cᵀq̇ − g)          │
-│ Estimates per-leg contact force     │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────┐
-│ SchmittTrigger × 4 legs         │
-│ Activate: |Rm|>rm_high OR       │
-│           |β|>beta_high         │
-│ Deactivate: |Rm|<rm_low AND     │
-│             |β|<beta_low        │
-└──────────────┬──────────────────┘
-               │
-               ▼  (corgi_leg_odom only)
-┌─────────────────────────────────┐
-│ ES-EKF                          │
-│  Predict: IMU propagation       │
-│           (bias-corrected)      │
-│  Update:  per-leg no-slip       │
-│           constraint            │
-│  Reject:  Mahalanobis outliers  │
-└──────────────┬──────────────────┘
-               │
-               ▼
+Subscribed Topics (1 000 Hz)
+  motor/state, imu, trigger
+  odometry/position  ◄──(*)  world-frame p from ES-EKF
+  odometry/velocity  ◄──(*)  world-frame v from ES-EKF   <── feedback (see below)
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ DataProcessor                           │
+│ msgs → (q, q̇, τ, Ic)                   │
+│ low-pass filter on encoder velocity     │
+└────────────────────┬────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ DisturbanceObserver (GMO)               │
+│ τ̂_d = β·p_k − LPF(β·p + Sᵀτ           │
+│                + Cᵀq̇ − g)              │
+│ estimates per-leg contact force         │
+└────────────────────┬────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│ SchmittTrigger × 4 legs                 │
+│ activate:   |Rm| > rm_high  OR          │
+│             |β|  > beta_high            │
+│ deactivate: |Rm| < rm_low   AND         │
+│             |β|  < beta_low             │
+└────────────────────┬────────────────────┘
+                     │
+                     ▼  (corgi_leg_odom only)
+┌─────────────────────────────────────────┐
+│ ES-EKF                                  │
+│  predict: IMU propagation               │
+│           (bias-corrected)              │
+│  update:  per-leg no-slip constraint    │
+│  reject:  Mahalanobis outliers          │
+└────────────────────┬────────────────────┘
+          ┌──────────┘
+          │  (*) world-frame p, v fed back into DataProcessor / GMO
+          │      (replaces external odometry topics once validated)
+          ▼
 Published Topics
- contact_state  (all nodes)
- ekf            (corgi_leg_odom)
+  contact_state  (all nodes)
+  ekf            (corgi_leg_odom)
 ```
 
 The **ES-EKF** maintains a 19-dimensional nominal state (position, velocity, attitude quaternion, accel bias, gyro bias, velocity bias) and an 18-dimensional error state (substituting a rotation vector for the quaternion error).
