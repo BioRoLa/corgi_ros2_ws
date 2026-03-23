@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
 
         // Default YAML path: <package>/config/config_test.yaml
         std::string yaml_path =
-            (std::filesystem::path(__FILE__).parent_path().parent_path()
+            (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
              / "config" / "config_test.yaml").string();
 
         // Check for --config <path> argument

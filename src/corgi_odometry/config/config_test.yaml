@@ -26,9 +26,9 @@ contact:
   beta_threshold_low:   1.0
 
 # Logic switches
-simulate_imu_noise: false
-use_esekf_state:    false
-quiet:              false
+simulate_imu_noise: true
+use_esekf_state:    true
+quiet:              true
 
 # Offline processing
 offline:
