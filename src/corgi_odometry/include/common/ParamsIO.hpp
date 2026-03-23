@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Params.hpp"
+#include "common/Params.hpp"
 #include <yaml-cpp/yaml.h>
 #include <string>
 #include <stdexcept>

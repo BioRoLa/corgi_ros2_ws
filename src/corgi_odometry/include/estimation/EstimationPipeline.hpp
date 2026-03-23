@@ -5,14 +5,14 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include "Params.hpp"
-#include "SchmittTrigger.hpp"
+#include "common/Params.hpp"
+#include "estimation/SchmittTrigger.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "kinematic/ContactMap.hpp"
 #include "kinematic/Leg.hpp"
 #include "es_ekf/ESEKF.hpp"
-#include "Config.hpp"
+#include "common/Config.hpp"
 
 namespace corgi {
 

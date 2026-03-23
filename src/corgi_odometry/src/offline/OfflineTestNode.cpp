@@ -1,5 +1,5 @@
-#include "OfflineTestNode.hpp"
-#include "Config.hpp"
+#include "offline/OfflineTestNode.hpp"
+#include "common/Config.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -45,7 +45,7 @@ int OfflineTestNode::run() {
     const size_t rmse_skip = params_.rmse_skip;
 
     // ── Load CSV ────────────────────────────────────────────────
-    const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path()
+    const auto csv_file_path = (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
                                 / "data" / (params_.csv_filename + ".csv")).string();
     if (!quiet) std::cout << "Loading data...\n";
     CSVReader reader;

@@ -13,10 +13,10 @@
 #include <corgi_msgs/msg/contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
 #include "general_momentum_observer/DisturbanceObserver.hpp"
-#include "Config.hpp"
+#include "common/Config.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
-#include "ParamsIO.hpp"
+#include "common/ParamsIO.hpp"
 
 using namespace std::chrono_literals;
 

@@ -4,12 +4,12 @@
 #include <vector>
 #include <memory>
 
-#include "Params.hpp"
-#include "CSVReader.hpp"
-#include "RmseAccumulator.hpp"
-#include "EstimationPipeline.hpp"
+#include "common/Params.hpp"
+#include "offline/CSVReader.hpp"
+#include "offline/RmseAccumulator.hpp"
+#include "estimation/EstimationPipeline.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
-#include "ImuNoiseSimulator.hpp"
+#include "offline/ImuNoiseSimulator.hpp"
 
 namespace corgi {
 

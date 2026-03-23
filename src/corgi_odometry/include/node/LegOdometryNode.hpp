@@ -19,8 +19,8 @@
 #include "general_momentum_observer/DataProcessor.hpp"
 #include "kinematic/ContactMap.hpp"
 #include "es_ekf/ESEKF.hpp"
-#include "Config.hpp"
-#include "Params.hpp"
+#include "common/Config.hpp"
+#include "common/Params.hpp"
 
 /**
  * @brief Leg Odometry Node

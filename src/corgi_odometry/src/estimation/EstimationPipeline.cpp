@@ -1,4 +1,4 @@
-#include "EstimationPipeline.hpp"
+#include "estimation/EstimationPipeline.hpp"
 #include <cmath>
 
 namespace corgi {

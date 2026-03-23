@@ -4,9 +4,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include <nav_msgs/msg/odometry.hpp>
 #include "ament_index_cpp/get_package_share_directory.hpp"
-#include "LegOdometryNode.hpp"
-#include "Config.hpp"
-#include "ParamsIO.hpp"
+#include "node/LegOdometryNode.hpp"
+#include "common/Config.hpp"
+#include "common/ParamsIO.hpp"
 
 // ============================================================
 // Global node pointer (for signal handler)

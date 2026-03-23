@@ -1,6 +1,6 @@
-#include "OfflineTestNode.hpp"
-#include "Params.hpp"
-#include "ParamsIO.hpp"
+#include "offline/OfflineTestNode.hpp"
+#include "common/Params.hpp"
+#include "common/ParamsIO.hpp"
 #include <iostream>
 #include <string>
 #include <filesystem>

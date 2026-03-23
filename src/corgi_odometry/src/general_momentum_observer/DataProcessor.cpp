@@ -1,5 +1,5 @@
 #include "general_momentum_observer/DataProcessor.hpp"
-#include "Config.hpp"
+#include "common/Config.hpp"
 #include <cmath>
 
 DataProcessor::DataProcessor(double dt, double encoder_cutoff_freq)

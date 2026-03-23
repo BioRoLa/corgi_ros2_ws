@@ -17,9 +17,9 @@ target_link_libraries(simplify_dynamics
 
 # Build executable
 add_executable(offline_test 
-  offline_test.cpp
-  OfflineTestNode.cpp
-  EstimationPipeline.cpp
+  offline/offline_test.cpp
+  offline/OfflineTestNode.cpp
+  estimation/EstimationPipeline.cpp
 )
 
 ament_target_dependencies(offline_test 
@@ -42,7 +42,7 @@ install(TARGETS offline_test
 
 # Build executable
 add_executable(corgi_contact_leg_est 
-  corgi_contact_leg_est.cpp
+  node/corgi_contact_leg_est.cpp
 )
 
 ament_target_dependencies(corgi_contact_leg_est 
@@ -76,7 +76,7 @@ target_link_libraries(esekf_estimation
 
 # Build executable
 add_executable(corgi_leg_odom 
-  corgi_leg_odom.cpp
+  node/corgi_leg_odom.cpp
 )
 
 ament_target_dependencies(corgi_leg_odom 
