@@ -281,10 +281,16 @@ $OFFLINE_TEST [sigma_a_x] [sigma_leg_x] [sigma_leg_z] [mahalanobis_threshold] [s
 | 6 | `quiet` | `0` or `1` | bool |
 | 7 | `use_esekf_state` | `0` or `1` | bool |
 
-**Example — tune noise parameters and enable IMU noise simulation:**
+**Example — use defaults (noise simulation, ES-EKF, quiet output all enabled):**
 
 ```bash
-$OFFLINE_TEST 5.0 0.05 1.2 16.27 1 0 0
+$OFFLINE_TEST 5.0 0.05 1.2 16.27 1 1 1
+```
+
+**Example — verbose run with noise simulation disabled:**
+
+```bash
+$OFFLINE_TEST 5.0 0.05 1.2 16.27 0 0 0
 ```
 
 **Example — combine YAML config with selective overrides:**
@@ -363,9 +369,9 @@ contact:
   beta_threshold_low:   1.0
 
 # Logic switches
-simulate_imu_noise: false   # Inject 3DM-CX5-AHRS noise model into CSV IMU data
-use_esekf_state:    false   # Use ES-EKF state for evaluation (vs ground truth)
-quiet:              false   # Suppress per-frame log output
+simulate_imu_noise: true    # Inject 3DM-CX5-AHRS noise model into CSV IMU data
+use_esekf_state:    true    # Use ES-EKF state for evaluation (vs ground truth)
+quiet:              true    # Suppress per-frame log output
 
 # Offline replay settings
 offline:
