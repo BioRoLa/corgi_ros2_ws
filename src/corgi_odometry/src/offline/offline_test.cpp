@@ -17,7 +17,9 @@ int main(int argc, char** argv) {
         // Check for --config <path> argument
         for (int i = 1; i < argc - 1; ++i) {
             if (std::string(argv[i]) == "--config") {
-                yaml_path = argv[i + 1];
+                yaml_path =             
+                (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
+                / "config/").string() + argv[i + 1] + ".yaml";
                 break;
             }
         }
