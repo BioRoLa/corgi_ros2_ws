@@ -28,13 +28,14 @@ esekf:
   sigma_bw: [1.0e-08, 1.0e-08, 1.0e-08]
   sigma_bv: [1.0e-06, 1.0e-06, 1.0e-06]
   sigma_leg_vec: [0.02, 1.5, 0.8]
-  mahalanobis_threshold: 16.27
+  mahalanobis_threshold: 16.27 # 16.27(default) // 1e+30(no_maha)
 observer: {cutoff_freq: 15.0, encoder_cutoff_freq: 30.0}
 contact: {rm_threshold_high: 25.0, rm_threshold_low: 15.0, beta_threshold_high: 10.0,
   beta_threshold_low: 1.0}
 simulate_imu_noise: true
 use_esekf_state: true
 quiet: true
-offline: {csv_filename: walk_2m_01, start_index: 0, max_processed: 12000, rmse_skip: 0,
+offline: {csv_filename: walk_2m_01,   # walk_obs // walk_2m_01
+  start_index: 0, max_processed: 12000, rmse_skip: 0,
   enable_logging: true, log_details: false, imu_noise_seed: 42}
 gt_velocity_lpf_cutoff: 10.0
