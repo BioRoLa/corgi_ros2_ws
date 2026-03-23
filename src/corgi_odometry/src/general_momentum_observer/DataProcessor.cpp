@@ -2,8 +2,109 @@
 #include "Config.hpp"
 #include <cmath>
 
-DataProcessor::DataProcessor(double dt) : dt_(dt) {
-    // No need for state tracking since velocities come from motor_state
+DataProcessor::DataProcessor(double dt)
+    : dt_(dt)
+    , low_pass_alpha_(1.0 - std::exp(-2.0 * M_PI * corgi::Config::ENCODER_CUTOFF_FREQ * dt_))
+{
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Offline: process a single CSV record (stateful velocity LPF)
+// ─────────────────────────────────────────────────────────────────
+DataProcessor::ProcessedData DataProcessor::process_record(const RawRecord& data) {
+    ProcessedData result;
+    result.q     = Eigen::VectorXd::Zero(12);
+    result.q_dot = Eigen::VectorXd::Zero(12);
+    result.tau   = Eigen::VectorXd(8);
+    result.I_c   = Eigen::VectorXd(4);
+
+    // Base position
+    result.q(0) = data.sim_pos_x;
+    result.q(1) = data.sim_pos_z;
+
+    // Base velocities with causal IIR low-pass filter
+    double x_dot = (data.sim_pos_x - last_sim_pos_x_) / dt_;
+    double z_dot = (data.sim_pos_z - last_sim_pos_z_) / dt_;
+    if (!first_call_) {
+        x_dot = (1.0 - low_pass_alpha_) * last_x_dot_ + low_pass_alpha_ * x_dot;
+        z_dot = (1.0 - low_pass_alpha_) * last_z_dot_ + low_pass_alpha_ * z_dot;
+    }
+    result.q_dot(0) = x_dot;
+    result.q_dot(1) = z_dot;
+    last_sim_pos_x_ = data.sim_pos_x;
+    last_sim_pos_z_ = data.sim_pos_z;
+    last_x_dot_ = x_dot;
+    last_z_dot_ = z_dot;
+
+    // Quaternion → Euler
+    double roll, pitch;
+    cal_quaternion_to_euler(data.imu_orien_x, data.imu_orien_y,
+                            data.imu_orien_z, data.imu_orien_w, roll, pitch);
+    result.q(2) = roll;
+    result.q(3) = pitch;
+
+    // Leg joint angles (theta→Rm, right-side beta negated)
+    result.q(4)  =  data.state_beta_a;
+    result.q(5)  =  cal_theta_to_Rm(data.state_theta_a);
+    result.q(6)  = -data.state_beta_b;
+    result.q(7)  =  cal_theta_to_Rm(data.state_theta_b);
+    result.q(8)  = -data.state_beta_c;
+    result.q(9)  =  cal_theta_to_Rm(data.state_theta_c);
+    result.q(10) =  data.state_beta_d;
+    result.q(11) =  cal_theta_to_Rm(data.state_theta_d);
+
+    // Angular velocity
+    result.q_dot(2) = data.imu_ang_vel_x;
+    result.q_dot(3) = data.imu_ang_vel_y;
+
+    // Motor velocities → joint velocities
+    double theta_a_dot = (-data.state_vel_r_a + data.state_vel_l_a) / 2.0;
+    double beta_a_dot  = ( data.state_vel_r_a + data.state_vel_l_a) / 2.0;
+    double theta_b_dot = (-data.state_vel_r_b + data.state_vel_l_b) / 2.0;
+    double beta_b_dot  = ( data.state_vel_r_b + data.state_vel_l_b) / 2.0;
+    beta_b_dot = -beta_b_dot;
+    double theta_c_dot = (-data.state_vel_r_c + data.state_vel_l_c) / 2.0;
+    double beta_c_dot  = ( data.state_vel_r_c + data.state_vel_l_c) / 2.0;
+    beta_c_dot = -beta_c_dot;
+    double theta_d_dot = (-data.state_vel_r_d + data.state_vel_l_d) / 2.0;
+    double beta_d_dot  = ( data.state_vel_r_d + data.state_vel_l_d) / 2.0;
+
+    result.q_dot(4)  = beta_a_dot;
+    result.q_dot(5)  = cal_theta_dot_to_Rm_dot(data.state_theta_a, theta_a_dot);
+    result.q_dot(6)  = beta_b_dot;
+    result.q_dot(7)  = cal_theta_dot_to_Rm_dot(data.state_theta_b, theta_b_dot);
+    result.q_dot(8)  = beta_c_dot;
+    result.q_dot(9)  = cal_theta_dot_to_Rm_dot(data.state_theta_c, theta_c_dot);
+    result.q_dot(10) = beta_d_dot;
+    result.q_dot(11) = cal_theta_dot_to_Rm_dot(data.state_theta_d, theta_d_dot);
+
+    // Motor torques → joint torques
+    double torque_beta_a, F_Rm_a;
+    cal_motor_to_joint_torque(data.state_theta_a, data.state_trq_r_a, data.state_trq_l_a, torque_beta_a, F_Rm_a);
+    double torque_beta_b, F_Rm_b;
+    cal_motor_to_joint_torque(data.state_theta_b, data.state_trq_r_b, data.state_trq_l_b, torque_beta_b, F_Rm_b);
+    double torque_beta_c, F_Rm_c;
+    cal_motor_to_joint_torque(data.state_theta_c, data.state_trq_r_c, data.state_trq_l_c, torque_beta_c, F_Rm_c);
+    double torque_beta_d, F_Rm_d;
+    cal_motor_to_joint_torque(data.state_theta_d, data.state_trq_r_d, data.state_trq_l_d, torque_beta_d, F_Rm_d);
+
+    result.tau(0) =  torque_beta_a;
+    result.tau(1) =  F_Rm_a;
+    result.tau(2) = -torque_beta_b;
+    result.tau(3) =  F_Rm_b;
+    result.tau(4) = -torque_beta_c;
+    result.tau(5) =  F_Rm_c;
+    result.tau(6) =  torque_beta_d;
+    result.tau(7) =  F_Rm_d;
+
+    // Leg inertias
+    result.I_c(0) = cal_theta_to_Ic(data.state_theta_a);
+    result.I_c(1) = cal_theta_to_Ic(data.state_theta_b);
+    result.I_c(2) = cal_theta_to_Ic(data.state_theta_c);
+    result.I_c(3) = cal_theta_to_Ic(data.state_theta_d);
+
+    first_call_ = false;
+    return result;
 }
 
 DataProcessor::ProcessedData DataProcessor::process_realtime_data(
@@ -144,50 +245,41 @@ void DataProcessor::cal_quaternion_to_euler(double x, double y, double z, double
 }
 
 double DataProcessor::cal_theta_to_Rm(double theta) {
+    // Horner's method: A[0]*x^4 + A[1]*x^3 + ... + A[4]
     const auto& A = corgi::Config::RM_COEFF;
-    double Rm = 0.0;
-    double theta_power = 1.0;
-    for (int i = A.size() - 1; i >= 0; --i) {
-        Rm += A[i] * theta_power;
-        theta_power *= theta;
-    }
-    return Rm;
+    double result = A[0];
+    for (size_t i = 1; i < A.size(); ++i)
+        result = result * theta + A[i];
+    return result;
 }
 
 double DataProcessor::cal_theta_dot_to_Rm_dot(double theta, double theta_dot) {
+    // Horner's method on derivative: d/dx[A0*x^4+...+A4] = 4*A0*x^3+3*A1*x^2+2*A2*x+A3
     const auto& A = corgi::Config::RM_COEFF;
-    double dRm_dtheta = 0.0;
-    double theta_power = 1.0;
-    
-    for (size_t i = 1; i < A.size(); ++i) {
-        dRm_dtheta += A[i] * (A.size() - 1 - i) * theta_power;
-        theta_power *= theta;
-    }
-    
-    return dRm_dtheta * theta_dot;
+    const int n = static_cast<int>(A.size()) - 1;  // degree = 4
+    double deriv = n * A[0];
+    for (int i = 1; i < n; ++i)
+        deriv = deriv * theta + (n - i) * A[i];
+    return deriv * theta_dot;
 }
 
 double DataProcessor::cal_theta_to_Ic(double theta) {
+    // Horner's method: B[0]*x^6 + B[1]*x^5 + ... + B[6]
     const auto& B = corgi::Config::IC_COEFF;
-    double Ic = 0.0;
-    double theta_power = 1.0;
-    for (int i = B.size() - 1; i >= 0; --i) {
-        Ic += B[i] * theta_power;
-        theta_power *= theta;
-    }
-    return Ic;
+    double result = B[0];
+    for (size_t i = 1; i < B.size(); ++i)
+        result = result * theta + B[i];
+    return result;
 }
 
 void DataProcessor::cal_motor_to_joint_torque(double theta, double torque_right, double torque_left,
                                     double& torque_beta, double& force_Rm) {
     const auto& A = corgi::Config::RM_COEFF;
-    double dRm_dtheta = 0.0;
-    double theta_power = 1.0;
-    
-    for (size_t i = 1; i < A.size(); ++i) {
-        dRm_dtheta += A[i] * (A.size() - 1 - i) * theta_power;
-        theta_power *= theta;
-    }
+    // Horner's method on derivative
+    const int n = static_cast<int>(A.size()) - 1;
+    double dRm_dtheta = n * A[0];
+    for (int i = 1; i < n; ++i)
+        dRm_dtheta = dRm_dtheta * theta + (n - i) * A[i];
     
     // Virtual work transformation
     double temp1 = torque_left - torque_right;

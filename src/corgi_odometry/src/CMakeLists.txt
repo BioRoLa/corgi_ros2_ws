@@ -18,6 +18,8 @@ target_link_libraries(simplify_dynamics
 # Build executable
 add_executable(offline_test 
   offline_test.cpp
+  OfflineTestNode.cpp
+  EstimationPipeline.cpp
 )
 
 ament_target_dependencies(offline_test 
