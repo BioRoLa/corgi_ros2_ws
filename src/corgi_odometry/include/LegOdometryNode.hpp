@@ -20,6 +20,7 @@
 #include "kinematic/ContactMap.hpp"
 #include "es_ekf/ESEKF.hpp"
 #include "Config.hpp"
+#include "Params.hpp"
 
 /**
  * @brief Leg Odometry Node
@@ -127,6 +128,17 @@ private:
     // Contact state (Schmitt trigger memory)
     // ============================================================
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
+
+    // Contact thresholds (loaded from YAML config)
+    double contact_rm_threshold_high_   = 25.0;
+    double contact_rm_threshold_low_    = 15.0;
+    double contact_beta_threshold_high_ = 10.0;
+    double contact_beta_threshold_low_  =  1.0;
+
+    // ============================================================
+    // YAML config (loaded once at startup via yaml-cpp)
+    // ============================================================
+    corgi::Params params_;
 
     // ============================================================
     // Processing components — disturbance observer

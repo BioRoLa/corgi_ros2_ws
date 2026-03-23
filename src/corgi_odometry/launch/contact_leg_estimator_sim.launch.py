@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-Launch file for Contact Leg Estimator and Velocity Estimator (Online Version)
+Launch file for Contact Leg Estimator + Velocity Estimator (Simulation Version)
+
+Tunable parameters (observer cutoff freq, contact thresholds) are loaded
+by corgi_contact_leg_est at startup from:
+  share/corgi_odometry/config/config_online.yaml
+Edit that file to change values without recompiling.
 """
 
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
-    """Generate launch description for contact leg estimator and velocity estimator."""
-    
-    cutoff_freq_arg = DeclareLaunchArgument(
-        'cutoff_freq',
-        default_value='30.0',
-        description='Low-pass filter cutoff frequency (Hz)'
+    config = os.path.join(
+        get_package_share_directory('corgi_odometry'), 'config', 'config_online.yaml'
     )
-    
-    # Create velocity estimator node
+
     velocity_estimator_node = Node(
         package='corgi_odometry',
         executable='velocity_estimator',
@@ -26,32 +26,26 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': True,
-            'cutoff_freq': LaunchConfiguration('cutoff_freq'),
             'sample_rate': 1000.0,
             'position_topic': 'sim/data',
             'velocity_topic': 'odometry/velocity',
             'position_output_topic': 'odometry/position',
         }]
     )
-    
-    # Create contact leg estimator node
+
     contact_leg_estimator_node = Node(
         package='corgi_odometry',
         executable='corgi_contact_leg_est',
         name='corgi_contact_leg_est',
         output='screen',
-        parameters=[{
-            'use_sim_time': True,
-        }],
+        # config_online.yaml is loaded internally by the node via yaml-cpp.
+        # Only system parameters (use_sim_time, remappings) are passed here.
+        parameters=[{'use_sim_time': True}],
         remappings=[
-            # Uncomment and modify if you need to remap topics
             # ('motor/state', '/custom/motor/state'),
-            # ('imu', '/custom/imu/filtered'),
-            # ('odometry/position', '/custom/odometry/position'),
         ]
     )
     return LaunchDescription([
-        cutoff_freq_arg,
         velocity_estimator_node,
         contact_leg_estimator_node,
     ])

@@ -19,6 +19,8 @@ find_package(nav_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
 # Include directories
 include_directories(
@@ -42,6 +44,11 @@ add_subdirectory(src)
 
 # Install launch files
 install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install config files (YAML)
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}/
 )
 

@@ -53,7 +53,7 @@ int OfflineTestNode::run() {
     if (!quiet) std::cout << "✓ Loaded " << data.size() << " records\n";
 
     // ── Processor & Pipeline ────────────────────────────────────
-    DataProcessor processor(dt);
+    DataProcessor processor(dt, params_.encoder_cutoff_freq);
     EstimationPipeline pipeline(params_);
 
     // ── IMU noise simulator (optional) ──────────────────────────

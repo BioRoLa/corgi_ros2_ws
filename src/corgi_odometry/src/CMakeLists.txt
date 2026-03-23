@@ -34,6 +34,7 @@ target_link_libraries(offline_test
   simplify_dynamics
   esekf_estimation
   Eigen3::Eigen
+  yaml-cpp
 )
 
 install(TARGETS offline_test
@@ -50,11 +51,13 @@ ament_target_dependencies(corgi_contact_leg_est
   rosgraph_msgs 
   geometry_msgs 
   corgi_msgs
+  ament_index_cpp
 )
 
 target_link_libraries(corgi_contact_leg_est
   simplify_dynamics
   Eigen3::Eigen
+  yaml-cpp
 )
 
 install(TARGETS corgi_contact_leg_est
@@ -83,12 +86,14 @@ ament_target_dependencies(corgi_leg_odom
   geometry_msgs 
   nav_msgs
   corgi_msgs
+  ament_index_cpp
 )
 
 target_link_libraries(corgi_leg_odom
   simplify_dynamics
   esekf_estimation
   Eigen3::Eigen
+  yaml-cpp
 )
 
 install(TARGETS corgi_leg_odom

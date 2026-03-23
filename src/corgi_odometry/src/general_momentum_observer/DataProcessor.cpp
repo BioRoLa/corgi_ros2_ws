@@ -2,9 +2,9 @@
 #include "Config.hpp"
 #include <cmath>
 
-DataProcessor::DataProcessor(double dt)
+DataProcessor::DataProcessor(double dt, double encoder_cutoff_freq)
     : dt_(dt)
-    , low_pass_alpha_(1.0 - std::exp(-2.0 * M_PI * corgi::Config::ENCODER_CUTOFF_FREQ * dt_))
+    , low_pass_alpha_(1.0 - std::exp(-2.0 * M_PI * encoder_cutoff_freq * dt_))
 {
 }
 

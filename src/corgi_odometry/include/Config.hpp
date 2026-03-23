@@ -36,14 +36,6 @@ public:
     static constexpr double BODY_I_YY = BASE_WEIGHT * (BASE_WIDTH * BASE_WIDTH + BASE_HEIGHT * BASE_HEIGHT) / 12.0;
     
     // Observer parameters
-    static constexpr double OBSERVER_CUTOFF_FREQ = 15.0;  // Disturbance observer cutoff frequency [Hz]
-    static constexpr double ENCODER_CUTOFF_FREQ = 30.0;   // Encoder low-pass filter cutoff frequency [Hz]
-
-    static constexpr double CONTACT_RM_THRESHOLD_HIGH = 25.0; // High RM threshold for contact detection [N]
-    static constexpr double CONTACT_RM_THRESHOLD_LOW = 15.0;  // Low RM threshold for contact detection [N]
-
-    static constexpr double CONTACT_BETA_THRESHOLD_HIGH = 10;
-    static constexpr double CONTACT_BETA_THRESHOLD_LOW =  1;
     
     // Sample rate and time step
     static constexpr double SAMPLE_RATE = 1000.0;         // Sampling frequency [Hz]
@@ -60,15 +52,6 @@ public:
     static constexpr std::array<double, 7> IC_COEFF = {
         1e-06, -1e-05, 0.0001, -0.0002, -0.0012, 0.0042, 0.0041
     };
-    
-    // ============================================================
-    // OFFLINE PARAMETERS (used only in offline processing mode)
-    // ============================================================
-    
-    // CSV file configuration
-    static constexpr const char* CSV_FILENAME = "walk_2m_01"; // walk_obs // walk_2m_01
-    static constexpr int START_INDEX = 0;             // Starting index for offline data processing
-    static constexpr bool ENABLE_LOGGING = true;      // Enable CSV logging for offline mode
     
     // ============================================================
     // ONLINE PARAMETERS (used only in online ROS2 mode)
@@ -91,12 +74,6 @@ public:
     // Queue sizes
     static constexpr int QUEUE_SIZE_SUB = 1;          // Subscriber queue size (use latest value)
     static constexpr int QUEUE_SIZE_PUB = 10;         // Publisher queue size
-
-    // ============================================================
-    // OUTPUTFILE PARAMETERS
-    // ============================================================
-
-    static constexpr bool LOG_DETAILS = false;         // Log detailed information (true) or only disturbance (false)
 };
 
 } // namespace corgi

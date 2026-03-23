@@ -3,8 +3,10 @@
 #include <signal.h>
 #include "rclcpp/rclcpp.hpp"
 #include <nav_msgs/msg/odometry.hpp>
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "LegOdometryNode.hpp"
 #include "Config.hpp"
+#include "ParamsIO.hpp"
 
 // ============================================================
 // Global node pointer (for signal handler)
@@ -38,16 +40,31 @@ static void wait_for_clock_sync(const rclcpp::Node::SharedPtr& node) {
 
 LegOdometryNode::LegOdometryNode()
     : Node("leg_odometry"),
-      processor_(corgi::Config::DT),
+      params_([]() -> corgi::Params {
+          try {
+              const std::string pkg =
+                  ament_index_cpp::get_package_share_directory("corgi_odometry");
+              return corgi::load_params(pkg + "/config/config_online.yaml");
+          } catch (const std::exception& e) {
+              RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
+                          "Config load failed (%s), using defaults", e.what());
+              return corgi::Params{};
+          }
+      }()),
+      processor_(corgi::Config::DT, params_.encoder_cutoff_freq),
       observer_(
           corgi::Config::DT,
-          corgi::Config::OBSERVER_CUTOFF_FREQ,
+          params_.observer_cutoff_freq,
           corgi::Config::DOF,
           false,   // CSV logging
           ""       // No CSV filename
       ),
       esekf_(static_cast<float>(corgi::Config::DT))
 {
+    contact_rm_threshold_high_   = params_.contact_rm_threshold_high;
+    contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
+    contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
+    contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         corgi::Config::TOPIC_MOTOR_STATE, corgi::Config::QUEUE_SIZE_SUB,
@@ -390,13 +407,13 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd& disturbance) 
         double beta = disturbance(beta_idx[i]);
 
         if (!leg_contact_state_[i]) {
-            if (std::abs(rm) > corgi::Config::CONTACT_RM_THRESHOLD_HIGH ||
-                std::abs(beta) > corgi::Config::CONTACT_BETA_THRESHOLD_HIGH) {
+            if (std::abs(rm) > contact_rm_threshold_high_ ||
+                std::abs(beta) > contact_beta_threshold_high_) {
                 leg_contact_state_[i] = true;
             }
         } else {
-            if (std::abs(rm) < corgi::Config::CONTACT_RM_THRESHOLD_LOW &&
-                std::abs(beta) < corgi::Config::CONTACT_BETA_THRESHOLD_LOW) {
+            if (std::abs(rm) < contact_rm_threshold_low_ &&
+                std::abs(beta) < contact_beta_threshold_low_) {
                 leg_contact_state_[i] = false;
             }
         }

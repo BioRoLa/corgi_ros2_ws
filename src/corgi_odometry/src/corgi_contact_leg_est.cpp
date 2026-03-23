@@ -15,6 +15,8 @@
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "Config.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
+#include "ament_index_cpp/get_package_share_directory.hpp"
+#include "ParamsIO.hpp"
 
 using namespace std::chrono_literals;
 
@@ -28,15 +30,30 @@ class ContactLegEstimatorNode : public rclcpp::Node {
 public:
     ContactLegEstimatorNode() 
         : Node(corgi::Config::NODE_NAME),
-          processor_(corgi::Config::DT),
+          params_([]() -> corgi::Params {
+              try {
+                  const std::string pkg =
+                      ament_index_cpp::get_package_share_directory("corgi_odometry");
+                  return corgi::load_params(pkg + "/config/config_online.yaml");
+              } catch (const std::exception& e) {
+                  RCLCPP_WARN(rclcpp::get_logger("contact_leg_estimator"),
+                              "Config load failed (%s), using defaults", e.what());
+                  return corgi::Params{};
+              }
+          }()),
+          processor_(corgi::Config::DT, params_.encoder_cutoff_freq),
           observer_(
               corgi::Config::DT,
-              corgi::Config::OBSERVER_CUTOFF_FREQ,
+              params_.observer_cutoff_freq,
               corgi::Config::DOF,
               false,  // CSV logging
               ""      // No CSV filename
           )
     {
+        contact_rm_threshold_high_   = params_.contact_rm_threshold_high;
+        contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
+        contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
+        contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
         // Create subscribers
         motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
             corgi::Config::TOPIC_MOTOR_STATE,
@@ -177,11 +194,11 @@ private:
             double beta_torque = disturbance(beta_torque_indices[i]);
             
             if (!leg_contact_state_[i]) { // Currently no contact
-                if (std::abs(rm_force) > corgi::Config::CONTACT_RM_THRESHOLD_HIGH || std::abs(beta_torque) > corgi::Config::CONTACT_BETA_THRESHOLD_HIGH) {
+                if (std::abs(rm_force) > contact_rm_threshold_high_ || std::abs(beta_torque) > contact_beta_threshold_high_) {
                     leg_contact_state_[i] = true;
                 }
             } else { // Currently in contact
-                if (std::abs(rm_force) < corgi::Config::CONTACT_RM_THRESHOLD_LOW && std::abs(beta_torque) < corgi::Config::CONTACT_BETA_THRESHOLD_LOW) {
+                if (std::abs(rm_force) < contact_rm_threshold_low_ && std::abs(beta_torque) < contact_beta_threshold_low_) {
                     leg_contact_state_[i] = false;
                 }
             }
@@ -237,7 +254,16 @@ private:
     // Leg contact states (for Schmitt trigger)
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
     
-    // Processing components
+    // Contact thresholds (loaded from YAML config)
+    double contact_rm_threshold_high_   = 25.0;
+    double contact_rm_threshold_low_    = 15.0;
+    double contact_beta_threshold_high_ = 10.0;
+    double contact_beta_threshold_low_  =  1.0;
+    
+    // YAML config + processing components
+    // NOTE: params_ must be declared before processor_ and observer_
+    //       so the member init list can use params_.* to init them.
+    corgi::Params params_;
     DataProcessor processor_;
     corgi::DisturbanceObserver observer_;
     

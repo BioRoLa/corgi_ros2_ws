@@ -37,7 +37,7 @@ struct RawRecord {
  */
 class DataProcessor {
 public:
-    DataProcessor(double dt);
+    DataProcessor(double dt, double encoder_cutoff_freq = 30.0);
     
     struct ProcessedData {
         Eigen::VectorXd q;      // (12,) - generalized coordinates
