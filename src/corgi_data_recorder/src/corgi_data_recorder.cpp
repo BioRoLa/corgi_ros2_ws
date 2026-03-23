@@ -19,6 +19,7 @@
 #include "sensor_msgs/msg/range.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
+#include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <tf2_ros/transform_listener.h>
@@ -37,6 +38,7 @@ sensor_msgs::msg::Range range_3;
 sensor_msgs::msg::Range range_4;
 corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::msg::ForceStateStamped force_state;
+corgi_msgs::msg::SimLegContactStamped sim_leg_contact_state;
 geometry_msgs::msg::TransformStamped tf_data;
 bool tf_data_valid = false;
 
@@ -136,6 +138,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "sim_sec" << "," << "sim_nsec" << ","
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
+                        << "sim_contact_state_a" << "," << "sim_contact_state_b" << "," << "sim_contact_state_c" << "," << "sim_contact_state_d" << ","
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
@@ -197,6 +200,10 @@ void imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr cmd){
 
 void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr state){
     force_state = *state;
+}
+
+void sim_leg_contact_state_cb(const corgi_msgs::msg::SimLegContactStamped::SharedPtr state){
+    sim_leg_contact_state = *state;
 }
 
 void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
@@ -282,6 +289,11 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << tf_data.transform.translation.x << "," << tf_data.transform.translation.y << "," << tf_data.transform.translation.z << ","
                 << tf_data.transform.rotation.x << "," << tf_data.transform.rotation.y << "," << tf_data.transform.rotation.z << "," << tf_data.transform.rotation.w << ","
 
+                << sim_leg_contact_state.module_a.contact << ","
+                << sim_leg_contact_state.module_b.contact << ","
+                << sim_leg_contact_state.module_c.contact << ","
+                << sim_leg_contact_state.module_d.contact << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -319,38 +331,44 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
     auto node = rclcpp::Node::make_shared("corgi_data_recorder");
-    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
-    
-    while (rclcpp::ok()) {
-        // 1. 處理一下 callback，嘗試接收 /clock
-        rclcpp::spin_some(node);
-        
-        // 2. 檢查現在時間是否大於 0 (代表收到 clock 了)
-        if (node->now().seconds() > 0.0) {
-            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
-            break; // 成功對時，跳出等待
+
+    // Only wait for Webots /clock when running in simulation mode.
+    // In real-hardware mode (use_sim_time=false) the system wall clock is used
+    // and node->now() is already valid — no need to wait.
+    bool use_sim_time = false;
+    node->get_parameter_or("use_sim_time", use_sim_time, false);
+
+    if (use_sim_time) {
+        RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(node);
+            if (node->now().seconds() > 0.0) {
+                RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+                break;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        
-        // 3. 小睡一下避免 CPU 100% (這裡可以用 Wall Rate 因為只是在等連線)
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        RCLCPP_INFO(node->get_logger(), "Real hardware mode: using system wall clock.");
     }
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000, motor_cmd_cb);
-    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
-    auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 1000, power_cmd_cb);
-    auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 1000, power_state_cb);
-    auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
-    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000, imp_cmd_cb);
-    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 100, trigger_cb);
+    auto motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 100, motor_cmd_cb);
+    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 100, motor_state_cb);
+    auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 100, power_cmd_cb);
+    auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 100, power_state_cb);
+    auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 100, imu_cb);
+    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 100, imp_cmd_cb);
+    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 100, force_state_cb);
+    auto sim_leg_contact_state_sub = node->create_subscription<corgi_msgs::msg::SimLegContactStamped>("sim/leg_contact", 100, sim_leg_contact_state_cb);
     // TF listener for odom -> base_link transform
     tf2_ros::Buffer tfBuffer(node->get_clock());
     tf2_ros::TransformListener tfListener(tfBuffer);
 
-    auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 1000, stair_info_cb);
-    auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 1000, range_1_cb);
-    auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 1000, range_2_cb);
-    auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 1000, range_3_cb);
-    auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 1000, range_4_cb);
+    auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 100, stair_info_cb);
+    auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 100, range_1_cb);
+    auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 100, range_2_cb);
+    auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 100, range_3_cb);
+    auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 100, range_4_cb);
 
     // rclcpp::Rate rate(1000);
     rclcpp::Duration period(0, 1000000); // 1ms

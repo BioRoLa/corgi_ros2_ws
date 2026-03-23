@@ -119,9 +119,9 @@ int main(int argc, char **argv)
     rclcpp::executors::SingleThreadedExecutor exec;
     exec.add_node(node);
 
-    auto motor_cmd_pub_ = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 1000);
+    auto motor_cmd_pub_ = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("/motor/command", 5);
     auto motor_state_sub_ = node->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "/motor/state", 1000, motorsStateCallback);
+        "/motor/state", 5, motorsStateCallback);
 
     RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
     

@@ -14,8 +14,8 @@ WLWGait::WLWGait(ros::NodeHandle& nh, bool sim, double CoM_bias, int pub_rate, d
     rng(rd()), 
     dist(0, 359)
 {
-    motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("/motor/command", 1000);
-    motor_state_sub_ = nh.subscribe("/motor/state", 1000, &WLWGait::motorsStateCallback, this);
+    motor_pub = nh.advertise<corgi_msgs::MotorCmdStamped>("/motor/command", 5);
+    motor_state_sub_ = nh.subscribe("/motor/state", 5, &WLWGait::motorsStateCallback, this);
     rate_ptr = new ros::Rate(pub_rate);
     
     // Initialize dS & incre_duty

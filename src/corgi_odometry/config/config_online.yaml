@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────────
+# Online node parameters — corgi_odometry
+# Loaded directly by corgi_leg_odom and corgi_contact_leg_est
+# at startup via yaml-cpp (no recompile needed).
+# ─────────────────────────────────────────────────────────────────
+
+# Disturbance observer / encoder filter
+observer:
+  cutoff_freq:         15.0    # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0    # Encoder velocity LPF [Hz]
+
+# Schmitt-trigger contact thresholds
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
