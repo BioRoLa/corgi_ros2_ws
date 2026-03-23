@@ -213,8 +213,8 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     H.block<3,3>(0, V_IDX) = Eigen::Matrix3f::Identity();  // ∂h/∂δv
     // NOTE: bv deliberately excluded from H to preserve observability
     const Eigen::Vector3f& r_c = obs.leg->contact_point;
-    H(0, BW_IDX + 1) = -r_c.z();   // ∂z_leg_x / ∂δbw_y
-    H(2, BW_IDX + 1) =  r_c.x();   // ∂z_leg_z / ∂δbw_y
+    H(0, BW_IDX + 1) =  r_c.z();   // ∂z_leg_x / ∂δbw_y = +r_c.z()
+    H(2, BW_IDX + 1) = -r_c.x();   // ∂z_leg_z / ∂δbw_y = -r_c.x()
 
     // ----------------------------------------------------------
     // 4. Kalman gain & state/covariance update
