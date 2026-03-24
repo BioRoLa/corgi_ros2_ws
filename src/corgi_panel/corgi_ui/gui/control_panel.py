@@ -99,6 +99,9 @@ class CorgiControlPanel(QWidget):
         # Update button states after init
         self._update_button_states()
         
+        # Sim time tracking for clock jump detection
+        self._last_sim_time_sec = 0.0
+
         # Auto-start data recorder
         self._start_data_recorder()
     
@@ -988,12 +991,32 @@ class CorgiControlPanel(QWidget):
         )
     
     def _timer_update(self):
-        """Periodic timer update (placeholder for future enhancements)"""
+        """Periodic timer update"""
         # Check if set_zero process has completed
         if self.btn_set_zero.text() == 'Setting Zero...':
             if not self.process_manager.is_running('set_zero'):
                 # Process finished but callback wasn't triggered
                 self._on_set_zero_completed()
+
+        # Detect sim-time clock jump (Webots reset) and restart data recorder
+        if self.use_sim_time and self.ros_worker.is_running:
+            try:
+                current = self.ros_worker.node.get_clock().now().nanoseconds / 1e9
+                if self._last_sim_time_sec > 1.0 and current < self._last_sim_time_sec - 1.0:
+                    self._log(
+                        f'Clock jumped backward ({self._last_sim_time_sec:.1f}s -> {current:.1f}s). '
+                        'Restarting data recorder...',
+                        LOGLEVEL.WARN, 'system'
+                    )
+                    # Reset trigger button
+                    self.btn_trigger.setChecked(False)
+                    # Kill and restart data recorder
+                    if self.process_manager.is_running('data_recorder'):
+                        self.process_manager.stop_process('data_recorder', timeout=2.0)
+                    self._start_data_recorder()
+                self._last_sim_time_sec = current
+            except Exception:
+                pass
     
     def reset(self):
         """Reset panel to initial state"""

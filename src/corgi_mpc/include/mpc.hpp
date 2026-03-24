@@ -10,7 +10,6 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include "rclcpp/rclcpp.hpp"
 #include <yaml-cpp/yaml.h>
-#include "corgi_msgs/msg/sim_data_stamped.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
@@ -35,15 +34,15 @@ class ModelPredictiveController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 80;
-        double By_swing = 80;
-        double Bx_stance = 80;
+        double Bx_swing = 200;
+        double By_swing = 200;
+        double Bx_stance = 200;
         // double Bx_stance = 50;
-        double By_stance = 10;
+        double By_stance = 200;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 200;
+        double Ky_stance = 2000;
 
 
         const int freq = 100;
@@ -87,8 +86,8 @@ class ModelPredictiveController {
         int fx_upper_bound = 10;
         int fx_lower_bound = -10;
         int fz_upper_bound = 200;
-        // int fz_lower_bound = -10;
-        int fz_lower_bound = -50;
+        // int fz_lower_bound = -50;
+        int fz_lower_bound = 0;
 
         double friction_coef = 1;
 

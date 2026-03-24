@@ -36,7 +36,7 @@ int main (int argc, char* argv[]) {
 
     std::string filename = std::string(argv[1]);
     std::string filepath = std::getenv("HOME");
-    filepath += "/corgi_ws/corgi_ros2_ws/src/corgi_odom/data/";
+    filepath += "/corgi_ws/corgi_ros2_ws/src/corgi_odometry_legacy/data/";
     DataProcessor::DataFrame df =  DataProcessor::read_csv(filepath+filename+".csv");
     int n = df.row;
     Eigen::initParallel();

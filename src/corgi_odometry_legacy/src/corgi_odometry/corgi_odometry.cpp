@@ -16,9 +16,7 @@ std::vector<std::string> odo_headers = {
         "lf.contact","rf.contact","rh.contact","lh.contact",
         "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
         "threshold",
-        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz",
-        "filtered_v_.x", "filtered_v_.y", "filtered_v_.z",
-        "filtered_p.x", "filtered_p.y", "filtered_p.z"
+        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
 };
 
 std::string output_file_path;
@@ -42,7 +40,6 @@ Eigen::Vector3f w;
 Eigen::Quaternionf q;
 
 geometry_msgs::msg::Vector3 prev_v;
-Eigen::Vector3f filtered_position;
 
 bool exclude[4];
 
@@ -58,7 +55,7 @@ Eigen::Matrix3f P_cov;
 corgi_msgs::msg::MotorStateStamped motor_state;
 corgi_msgs::msg::ImuStamped imu;
 
-rclcpp::Logger node_logger = rclcpp::get_logger("corgi_odometry");
+rclcpp::Logger node_logger = rclcpp::get_logger("corgi_odometry_legacy");
 
 // Callbacks
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
@@ -157,7 +154,7 @@ void Encoder::init(float dt){
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<rclcpp::Node>("corgi_odometry");
+    auto node = std::make_shared<rclcpp::Node>("corgi_odometry_legacy");
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -171,11 +168,9 @@ int main(int argc, char **argv) {
     }
 
     // ROS Publishers
-    auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/velocity", 10);
-    auto position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/position", 10);
-    auto filtered_velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/filtered_velocity", 10);
-    auto filtered_position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/filtered_position", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 10);
+    auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 10);
+    auto position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/position", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
 
     // ROS Subscribers
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -185,7 +180,7 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 10, imu_cb);
     auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>(
-        "odometry/contact", 10, contact_cb);
+        "odometry/legacy/contact", 10, contact_cb);
 
     node_logger = node->get_logger();
     Eigen::initParallel();
@@ -284,7 +279,6 @@ int main(int argc, char **argv) {
 
                 //
                 p << 0, 0, 0;
-                filtered_position << 0, 0, 0;
                 //quaternion
                 q_init = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
                 R_init = q_init.toRotationMatrix();
@@ -368,30 +362,6 @@ int main(int argc, char **argv) {
                 estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
                 estimate_state(29) = filter.threshold;                                                                                                  //threshold
                 estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
-
-
-                if (FILTE_VEL){
-
-                    geometry_msgs::msg::Vector3 filtered_velocity_msg;
-                    float cutoff_freq = FILTE_VEL_CUT_OFF_FREQ; //Hz
-                    filtered_velocity_msg = low_pass_filter(velocity_msg, prev_v, cutoff_freq, ODOM_ESTIMATOR_RATE);
-                    prev_v = filtered_velocity_msg;
-                    filtered_velocity_pub->publish(filtered_velocity_msg);
-                    
-                    Eigen::Vector<float, 3> filtered_velocity;
-                    filtered_velocity << filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z;
-                    filtered_position += rot * R * R_init.transpose() * filtered_velocity * dt;
-
-                    geometry_msgs::msg::Vector3 filtered_position_msg;
-                    filtered_position_msg.x = filtered_position(0);
-                    filtered_position_msg.y = filtered_position(1);
-                    filtered_position_msg.z = filtered_position(2);
-                    filtered_position_pub->publish(filtered_position_msg);
-
-                    estimate_state.segment(39, 3) = Eigen::Vector<float, 3>(filtered_velocity_msg.x, filtered_velocity_msg.y, filtered_velocity_msg.z);     //filtered velocity
-                    estimate_state.segment(42, 3) = Eigen::Vector<float, 3>(filtered_position_msg.x, filtered_position_msg.y, filtered_position_msg.z);     //filtered position   
-                }
-                
                 logger.logState(estimate_state);
             }
             counter ++;

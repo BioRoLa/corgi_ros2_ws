@@ -24,8 +24,6 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
 - [**_Notes & Contact_**](#notes--contact)
 
 ## System Architecture
-
-The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
 
 ## System Requirements & Dependencies

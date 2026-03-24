@@ -9,7 +9,6 @@
 #include <fstream>
 
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
-#include "corgi_msgs/msg/sim_data_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
@@ -20,17 +19,11 @@
 #define INIT_BETA (0.0)
 
 corgi_msgs::msg::TriggerStamped trigger_msg;
-corgi_msgs::msg::SimDataStamped sim_data;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg)
 {
     trigger_msg = *msg;
 } // end trigger_cb
-
-void robot_cb(const corgi_msgs::msg::SimDataStamped msg)
-{
-    sim_data = msg;
-} // end robot_cb
 
 int main(int argc, char **argv)
 {
@@ -54,7 +47,6 @@ int main(int argc, char **argv)
 
     auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
-    // Note: SimDataStamped subscription removed - not needed for this variant
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
     std::array<corgi_msgs::msg::MotorCmd *, 4> motor_cmd_modules = {
         &motor_cmd.module_a,
@@ -199,7 +191,6 @@ int main(int argc, char **argv)
                 stair_climb.initialize(current_eta, velocity, exp_robot_x);
                 for (int i = 0; i < stair_num; i++)
                 {
-                    // stair_climb.add_stair_edge(-D/2.0 + i*D - sim_data.position.x, (i+1)*H);
                     stair_climb.add_stair_edge(-D / 2.0 + i * D, (i + 1) * H);
                 } // end for
             } // end if

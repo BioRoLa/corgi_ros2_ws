@@ -4,7 +4,6 @@
 
 
 bool trigger = false;
-corgi_msgs::msg::SimDataStamped sim_data;
 corgi_msgs::msg::ForceStateStamped force_state;
 corgi_msgs::msg::MotorStateStamped motor_state;
 geometry_msgs::msg::Vector3 odom_pos;
@@ -14,10 +13,6 @@ corgi_msgs::msg::ImuStamped imu;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
-}
-
-void sim_data_cb(const corgi_msgs::msg::SimDataStamped::SharedPtr msg){
-    sim_data = *msg;
 }
 
 void force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg){
@@ -74,14 +69,13 @@ int main(int argc, char **argv) {
     mpc.load_config();
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 1000);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 1000);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto sim_data_sub = node->create_subscription<corgi_msgs::msg::SimDataStamped>("sim/data", 1000, sim_data_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1000, motor_state_cb);
-    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/position", 1000, odom_pos_cb);
-    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/velocity", 1000, odom_vel_cb);
-    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/z_position_hip", 1000, odom_z_cb);
+    auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/position", 1000, odom_pos_cb);
+    auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 1000, odom_vel_cb);
+    auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/legacy/z_position_hip", 1000, odom_z_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 1000, imu_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq);
@@ -284,14 +278,6 @@ int main(int argc, char **argv) {
                 mpc.robot_pos[1] = odom_pos.y;
                 // mpc.robot_pos[2] = odom_pos.z;
                 mpc.robot_pos[2] = odom_z;
-
-                // mpc.robot_vel[0] = (sim_data.position.x-mpc.robot_pos[0])/mpc.dt;
-                // mpc.robot_vel[1] = (sim_data.position.y-mpc.robot_pos[1])/mpc.dt;
-                // mpc.robot_vel[2] = (sim_data.position.z-mpc.robot_pos[2])/mpc.dt;
-                
-                // mpc.robot_pos[0] = sim_data.position.x;
-                // mpc.robot_pos[1] = sim_data.position.y;
-                // mpc.robot_pos[2] = sim_data.position.z;
 
                 mpc.robot_ang.x() = imu.orientation.x;
                 mpc.robot_ang.y() = imu.orientation.y;

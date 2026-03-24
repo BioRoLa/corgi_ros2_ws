@@ -2,21 +2,27 @@
 
 ForceControlNode::ForceControlNode()
     : Node("force_control"),
-      kinematics_(sim_),
+      sim_(false),
       phi_vel_prev_modules_(4, Eigen::MatrixXd::Zero(2, 1)),
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(2, 1))
 {
     RCLCPP_INFO(this->get_logger(), "Force Control Starts");
-    
-    // Wait for clock synchronization
-    RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
-    while (rclcpp::ok()) {
-        rclcpp::spin_some(this->get_node_base_interface());
-        if (this->now().seconds() > 0.0) {
-            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
-            break;
+
+    this->get_parameter_or("use_sim_time", sim_, false);
+    kinematics_ = std::make_unique<KinematicsHelper>(sim_);
+
+    if (sim_) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            if (this->now().seconds() > 0.0) {
+                RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+                break;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Real hardware mode: using system wall clock.");
     }
 
     imp_cmd_sub_ = this->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>(
@@ -83,7 +89,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     // position command and state
     Eigen::MatrixXd pos_des(2, 1);
 
-    LegModel& legmodel = kinematics_.get_leg_model();
+    LegModel& legmodel = kinematics_->get_leg_model();
     legmodel.contact_map(imp_cmd_->theta, imp_cmd_->beta);
 
     int target_rim = legmodel.rim;
@@ -102,10 +108,10 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
-        motor_cmd_->kp_r = 50;
-        motor_cmd_->kp_l = 50;
-        motor_cmd_->kd_r = 1;
-        motor_cmd_->kd_l = 1;
+        motor_cmd_->kp_r = 90;
+        motor_cmd_->kp_l = 90;
+        motor_cmd_->kd_r = 1.75;
+        motor_cmd_->kd_l = 1.75;
         motor_cmd_->torque_r = 0;
         motor_cmd_->torque_l = 0;
         return;
@@ -128,7 +134,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
 
     legmodel.contact_map(motor_state_->theta, motor_state_->beta + pitch);
-    P_poly = kinematics_.calculate_P_poly(legmodel.rim, legmodel.alpha);
+    P_poly = kinematics_->calculate_P_poly(legmodel.rim, legmodel.alpha);
     
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
 
@@ -136,7 +142,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i); 
     
     Eigen::MatrixXd J_fb(2, 2);
-    J_fb = kinematics_.calculate_jacobian(P_theta, P_theta_deriv, motor_state_->beta + pitch);
+    J_fb = kinematics_->calculate_jacobian(P_theta, P_theta_deriv, motor_state_->beta + pitch);
 
     // std::cout << "J_fb: " << std::endl
     //           << J_fb(0, 0) << ", " << J_fb(0, 1) << std::endl
@@ -230,10 +236,10 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                         corgi_msgs::msg::MotorCmd* motor_cmd_) {
     motor_cmd_->theta = imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
-    motor_cmd_->kp_r = 50;
-    motor_cmd_->kp_l = 50;
-    motor_cmd_->kd_r = 1;
-    motor_cmd_->kd_l = 1;
+    motor_cmd_->kp_r = 95;
+    motor_cmd_->kp_l = 95;
+    motor_cmd_->kd_r = 1.75;
+    motor_cmd_->kd_l = 1.75;
     motor_cmd_->torque_r = 0;
     motor_cmd_->torque_l = 0;
 }
@@ -294,7 +300,7 @@ void ForceControlNode::timer_cb() {
     }
 
     // dynamic friction compensation
-    if (!kinematics_.is_sim()){
+    if (!kinematics_->is_sim()){
         for (int i=0; i<4; i++) {
             double phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
             double phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;

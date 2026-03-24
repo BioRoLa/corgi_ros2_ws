@@ -21,7 +21,7 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
     
     // Kinematics helper
-    KinematicsHelper kinematics_;
+    std::unique_ptr<KinematicsHelper> kinematics_;
     
     // Messages
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd_;
@@ -34,28 +34,34 @@ private:
     double h_;
     
     // Physical parameters
-    const bool sim_ = false;
+    bool sim_;
 };
 
 ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     : Node("imp_cmd_pub"),
-      kinematics_(sim_),
+      sim_(false),
       trigger_(false),
       mg_(19.68 * 9.81),
       s_(0.0),
       h_(0.0)
 {
     RCLCPP_INFO(this->get_logger(), "Impedance Command Publisher Starts");
-    
-    // Wait for clock synchronization
-    RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
-    while (rclcpp::ok()) {
-        rclcpp::spin_some(this->get_node_base_interface());
-        if (this->now().seconds() > 0.0) {
-            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
-            break;
+
+    this->get_parameter_or("use_sim_time", sim_, false);
+    kinematics_ = std::make_unique<KinematicsHelper>(sim_);
+
+    if (sim_) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            if (this->now().seconds() > 0.0) {
+                RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+                break;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Real hardware mode: using system wall clock.");
     }
 
     imp_cmd_pub_ = this->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
@@ -88,10 +94,10 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
         cmd->mx = 0;
         cmd->my = 0;
         if (sim_) {
-            cmd->bx = 80; //200
-            cmd->by = 10; //200
-            cmd->kx = 2000; //2000
-            cmd->ky = 100; //2000
+            cmd->bx = 200; //200
+            cmd->by = 200; //200
+            cmd->kx = 4000; //2000
+            cmd->ky = 4000; //2000
         }
         else {
             cmd->bx = 80;
@@ -103,7 +109,7 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
 }
 
 void ImpedanceCmdPublisherNode::execute_initialization_phase() {
-    LegModel& legmodel = kinematics_.get_leg_model();
+    LegModel& legmodel = kinematics_->get_leg_model();
     std::array<double, 2> eta;
     
     rclcpp::Duration period(0, 1000000); // 1ms
@@ -147,7 +153,7 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
 }
 
 void ImpedanceCmdPublisherNode::execute_control_phase() {
-    LegModel& legmodel = kinematics_.get_leg_model();
+    LegModel& legmodel = kinematics_->get_leg_model();
     std::array<double, 2> eta;
     double ds = 0.0;
     

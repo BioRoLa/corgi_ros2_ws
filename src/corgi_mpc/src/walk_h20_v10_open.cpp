@@ -34,10 +34,10 @@ int main(int argc, char **argv) {
     ModelPredictiveController mpc;
     mpc.load_config();
 
-    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/contact", 1000);
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
+    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = node->now();
@@ -97,8 +97,8 @@ int main(int argc, char **argv) {
         cmd->ki_r = 0;
         cmd->ki_l = 0;
         if (sim) {
-            cmd->kd_r = 1;
-            cmd->kd_l = 1;
+            cmd->kd_r = 1.75;
+            cmd->kd_l = 1.75;
         }
         else {
             cmd->kd_r = 1.75;

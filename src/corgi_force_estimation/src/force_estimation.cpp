@@ -192,20 +192,28 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torqu
 
 ForceEstimationNode::ForceEstimationNode()
     : Node("force_estimation"),
-      estimator_(sim_),
+      sim_(false),
+      mass_(0.0),
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(2, 1))
 {
     RCLCPP_INFO(this->get_logger(), "Force Estimation Starts");
-    
-    // Wait for clock synchronization
-    RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
-    while (rclcpp::ok()) {
-        rclcpp::spin_some(this->get_node_base_interface());
-        if (this->now().seconds() > 0.0) {
-            RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
-            break;
+
+    this->get_parameter_or("use_sim_time", sim_, false);
+    mass_ = sim_ ? 0.9 : 0.68;
+    estimator_ = std::make_unique<ForceEstimator>(sim_);
+
+    if (sim_) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
+        while (rclcpp::ok()) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            if (this->now().seconds() > 0.0) {
+                RCLCPP_INFO(this->get_logger(), "Clock synced! Sim Time: %.2f", this->now().seconds());
+                break;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Real hardware mode: using system wall clock.");
     }
 
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
@@ -296,13 +304,13 @@ void ForceEstimationNode::timer_cb() {
         Eigen::MatrixXd force_est;
 
         if (i == 1 || i == 2) {
-            force_est = estimator_.estimate(motor_state_modules[i]->theta, 
+            force_est = estimator_->estimate(motor_state_modules[i]->theta, 
                                             motor_state_modules[i]->beta - pitch,
                                             motor_state_modules[i]->torque_r, 
                                             motor_state_modules[i]->torque_l);
         }
         else {
-            force_est = estimator_.estimate(motor_state_modules[i]->theta, 
+            force_est = estimator_->estimate(motor_state_modules[i]->theta, 
                                             motor_state_modules[i]->beta + pitch,
                                             motor_state_modules[i]->torque_r, 
                                             motor_state_modules[i]->torque_l);
