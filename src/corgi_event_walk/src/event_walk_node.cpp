@@ -41,7 +41,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
 {
     // ── declare parameters ────────────────────────────────────────────────
     sim_               = this->declare_parameter("sim",               true);
-    velocity_          = this->declare_parameter("velocity",          0.05);
+    velocity_          = this->declare_parameter("velocity",          0.1);
     stand_height_      = this->declare_parameter("stand_height",      0.25);
     step_length_       = this->declare_parameter("step_length",       0.3);
     step_height_       = this->declare_parameter("step_height",       0.04);
