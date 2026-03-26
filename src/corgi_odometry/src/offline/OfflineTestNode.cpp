@@ -83,7 +83,7 @@ int OfflineTestNode::run() {
     }
 
     // ── Output CSV ──────────────────────────────────────────────
-    const auto output_dir = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "output_data";
+    const auto output_dir = std::filesystem::current_path() / "output_data";
     std::filesystem::create_directories(output_dir);
     const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf.csv");
     std::ofstream esekf_out(esekf_out_path);
@@ -106,7 +106,6 @@ int OfflineTestNode::run() {
               << "S_xx_c,S_yy_c,S_zz_c,"
               << "S_xx_d,S_yy_d,S_zz_d,"
               << "P_vx,P_vy,P_vz,"
-              << "imu_pos_x,imu_pos_y,imu_pos_z,imu_vel_bx,imu_vel_by,imu_vel_bz,"
               << "pred_vel_x,pred_vel_y,pred_vel_z,"
               << "imu_gyro_pos_x,imu_gyro_pos_y,imu_gyro_pos_z,"
               << "imu_gyro_vel_bx,imu_gyro_vel_by,imu_gyro_vel_bz,"
@@ -121,10 +120,6 @@ int OfflineTestNode::run() {
     // ── RMSE accumulators ───────────────────────────────────────
     RmseAccumulator pos_rmse, vel_rmse;
     RmseAccumulator imu_pos_rmse, imu_vel_rmse;
-
-    // IMU pure integration state (GT quaternion)
-    Eigen::Vector3f imu_vel_w = Eigen::Vector3f::Zero();
-    Eigen::Vector3f imu_pos_w = Eigen::Vector3f::Zero();
 
     // IMU pure integration state (gyro-integrated attitude)
     Eigen::Quaternionf imu_gyro_q = Eigen::Quaternionf::Identity(); // will init from first IMU reading
@@ -181,21 +176,7 @@ int OfflineTestNode::run() {
             imu_noise_sim->apply(a_m, w_m);
         }
 
-        // GT quaternion for IMU pure integration & RMSE
-        Eigen::Quaternionf q_gt(
-            static_cast<float>(d.sim_orien_w),
-            static_cast<float>(d.sim_orien_x),
-            static_cast<float>(d.sim_orien_y),
-            static_cast<float>(d.sim_orien_z));
-        q_gt.normalize();
         Eigen::Vector3f g_w(0.0f, 0.0f, -9.81f);
-
-        // IMU pure integration (GT quaternion — existing)
-        {
-            Eigen::Vector3f a_world_imu = q_gt.toRotationMatrix() * a_m + g_w;
-            imu_vel_w += a_world_imu * static_cast<float>(dt);
-            imu_pos_w += imu_vel_w * static_cast<float>(dt);
-        }
 
         // IMU pure integration (gyro-integrated attitude)
         {
@@ -248,13 +229,13 @@ int OfflineTestNode::run() {
                 vel_rmse.add(ev_x, ev_y, ev_z);
                 pos_rmse.add(ep_x, ep_y, ep_z);
 
-                Eigen::Vector3f imu_vel_b_rmse = q_gt_rmse.toRotationMatrix().transpose() * imu_vel_w;
-                imu_vel_rmse.add(imu_vel_b_rmse.x() - gt_vb_i.x(),
-                                 imu_vel_b_rmse.y() - gt_vb_i.y(),
-                                 imu_vel_b_rmse.z() - gt_vb_i.z());
-                imu_pos_rmse.add(imu_pos_w.x() - (d.sim_pos_x - gt_offset_x),
-                                 imu_pos_w.y() - (d.sim_pos_y - gt_offset_y),
-                                 imu_pos_w.z() - (d.sim_pos_z - gt_offset_z));
+                Eigen::Vector3f imu_gyro_vel_b_rmse = imu_gyro_q.toRotationMatrix().transpose() * imu_gyro_vel_w;
+                imu_vel_rmse.add(imu_gyro_vel_b_rmse.x() - gt_vb_i.x(),
+                                 imu_gyro_vel_b_rmse.y() - gt_vb_i.y(),
+                                 imu_gyro_vel_b_rmse.z() - gt_vb_i.z());
+                imu_pos_rmse.add(imu_gyro_pos_w.x() - (d.sim_pos_x - gt_offset_x),
+                                 imu_gyro_pos_w.y() - (d.sim_pos_y - gt_offset_y),
+                                 imu_gyro_pos_w.z() - (d.sim_pos_z - gt_offset_z));
             }
         }
 
@@ -285,11 +266,6 @@ int OfflineTestNode::run() {
             esekf_out << Pcov(estimation_model::V_IDX, estimation_model::V_IDX) << ","
                       << Pcov(estimation_model::V_IDX + 1, estimation_model::V_IDX + 1) << ","
                       << Pcov(estimation_model::V_IDX + 2, estimation_model::V_IDX + 2) << ",";
-            {
-                Eigen::Vector3f imu_vel_b_log = q_gt.toRotationMatrix().transpose() * imu_vel_w;
-                esekf_out << imu_pos_w.x() << "," << imu_pos_w.y() << "," << imu_pos_w.z() << ","
-                          << imu_vel_b_log.x() << "," << imu_vel_b_log.y() << "," << imu_vel_b_log.z() << ",";
-            }
             // pred_vel (prediction-only, before measurement update)
             esekf_out << result.pred_vel.x() << "," << result.pred_vel.y() << "," << result.pred_vel.z() << ",";
             // IMU gyro-integrated state
@@ -310,7 +286,7 @@ int OfflineTestNode::run() {
 
     if (!quiet) {
         std::cout << "\nProcessing complete\n";
-        std::cout << "Disturbance results: output_data/" << params_.csv_filename << "_result.csv\n";
+        std::cout << "Disturbance results: output_data/" << params_.csv_filename << "_gmo.csv\n";
         std::cout << "ESEKF results:       " << esekf_out_path.string() << "\n";
     }
 
@@ -356,7 +332,7 @@ int OfflineTestNode::run() {
         std::cout << "Velocity RMSE total: " << vel_rmse.total_rmse() << " m/s\n";
         auto ip = imu_pos_rmse.rmse();
         auto iv = imu_vel_rmse.rmse();
-        std::cout << "--- IMU pure integration (GT q, no bias) ---\n";
+        std::cout << "--- IMU pure integration (gyro-integrated) ---\n";
         std::cout << "IMU Pos RMSE (m):     [" << ip.x() << ", " << ip.y() << ", " << ip.z() << "]\n";
         std::cout << "IMU Vel RMSE body(m/s):[" << iv.x() << ", " << iv.y() << ", " << iv.z() << "]\n";
         std::cout << "IMU Pos RMSE total:  " << imu_pos_rmse.total_rmse() << " m\n";

@@ -223,7 +223,7 @@ void DisturbanceObserver::log_details_to_file(
 ) {
     // Open file if not already open
     if (!log_file_.is_open()) {
-        std::string filename = "output_data/" + output_filename_ + "_result.csv";
+        std::string filename = "output_data/" + output_filename_ + "_gmo.csv";
         log_file_.open(filename);
         
         // Write header
