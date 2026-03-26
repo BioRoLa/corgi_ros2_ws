@@ -10,7 +10,6 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("transform_main");
     auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
-    rclcpp::WallRate rate(1000);
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
 
@@ -38,7 +37,29 @@ int main(int argc, char **argv)
 
     std::array<std::array<double, 4>, 2> eta_list;
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // --- Synchronization Setup ---
+    // Define 1ms control period (1,000,000 nanoseconds)
+    rclcpp::Duration period(0, 1000000);
+
+    // Wait for the ROS 2 clock to start (important if simulation is paused)
+    RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
+    while (rclcpp::ok())
+    {
+        // 1. Process callbacks to try receiving the /clock topic
+        rclcpp::spin_some(node);
+
+        // 2. Check whether the current time is greater than 0 (indicates /clock has been received)
+        if (node->now().seconds() > 0.0)
+        {
+            RCLCPP_INFO(node->get_logger(), "Clock synced! Sim Time: %.2f", node->now().seconds());
+            break; // Clock synchronized successfully; exit the wait loop
+        }
+
+        // 3. Sleep briefly to avoid 100% CPU usage (Wall time is fine here since we're only waiting for the connection)
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+    auto start_time = node->now();
+    rclcpp::Time next_time = start_time;
 
     while (rclcpp::ok())
     {
@@ -58,12 +79,22 @@ int main(int argc, char **argv)
         // std::cout << std::endl;
 
         motor_pub->publish(motor_cmd);
-        rate.sleep();
+
+        // --- Synchronized Sleep ---
+        next_time += period;
+        if (!node->get_clock()->sleep_until(next_time))
+        {
+            // If the clock jumps or we miss a cycle, warn and exit the loop for consistency
+            RCLCPP_WARN(node->get_logger(), "Missed control cycle or clock jump");
+            break;
+        }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "time: " << duration.count() << " ms" << std::endl;
+    auto end_time = node->now();
+    auto duration = end_time - start_time;
+
+    std::cout << "Transformation complete." << std::endl;
+    std::cout << "Total Simulation Time: " << duration.seconds() << " seconds" << std::endl;
 
     rclcpp::shutdown();
 
