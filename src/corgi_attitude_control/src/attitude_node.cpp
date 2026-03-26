@@ -120,42 +120,42 @@ private:
             // Passthrough mode — relay walk/command unchanged
             pub_cmd_->publish(walk_cmd_);
         } else {
-                // // Adjusting mode — extract current theta/beta from walk_cmd_
-                // std::array<double, 4> cur_theta, cur_beta;
-                // const std::array<const corgi_msgs::msg::MotorCmd *, 4> walk_mods = {
-                //     &walk_cmd_.module_a, &walk_cmd_.module_b,
-                //     &walk_cmd_.module_c, &walk_cmd_.module_d};
+                // Adjusting mode — extract current theta/beta from walk_cmd_
+                std::array<double, 4> cur_theta, cur_beta;
+                const std::array<const corgi_msgs::msg::MotorCmd *, 4> walk_mods = {
+                    &walk_cmd_.module_a, &walk_cmd_.module_b,
+                    &walk_cmd_.module_c, &walk_cmd_.module_d};
 
-                // for (int i = 0; i < 4; ++i) {
-                //     cur_theta[i] = walk_mods[i]->theta;
-                //     // Undo beta sign convention before passing to controller
-                //     // (motor_cmd stores beta with sign flips; controller works in
-                //     //  the internal "positive = outward" convention used by LegModel)
-                //     if (i == 0 || i == 3) {           // FL, RL
-                //         cur_beta[i] = -walk_mods[i]->beta;
-                //     } else {                            // FR, RR
-                //         cur_beta[i] =  walk_mods[i]->beta;
-                //     }
-                // }
+                for (int i = 0; i < 4; ++i) {
+                    cur_theta[i] = walk_mods[i]->theta;
+                    // Undo beta sign convention before passing to controller
+                    // (motor_cmd stores beta with sign flips; controller works in
+                    //  the internal "positive = outward" convention used by LegModel)
+                    if (i == 0 || i == 3) {           // FL, RL
+                        cur_beta[i] = -walk_mods[i]->beta;
+                    } else {                            // FR, RR
+                        cur_beta[i] =  walk_mods[i]->beta;
+                    }
+                }
 
-                // auto corrected = controller_->compute(roll, pitch, swing_mask_,
-                //                                       cur_theta, cur_beta);
+                auto corrected = controller_->compute(roll, pitch, swing_mask_,
+                                                      cur_theta, cur_beta);
 
-                // auto out = walk_cmd_;  // copy header + gains
-                // std::array<corgi_msgs::msg::MotorCmd *, 4> out_mods = {
-                //     &out.module_a, &out.module_b, &out.module_c, &out.module_d};
+                auto out = walk_cmd_;  // copy header + gains
+                std::array<corgi_msgs::msg::MotorCmd *, 4> out_mods = {
+                    &out.module_a, &out.module_b, &out.module_c, &out.module_d};
 
-                // for (int i = 0; i < 4; ++i) {
-                //     out_mods[i]->theta = corrected[0][i];
-                //     // Re-apply beta sign convention
-                //     if (i == 0 || i == 3) {
-                //         out_mods[i]->beta = -corrected[1][i];
-                //     } else {
-                //         out_mods[i]->beta =  corrected[1][i];
-                //     }
-                // }
-                // pub_cmd_->publish(out);
-                pub_cmd_->publish(walk_cmd_);
+                for (int i = 0; i < 4; ++i) {
+                    out_mods[i]->theta = corrected[0][i];
+                    // Re-apply beta sign convention
+                    if (i == 0 || i == 3) {
+                        out_mods[i]->beta = -corrected[1][i];
+                    } else {
+                        out_mods[i]->beta =  corrected[1][i];
+                    }
+                }
+                pub_cmd_->publish(out);
+                // pub_cmd_->publish(walk_cmd_);
 
 
             // Publish stability flag
