@@ -19,6 +19,10 @@ LegModel::LegModel(bool sim) :
     R(0.1), // 10 cm
     r(sim? 0.019 : 0.019), // No tire 0.0125: With tire 0.019// they are now the same in webots
     radius(R + r),
+    // Foot design parameters
+    foot_offset(0.02225),      // 22.25 mm
+    tyre_thickness(0.01225),   // 12.25 mm
+    foot_radius(R + foot_offset + tyre_thickness),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
     arc_BC(M_PI * 101.0 / 180.0),
@@ -83,6 +87,14 @@ void LegModel::calculate() {
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
+    
+    // Foot characteristics
+    O_r_c = G_c.real() + R;
+    I_l_c = O_r_c + (R + foot_offset) * std::exp(1i * (M_PI * 140.0 / 180.0));
+    ang_OC = std::arg(C_l_c);
+    J_l_c = U_l_c + (R + foot_offset) * std::exp(1i * (M_PI * 140.0 / 180.0 + std::arg(H_l_c - U_l_c)));
+    H_extend_l_c = U_l_c + (R + foot_offset) * std::exp(1i * std::arg(H_l_c - U_l_c));
+    
     this->symmetry();
 }
 
@@ -96,6 +108,11 @@ void LegModel::symmetry() {
     H_r_c = std::conj(H_l_c);
     U_r_c = std::conj(U_l_c);
     L_r_c = std::conj(L_l_c);
+    
+    // Foot characteristics symmetry
+    I_r_c = std::conj(I_l_c);
+    J_r_c = std::conj(J_l_c);
+    H_extend_r_c = std::conj(H_extend_l_c);
 }
 
 void LegModel::rotate() {
@@ -120,6 +137,15 @@ void LegModel::rotate() {
     U_r_c *= rot_ang;
     L_l_c *= rot_ang;
     L_r_c *= rot_ang;
+    
+    // Rotate foot characteristics
+    O_r_c *= rot_ang;
+    I_l_c *= rot_ang;
+    I_r_c *= rot_ang;
+    J_l_c *= rot_ang;
+    J_r_c *= rot_ang;
+    H_extend_l_c *= rot_ang;
+    H_extend_r_c *= rot_ang;
 }
 
 void LegModel::to_vector() {
@@ -141,6 +167,69 @@ void LegModel::to_vector() {
     U_r = {U_r_c.real(), U_r_c.imag()};
     L_l = {L_l_c.real(), L_l_c.imag()};
     L_r = {L_r_c.real(), L_r_c.imag()};
+    
+    // Foot characteristics
+    O_r = {O_r_c.real(), O_r_c.imag()};
+    I_l = {I_l_c.real(), I_l_c.imag()};
+    I_r = {I_r_c.real(), I_r_c.imag()};
+    J_l = {J_l_c.real(), J_l_c.imag()};
+    J_r = {J_r_c.real(), J_r_c.imag()};
+    H_extend_l = {H_extend_l_c.real(), H_extend_l_c.imag()};
+    H_extend_r = {H_extend_r_c.real(), H_extend_r_c.imag()};
+}
+
+std::array<std::array<double, 2>, 2> LegModel::rot(double ang) {
+    // Returns 2D rotation matrix for given angle.
+    double cos_ang = std::cos(ang);
+    double sin_ang = std::sin(ang);
+    return {{{cos_ang, -sin_ang}, {sin_ang, cos_ang}}};
+}
+
+std::array<double, 2> LegModel::rim_point(double alpha) {
+    // Calculates point on the wheel rim for given alpha angle (degrees).
+    // Alpha: Angle in degrees, where 0 degrees is directly in front of the wheel,
+    //        and positive angles rotate counterclockwise.
+    
+    this->forward(theta, beta, true);
+    double alpha_rad = alpha * M_PI / 180.0;
+    double a_mod = std::fmod((alpha + 180.0), 360.0) - 180.0;
+    
+    // Select rim segment and center point
+    std::array<double, 2> center;
+    std::array<double, 2> direction_point;
+    double angle = 0.0;
+    
+    if (a_mod >= -40.0 && a_mod <= 40.0) {
+        // Foot rim
+        center = O_r;
+        direction_point = G;
+        angle = alpha_rad;
+    } else if (a_mod > 40.0 && a_mod <= 180.0) {
+        // Upper rim RHS
+        center = U_r;
+        direction_point = J_r;
+        angle = (a_mod - 40.0) * M_PI / 180.0;
+    } else {
+        // Upper rim LHS
+        center = U_l;
+        direction_point = J_l;
+        angle = (a_mod + 40.0) * M_PI / 180.0;
+    }
+    
+    // Compute unit direction vector
+    double dx = direction_point[0] - center[0];
+    double dy = direction_point[1] - center[1];
+    double norm = std::sqrt(dx*dx + dy*dy);
+    norm = (norm < 1e-10) ? 1.0 : norm;
+    dx /= norm;
+    dy /= norm;
+    
+    // Apply rotation
+    auto rot_mat = rot(angle);
+    double rotated_x = rot_mat[0][0] * dx + rot_mat[0][1] * dy;
+    double rotated_y = rot_mat[1][0] * dx + rot_mat[1][1] * dy;
+    
+    return {{center[0] + foot_radius * rotated_x, center[1] + foot_radius * rotated_y}};
 }
 
 void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {

@@ -13,6 +13,12 @@ public:
     // Forward kinematics
     void forward(double theta, double beta, bool vector = true);
 
+    // Rotation matrix helper
+    std::array<std::array<double, 2>, 2> rot(double ang);
+
+    // Rim point calculation
+    std::array<double, 2> rim_point(double alpha = 0.0);
+
     // Inverse kinematics
     std::array<double, 2> inverse(const std::array<double, 2> &pos, const std::string &joint = "G");
     std::array<double, 2> inverse(const double pos[2], const std::string &joint = "G")
@@ -30,8 +36,14 @@ public:
     // Joint Positions
     std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
 
+    // Foot design joint positions
+    std::array<double, 2> O_r, I_l, I_r, J_l, J_r, H_extend_l, H_extend_r;
+
     // Joint Positions in complex
     std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
+
+    // Foot design joint positions in complex
+    std::complex<double> O_r_c, I_l_c, I_r_c, J_l_c, J_r_c, H_extend_l_c, H_extend_r_c;
 
     // Constants (public - match initialization order)
     const double max_theta;
@@ -41,6 +53,11 @@ public:
     const double R;      // Wheel radius
     const double r;      // Tire radius
     const double radius; // Wheel radius + Tire radius
+
+    // Foot design parameters
+    const double foot_offset;      // 22.25 mm
+    const double tyre_thickness;   // 12.25 mm
+    const double foot_radius;      // R + foot_offset + tyre_thickness
 
     // Current theta and beta
     double theta;
@@ -71,6 +88,7 @@ private:
     double ang_OEA;
     double ang_DBC;
     double ang_OGF;
+    double ang_OC;
 
     // Helper functions
     void calculate();
