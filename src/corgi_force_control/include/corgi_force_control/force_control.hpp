@@ -1,5 +1,5 @@
-#ifndef FORCE_CONTROL_3D_HPP
-#define FORCE_CONTROL_3D_HPP
+#ifndef FORCE_CONTROL_HPP
+#define FORCE_CONTROL_HPP
 
 #include <iostream>
 #include <algorithm>
@@ -21,9 +21,9 @@
 #include "corgi_msgs/msg/imu_stamped.hpp"
 
 
-class ForceControl3DNode : public rclcpp::Node {
+class ForceControlNode : public rclcpp::Node {
 public:
-    ForceControl3DNode();
+    ForceControlNode();
     void run();
 
 private:
@@ -51,7 +51,7 @@ private:
                                     double& yaw);
     
     // Kinematics helper
-    KinematicsHelper kinematics_;
+    std::unique_ptr<KinematicsHelper> kinematics_;
     
     // Messages
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd_;
@@ -72,7 +72,7 @@ private:
     std::vector<Eigen::MatrixXd> phi_prev_modules_;
     
     // Physical parameters
-    const bool sim_ = false;
+    bool sim_;
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
     
     int loop_count_ = 0;
