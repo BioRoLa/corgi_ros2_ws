@@ -103,10 +103,19 @@ int main(int argc, char **argv) {
 
             cmd->kp_r = 90;
             cmd->kp_l = 90;
+            cmd->kp_h = 90;
             cmd->ki_r = 0;
             cmd->ki_l = 0;
+            cmd->ki_h = 0;
             cmd->kd_r = 1.75;
             cmd->kd_l = 1.75;
+            cmd->kd_h = 1.75;
+        }
+        // Read 4 gamma (ABAD) columns: A_γ, B_γ, C_γ, D_γ
+        for (auto& cmd : motor_cmds){
+            std::getline(ss, item, ',');
+            cmd->gamma = std::stod(item);
+            RCLCPP_DEBUG(node->get_logger(), item.c_str());
         }
         motor_cmd.header.stamp = node->now();
         motor_cmd.header.seq = -4999+i;
@@ -162,10 +171,18 @@ int main(int argc, char **argv) {
 
                 cmd->kp_r = 90;
                 cmd->kp_l = 90;
+                cmd->kp_h = 90;
                 cmd->ki_r = 0;
                 cmd->ki_l = 0;
+                cmd->ki_h = 0;
                 cmd->kd_r = 1.75;
                 cmd->kd_l = 1.75;
+                cmd->kd_h = 1.75;
+            }
+            // Read 4 gamma (ABAD) columns: A_γ, B_γ, C_γ, D_γ
+            for (auto& cmd : motor_cmds){
+                std::getline(ss, item, ',');
+                cmd->gamma = std::stod(item);
             }
 
             motor_cmd.header.seq = seq;
