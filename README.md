@@ -127,7 +127,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       sudo make install
       ```
     
-    5. **[osqp_eigen](https://github.com/robotology/osqp-eigen)**
+    5. **[osqp_eigen](https://github.com/gbionics/osqp-eigen)**
       ```bash
       git clone https://github.com/gbionics/osqp-eigen.git
       cd osqp-eigen
@@ -177,7 +177,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     
 4.  **Build the ROS Workspace**
 
-    Per-package CMake arguments (e.g., `LOCAL_PACKAGE_PATH`, `ROS_EDITION`, `yaml-cpp_DIR`) are configured in [`colcon.meta`](colcon.meta), so you only need:
+    Per-package CMake arguments (e.g. `ROS_EDITION`, `yaml-cpp_DIR`) are configured in [`colcon.meta`](colcon.meta), so you only need:
 
     ```bash
     cd ~/corgi_ws/corgi_ros2_ws/
