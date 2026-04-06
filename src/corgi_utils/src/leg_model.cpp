@@ -231,7 +231,7 @@ std::array<double, 2> LegModel::rim_point(double alpha) {
     
     return {{center[0] + foot_radius * rotated_x, center[1] + foot_radius * rotated_y}};
 }
-
+// TODO: remove contact_map after contact_map_3d is fully tested and validated in simulation　
 void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {
         using namespace std::complex_literals;
         double beta_adjusted = beta_in - slope;
@@ -282,18 +282,39 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             contact_p = {x_new, y_new};
         }//end if
 }//end contact_map
-
+// TODO: Consider the other two rims
 void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope, bool contact_upper, bool contact_lower) {
-        this->contact_map(theta_in, beta_in, slope, contact_upper, contact_lower);
-        
-        this->gamma = gamma_in;
-
-        double sin_g = std::sin(gamma);
-        double cos_g = std::cos(gamma);
-
-        contact_p_3d[0] = contact_p[0];
-        contact_p_3d[1] = d_wheel * cos_g - contact_p[1] * sin_g;
-        contact_p_3d[2] = d_wheel * sin_g + contact_p[1] * cos_g;
+    // Step 1: Forward kinematics in Leg Frame
+    this->forward(theta_in, beta_in, false);
+    this->gamma = gamma_in;
+    
+    // Step 2: Calculate alpha from ground slope (in degrees)
+    double alpha = (slope - beta_in) * 180.0 / M_PI;
+    
+    // Step 3: Calculate sin(γ) and cos(γ)
+    double sin_g = std::sin(gamma);
+    double cos_g = std::cos(gamma);
+    
+    // Step 4: Determine wheel thickness based on gamma sign
+    // Select opposite sign to minimize Z height
+    double half_w = tyre_thickness / 2.0;
+    double d_wheel = (sin_g > 0) ? -half_w : half_w;
+    
+    // Step 5: Optimization for small gamma
+    if (std::abs(sin_g) < 1e-4) {
+        d_wheel = 0.0;
+    }
+    
+    // Step 6: Get 2D contact point from rim_point (Leg Frame)
+    auto contact_2d = rim_point(alpha);
+    
+    // Step 7: Apply axis rotation matrix
+    // [X]   [1   0        0    ] [x_2D  ]
+    // [Y] = [0  cos(γ) -sin(γ)] [d_wheel ]
+    // [Z]   [0  sin(γ)  cos(γ)] [z_2D  ]
+    contact_p_3d[0] = contact_2d[0];                           // X = x_2D
+    contact_p_3d[1] = d_wheel * cos_g - contact_2d[1] * sin_g;  // Y
+    contact_p_3d[2] = d_wheel * sin_g + contact_2d[1] * cos_g;  // Z
 }//end contact_map_3d
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
