@@ -15,13 +15,6 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 
-if(NOT DEFINED LOCAL_PACKAGE_PATH)
-  if(DEFINED ENV{LOCAL_PACKAGE_PATH})
-    set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}")
-  else()
-    set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install")
-  endif()
-endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -40,13 +33,8 @@ find_package(osqp REQUIRED)
 find_package(OsqpEigen REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
-set(OSQP_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/osqp")
-set(OSQP_EIGEN_INCLUDE_DIRS "${LOCAL_PACKAGE_PATH}/include/OsqpEigen")
-
 include_directories(
   ${CMAKE_CURRENT_LIST_DIR}
-  ${OSQP_INCLUDE_DIRS}
-  ${OSQP_EIGEN_INCLUDE_DIRS}
   include
 )
 
