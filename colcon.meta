@@ -1,0 +1,15 @@
+{
+  "names": {
+    "corgi_mpc": {
+      "cmake-args": [
+        "-Dyaml-cpp_DIR=/usr/local/lib/cmake/yaml-cpp"
+      ]
+    },
+    "livox_ros_driver2": {
+      "cmake-args": [
+        "-DROS_EDITION=ROS2",
+        "-DHUMBLE_ROS=humble"
+      ]
+    }
+  }
+}
