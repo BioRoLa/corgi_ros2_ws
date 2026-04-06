@@ -89,7 +89,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     
     // Note: Use contact_map_3d and 3D position logic
     legmodel.contact_map_3d(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
-
+    // TODO: should be modifiled
     int target_rim = legmodel.rim;
     int target_alpha = legmodel.alpha;
 
@@ -99,7 +99,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
     pos_fb << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
-
+    /* TODO: should be modifiled                                  
     if (target_rim == 0 || target_rim > 5) {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
@@ -114,7 +114,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
         motor_cmd_->torque_l = 0;
         motor_cmd_->torque_h = 0;
         return;
-    }
+    }*/
 
     Eigen::MatrixXd pos_err(3, 1);
     pos_err = pos_des - pos_fb;
@@ -124,8 +124,8 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd P_poly_deriv = Eigen::MatrixXd::Zero(2, 7);
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
-
-    P_poly = kinematics_.calculate_P_poly(legmodel.rim, legmodel.alpha);
+    // TODO: should be modifiled 
+    P_poly = kinematics_.calculate_P_poly(legmodel.alpha);
     
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
 
