@@ -58,7 +58,7 @@ BodyLevelingController::compute(
         //   hip_x < 0 (rear)     → goes DOWN → leg LONGER (Δh < 0)
         //
         // Required foot-to-hip distance: d = stand_height - Δh
-        double delta_h = hip_y_[i] * std::sin(roll) + std::abs(hip_x_[i]) * std::sin(pitch);
+        double delta_h = hip_y_[i] * std::sin(roll) - hip_x_[i] * std::sin(pitch);
         double target_depth = stand_height_ - delta_h;
 
         // Clamp to safe range (same limits as set_stand_height in walk_gait)
