@@ -11,7 +11,10 @@ KinematicsHelper::KinematicsHelper(bool sim)
       U_r_coef_(2, 8),
       L_l_coef_(2, 8),
       L_r_coef_(2, 8),
-      G_coef_(2, 8)
+      G_coef_(2, 8),
+      O_r_coef_(2, 8),
+      J_l_coef_(2, 8),
+      J_r_coef_(2, 8)
 {
     initialize_coefficients();
 }
@@ -44,41 +47,50 @@ void KinematicsHelper::initialize_coefficients() {
         
         G_coef_(0, i) = 0;
         G_coef_(1, i) = G_y_coef[i];
+        
+        // Foot point O_r coefficients (O_r = G + offset in x by R, same y as G)
+        O_r_coef_(0, i) = 0;  // O_r x-coefficient (pure vertical geometry from G)
+        O_r_coef_(1, i) = O_y_coef[i];  // O_r y-coordinate follows G
+        
+        // Upper point J_l coefficients (140 degrees)
+        J_l_coef_(0, i) = J_x_coef[i];
+        J_l_coef_(1, i) = J_y_coef[i];
+        
+        // Upper point J_r coefficients (140 degrees, symmetric)
+        J_r_coef_(0, i) = -J_x_coef[i];
+        J_r_coef_(1, i) = J_y_coef[i];
     }
 }
 
-Eigen::MatrixXd KinematicsHelper::calculate_P_poly(int rim, double alpha) {
+Eigen::MatrixXd KinematicsHelper::calculate_P_poly(double alpha) {
     Eigen::MatrixXd P_poly(2, 8);
-
+    
+    // Convert alpha from degrees to radians and normalize to [-180, 180]
+    double alpha_rad = alpha * M_PI / 180.0;
+    double a_mod = std::fmod((alpha + 180.0), 360.0) - 180.0;
+    
     double scaled_radius = leg_model_.radius / leg_model_.R;
-
-    if (rim == 1 && alpha > -M_PI*2.0/3.0) {
-        Eigen::Rotation2D<double> rotation(alpha+M_PI);
+    
+    // 3-rim structure based on alpha ranges
+    if (a_mod >= -40.0 && a_mod <= 40.0) {
+        // Rim 1: Foot rim - centered at O_r, direction toward G
+        Eigen::Rotation2D<double> rotation(alpha_rad);
         Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-        P_poly = rot_alpha * (H_l_coef_-U_l_coef_) * scaled_radius + U_l_coef_;
+        P_poly = rot_alpha * (G_coef_ - O_r_coef_) * scaled_radius + O_r_coef_;
     }
-    else if (rim == 2) {
-        Eigen::Rotation2D<double> rotation(alpha);
+    else if (a_mod > 40.0 && a_mod <= 180.0) {
+        // Rim 2: Upper RHS - centered at U_r, direction toward J_r
+        double angle_offset = (a_mod - 40.0) * M_PI / 180.0;
+        Eigen::Rotation2D<double> rotation(angle_offset);
         Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-        P_poly = rot_alpha * (G_coef_-L_l_coef_) * scaled_radius + L_l_coef_;
-    }
-    else if (rim == 3) {
-        Eigen::Rotation2D<double> rotation(alpha);
-        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-        P_poly = rot_alpha * (G_coef_-L_l_coef_) * leg_model_.r / leg_model_.R + G_coef_;
-    }
-    else if (rim == 4) {
-        Eigen::Rotation2D<double> rotation(alpha);
-        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-        P_poly = rot_alpha * (G_coef_-L_r_coef_) * scaled_radius + L_r_coef_;
-    }
-    else if (rim == 5 && alpha < M_PI*2.0/3.0) {
-        Eigen::Rotation2D<double> rotation(alpha-M_PI);
-        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
-        P_poly = rot_alpha * (H_r_coef_-U_r_coef_) * scaled_radius + U_r_coef_;
+        P_poly = rot_alpha * (J_r_coef_ - U_r_coef_) * scaled_radius + U_r_coef_;
     }
     else {
-        P_poly = Eigen::MatrixXd::Zero(2, 8);
+        // Rim 3: Upper LHS - centered at U_l, direction toward J_l
+        double angle_offset = (a_mod + 40.0) * M_PI / 180.0;
+        Eigen::Rotation2D<double> rotation(angle_offset);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (J_l_coef_ - U_l_coef_) * scaled_radius + U_l_coef_;
     }
     
     return P_poly;
@@ -159,7 +171,7 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torqu
     LegModel& leg_model = kinematics_.get_leg_model();
     leg_model.contact_map(theta, beta);
 
-    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly(leg_model.rim, leg_model.alpha);
+    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly(leg_model.alpha);
     Eigen::MatrixXd P_poly_deriv(2, 7);
 
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);

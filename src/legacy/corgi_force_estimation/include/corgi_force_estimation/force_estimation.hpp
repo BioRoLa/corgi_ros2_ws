@@ -29,7 +29,7 @@ public:
     explicit KinematicsHelper(bool sim);
     
     // Kinematics computations
-    Eigen::MatrixXd calculate_P_poly(int rim, double alpha);
+    Eigen::MatrixXd calculate_P_poly(double alpha);
     Eigen::MatrixXd calculate_jacobian(const Eigen::MatrixXd& P_theta, 
                                        const Eigen::MatrixXd& P_theta_deriv, 
                                        double beta);
@@ -60,6 +60,9 @@ private:
     Eigen::MatrixXd L_l_coef_;
     Eigen::MatrixXd L_r_coef_;
     Eigen::MatrixXd G_coef_;
+    Eigen::MatrixXd O_r_coef_;   // Foot point coefficients
+    Eigen::MatrixXd J_l_coef_;   // Left upper point coefficients
+    Eigen::MatrixXd J_r_coef_;   // Right upper point coefficients
 };
 
 
