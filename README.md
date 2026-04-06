@@ -12,16 +12,17 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
 
 ## Table of Contents
 
-- [**_System Architecture_**](#system-architecture)
-- [**_System Requirements & Dependencies_**](#system-requirements--dependencies)
-  - [_Hardware_](#hardware)
-  - [_Software_](#software)
-- [**_Installation and Build Instructions_**](#installation-and-build-instructions)
-- [**_Usage Guide_**](#usage-guide)
-  - [_Running the Simulation_](#running-the-simulation)
-  - [_Running on the Real Robot_](#running-on-the-real-robot)
-- [**_Workspace Structure & Key Packages_**](#workspace-structure--key-packages)
-- [**_Notes & Contact_**](#notes--contact)
+- [Corgi Robot ROS 2 Workspace](#corgi-robot-ros-2-workspace)
+  - [Table of Contents](#table-of-contents)
+  - [System Architecture](#system-architecture)
+  - [System Requirements \& Dependencies](#system-requirements--dependencies)
+    - [Hardware](#hardware)
+    - [Software](#software)
+  - [Installation and Build Instructions](#installation-and-build-instructions)
+  - [Usage Guide](#usage-guide)
+    - [Running on the Real Robot](#running-on-the-real-robot)
+  - [Workspace Structure \& Key Packages](#workspace-structure--key-packages)
+    - [Key Packages in `src/`](#key-packages-in-src)
 
 ## System Architecture
 The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
@@ -152,17 +153,32 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       ```bash
       sudo apt install ros-humble-joy
       ```
-    
-5.  **Build the ROS Workspace**
 
-    If you installed C++ dependencies to the recommended path, use the following command.
+    9. **Livox-SDK2 (required by livox_ros_driver2)**
+    Install Livox-SDK2 to provide `/usr/local/lib/liblivox_lidar_sdk_shared.so`:
+      ```bash
+      cd ~/corgi_ws/
+      git clone https://github.com/Livox-SDK/Livox-SDK2.git
+      cd Livox-SDK2
+      mkdir -p build && cd build
+      cmake ..
+      make -j$(nproc)
+      sudo make install
+      ```
+    
+4.  **Build the ROS Workspace**
+
+    Per-package CMake arguments (e.g., `LOCAL_PACKAGE_PATH`, `ROS_EDITION`, `yaml-cpp_DIR`) are configured in [`colcon.meta`](colcon.meta), so you only need:
 
     ```bash
     cd ~/corgi_ws/corgi_ros2_ws/
-    colcon build --cmake-args -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
+    source /opt/ros/humble/setup.bash
+    colcon build
     ```
 
-6.  **Source the Environment (ROS 2)**
+    > **Note:** If you installed C++ dependencies to a non-default path, update the paths in `colcon.meta` accordingly.
+
+5.  **Source the Environment (ROS 2)**
 
     You can also add this to your own `~/.bashrc`:
 
@@ -170,6 +186,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     source /opt/ros/humble/setup.bash
     source $HOME/corgi_ws/corgi_ros2_ws/install/setup.bash
     ```
+
 ## Usage Guide
 
 ### Running on the Real Robot
@@ -205,7 +222,8 @@ For more details on a specific package, please see its respective `README.md` fi
 
 - **Sensing & Estimation**
 
-  - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`livox_ros_driver2`](src/livox_ros_driver2): ROS 2 driver for Livox MID-360 LiDAR (fork of [Livox-SDK/livox_ros_driver2](https://github.com/Livox-SDK/livox_ros_driver2)).
 
 - **Control & Planning**
   - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
@@ -214,5 +232,3 @@ For more details on a specific package, please see its respective `README.md` fi
   - [`corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
   - [`corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
   - [`corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
-
-## Notes
