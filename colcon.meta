@@ -2,13 +2,7 @@
   "names": {
     "corgi_mpc": {
       "cmake-args": [
-        "-Dyaml-cpp_DIR=/usr/local/lib/cmake/yaml-cpp",
-        "-DLOCAL_PACKAGE_PATH=/home/hiho817/corgi_ws/install"
-      ]
-    },
-    "corgi_ros_bridge": {
-      "cmake-args": [
-        "-DLOCAL_PACKAGE_PATH=/home/hiho817/corgi_ws/install"
+        "-Dyaml-cpp_DIR=/usr/local/lib/cmake/yaml-cpp"
       ]
     },
     "livox_ros_driver2": {
