@@ -19,7 +19,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     double velocity       = this->declare_parameter("velocity",          0.1);
     double stand_height   = this->declare_parameter("stand_height",      0.25);
     double step_length    = this->declare_parameter("step_length",       0.3);
-    double step_height    = this->declare_parameter("step_height",       0.04);
+    double step_height    = this->declare_parameter("step_height",       0.06);
     int    sampling_rate  = this->declare_parameter("sampling_rate",     1000);
     int    max_adj_steps  = this->declare_parameter("max_adjust_steps",  3000);
     double BL             = this->declare_parameter("BL",                0.444);
@@ -101,7 +101,10 @@ void EventWalkNode::on_timer()
     // ── assemble ExternalInput from latest callback data ──────────────────
     EventWalkGait::ExternalInput input;
     input.trigger          = trigger_enable_;
-    input.attitude_stable  = attitude_stable_;
+    // Only forward attitude_stable when the gait is actually in ADJUSTING phase.
+    // Stale "true" values from a previous ADJUSTING cycle must not pre-trigger
+    // the latch on the very first tick of the next adjustment window.
+    input.attitude_stable  = gait_->is_adjusting() && attitude_stable_;
     input.contact          = contact_;
     input.motor_state_valid = motor_state_valid_;
 
