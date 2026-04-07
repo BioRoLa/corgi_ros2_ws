@@ -59,6 +59,8 @@ public:
         double roll_thresh  = this->declare_parameter("roll_thresh",  0.052);
         double pitch_thresh = this->declare_parameter("pitch_thresh", 0.052);
         double omega_thresh = this->declare_parameter("omega_thresh", 0.05);
+        double max_joint_rate = this->declare_parameter("max_joint_rate", 2.0);  // rad/s
+        max_delta_ = max_joint_rate * 0.001;  // per 1-ms tick
 
         controller_ = std::make_unique<BodyLevelingController>(
             sim, BL, BW, stand_height, roll_thresh, pitch_thresh, omega_thresh);
@@ -116,49 +118,69 @@ private:
         double omega_x = imu_.angular_velocity.x;
         double omega_y = imu_.angular_velocity.y;
 
-        if (walk_phase_ != 2) {
-            // Passthrough mode — relay walk/command unchanged
-            pub_cmd_->publish(walk_cmd_);
-        } else {
-                // Adjusting mode — extract current theta/beta from walk_cmd_
-                std::array<double, 4> cur_theta, cur_beta;
-                const std::array<const corgi_msgs::msg::MotorCmd *, 4> walk_mods = {
-                    &walk_cmd_.module_a, &walk_cmd_.module_b,
-                    &walk_cmd_.module_c, &walk_cmd_.module_d};
+        // ── extract walk_cmd_ theta/beta in internal (LegModel) convention ──
+        const std::array<const corgi_msgs::msg::MotorCmd *, 4> walk_mods = {
+            &walk_cmd_.module_a, &walk_cmd_.module_b,
+            &walk_cmd_.module_c, &walk_cmd_.module_d};
 
-                for (int i = 0; i < 4; ++i) {
-                    cur_theta[i] = walk_mods[i]->theta;
-                    // Undo beta sign convention before passing to controller
-                    // (motor_cmd stores beta with sign flips; controller works in
-                    //  the internal "positive = outward" convention used by LegModel)
-                    if (i == 0 || i == 3) {           // FL, RL
-                        cur_beta[i] = -walk_mods[i]->beta;
-                    } else {                            // FR, RR
-                        cur_beta[i] =  walk_mods[i]->beta;
-                    }
-                }
+        std::array<double, 4> base_theta, base_beta;
+        for (int i = 0; i < 4; ++i) {
+            base_theta[i] = walk_mods[i]->theta;
+            // Undo motor-cmd beta sign flip so controller works in LegModel convention
+            base_beta[i] = (i == 0 || i == 3) ? -walk_mods[i]->beta : walk_mods[i]->beta;
+        }
 
-                auto corrected = controller_->compute(roll, pitch, swing_mask_,
-                                                      cur_theta, cur_beta);
+        // ── compute target correction delta (zero when not ADJUSTING) ────────
+        // The slew is applied only to the correction on top of walk_cmd_, so the
+        // swing-leg trajectory is always relayed exactly without any rate limiting.
+        // When leaving ADJUSTING, snap correction to zero immediately so no
+        // residual offset is applied during the following swing phase.
+        if (prev_walk_phase_ == 2 && walk_phase_ != 2) {
+            prev_corr_theta_.fill(0.0);
+            prev_corr_beta_.fill(0.0);
+        }
+        prev_walk_phase_ = walk_phase_;
 
-                auto out = walk_cmd_;  // copy header + gains
-                std::array<corgi_msgs::msg::MotorCmd *, 4> out_mods = {
-                    &out.module_a, &out.module_b, &out.module_c, &out.module_d};
+        std::array<double, 4> tgt_corr_theta = {}, tgt_corr_beta = {};
+        if (walk_phase_ == 2) {
+            auto corrected = controller_->compute(roll, pitch, swing_mask_,
+                                                  base_theta, base_beta);
+            for (int i = 0; i < 4; ++i) {
+                tgt_corr_theta[i] = corrected[0][i] - base_theta[i];
+                tgt_corr_beta[i]  = corrected[1][i] - base_beta[i];
+            }
+        }
+        // else: target correction is 0 → slew ramps existing correction back to 0
 
-                for (int i = 0; i < 4; ++i) {
-                    out_mods[i]->theta = corrected[0][i];
-                    // Re-apply beta sign convention
-                    if (i == 0 || i == 3) {
-                        out_mods[i]->beta = -corrected[1][i];
-                    } else {
-                        out_mods[i]->beta =  corrected[1][i];
-                    }
-                }
-                pub_cmd_->publish(out);
-                // pub_cmd_->publish(walk_cmd_);
+        // ── slew-rate limit on correction only ───────────────────────────────
+        auto slew = [this](double prev, double tgt) -> double {
+            double diff = tgt - prev;
+            if (diff >  max_delta_) diff =  max_delta_;
+            if (diff < -max_delta_) diff = -max_delta_;
+            return prev + diff;
+        };
+        for (int i = 0; i < 4; ++i) {
+            prev_corr_theta_[i] = slew(prev_corr_theta_[i], tgt_corr_theta[i]);
+            prev_corr_beta_[i]  = slew(prev_corr_beta_[i],  tgt_corr_beta[i]);
+        }
 
+        // ── assemble and publish motor command ───────────────────────────────
+        auto out_msg = walk_cmd_;  // copy header + gains
+        std::array<corgi_msgs::msg::MotorCmd *, 4> out_mods = {
+            &out_msg.module_a, &out_msg.module_b,
+            &out_msg.module_c, &out_msg.module_d};
 
-            // Publish stability flag
+        for (int i = 0; i < 4; ++i) {
+            double out_theta = base_theta[i] + prev_corr_theta_[i];
+            double out_beta  = base_beta[i]  + prev_corr_beta_[i];
+            out_mods[i]->theta = out_theta;
+            // Re-apply motor-cmd beta sign convention
+            out_mods[i]->beta = (i == 0 || i == 3) ? -out_beta : out_beta;
+        }
+        pub_cmd_->publish(out_msg);
+
+        // ── publish stability flag (only during ADJUSTING) ───────────────────
+        if (walk_phase_ == 2) {
             std_msgs::msg::Bool stable_msg;
             stable_msg.data = controller_->is_stable(roll, pitch, omega_x, omega_y);
             pub_stable_->publish(stable_msg);
@@ -166,8 +188,13 @@ private:
     }
 
     // State
-    int walk_phase_ = 0;
+    int walk_phase_      = 0;
+    int prev_walk_phase_ = 0;
     std::array<int, 4> swing_mask_ = {0, 0, 0, 0};
+    // Slewed correction delta added on top of walk_cmd_ (never touches swing trajectory)
+    std::array<double, 4> prev_corr_theta_ = {};
+    std::array<double, 4> prev_corr_beta_  = {};
+    double max_delta_ = 0.002;  // rad/tick, set from param in constructor
     corgi_msgs::msg::MotorCmdStamped      walk_cmd_;
     corgi_msgs::msg::ImuStamped           imu_;
     corgi_msgs::msg::MotorStateStamped    motor_state_;
