@@ -1,5 +1,6 @@
 #include <iostream>
 #include <array>
+#include <cmath>
 #include "rclcpp/rclcpp.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
@@ -26,24 +27,31 @@ private:
     // Messages
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd_;
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules_;
+
+    // Physical parameters
+    bool sim_;
     
     // State variables
     bool trigger_;
     double mg_;
     double s_;
     double h_;
+    int test_module_idx_;
+    double gamma_amp_rad_;
+    double gamma_freq_hz_;
     
-    // Physical parameters
-    bool sim_;
 };
 
 ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     : Node("imp_cmd_pub"),
-      sim_(false),
-      trigger_(false),
+    sim_(false),
+    trigger_(false),
       mg_(19.68 * 9.81),
       s_(0.0),
-      h_(0.0)
+    h_(0.0),
+    test_module_idx_(1),
+    gamma_amp_rad_(8.0/180.0*M_PI),
+    gamma_freq_hz_(0.5)
 {
     RCLCPP_INFO(this->get_logger(), "Impedance Command Publisher Starts");
 
@@ -85,7 +93,6 @@ void ImpedanceCmdPublisherNode::trigger_cb(const corgi_msgs::msg::TriggerStamped
 }
 
 void ImpedanceCmdPublisherNode::initialize_impedance_command() {
-    // robot weight ~= 220 N
     for (auto& cmd : imp_cmd_modules_){
         cmd->theta = 17/180.0*M_PI;
         cmd->beta = 0/180.0*M_PI;
@@ -97,20 +104,20 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
         cmd->my = 0;
         cmd->mz = 0;
         if (sim_) {
-            cmd->bx = 200; //200
-            cmd->by = 200; //200
-            cmd->bz = 0;
-            cmd->kx = 4000; //2000
-            cmd->ky = 4000; //2000
-            cmd->kz = 0;
+            cmd->bx = 0;
+            cmd->by = 0;
+            cmd->bz = 6;
+            cmd->kx = 0;
+            cmd->ky = 0;
+            cmd->kz = 20;
         }
         else {
-            cmd->bx = 80;
-            cmd->by = 10;
-            cmd->bz = 0;
-            cmd->kx = 2000;
-            cmd->ky = 100;
-            cmd->kz = 0;
+            cmd->bx = 0;
+            cmd->by = 0;
+            cmd->bz = 2;
+            cmd->kx = 0;
+            cmd->ky = 0;
+            cmd->kz = 8;
         }
     }
 }
@@ -118,16 +125,16 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
 void ImpedanceCmdPublisherNode::execute_initialization_phase() {
     LegModel& legmodel = kinematics_->get_leg_model();
     std::array<double, 2> eta;
-    
+
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = this->now();
-    
+
     for (int i=0; i<2000; i++){
         s_ = 0.12;
         h_ = 0.12;
 
         eta = legmodel.move(imp_cmd_modules_[1]->theta, imp_cmd_modules_[1]->beta, {-s_/2000.0, h_/2000.0});
-        
+
         imp_cmd_modules_[0]->theta = eta[0];
         imp_cmd_modules_[1]->theta = eta[0];
         imp_cmd_modules_[2]->theta = eta[0];
@@ -142,7 +149,7 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         imp_cmd_modules_[1]->gamma = 0.0;
         imp_cmd_modules_[2]->gamma = 0.0;
         imp_cmd_modules_[3]->gamma = 0.0;
-        
+
         legmodel.contact_map(eta[0], eta[1]);
         double s_front = 0.222+legmodel.contact_p[0];
         double f_hind = -mg_/2.0*(s_front/0.444);
@@ -165,66 +172,46 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
 }
 
 void ImpedanceCmdPublisherNode::execute_control_phase() {
-    LegModel& legmodel = kinematics_->get_leg_model();
-    std::array<double, 2> eta;
-    double ds = 0.0;
-    
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = this->now();
-    
+
     int loop_count = 0;
+    const int total_count = 10000;
     while (rclcpp::ok()) {
-        if (loop_count < 2000) {
-            ds = 0.0;
-        }
-        else if (loop_count < 10000) {
-            if (loop_count < 2200) { ds += 2*s_/2000.0/200.0; }
-            else if (loop_count < 3800) { ds =   2*s_/2000.0; }
-            else if (loop_count < 4000) { ds -=  2*s_/2000.0/200.0; }
-            else if (loop_count < 4200) { ds -=  2*s_/2000.0/200.0; }
-            else if (loop_count < 5800) { ds =  -2*s_/2000.0; }
-            else if (loop_count < 6000) { ds +=  2*s_/2000.0/200.0; }
-            else if (loop_count < 6200) { ds +=  2*s_/2000.0/200.0; }
-            else if (loop_count < 7800) { ds =   2*s_/2000.0; }
-            else if (loop_count < 8000) { ds -=  2*s_/2000.0/200.0; }
-            else if (loop_count < 8200) { ds -=  2*s_/2000.0/200.0; }
-            else if (loop_count < 9800) { ds =  -2*s_/2000.0; }
-            else if (loop_count < 10000) { ds += 2*s_/2000.0/200.0; }
-
-            eta = legmodel.move(imp_cmd_modules_[1]->theta, imp_cmd_modules_[1]->beta, {ds, 0.0});
-
-            imp_cmd_modules_[0]->theta = eta[0];
-            imp_cmd_modules_[1]->theta = eta[0];
-            imp_cmd_modules_[2]->theta = eta[0];
-            imp_cmd_modules_[3]->theta = eta[0];
-
-            imp_cmd_modules_[0]->beta = -eta[1];
-            imp_cmd_modules_[1]->beta = eta[1];
-            imp_cmd_modules_[2]->beta = eta[1];
-            imp_cmd_modules_[3]->beta = -eta[1];
-
-            imp_cmd_modules_[0]->gamma = 0.0;
-            imp_cmd_modules_[1]->gamma = 0.0;
-            imp_cmd_modules_[2]->gamma = 0.0;
-            imp_cmd_modules_[3]->gamma = 0.0;
-
-            legmodel.contact_map(eta[0], eta[1]);
-            double s_front = 0.222+legmodel.contact_p[0];
-            double f_hind = -mg_/2.0*(s_front/0.444);
-            imp_cmd_modules_[0]->fy = -mg_/2.0 - f_hind;
-            imp_cmd_modules_[1]->fy = -mg_/2.0 - f_hind;
-            imp_cmd_modules_[2]->fy = f_hind;
-            imp_cmd_modules_[3]->fy = f_hind;
-
-            if (loop_count > 6000 && loop_count < 10000) {
-                imp_cmd_modules_[0]->fy += 10 * sin((loop_count-2000)/500.0*M_PI);
-                imp_cmd_modules_[1]->fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
-                imp_cmd_modules_[2]->fy += 10 * sin((loop_count-2000)/500.0*M_PI);
-                imp_cmd_modules_[3]->fy -= 10 * sin((loop_count-2000)/500.0*M_PI);
-            }
-        }
-        else {
+        if (loop_count >= total_count) {
             break;
+        }
+
+        for (auto& cmd : imp_cmd_modules_) {
+            cmd->theta = 17/180.0*M_PI;
+            cmd->beta = 0.0;
+            cmd->gamma = 0.0;
+            cmd->fx = 0.0;
+            cmd->fy = 0.0;
+            cmd->fz = 0.0;
+            cmd->mx = 0.0;
+            cmd->my = 0.0;
+            cmd->mz = 0.0;
+            cmd->bx = 0.0;
+            cmd->by = 0.0;
+            cmd->bz = 0.0;
+            cmd->kx = 0.0;
+            cmd->ky = 0.0;
+            cmd->kz = 0.0;
+        }
+
+        const double t = static_cast<double>(loop_count) / 1000.0;
+        const double gamma_cmd = gamma_amp_rad_ * std::sin(2.0 * M_PI * gamma_freq_hz_ * t);
+
+        auto* test_cmd = imp_cmd_modules_[test_module_idx_];
+        test_cmd->gamma = gamma_cmd;
+
+        if (sim_) {
+            test_cmd->bz = 6.0;
+            test_cmd->kz = 20.0;
+        } else {
+            test_cmd->bz = 2.0;
+            test_cmd->kz = 8.0;
         }
 
         imp_cmd_.header.seq = loop_count;
