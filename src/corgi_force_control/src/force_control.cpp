@@ -108,12 +108,16 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
+        motor_cmd_->gamma = 0.0;
         motor_cmd_->kp_r = 90;
         motor_cmd_->kp_l = 90;
+        motor_cmd_->kp_h = 90;
         motor_cmd_->kd_r = 1.75;
         motor_cmd_->kd_l = 1.75;
+        motor_cmd_->kd_h = 1.75;
         motor_cmd_->torque_r = 0;
         motor_cmd_->torque_l = 0;
+        motor_cmd_->torque_h = 0;
         return;
     }
 
@@ -224,24 +228,32 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
     motor_cmd_->beta = eta_cmd(1, 0);
+    motor_cmd_->gamma = 0.0;
     motor_cmd_->kp_r = kp_cmd(0, 0); //std::min(200.0, std::max(10.0, kp_cmd(0, 0)));
     motor_cmd_->kp_l = kp_cmd(1, 0); //std::min(200.0, std::max(10.0, kp_cmd(1, 0)));
+    motor_cmd_->kp_h = 90.0;
     motor_cmd_->kd_r = kd_cmd(0, 0); //std::min(5.0,   std::max(0.05, kd_cmd(0, 0)));
     motor_cmd_->kd_l = kd_cmd(1, 0); //std::min(5.0,   std::max(0.05, kd_cmd(1, 0)));
+    motor_cmd_->kd_h = 1.75;
     motor_cmd_->torque_r = trq_cmd(0, 0);
     motor_cmd_->torque_l = trq_cmd(1, 0);
+    motor_cmd_->torque_h = 0.0;
 }
 
 void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                                         corgi_msgs::msg::MotorCmd* motor_cmd_) {
     motor_cmd_->theta = imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
+    motor_cmd_->gamma = 0.0;
     motor_cmd_->kp_r = 95;
     motor_cmd_->kp_l = 95;
+    motor_cmd_->kp_h = 90.0;
     motor_cmd_->kd_r = 1.75;
     motor_cmd_->kd_l = 1.75;
+    motor_cmd_->kd_h = 1.75;
     motor_cmd_->torque_r = 0;
     motor_cmd_->torque_l = 0;
+    motor_cmd_->torque_h = 0.0;
 }
 
 void ForceControlNode::timer_cb() {
