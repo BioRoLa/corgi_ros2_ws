@@ -6,5 +6,5 @@
 	url = git@github.com:BioRoLa/livox_ros_driver2.git
 [submodule "src/fast_lio"]
 	path = src/fast_lio
-	url = https://github.com/BioRoLa/fast_lio
+	url = git@github.com:BioRoLa/fast_lio.git
 	branch = corgi/ROS2
