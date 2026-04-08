@@ -125,7 +125,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
     // TODO: should be modifiled 
-    P_poly = kinematics_.calculate_P_poly(legmodel.alpha);
+    P_poly = kinematics_.calculate_P_poly_3d(legmodel.alpha);
     
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
 

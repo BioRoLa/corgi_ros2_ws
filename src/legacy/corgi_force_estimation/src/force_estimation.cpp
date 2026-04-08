@@ -62,7 +62,44 @@ void KinematicsHelper::initialize_coefficients() {
     }
 }
 
-Eigen::MatrixXd KinematicsHelper::calculate_P_poly(double alpha) {
+Eigen::MatrixXd KinematicsHelper::calculate_P_poly(int rim, double alpha) {
+    Eigen::MatrixXd P_poly(2, 8);
+
+    double scaled_radius = leg_model_.radius / leg_model_.R;
+
+    if (rim == 1 && alpha > -M_PI*2.0/3.0) {
+        Eigen::Rotation2D<double> rotation(alpha+M_PI);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (H_l_coef_-U_l_coef_) * scaled_radius + U_l_coef_;
+    }
+    else if (rim == 2) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef_-L_l_coef_) * scaled_radius + L_l_coef_;
+    }
+    else if (rim == 3) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef_-L_l_coef_) * leg_model_.r / leg_model_.R + G_coef_;
+    }
+    else if (rim == 4) {
+        Eigen::Rotation2D<double> rotation(alpha);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (G_coef_-L_r_coef_) * scaled_radius + L_r_coef_;
+    }
+    else if (rim == 5 && alpha < M_PI*2.0/3.0) {
+        Eigen::Rotation2D<double> rotation(alpha-M_PI);
+        Eigen::Matrix2d rot_alpha = rotation.toRotationMatrix();
+        P_poly = rot_alpha * (H_r_coef_-U_r_coef_) * scaled_radius + U_r_coef_;
+    }
+    else {
+        P_poly = Eigen::MatrixXd::Zero(2, 8);
+    }
+    
+    return P_poly;
+}
+
+Eigen::MatrixXd KinematicsHelper::calculate_P_poly_3d(double alpha) {
     Eigen::MatrixXd P_poly(2, 8);
     
     // Convert alpha from degrees to radians and normalize to [-180, 180]
@@ -171,7 +208,7 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torqu
     LegModel& leg_model = kinematics_.get_leg_model();
     leg_model.contact_map(theta, beta);
 
-    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly(leg_model.alpha);
+    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly(leg_model.rim,leg_model.alpha);
     Eigen::MatrixXd P_poly_deriv(2, 7);
 
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);

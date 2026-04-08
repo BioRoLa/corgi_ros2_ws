@@ -29,7 +29,8 @@ public:
     explicit KinematicsHelper(bool sim);
     
     // Kinematics computations
-    Eigen::MatrixXd calculate_P_poly(double alpha);
+    Eigen::MatrixXd calculate_P_poly(int rim, double alpha);
+    Eigen::MatrixXd calculate_P_poly_3d(double alpha);
     Eigen::MatrixXd calculate_jacobian(const Eigen::MatrixXd& P_theta, 
                                        const Eigen::MatrixXd& P_theta_deriv, 
                                        double beta);
