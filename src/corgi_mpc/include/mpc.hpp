@@ -42,13 +42,13 @@ class ModelPredictiveController {
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 2000;
+        double Ky_stance = 1500;
 
 
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const double m = 19.5;
+        const double m = 19.68;
         const double gravity = 9.81;
 
         const int N = 10;
@@ -87,7 +87,7 @@ class ModelPredictiveController {
         int fx_lower_bound = -10;
         int fz_upper_bound = 200;
         // int fz_lower_bound = -50;
-        int fz_lower_bound = 0;
+        int fz_lower_bound = -50;
 
         double friction_coef = 1;
 

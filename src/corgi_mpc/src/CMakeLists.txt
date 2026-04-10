@@ -4,6 +4,7 @@ set(dependencies
   geometry_msgs
   sensor_msgs
   corgi_msgs
+  tf2_msgs
   corgi_utils
   corgi_walk
   corgi_force_estimation
@@ -60,6 +61,11 @@ add_executable(walk_obs_open walk_obs_open.cpp mpc.cpp)
 ament_target_dependencies(walk_obs_open ${dependencies})
 target_link_libraries(walk_obs_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
 
+# Walk collapse
+add_executable(walk_probing walk_probing.cpp mpc.cpp)
+ament_target_dependencies(walk_probing ${dependencies})
+target_link_libraries(walk_probing ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+
 # Install all executables
 install(TARGETS
   walk_h20_v10_open
@@ -72,5 +78,6 @@ install(TARGETS
   walk_h25_v15_closed
   walk_obs_closed
   walk_obs_open
+  walk_probing
   DESTINATION lib/${PROJECT_NAME}
 )
