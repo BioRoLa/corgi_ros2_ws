@@ -32,6 +32,7 @@ public:
 
     // Move
     std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper = true, bool contact_lower = true, double tol = 1e-14, size_t max_iter = 100);
+    std::array<double, 3> move_3d(double theta_in, double beta_in, double gamma_in, std::array<double, 3> move_vec, double slope = 0.0, double tol = 1e-12, size_t max_iter = 100);
 
     // Joint Positions
     std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
@@ -97,6 +98,7 @@ private:
     void to_vector();
     std::array<double, 3> arc_min(const std::complex<double> &p1, const std::complex<double> &p2, const std::complex<double> &O, const std::string &rim);
     std::array<double, 2> objective(const std::array<double, 2> &d_q, const std::array<double, 2> &current_q, const std::array<double, 2> &move_vec, int contact_rim);
+    std::array<double, 3> objective_3d(const std::array<double, 3> &d_q, const std::array<double, 3> &current_q, const std::array<double, 3> &move_vec, double slope = 0.0);
 
 }; // end class LegModel
 

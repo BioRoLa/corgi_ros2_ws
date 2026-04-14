@@ -464,6 +464,48 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
     return {theta, beta};
 }//end move
 
+std::array<double, 3> LegModel::move_3d(double theta_in, double beta_in, double gamma_in, std::array<double, 3> move_vec, double slope, double tol, size_t max_iter) {
+    std::array<double, 3> current_q = {theta_in, beta_in, gamma_in};
+    std::array<double, 3> guess_dq = {0.0, 0.0, 0.0};
+
+    for (size_t iter = 0; iter < max_iter; ++iter) {
+        std::array<double, 3> cost = this->objective_3d(guess_dq, current_q, move_vec, slope);
+        Eigen::Vector3d cost_vec(cost[0], cost[1], cost[2]);
+
+        if (cost_vec.norm() < tol) {
+            break;
+        }
+
+        double epsilon = 1e-6;
+        Eigen::Matrix3d Jac;
+        for (size_t i = 0; i < 3; ++i) {
+            std::array<double, 3> dq_eps = guess_dq;
+            dq_eps[i] += epsilon;
+            std::array<double, 3> cost_eps = this->objective_3d(dq_eps, current_q, move_vec, slope);
+            Eigen::Vector3d cost_eps_vec(cost_eps[0], cost_eps[1], cost_eps[2]);
+            Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;
+        }
+
+        Eigen::Vector3d dq = Jac.partialPivLu().solve(-cost_vec);
+        if (dq.norm() < tol) {
+            break;
+        }
+
+        guess_dq[0] += dq[0];
+        guess_dq[1] += dq[1];
+        guess_dq[2] += dq[2];
+
+        if (iter == max_iter - 1) {
+            std::cout << "LegModel::move_3d: Newton solver cost " << cost_vec.norm() << std::endl;
+        }
+    }
+
+    theta = current_q[0] + guess_dq[0];
+    beta  = current_q[1] + guess_dq[1];
+    gamma = current_q[2] + guess_dq[2];
+    return {theta, beta, gamma};
+}//end move_3d
+
 std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, const std::array<double, 2>& move_vec, int contact_rim) {
     using namespace std::complex_literals;
     std::array<double, 2> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1]};
@@ -528,5 +570,38 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     // Return the result of the objective function
     return {guessed_hip[0] - move_vec[0], guessed_hip[1] - move_vec[1]};
 }//end objective
+
+std::array<double, 3> LegModel::objective_3d(const std::array<double, 3> &d_q, const std::array<double, 3> &current_q, const std::array<double, 3> &move_vec, double slope) {
+    using namespace std::complex_literals;
+
+    std::array<double, 3> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1], current_q[2] + d_q[2]};
+
+    std::complex<double> current_F_exp = (F_l_poly[0](current_q[0]) + 1i * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> current_U_exp = (U_l_poly[0](current_q[0]) + 1i * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> guessed_F_exp = (F_l_poly[0](guessed_q[0]) + 1i * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+    std::complex<double> guessed_U_exp = (U_l_poly[0](guessed_q[0]) + 1i * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+
+    double d_alpha = std::arg(-1i / (guessed_F_exp - guessed_U_exp)) - std::arg(-1i / (current_F_exp - current_U_exp));
+    double roll_d = d_alpha * foot_radius;
+
+    this->contact_map_3d(current_q[0], current_q[1], current_q[2], slope, true, true);
+    std::array<double, 3> current_contact = contact_p_3d;
+
+    this->contact_map_3d(guessed_q[0], guessed_q[1], guessed_q[2], slope, true, true);
+    std::array<double, 3> guessed_contact = contact_p_3d;
+
+    std::array<double, 3> next_contact = {current_contact[0] + roll_d, current_contact[1], current_contact[2]};
+    std::array<double, 3> guessed_hip = {
+        next_contact[0] - guessed_contact[0],
+        next_contact[1] - guessed_contact[1],
+        next_contact[2] - guessed_contact[2]
+    };
+
+    return {
+        guessed_hip[0] - move_vec[0],
+        guessed_hip[1] - move_vec[1],
+        guessed_hip[2] - move_vec[2]
+    };
+}
 
 // 
