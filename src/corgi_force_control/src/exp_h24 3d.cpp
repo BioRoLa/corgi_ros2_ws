@@ -124,7 +124,7 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
 
 void ImpedanceCmdPublisherNode::execute_initialization_phase() {
     LegModel& legmodel = kinematics_->get_leg_model();
-    std::array<double, 2> eta;
+    std::array<double, 3> eta;
 
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = this->now();
@@ -133,7 +133,12 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         s_ = 0.12;
         h_ = 0.12;
 
-        eta = legmodel.move(imp_cmd_modules_[1]->theta, imp_cmd_modules_[1]->beta, {-s_/2000.0, h_/2000.0});
+        eta = legmodel.move_3d(
+            imp_cmd_modules_[1]->theta,
+            imp_cmd_modules_[1]->beta,
+            imp_cmd_modules_[1]->gamma,
+            {-s_ / 2000.0, 0.0, h_ / 2000.0}
+        );
 
         imp_cmd_modules_[0]->theta = eta[0];
         imp_cmd_modules_[1]->theta = eta[0];
@@ -145,13 +150,13 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         imp_cmd_modules_[2]->beta = eta[1];
         imp_cmd_modules_[3]->beta = -eta[1];
 
-        imp_cmd_modules_[0]->gamma = 0.0;
-        imp_cmd_modules_[1]->gamma = 0.0;
-        imp_cmd_modules_[2]->gamma = 0.0;
-        imp_cmd_modules_[3]->gamma = 0.0;
+        imp_cmd_modules_[0]->gamma = eta[2];
+        imp_cmd_modules_[1]->gamma = eta[2];
+        imp_cmd_modules_[2]->gamma = eta[2];
+        imp_cmd_modules_[3]->gamma = eta[2];
 
-        legmodel.contact_map(eta[0], eta[1]);
-        double s_front = 0.222+legmodel.contact_p[0];
+        legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
+        double s_front = 0.222 + legmodel.contact_p_3d[0];
         double f_hind = -mg_/2.0*(s_front/0.444);
         imp_cmd_modules_[0]->fy = -mg_/2.0 - f_hind;
         imp_cmd_modules_[1]->fy = -mg_/2.0 - f_hind;
