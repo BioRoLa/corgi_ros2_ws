@@ -43,11 +43,23 @@ target_link_libraries(exp_h24_3d_node
   corgi_force_estimation::corgi_force_estimation
 )
 
+# Impedance command publisher (exp_sim_stay) node
+add_executable(exp_sim_stay_node exp_sim_stay.cpp)
+ament_target_dependencies(exp_sim_stay_node
+  rclcpp
+  corgi_msgs
+  Eigen3
+)
+target_link_libraries(exp_sim_stay_node
+  corgi_force_estimation::corgi_force_estimation
+)
+
 # Install
 install(TARGETS
   force_control_node
   force_control_3d_node
   exp_h24_node
   exp_h24_3d_node
+  exp_sim_stay_node
   DESTINATION lib/${PROJECT_NAME}
 )
