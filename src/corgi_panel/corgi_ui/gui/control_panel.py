@@ -6,6 +6,7 @@ Refactored version with modular architecture (MVC pattern)
 import os
 import sys
 import logging
+import yaml
 import numpy as np
 from datetime import datetime
 from PyQt5.QtWidgets import (
@@ -52,10 +53,10 @@ class CorgiControlPanel(QWidget):
         
         # Initialize GPIO if available
         if GPIO_defined:
-            self.trigger_pin = 16
+            self.trigger_pin = 11
             GPIO.setmode(GPIO.BOARD)
             GPIO.setup(self.trigger_pin, GPIO.OUT)
-            GPIO.output(self.trigger_pin, GPIO.LOW)
+            GPIO.output(self.trigger_pin, GPIO.HIGH)
         
         # Initialize instance variables
         self._robot_cmd_seq = 0
@@ -378,10 +379,10 @@ class CorgiControlPanel(QWidget):
     def _create_motor_monitor(self) -> QVBoxLayout:
         """Create motor status monitor"""
         monitor_layout = QVBoxLayout()
-        
+
         grid_motors = QGridLayout()
         self.motor_labels = {}
-        
+
         # Define legs: (name, row, col, motors)
         legs = [
             ('LF', 0, 0, ['M1', 'M2']),
@@ -389,24 +390,151 @@ class CorgiControlPanel(QWidget):
             ('LH', 1, 0, ['M5', 'M6']),
             ('RH', 1, 1, ['M7', 'M8'])
         ]
-        
+
         for leg_name, r, c, motors in legs:
             leg_group = QGroupBox(leg_name)
             leg_layout = QVBoxLayout()
-            
+
             for motor_key in motors:
                 lbl = QLabel(f"{motor_key}: --")
                 lbl.setObjectName("MotorLabel")
                 leg_layout.addWidget(lbl)
                 self.motor_labels[motor_key] = lbl
-            
+
             leg_group.setLayout(leg_layout)
             grid_motors.addWidget(leg_group, r, c)
-        
+
         monitor_layout.addLayout(grid_motors)
+        monitor_layout.addWidget(self._create_motor_config_display())
         monitor_layout.addStretch(1)
-        
+
         return monitor_layout
+
+    def _load_motor_config(self) -> dict:
+        """Load motor_config.yaml from the corgi_driver_pkg directory.
+
+        Uses importlib to locate the installed (or symlinked) package so the
+        YAML is read directly from source — no rebuild needed.
+        """
+        import importlib.util
+        # Primary: find via the installed Python package (works with --symlink-install)
+        try:
+            spec = importlib.util.find_spec('corgi_driver_pkg')
+            if spec and spec.origin:
+                pkg_dir = os.path.dirname(spec.origin)
+                yaml_path = os.path.join(pkg_dir, 'motor_config.yaml')
+                with open(yaml_path, 'r') as f:
+                    return yaml.safe_load(f)
+        except Exception as e:
+            print(f"Warning: importlib path failed: {e}")
+
+        # Fallback: ament share directory (requires colcon build)
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            share = get_package_share_directory('corgi_sim')
+            yaml_path = os.path.join(share, 'motor_config.yaml')
+            with open(yaml_path, 'r') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            print(f"Warning: could not load motor_config.yaml from share: {e}")
+
+        return {}
+
+    def _create_motor_config_display(self) -> QGroupBox:
+        """Create a read-only display of the motor direction config (motor_config.yaml)."""
+        cfg = self._load_motor_config()
+
+        grp = QGroupBox("Motor Direction Config  (motor_config.yaml)")
+        outer = QVBoxLayout()
+
+        # Reload button
+        self.btn_reload_config = QPushButton("↺  Reload Config")
+        self.btn_reload_config.setMaximumWidth(160)
+        self.btn_reload_config.clicked.connect(self._reload_motor_config_display)
+        outer.addWidget(self.btn_reload_config, alignment=Qt.AlignLeft)
+
+        # Grid: one column per module (A B C D), rows = each direction field
+        self._config_grid = QGridLayout()
+        self._config_grid.setSpacing(6)
+
+        # Map module id → friendly leg label
+        MODULE_LABEL = {'A': 'A (FL)', 'B': 'B (FR)', 'C': 'C (RR)', 'D': 'D (RL)'}
+        FIELDS = [
+            ('joint_dir',  'theta',        'θ  joint dir'),
+            ('joint_dir',  'beta',         'β  joint dir'),
+            ('joint_dir',  'g_joint_beta', 'G-joint β dir'),
+            ('motor_dir',  'L',            'Motor L dir'),
+            ('motor_dir',  'R',            'Motor R dir'),
+            ('motor_dir',  'ABAD',         'ABAD dir'),
+        ]
+
+        # Header row
+        self._config_grid.addWidget(QLabel(""), 0, 0)
+        for col, mod_id in enumerate(('A', 'B', 'C', 'D'), start=1):
+            hdr = QLabel(MODULE_LABEL[mod_id])
+            hdr.setAlignment(Qt.AlignCenter)
+            hdr.setStyleSheet("font-weight: bold; color: #ccc;")
+            self._config_grid.addWidget(hdr, 0, col)
+
+        # Data rows
+        self._config_value_labels = {}
+        for row, (section, key, label_text) in enumerate(FIELDS, start=1):
+            row_lbl = QLabel(label_text)
+            row_lbl.setStyleSheet("color: #aaa;")
+            self._config_grid.addWidget(row_lbl, row, 0)
+
+            for col, mod_id in enumerate(('A', 'B', 'C', 'D'), start=1):
+                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                lbl = QLabel(self._fmt_dir(val))
+                lbl.setAlignment(Qt.AlignCenter)
+                lbl.setStyleSheet(self._dir_style(val))
+                self._config_grid.addWidget(lbl, row, col)
+                self._config_value_labels[(mod_id, section, key)] = lbl
+
+        outer.addLayout(self._config_grid)
+        grp.setLayout(outer)
+        return grp
+
+    @staticmethod
+    def _fmt_dir(val) -> str:
+        """Format a direction value as +1 / -1 / ?"""
+        try:
+            v = float(val)
+            return '+1' if v > 0 else '-1'
+        except (TypeError, ValueError):
+            return '?'
+
+    @staticmethod
+    def _dir_style(val) -> str:
+        """Return colour style based on direction value."""
+        try:
+            v = float(val)
+            colour = '#4caf50' if v > 0 else '#ef5350'   # green / red
+        except (TypeError, ValueError):
+            colour = '#888'
+        return f"color: {colour}; font-weight: bold; font-size: 14px;"
+
+    def _reload_motor_config_display(self):
+        """Reload motor_config.yaml and refresh every label in the grid."""
+        cfg = self._load_motor_config()
+        FIELDS = [
+            ('joint_dir',  'theta',        ),
+            ('joint_dir',  'beta',         ),
+            ('joint_dir',  'g_joint_beta', ),
+            ('motor_dir',  'L',            ),
+            ('motor_dir',  'R',            ),
+            ('motor_dir',  'ABAD',         ),
+        ]
+        for mod_id in ('A', 'B', 'C', 'D'):
+            for section, key in FIELDS:
+                lbl = self._config_value_labels.get((mod_id, section, key))
+                if lbl is None:
+                    continue
+                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                lbl.setText(self._fmt_dir(val))
+                lbl.setStyleSheet(self._dir_style(val))
+        self._log("Motor config reloaded from YAML", LOGLEVEL.INFO, "system")
+
     
     def _create_log_area(self) -> QGroupBox:
         """Create log area using LogWidget"""
@@ -723,7 +851,7 @@ class CorgiControlPanel(QWidget):
         if GPIO_defined:
             GPIO.output(
                 self.trigger_pin,
-                GPIO.HIGH if self.btn_trigger.isChecked() else GPIO.LOW
+                GPIO.LOW if self.btn_trigger.isChecked() else GPIO.HIGH
             )
         
         if self.btn_trigger.isChecked():
