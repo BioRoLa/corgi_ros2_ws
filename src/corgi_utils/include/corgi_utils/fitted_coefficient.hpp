@@ -91,6 +91,11 @@ const std::array<polynomial, 2> U_l_poly = { polynomial(U_x_coef), polynomial(U_
 const std::array<polynomial, 2> U_r_poly = {-polynomial(U_x_coef), polynomial(U_y_coef)};
 const std::array<polynomial, 2> L_l_poly = { polynomial(L_x_coef), polynomial(L_y_coef)};
 const std::array<polynomial, 2> L_r_poly = {-polynomial(L_x_coef), polynomial(L_y_coef)};
+const std::array<polynomial, 2> I_l_poly = { polynomial(I_x_coef), polynomial(I_y_coef)};
+const std::array<polynomial, 2> I_r_poly = {-polynomial(I_x_coef), polynomial(I_y_coef)};
+const std::array<polynomial, 2> J_l_poly = { polynomial(J_x_coef), polynomial(J_y_coef)};
+const std::array<polynomial, 2> J_r_poly = {-polynomial(J_x_coef), polynomial(J_y_coef)};
+const std::array<polynomial, 2> O_r_poly = {-polynomial({0}), polynomial(O_y_coef)};
 const polynomial inv_G_dist_poly(inv_G_dist_coef);
 const polynomial inv_U_dist_poly(inv_U_dist_coef);
 const polynomial inv_L_dist_poly(inv_L_dist_coef);

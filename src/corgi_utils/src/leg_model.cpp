@@ -576,12 +576,12 @@ std::array<double, 3> LegModel::objective_3d(const std::array<double, 3> &d_q, c
 
     std::array<double, 3> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1], current_q[2] + d_q[2]};
 
-    std::complex<double> current_F_exp = (F_l_poly[0](current_q[0]) + 1i * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
-    std::complex<double> current_U_exp = (U_l_poly[0](current_q[0]) + 1i * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
-    std::complex<double> guessed_F_exp = (F_l_poly[0](guessed_q[0]) + 1i * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
-    std::complex<double> guessed_U_exp = (U_l_poly[0](guessed_q[0]) + 1i * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+    std::complex<double> current_J_exp = (J_r_poly[0](current_q[0]) + 1i * J_r_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> current_O_exp = (O_r_poly[0](current_q[0]) + 1i * O_r_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> guessed_J_exp = (J_r_poly[0](guessed_q[0]) + 1i * J_r_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+    std::complex<double> guessed_O_exp = (O_r_poly[0](guessed_q[0]) + 1i * O_r_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
 
-    double d_alpha = std::arg(-1i / (guessed_F_exp - guessed_U_exp)) - std::arg(-1i / (current_F_exp - current_U_exp));
+    double d_alpha = std::arg(-1i / (guessed_J_exp - guessed_O_exp)) - std::arg(-1i / (current_J_exp - current_O_exp));
     double roll_d = d_alpha * foot_radius;
 
     this->contact_map_3d(current_q[0], current_q[1], current_q[2], slope, true, true);
