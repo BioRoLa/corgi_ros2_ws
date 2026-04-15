@@ -1,5 +1,12 @@
 #include <iostream>
 #include <mutex>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+#include <csignal>
+#include <cstdlib>
 #include "rclcpp/rclcpp.hpp"
 
 #include "NodeHandler.h"
@@ -71,7 +78,28 @@ core::Publisher<robot_msg::RobotCmdStamped>         *grpc_robot_cmd_pub;
 core::Publisher<steering_msg::SteeringCmdStamped>   *grpc_steer_cmd_pub;
 core::Publisher<config_msg::ConfigStamped>          *grpc_config_cmd_pub;
 
+std::ofstream timing_log;
+std::mutex    mutex_timing_log;
+int32_t       prev_ros_motor_seq = 0;
+bool          has_prev_ros_motor_seq = false;
+
+int64_t wall_now_ns() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+void timing_signal_handler(int signum) {
+    if (timing_log.is_open()) {
+        timing_log.flush();
+        timing_log.close();
+    }
+    rclcpp::shutdown();
+    exit(signum);
+}
+
 void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
+    int64_t wall_recv_ns = wall_now_ns();
+
     std::lock_guard<std::mutex> lock(mutex_grpc_motor_cmd);
 
     ros_motor_cmd = cmd;
@@ -107,7 +135,34 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
     grpc_motor_cmd.mutable_header()->mutable_stamp()->set_sec(ros_motor_cmd.header.stamp.sec);
     grpc_motor_cmd.mutable_header()->mutable_stamp()->set_usec(ros_motor_cmd.header.stamp.nanosec / 1000);
 
+    int64_t grpc_publish_pre_ns = wall_now_ns();
+    auto grpc_publish_call_start = std::chrono::steady_clock::now();
     grpc_motor_cmd_pub->publish(grpc_motor_cmd);
+    int64_t grpc_publish_call_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - grpc_publish_call_start).count();
+    int64_t grpc_publish_post_ns = wall_now_ns();
+
+    int64_t conversion_ns = grpc_publish_pre_ns - wall_recv_ns;
+    int64_t recv_to_post_publish_ns = grpc_publish_post_ns - wall_recv_ns;
+    int32_t seq_delta = has_prev_ros_motor_seq ? (ros_motor_cmd.header.seq - prev_ros_motor_seq) : ros_motor_cmd.header.seq;
+    prev_ros_motor_seq = ros_motor_cmd.header.seq;
+    has_prev_ros_motor_seq = true;
+
+    {
+        std::lock_guard<std::mutex> tlock(mutex_timing_log);
+        if (timing_log.is_open()) {
+            timing_log << wall_recv_ns << ","
+                       << ros_motor_cmd.header.seq << ","
+                       << ros_motor_cmd.header.stamp.sec << ","
+                       << ros_motor_cmd.header.stamp.nanosec << ","
+                       << grpc_publish_pre_ns << ","
+                       << conversion_ns << ","
+                       << seq_delta << ","
+                       << grpc_publish_post_ns << ","
+                       << grpc_publish_call_ns << ","
+                       << recv_to_post_publish_ns << "\n";
+        }
+    }
 }
 
 void ros_steer_cmd_cb(const corgi_msgs::msg::SteeringCmdStamped cmd) {
@@ -322,6 +377,29 @@ int main(int argc, char **argv) {
         }
     }
 
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        std::tm tm_buf;
+        localtime_r(&t, &tm_buf);
+        std::ostringstream timing_file_path;
+        timing_file_path << std::string(getenv("HOME"))
+                         << "/corgi_ws/corgi_ros2_ws/log_file/timing_bridge_"
+                         << std::put_time(&tm_buf, "%Y%m%d_%H%M%S")
+                         << ".csv";
+
+        timing_log.open(timing_file_path.str());
+        if (timing_log.is_open()) {
+            timing_log << "wall_recv_ns,ros_seq,ros_msg_sec,ros_msg_nsec,"
+                          "wall_pub_ns,conversion_ns,seq_delta,"
+                          "grpc_publish_post_ns,grpc_publish_call_ns,recv_to_post_publish_ns\n";
+            RCLCPP_INFO(node->get_logger(), "Bridge timing log: %s", timing_file_path.str().c_str());
+        } else {
+            RCLCPP_WARN(node->get_logger(), "Failed to open bridge timing log: %s", timing_file_path.str().c_str());
+        }
+    }
+    signal(SIGINT, timing_signal_handler);
+
     auto ros_motor_cmd_sub = node->create_subscription<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1, ros_motor_cmd_cb);
     auto ros_steer_cmd_sub = node->create_subscription<corgi_msgs::msg::SteeringCmdStamped>("steer/command", 1, ros_steer_cmd_cb);
     auto ros_robot_cmd_sub = node->create_subscription<corgi_msgs::msg::RobotCmdStamped>("robot/command", 1, ros_robot_cmd_cb);
@@ -361,6 +439,11 @@ int main(int argc, char **argv) {
     }
 
     RCLCPP_INFO(rclcpp::get_logger("CorgiRosBridge"), "Corgi ROS Bridge is killed");
+
+    if (timing_log.is_open()) {
+        timing_log.flush();
+        timing_log.close();
+    }
 
     rclcpp::shutdown();
     

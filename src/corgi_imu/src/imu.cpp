@@ -3,6 +3,7 @@
 #include "corgi_msgs/msg/headers.hpp"
 #include "corgi_msgs/srv/imu.hpp"
 #include "corgi_imu/cx5.hpp"
+#include <sys/time.h>
 #include <mutex>
 #include <thread>
 #include <memory>
@@ -72,12 +73,6 @@ int main(int argc, char **argv)
         }
     );
 
-    // Capture reference pair for steady_clock → ROS time conversion
-    // before starting the IMU thread, so the epoch is deterministic.
-    auto steady_epoch = std::chrono::steady_clock::now();
-    rclcpp::Time ros_epoch = node->now();
-    const int64_t ros_epoch_ns = ros_epoch.nanoseconds();
-
     std::thread imu_thread([&]() {
         imu->start();
     });
@@ -93,16 +88,14 @@ int main(int argc, char **argv)
     int seq = 0;
 
     while (rclcpp::ok()) {
-        std::chrono::steady_clock::time_point data_time;
-        imu->get(acceleration, twist, orientation, data_time);
+        imu->get(acceleration, twist, orientation);
 
-        // Convert: ROS_time = ros_epoch + (data_time - steady_epoch)
-        auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(data_time - steady_epoch);
-        int64_t stamp_ns = ros_epoch_ns + elapsed.count();
-        headers_msg.stamp.sec = static_cast<int32_t>(stamp_ns / 1000000000);
-        headers_msg.stamp.nanosec = static_cast<uint32_t>(stamp_ns % 1000000000);
+        timeval currentTime;
+        gettimeofday(&currentTime, nullptr);
 
         headers_msg.seq = seq++;
+        headers_msg.stamp.sec = currentTime.tv_sec;
+        headers_msg.stamp.nanosec = currentTime.tv_usec * 1000;
         
         imu_msg.header = headers_msg;
 
