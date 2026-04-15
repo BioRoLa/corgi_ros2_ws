@@ -182,6 +182,13 @@ class CX5_AHRS {
             device->registerDataCallback<data_filter::CompAngularRate, CX5_AHRS, &CX5_AHRS::on_gyro>(sensor_data_handlers[2], this);
             device->registerDataCallback<data_filter::GravityVector, CX5_AHRS, &CX5_AHRS::on_gravity>(sensor_data_handlers[3], this);
 
+            // Initialize last_data_time_ to current time so that published
+            // timestamps are approximately correct before the first callback fires.
+            {
+                std::lock_guard<std::mutex> lock(_imu_mutex);
+                last_data_time_ = std::chrono::steady_clock::now();
+            }
+
             if(commands_base::resume(*device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not resume the device!");
 
