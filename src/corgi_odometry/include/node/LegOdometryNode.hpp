@@ -125,6 +125,15 @@ private:
     bool is_triggered_         = false;
 
     // ============================================================
+    // IMU timestamp tracking (for dynamic ESEKF dt)
+    // ============================================================
+    rclcpp::Time last_esekf_imu_time_{0, 0, RCL_ROS_TIME};
+    bool last_esekf_imu_time_valid_ = false;
+
+    // ESEKF decimation counter (runs at ESEKF_RATE = 500Hz in a 1000Hz loop)
+    size_t esekf_tick_ = 0;
+
+    // ============================================================
     // Contact state (Schmitt trigger memory)
     // ============================================================
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};

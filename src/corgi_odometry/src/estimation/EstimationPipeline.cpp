@@ -25,7 +25,7 @@ EstimationPipeline::EstimationPipeline(const Params& params)
                 params.enable_logging,
                 params.csv_filename,
                 params.log_details),
-      esekf_(static_cast<float>(Config::DT))
+      esekf_()
 {
     legs_[0] = &lf_leg_;
     legs_[1] = &rf_leg_;
@@ -76,7 +76,8 @@ StepResult EstimationPipeline::step(
         const Eigen::Vector3f& a_m,
         const Eigen::Vector3f& w_m,
         const RawRecord& raw,
-        size_t index)
+        size_t index,
+        float esekf_dt)
 {
     StepResult result;
 
@@ -98,7 +99,7 @@ StepResult EstimationPipeline::step(
     }
 
     // ── ESEKF predict ───────────────────────────────────────────
-    esekf_.predict(a_m, w_m);
+    esekf_.predict(a_m, w_m, esekf_dt);
 
     // Capture prediction-only velocity (before measurement update)
     result.pred_vel = esekf_.nominal().v;

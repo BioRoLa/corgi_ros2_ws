@@ -17,6 +17,11 @@ struct RawRecord {
     double sim_pos_x = 0, sim_pos_y = 0, sim_pos_z = 0;
     double sim_orien_x = 0, sim_orien_y = 0, sim_orien_z = 0, sim_orien_w = 0;
 
+    // IMU timestamp (from CSV: imu_seq, imu_sec, imu_nsec)
+    int32_t imu_seq = 0;
+    int32_t imu_sec = 0;
+    int32_t imu_nsec = 0;
+
     // IMU data
     double imu_orien_x = 0, imu_orien_y = 0, imu_orien_z = 0, imu_orien_w = 0;
     double imu_ang_vel_x = 0, imu_ang_vel_y = 0, imu_ang_vel_z = 0;

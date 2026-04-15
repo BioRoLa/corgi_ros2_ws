@@ -83,6 +83,7 @@ inline Params load_params(const std::string& yaml_path) {
         p.enable_logging = detail::val(n, "enable_logging", p.enable_logging);
         p.log_details    = detail::val(n, "log_details",    p.log_details);
         p.imu_noise_seed = detail::val(n, "imu_noise_seed", p.imu_noise_seed);
+        p.use_dynamic_dt = detail::val(n, "use_dynamic_dt", p.use_dynamic_dt);
     }
 
     // ── GT velocity filter ──────────────────────────────────────

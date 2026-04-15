@@ -19,7 +19,7 @@ Eigen::Matrix3f ESEKF::skew(const Eigen::Vector3f& v) {
 // Constructor & Init
 // ============================================================
 
-ESEKF::ESEKF(float dt) : dt_(dt) {
+ESEKF::ESEKF() {
     dx_ = Eigen::VectorXf::Zero(ERR_STATE_DIM);
 
     // Initial error covariance: small for biases, larger for position/velocity
@@ -47,7 +47,7 @@ void ESEKF::init(const NominalState& x0) {
 // Predict (IMU propagation)
 // ============================================================
 
-void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
+void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m, float dt) {
     // ----------------------------------------------------------
     // 1. Bias-corrected IMU measurements
     // ----------------------------------------------------------
@@ -66,7 +66,7 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     // ----------------------------------------------------------
     // 2. Rotation increment R_delta = Exp(w_hat * dt)
     // ----------------------------------------------------------
-    Eigen::Vector3f dw = w_hat * dt_;
+    Eigen::Vector3f dw = w_hat * dt;
     float angle = dw.norm();
     Eigen::Matrix3f R_delta;
     if (angle > 1e-8f) {
@@ -84,8 +84,8 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //    q_{k+1} = q_k ⊗ q(R_delta)
     //    biases:  unchanged
     // ----------------------------------------------------------
-    x_nom_.p += R_body * x_nom_.v * dt_;
-    x_nom_.v  = R_delta.transpose() * x_nom_.v + (a_hat + g_body) * dt_;
+    x_nom_.p += R_body * x_nom_.v * dt;
+    x_nom_.v  = R_delta.transpose() * x_nom_.v + (a_hat + g_body) * dt;
     x_nom_.q  = (x_nom_.q * Eigen::Quaternionf(R_delta)).normalized();
     // ba, bw, bv: constant (random walk, corrected in update)
 
@@ -105,8 +105,8 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     Eigen::MatrixXf Fx = Eigen::MatrixXf::Identity(ERR_STATE_DIM, ERR_STATE_DIM);
 
     // δp row
-    Fx.block<3,3>(P_IDX, V_IDX)   =  R_body * dt_;
-    Fx.block<3,3>(P_IDX, TH_IDX)  = -R_body * skew(x_nom_.v) * dt_;
+    Fx.block<3,3>(P_IDX, V_IDX)   =  R_body * dt;
+    Fx.block<3,3>(P_IDX, TH_IDX)  = -R_body * skew(x_nom_.v) * dt;
 
     // δv row  (v_{k+1} = R_Δ^T v_k + ...)
     Fx.block<3,3>(V_IDX, V_IDX)   =  R_delta.transpose();
@@ -114,12 +114,12 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     //   δ(g_body) = [g_body]× · δθ   ⇒   Fx(V,TH) = R_Δ^T · [g_body]× · dt
     // NOTE: The previous formula used -[a_hat + g_body]× which ≈ 0 (gravity cancels
     //       specific force), destroying attitude–velocity coupling and observability.
-    Fx.block<3,3>(V_IDX, TH_IDX)  =  R_delta.transpose() * skew(g_body) * dt_;
-    Fx.block<3,3>(V_IDX, BA_IDX)  = -Eigen::Matrix3f::Identity() * dt_;
+    Fx.block<3,3>(V_IDX, TH_IDX)  =  R_delta.transpose() * skew(g_body) * dt;
+    Fx.block<3,3>(V_IDX, BA_IDX)  = -Eigen::Matrix3f::Identity() * dt;
 
     // δθ row
     Fx.block<3,3>(TH_IDX, TH_IDX) =  R_delta.transpose();
-    Fx.block<3,3>(TH_IDX, BW_IDX) = -Eigen::Matrix3f::Identity() * dt_;
+    Fx.block<3,3>(TH_IDX, BW_IDX) = -Eigen::Matrix3f::Identity() * dt;
 
     // δba, δbw, δbv rows: already Identity on diagonal
 
@@ -136,8 +136,8 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m) {
     // NOTE: σ_a here is the per-sample std (m/s²), not spectral density.
     // With σ_a=0.1, dt=0.001 → Q_v = 1e-8.  Steady-state Kalman gain ≈ 0.9%.
     // To get higher gain, increase σ_a (e.g. 1.0 → Q_v=1e-6, gain≈9%).
-    Qc.block<3,3>(V_IDX, V_IDX)   = noise_.sigma_a.array().square().matrix().asDiagonal() * (dt_ * dt_);
-    Qc.block<3,3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt_ * dt_);
+    Qc.block<3,3>(V_IDX, V_IDX)   = noise_.sigma_a.array().square().matrix().asDiagonal() * (dt * dt);
+    Qc.block<3,3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt * dt);
     Qc.block<3,3>(BA_IDX, BA_IDX) = noise_.sigma_ba.array().square().matrix().asDiagonal();
     Qc.block<3,3>(BW_IDX, BW_IDX) = noise_.sigma_bw.array().square().matrix().asDiagonal();
     Qc.block<3,3>(BV_IDX, BV_IDX) = noise_.sigma_bv.array().square().matrix().asDiagonal();

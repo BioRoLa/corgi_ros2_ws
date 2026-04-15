@@ -47,6 +47,7 @@ struct Params {
     bool   enable_logging    = true;
     bool   log_details       = false;
     uint64_t imu_noise_seed  = 42;
+    bool   use_dynamic_dt    = true;   // use IMU timestamps for ESEKF dt (offline)
 
     // ── GT velocity filter ──────────────────────────────────────
     double gt_velocity_lpf_cutoff = 10.0;  // [Hz]

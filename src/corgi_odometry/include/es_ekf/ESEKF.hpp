@@ -102,8 +102,7 @@ struct LegObservation {
 class ESEKF {
 public:
     /// @brief Constructor
-    /// @param dt  time step [s]
-    ESEKF(float dt);
+    ESEKF();
 
     /// @brief Initialize nominal state (call once at startup)
     void init(const NominalState& x0);
@@ -113,7 +112,8 @@ public:
     ///   - Propagate error-state covariance P via linearized Jacobian Fx
     /// @param a_m  raw accelerometer measurement in body frame [m/s^2]
     /// @param w_m  raw gyroscope measurement in body frame [rad/s]
-    void predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m);
+    /// @param dt   time step [s] (dynamic, from IMU timestamp difference)
+    void predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m, float dt);
 
     /// @brief Single-leg measurement update (sequential EKF update)
     ///   Observation model:  z_leg = v + bv + noise
@@ -158,7 +158,6 @@ private:
     Eigen::MatrixXf P_;                  // error covariance (18×18)
 
     // --- Parameters ---
-    float dt_;
     NoiseParams noise_;
 
     // --- Diagnostics ---

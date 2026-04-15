@@ -48,11 +48,13 @@ public:
     /// @param w_m        Raw gyroscope measurement (body frame)
     /// @param raw        Full raw record for leg encoder extraction
     /// @param index      Data index (for observer logging)
+    /// @param esekf_dt   Time step for ESEKF prediction [s] (dynamic, from IMU timestamps)
     StepResult step(const DataProcessor::ProcessedData& processed,
                     const Eigen::Vector3f& a_m,
                     const Eigen::Vector3f& w_m,
                     const RawRecord& raw,
-                    size_t index);
+                    size_t index,
+                    float esekf_dt);
 
     bool initialized() const { return initialized_; }
     const estimation_model::NominalState& nominal() const { return esekf_.nominal(); }
