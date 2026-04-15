@@ -28,17 +28,6 @@ include_directories(
   include
 )
 
-# Install scripts
-install(PROGRAMS
-  scripts/imu_node.sh
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# Install launch files
-install(DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/launch
-)
-
 add_subdirectory(src)
 
 ament_package()
