@@ -177,30 +177,16 @@ class CX5_AHRS {
             if(commands_filter::reset(*device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not reset the filter!");
 
-            DispatchHandler sensor_data_handlers[4];
-            device->registerExtractor(sensor_data_handlers[0], &raw_attitude);
-            device->registerExtractor(sensor_data_handlers[1], &raw_gyro);
-            device->registerExtractor(sensor_data_handlers[2], &raw_accel);
-            device->registerExtractor(sensor_data_handlers[3], &g);
+            device->registerDataCallback<data_sensor::CompQuaternion, CX5_AHRS, &CX5_AHRS::on_attitude>(sensor_data_handlers[0], this);
+            device->registerDataCallback<data_filter::CompAccel, CX5_AHRS, &CX5_AHRS::on_accel>(sensor_data_handlers[1], this);
+            device->registerDataCallback<data_filter::CompAngularRate, CX5_AHRS, &CX5_AHRS::on_gyro>(sensor_data_handlers[2], this);
+            device->registerDataCallback<data_filter::GravityVector, CX5_AHRS, &CX5_AHRS::on_gravity>(sensor_data_handlers[3], this);
 
             if(commands_base::resume(*device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not resume the device!");
 
-            // bool filter_state_ahrs = false;
-            Eigen::Matrix3f rot;
-            rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
-            
             while(running) {
                 device->update();
-                // if((!filter_state_ahrs)){
-                //     if (filter_status.filter_state == data_filter::FilterMode::AHRS) filter_state_ahrs = true;
-                //     else continue;
-                // }
-                _imu_mutex.lock();
-                acceleration = rot * (Eigen::Vector3f(raw_accel.accel) - attitude.toRotationMatrix().transpose() * Eigen::Vector3f(g.gravity));
-                twist = rot * (Eigen::Vector3f(raw_gyro.gyro)) - twist_bias;
-                attitude = Eigen::Quaternionf(raw_attitude.q[0], raw_attitude.q[1], raw_attitude.q[2], raw_attitude.q[3]);
-                _imu_mutex.unlock();
             }
         }
 
@@ -218,11 +204,18 @@ class CX5_AHRS {
         }
 
         void get(Eigen::Vector3f &acceleration_, Eigen::Vector3f &twist_, Eigen::Quaternionf &attitude_){
-            _imu_mutex.lock();
+            std::lock_guard<std::mutex> lock(_imu_mutex);
             acceleration_ = acceleration;
             twist_ = twist;
             attitude_ = attitude;
-            _imu_mutex.unlock();
+        }
+
+        void get(Eigen::Vector3f &acceleration_, Eigen::Vector3f &twist_, Eigen::Quaternionf &attitude_, std::chrono::steady_clock::time_point &data_time_){
+            std::lock_guard<std::mutex> lock(_imu_mutex);
+            acceleration_ = acceleration;
+            twist_ = twist;
+            attitude_ = attitude;
+            data_time_ = last_data_time_;
         }
 
         void stop() {
@@ -243,6 +236,38 @@ class CX5_AHRS {
         Eigen::Vector3f twist_bias;
         std::mutex _imu_mutex;
         std::atomic<bool> running;
+        std::chrono::steady_clock::time_point last_data_time_;
+        DispatchHandler sensor_data_handlers[4];
+
+        void on_attitude(const data_sensor::CompQuaternion& data, Timestamp timestamp) {
+            std::lock_guard<std::mutex> lock(_imu_mutex);
+            raw_attitude = data;
+            attitude = Eigen::Quaternionf(data.q[0], data.q[1], data.q[2], data.q[3]);
+            last_data_time_ = std::chrono::steady_clock::time_point(std::chrono::milliseconds(timestamp));
+        }
+
+        void on_accel(const data_filter::CompAccel& data, Timestamp timestamp) {
+            std::lock_guard<std::mutex> lock(_imu_mutex);
+            raw_accel = data;
+            Eigen::Matrix3f rot;
+            rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
+            acceleration = rot * (Eigen::Vector3f(raw_accel.accel) - attitude.toRotationMatrix().transpose() * Eigen::Vector3f(g.gravity));
+            last_data_time_ = std::chrono::steady_clock::time_point(std::chrono::milliseconds(timestamp));
+        }
+
+        void on_gyro(const data_filter::CompAngularRate& data, Timestamp timestamp) {
+            std::lock_guard<std::mutex> lock(_imu_mutex);
+            raw_gyro = data;
+            Eigen::Matrix3f rot;
+            rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
+            twist = rot * (Eigen::Vector3f(raw_gyro.gyro)) - twist_bias;
+            last_data_time_ = std::chrono::steady_clock::time_point(std::chrono::milliseconds(timestamp));
+        }
+
+        void on_gravity(const data_filter::GravityVector& data, Timestamp timestamp) {
+            std::lock_guard<std::mutex> lock(_imu_mutex);
+            g = data;
+        }
 
         // std::unique_ptr<Utils> assign_serial(std::string port, uint32_t baud){
         //     auto utils = std::unique_ptr<Utils>(new Utils());
