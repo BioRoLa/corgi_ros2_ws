@@ -21,6 +21,7 @@
 #include "corgi_msgs/msg/force_state_stamped.hpp"
 #include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/wrench_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
@@ -40,6 +41,10 @@ corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
 corgi_msgs::msg::ForceStateStamped force_state;
 corgi_msgs::msg::SimLegContactStamped sim_leg_contact_state;
 geometry_msgs::msg::TransformStamped tf_data;
+geometry_msgs::msg::WrenchStamped force_plate_1;
+geometry_msgs::msg::WrenchStamped force_plate_2;
+geometry_msgs::msg::WrenchStamped force_plate_3;
+geometry_msgs::msg::WrenchStamped force_plate_4;
 bool tf_data_valid = false;
 
 std::ofstream output_file;
@@ -121,13 +126,13 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
 
                         << "imp_seq" << "," << "imp_sec" << "," << "imp_nsec" << ","
                         << "imp_cmd_theta_a" << "," << "imp_cmd_beta_a" << ","
-                        << "imp_cmd_Fx_a"    << "," << "imp_cmd_Fy_a"   << ","
+                        << "imp_cmd_Fx_a"    << "," << "imp_cmd_Fy_a"   << "," << "imp_cmd_Fz_a"   << ","
                         << "imp_cmd_theta_b" << "," << "imp_cmd_beta_b" << ","
-                        << "imp_cmd_Fx_b"    << "," << "imp_cmd_Fy_b"   << ","
+                        << "imp_cmd_Fx_b"    << "," << "imp_cmd_Fy_b"   << "," << "imp_cmd_Fz_b"   << ","
                         << "imp_cmd_theta_c" << "," << "imp_cmd_beta_c" << ","
-                        << "imp_cmd_Fx_c"    << "," << "imp_cmd_Fy_c"   << ","
+                        << "imp_cmd_Fx_c"    << "," << "imp_cmd_Fy_c"   << "," << "imp_cmd_Fz_c"   << ","
                         << "imp_cmd_theta_d" << "," << "imp_cmd_beta_d" << ","
-                        << "imp_cmd_Fx_d"    << "," << "imp_cmd_Fy_d"   << ","
+                        << "imp_cmd_Fx_d"    << "," << "imp_cmd_Fy_d"   << "," << "imp_cmd_Fz_d"   << ","
 
                         << "force_seq" << "," << "force_sec" << "," << "force_nsec" << ","
                         << "force_Fx_a" << "," << "force_Fy_a" << ","
@@ -154,6 +159,19 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "v_9" << "," << "i_9" << ","
                         << "v_10" << "," << "i_10" << ","
                         << "v_11" << "," << "i_11"<< ","
+
+                        << "fp1_sec" << "," << "fp1_nsec" << ","
+                        << "fp1_fx" << "," << "fp1_fy" << "," << "fp1_fz" << ","
+                        << "fp1_tx" << "," << "fp1_ty" << "," << "fp1_tz" << ","
+                        << "fp2_sec" << "," << "fp2_nsec" << ","
+                        << "fp2_fx" << "," << "fp2_fy" << "," << "fp2_fz" << ","
+                        << "fp2_tx" << "," << "fp2_ty" << "," << "fp2_tz" << ","
+                        << "fp3_sec" << "," << "fp3_nsec" << ","
+                        << "fp3_fx" << "," << "fp3_fy" << "," << "fp3_fz" << ","
+                        << "fp3_tx" << "," << "fp3_ty" << "," << "fp3_tz" << ","
+                        << "fp4_sec" << "," << "fp4_nsec" << ","
+                        << "fp4_fx" << "," << "fp4_fy" << "," << "fp4_fz" << ","
+                        << "fp4_tx" << "," << "fp4_ty" << "," << "fp4_tz" << ","
 
                         << "dst_lf" << "," << "dst_rf" << "," << "dst_rr" << "," << "dst_lr" << ","
                         << "camera_dist" << "," << "camera_yaw" 
@@ -231,6 +249,22 @@ void range_4_cb(const sensor_msgs::msg::Range::SharedPtr msg){
     range_4 = *msg;
 }
 
+void force_plate_1_cb(const geometry_msgs::msg::WrenchStamped::SharedPtr msg){
+    force_plate_1 = *msg;
+}
+
+void force_plate_2_cb(const geometry_msgs::msg::WrenchStamped::SharedPtr msg){
+    force_plate_2 = *msg;
+}
+
+void force_plate_3_cb(const geometry_msgs::msg::WrenchStamped::SharedPtr msg){
+    force_plate_3 = *msg;
+}
+
+void force_plate_4_cb(const geometry_msgs::msg::WrenchStamped::SharedPtr msg){
+    force_plate_4 = *msg;
+}
+
 // write data to CSV file
 void write_data(rclcpp::Node::SharedPtr node) {
     if (!output_file.is_open()){
@@ -271,13 +305,13 @@ void write_data(rclcpp::Node::SharedPtr node) {
 
                 << imp_cmd.header.seq << "," << imp_cmd.header.stamp.sec << "," << imp_cmd.header.stamp.nanosec << ","
                 << imp_cmd.module_a.theta << "," << imp_cmd.module_a.beta << ","
-                << imp_cmd.module_a.fx    << "," << imp_cmd.module_a.fy << ","
+                << imp_cmd.module_a.fx    << "," << imp_cmd.module_a.fy << "," << imp_cmd.module_a.fz << ","
                 << imp_cmd.module_b.theta << "," << imp_cmd.module_b.beta << ","
-                << imp_cmd.module_b.fx    << "," << imp_cmd.module_b.fy << ","
+                << imp_cmd.module_b.fx    << "," << imp_cmd.module_b.fy << "," << imp_cmd.module_b.fz << ","
                 << imp_cmd.module_c.theta << "," << imp_cmd.module_c.beta << ","
-                << imp_cmd.module_c.fx    << "," << imp_cmd.module_c.fy << ","
+                << imp_cmd.module_c.fx    << "," << imp_cmd.module_c.fy << "," << imp_cmd.module_c.fz << ","
                 << imp_cmd.module_d.theta << "," << imp_cmd.module_d.beta << ","
-                << imp_cmd.module_d.fx    << "," << imp_cmd.module_d.fy << ","
+                << imp_cmd.module_d.fx    << "," << imp_cmd.module_d.fy << "," << imp_cmd.module_d.fz << ","
 
                 << force_state.header.seq << "," << force_state.header.stamp.sec << "," << force_state.header.stamp.nanosec << ","
                 << force_state.module_a.fx    << "," << force_state.module_a.fy << ","
@@ -307,6 +341,19 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << power_state.v_9 << "," << power_state.i_9 << ","
                 << power_state.v_10 << "," << power_state.i_10 << ","
                 << power_state.v_11 << "," << power_state.i_11 << ","
+
+                << force_plate_1.header.stamp.sec << "," << force_plate_1.header.stamp.nanosec << ","
+                << force_plate_1.wrench.force.x << "," << force_plate_1.wrench.force.y << "," << force_plate_1.wrench.force.z << ","
+                << force_plate_1.wrench.torque.x << "," << force_plate_1.wrench.torque.y << "," << force_plate_1.wrench.torque.z << ","
+                << force_plate_2.header.stamp.sec << "," << force_plate_2.header.stamp.nanosec << ","
+                << force_plate_2.wrench.force.x << "," << force_plate_2.wrench.force.y << "," << force_plate_2.wrench.force.z << ","
+                << force_plate_2.wrench.torque.x << "," << force_plate_2.wrench.torque.y << "," << force_plate_2.wrench.torque.z << ","
+                << force_plate_3.header.stamp.sec << "," << force_plate_3.header.stamp.nanosec << ","
+                << force_plate_3.wrench.force.x << "," << force_plate_3.wrench.force.y << "," << force_plate_3.wrench.force.z << ","
+                << force_plate_3.wrench.torque.x << "," << force_plate_3.wrench.torque.y << "," << force_plate_3.wrench.torque.z << ","
+                << force_plate_4.header.stamp.sec << "," << force_plate_4.header.stamp.nanosec << ","
+                << force_plate_4.wrench.force.x << "," << force_plate_4.wrench.force.y << "," << force_plate_4.wrench.force.z << ","
+                << force_plate_4.wrench.torque.x << "," << force_plate_4.wrench.torque.y << "," << force_plate_4.wrench.torque.z << ","
 
                 << range_1.range << "," << range_2.range << "," << range_3.range << "," << range_4.range ;
 
@@ -369,6 +416,10 @@ int main(int argc, char **argv) {
     auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 100, range_2_cb);
     auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 100, range_3_cb);
     auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 100, range_4_cb);
+    auto force_plate_sub_1 = node->create_subscription<geometry_msgs::msg::WrenchStamped>("sensor/force_plate_1", 100, force_plate_1_cb);
+    auto force_plate_sub_2 = node->create_subscription<geometry_msgs::msg::WrenchStamped>("sensor/force_plate_2", 100, force_plate_2_cb);
+    auto force_plate_sub_3 = node->create_subscription<geometry_msgs::msg::WrenchStamped>("sensor/force_plate_3", 100, force_plate_3_cb);
+    auto force_plate_sub_4 = node->create_subscription<geometry_msgs::msg::WrenchStamped>("sensor/force_plate_4", 100, force_plate_4_cb);
 
     // rclcpp::Rate rate(1000);
     rclcpp::Duration period(0, 1000000); // 1ms
