@@ -126,6 +126,7 @@ void LegOdometryNode::process() {
         observer_.reset();
         esekf_initialized_ = false;
         last_esekf_imu_time_valid_ = false;
+        prev_imu_valid_ = false;
         esekf_tick_ = 0;
         return;
     }
@@ -187,8 +188,14 @@ void LegOdometryNode::process() {
             static_cast<float>(imu_.angular_velocity.y),
             static_cast<float>(imu_.angular_velocity.z));
 
+        // Trapezoidal average with the intermediate tick's IMU sample.
+        // predict uses average over the 2ms interval; update uses the
+        // instantaneous measurement at the current tick.
+        Eigen::Vector3f a_pred = prev_imu_valid_ ? 0.5f * (prev_imu_a_ + a_m) : a_m;
+        Eigen::Vector3f w_pred = prev_imu_valid_ ? 0.5f * (prev_imu_w_ + w_m) : w_m;
+
         // --- 2. Predict (IMU propagation with dynamic dt) ---
-        esekf_.predict(a_m, w_m, esekf_dt);
+        esekf_.predict(a_pred, w_pred, esekf_dt);
 
         // --- 3. Build per-leg observations ---
         const float w_y = static_cast<float>(imu_.angular_velocity.y) - static_cast<float>(esekf_.nominal().bw.y());
@@ -248,6 +255,15 @@ void LegOdometryNode::process() {
             ekf_pub_->publish(odom_msg);
         }
     }
+
+    // Store current IMU for trapezoidal averaging at next ESEKF tick
+    prev_imu_a_ << static_cast<float>(imu_.linear_acceleration.x),
+                    static_cast<float>(imu_.linear_acceleration.y),
+                    static_cast<float>(imu_.linear_acceleration.z);
+    prev_imu_w_ << static_cast<float>(imu_.angular_velocity.x),
+                    static_cast<float>(imu_.angular_velocity.y),
+                    static_cast<float>(imu_.angular_velocity.z);
+    prev_imu_valid_ = true;
 
     iteration_count_++;
 }

@@ -134,6 +134,14 @@ private:
     size_t esekf_tick_ = 0;
 
     // ============================================================
+    // IMU trapezoidal averaging for ESEKF predict
+    // ============================================================
+    /// Previous tick's IMU (intermediate sample between ESEKF triggers)
+    Eigen::Vector3f prev_imu_a_{0.f, 0.f, 0.f};
+    Eigen::Vector3f prev_imu_w_{0.f, 0.f, 0.f};
+    bool prev_imu_valid_ = false;
+
+    // ============================================================
     // Contact state (Schmitt trigger memory)
     // ============================================================
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
