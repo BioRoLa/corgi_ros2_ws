@@ -10,6 +10,7 @@ from rclpy.executors import SingleThreadedExecutor
 import threading
 from typing import Optional
 from PyQt5.QtCore import QObject, pyqtSignal
+from rcl_interfaces.msg import Log as RosoutLog
 
 from corgi_msgs.msg import (
     ConfigStamped,
@@ -19,8 +20,7 @@ from corgi_msgs.msg import (
     PowerStateStamped,
     RobotCmdStamped,
     RobotStateStamped,
-    TriggerStamped,
-    LogStamped
+    TriggerStamped
 )
 
 
@@ -127,7 +127,7 @@ class ControlPanelRosWorker(RosWorkerBase):
     power_state_updated = pyqtSignal(object)  # PowerStateStamped
     robot_state_updated = pyqtSignal(object)  # RobotStateStamped
     motor_state_updated = pyqtSignal(object)  # MotorStateStamped
-    log_updated = pyqtSignal(object)  # LogStamped
+    log_updated = pyqtSignal(object)  # RosoutLog
     
     def __init__(self, node_name: str = 'corgi_control_panel'):
         super().__init__(node_name)
@@ -176,8 +176,8 @@ class ControlPanelRosWorker(RosWorkerBase):
             10
         )
         self.log_sub = self.node.create_subscription(
-            LogStamped,
-            'log',
+            RosoutLog,
+            '/rosout',
             self._log_callback,
             10
         )
@@ -195,8 +195,8 @@ class ControlPanelRosWorker(RosWorkerBase):
         """Callback for motor state messages"""
         self.motor_state_updated.emit(msg)
     
-    def _log_callback(self, msg: LogStamped) -> None:
-        """Callback for log messages"""
+    def _log_callback(self, msg: RosoutLog) -> None:
+        """Callback for /rosout messages"""
         self.log_updated.emit(msg)
     
     # Publishing methods

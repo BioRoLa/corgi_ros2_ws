@@ -589,6 +589,21 @@ class CorgiControlPanel(QWidget):
         
         # Write to file logger
         log_to_file(self.file_logger, level, source, message)
+
+    def _map_external_log_level(self, level: int) -> LOGLEVEL:
+        """Map external ROS log levels to panel LOGLEVEL."""
+        if level in LOGLEVEL._value2member_map_:
+            return LOGLEVEL(level)
+
+        if level >= 50:
+            return LOGLEVEL.FATAL
+        if level >= 40:
+            return LOGLEVEL.ERROR
+        if level >= 30:
+            return LOGLEVEL.WARN
+        if level >= 20:
+            return LOGLEVEL.INFO
+        return LOGLEVEL.DEBUG
     
     # ========================================================================
     # Event Handlers - ROS Bridge
@@ -981,9 +996,13 @@ class CorgiControlPanel(QWidget):
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
-        level = log_msg.level
-        node_name = log_msg.node_name if hasattr(log_msg, 'node_name') else 'unknown'
-        message = log_msg.message if hasattr(log_msg, 'message') else ''
+        raw_level = int(log_msg.level) if hasattr(log_msg, 'level') else int(LOGLEVEL.INFO)
+        level = self._map_external_log_level(raw_level)
+        node_name = log_msg.name if hasattr(log_msg, 'name') else 'unknown'
+        message = log_msg.msg if hasattr(log_msg, 'msg') else ''
+
+        if not message:
+            return
         
         # Always log to file
         file_log_level = LOGLEVEL_TO_LOGGING_MAP.get(level, logging.INFO)
