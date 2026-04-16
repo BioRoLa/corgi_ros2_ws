@@ -315,10 +315,9 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
 
     // --- Motor velocities → joint velocities ---
     // theta_d = (-velocity_r + velocity_l) / 2
-    // beta_d  = -( velocity_r + velocity_l) / 2   (negated for right-side legs)
-    // NOTE: motor sum gives -beta_d by convention; negate to get true beta_d
+    // beta_d  = ( velocity_r + velocity_l) / 2   (negated for right-side legs)
     float theta_d = static_cast<float>((-module.velocity_r + module.velocity_l) / 2.0);
-    float beta_d  = -static_cast<float>(( module.velocity_r + module.velocity_l) / 2.0);
+    float beta_d  = static_cast<float>(( module.velocity_r + module.velocity_l) / 2.0);
     if (is_right_side) beta_d = -beta_d;
 
     // --- Accumulate contact_beta ---

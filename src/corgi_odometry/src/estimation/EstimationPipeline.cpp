@@ -123,7 +123,7 @@ StepResult EstimationPipeline::step(
             double dt_sec = cur_t - prev_t;
             constexpr double lo = Config::ESEKF_DT * 0.5;
             constexpr double hi = Config::ESEKF_DT * 2.0;
-            if (dt_sec >= lo && dt_sec <= hi)
+            if (dt_sec > lo && dt_sec < hi)
                 actual_dt = static_cast<float>(dt_sec);
         }
         if (raw.imu_sec != 0 || raw.imu_nsec != 0) {
