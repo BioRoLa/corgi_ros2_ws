@@ -27,6 +27,7 @@ struct StepResult {
     Eigen::MatrixXf P;
     Eigen::Vector3f z_avg = Eigen::Vector3f::Zero();
     Eigen::Vector3f pred_vel = Eigen::Vector3f::Zero();  // velocity after predict, before update
+    bool esekf_updated = false;  // true when ESEKF predict+update ran this tick
 };
 
 /**
@@ -81,6 +82,17 @@ private:
     std::array<ContactSchmittTrigger, 4> contact_triggers_;
 
     bool initialized_ = false;
+
+    // ESEKF decimation state (matches online node architecture)
+    size_t esekf_tick_ = 0;
+    Eigen::Vector3f prev_imu_a_{0.f, 0.f, 0.f};
+    Eigen::Vector3f prev_imu_w_{0.f, 0.f, 0.f};
+    bool prev_imu_valid_ = false;
+
+    // ESEKF dt tracking between trigger ticks
+    int32_t prev_esekf_imu_sec_ = 0;
+    int32_t prev_esekf_imu_nsec_ = 0;
+    bool prev_esekf_time_valid_ = false;
 };
 
 }  // namespace corgi

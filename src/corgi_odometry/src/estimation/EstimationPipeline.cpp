@@ -81,12 +81,12 @@ StepResult EstimationPipeline::step(
 {
     StepResult result;
 
-    // ── GMO disturbance estimation ──────────────────────────────
+    // ── GMO disturbance estimation (always, every tick @ 1000 Hz) ──
     result.disturbance = observer_.estimate_disturbance(
         processed.q, processed.q_dot, processed.tau, processed.I_c,
         index, false);
 
-    // ── Schmitt trigger contact detection ───────────────────────
+    // ── Schmitt trigger contact detection (always) ──────────────
     // Disturbance layout: [4]=beta_a [5]=rm_a [6]=beta_b [7]=rm_b
     //                     [8]=beta_c [9]=rm_c [10]=beta_d [11]=rm_d
     constexpr int rm_idx[4]   = {5, 7, 9, 11};
@@ -98,8 +98,48 @@ StepResult EstimationPipeline::step(
         result.contacts[j] = contact_triggers_[j].state();
     }
 
-    // ── ESEKF predict ───────────────────────────────────────────
-    esekf_.predict(a_m, w_m, esekf_dt);
+    // ── ESEKF decimation (runs every ESEKF_DECIMATION ticks @ 500 Hz) ──
+    esekf_tick_++;
+    if (esekf_tick_ < static_cast<size_t>(Config::ESEKF_DECIMATION)) {
+        // Non-ESEKF tick: buffer IMU for trapezoidal averaging
+        prev_imu_a_ = a_m;
+        prev_imu_w_ = w_m;
+        prev_imu_valid_ = true;
+
+        // Return current (stale) ESEKF state
+        result.state = esekf_.nominal();
+        result.P     = esekf_.covariance();
+        result.esekf_updated = false;
+        return result;
+    }
+    esekf_tick_ = 0;
+
+    // ── Compute ESEKF dt from IMU timestamps ────────────────────
+    float actual_dt = static_cast<float>(Config::ESEKF_DT);  // nominal 2ms
+    if (params_.use_dynamic_dt) {
+        if (prev_esekf_time_valid_ && (raw.imu_sec != 0 || raw.imu_nsec != 0)) {
+            double cur_t  = raw.imu_sec  + raw.imu_nsec  * 1e-9;
+            double prev_t = prev_esekf_imu_sec_ + prev_esekf_imu_nsec_ * 1e-9;
+            double dt_sec = cur_t - prev_t;
+            constexpr double lo = Config::ESEKF_DT * 0.5;
+            constexpr double hi = Config::ESEKF_DT * 2.0;
+            if (dt_sec >= lo && dt_sec <= hi)
+                actual_dt = static_cast<float>(dt_sec);
+        }
+        if (raw.imu_sec != 0 || raw.imu_nsec != 0) {
+            prev_esekf_imu_sec_  = raw.imu_sec;
+            prev_esekf_imu_nsec_ = raw.imu_nsec;
+            prev_esekf_time_valid_ = true;
+        }
+    }
+
+    // ── Trapezoidal average of IMU for predict ──────────────────
+    Eigen::Vector3f a_pred = prev_imu_valid_ ? 0.5f * (prev_imu_a_ + a_m) : a_m;
+    Eigen::Vector3f w_pred = prev_imu_valid_ ? 0.5f * (prev_imu_w_ + w_m) : w_m;
+    prev_imu_valid_ = false;  // consumed
+
+    // ── ESEKF predict (averaged IMU, ESEKF-rate dt) ─────────────
+    esekf_.predict(a_pred, w_pred, actual_dt);
 
     // Capture prediction-only velocity (before measurement update)
     result.pred_vel = esekf_.nominal().v;
@@ -175,6 +215,7 @@ StepResult EstimationPipeline::step(
     esekf_.inject_and_reset();
 
     // Collect diagnostics
+    result.esekf_updated = true;
     result.state = esekf_.nominal();
     result.diag  = esekf_.leg_diag();
     result.P     = esekf_.covariance();
