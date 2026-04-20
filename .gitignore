@@ -22,3 +22,4 @@ output_data/*
 **/build
 **/log
 **/COLCON_IGNORE
+src/livox_ros_driver2/
