@@ -22,6 +22,7 @@
 #include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 
@@ -47,6 +48,7 @@ std::string output_file_name = "";
 std::string output_file_path = "";
 
 std_msgs::msg::Float32MultiArray camera;
+std_msgs::msg::Int32MultiArray swing_phase;
 
 // Check if file exists
 bool file_exists(const std::string &filename) {
@@ -139,6 +141,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
                         << "sim_contact_state_a" << "," << "sim_contact_state_b" << "," << "sim_contact_state_c" << "," << "sim_contact_state_d" << ","
+                        << "swing_phase_a" << "," << "swing_phase_b" << "," << "swing_phase_c" << "," << "swing_phase_d" << ","
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
@@ -213,6 +216,10 @@ void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
     camera.data = msg->data;
     // float dist = msg->data[0];
     // float yaw  = msg->data[1];
+}
+
+void swing_phase_cb(const std_msgs::msg::Int32MultiArray::SharedPtr msg){
+    swing_phase.data = msg->data;
 }
 
 void range_1_cb(const sensor_msgs::msg::Range::SharedPtr msg){
@@ -294,6 +301,11 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << sim_leg_contact_state.module_c.contact << ","
                 << sim_leg_contact_state.module_d.contact << ","
 
+                << (swing_phase.data.size() > 0 ? swing_phase.data[0] : -1) << ","
+                << (swing_phase.data.size() > 1 ? swing_phase.data[1] : -1) << ","
+                << (swing_phase.data.size() > 2 ? swing_phase.data[2] : -1) << ","
+                << (swing_phase.data.size() > 3 ? swing_phase.data[3] : -1) << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -365,6 +377,7 @@ int main(int argc, char **argv) {
     tf2_ros::TransformListener tfListener(tfBuffer);
 
     auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 100, stair_info_cb);
+    auto swing_phase_sub = node->create_subscription<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 100, swing_phase_cb);
     auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 100, range_1_cb);
     auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 100, range_2_cb);
     auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 100, range_3_cb);
