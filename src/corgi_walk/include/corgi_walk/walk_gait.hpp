@@ -19,6 +19,7 @@ class WalkGait {
         std::array<std::array<double, 4>, 2> step();
         void set_velocity(double new_value);
         void set_stand_height(double new_value);
+        void set_ground_offset(const std::array<double, 4>& new_value);
         void set_step_length(double new_value);
         void set_step_height(double new_value);
         void set_curvature(double new_value);
@@ -33,6 +34,7 @@ class WalkGait {
         double stand_height = 0.25;
         double step_length  = 0.3;
         double step_height  = 0.04;
+        std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0};
 
     private:
         LegModel leg_model;
@@ -83,7 +85,7 @@ class WalkGait {
         double diff_step_length = 0.0;  // Differential step length 
         double new_diff_step_length = 0.0;  // New differential step length
         double diff_dS = 0.0;   // Differential dS
-        int sign_diff[4];   // Differential sign
+        int sign_diff[4] = {0, 0, 0, 0};   // Differential sign
 };//end class WalkGait
 
 #endif // WALKGAIT_HPP

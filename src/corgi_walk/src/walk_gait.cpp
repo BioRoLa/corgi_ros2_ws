@@ -65,7 +65,8 @@ void WalkGait::initialize(double init_eta[8], double step_length_)
         {
             std::cout << "Leg cannot contact ground if use the given initial theta/beta." << std::endl;
         } // end if else
-        relative_foothold[i][1] = -stand_height;
+        double stand_height_eff = stand_height - ground_offset[i];
+        relative_foothold[i][1] = -stand_height_eff;
     } // end for
     // Get initial leg duty
     int first_swing_leg = 0;
@@ -142,7 +143,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
                 double rest_time = (1.0 - 4 * swing_time) / 2; // time during swing of front leg and next hind leg
                 total_step_length = step_length + sign_diff[i] * diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * (new_step_length + sign_diff[i] * new_diff_step_length) + swing_hip_move_d + direction * (rest_time * (step_length - new_step_length)) + CoM_bias, 0}; // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length + CoM_bias.
+                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * (new_step_length + sign_diff[i] * new_diff_step_length) + swing_hip_move_d + direction * (rest_time * (step_length - new_step_length)) + CoM_bias, ground_offset[i]}; // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length + CoM_bias.
                 diff_step_length = new_diff_step_length;
             }
             else
@@ -152,7 +153,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
                 next_step_length[i] = step_length; // apply hind step length corresponding to the front leg's.
                 total_step_length = step_length + sign_diff[i] * diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * total_step_length + swing_hip_move_d + CoM_bias, 0};
+                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * total_step_length + swing_hip_move_d + CoM_bias, ground_offset[i]};
                 incre_duty = dS / step_length; // change incre_duty corresponding to new step length when hind leg start to swing.
             } // end if else
             /* Bezier curve setup */
@@ -162,7 +163,8 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
             for (int j = 0; j < 5; j++)
             { // G, L_l, U_l
                 double contact_height = j == 0 ? leg_model.r : leg_model.radius;
-                std::array<double, 2> contact_point = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height + contact_height};
+                double stand_height_eff = stand_height - ground_offset[i];
+                std::array<double, 2> contact_point = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height_eff + contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
                 leg_model.contact_map(result_eta[0], result_eta[1]);
                 if (leg_model.rim == touch_rim_idx[j])
@@ -261,16 +263,35 @@ void WalkGait::set_velocity(double new_value)
 
 void WalkGait::set_stand_height(double new_value)
 {
-    if (new_value > 0.34 || new_value < 0.12 + step_height)
+    if (new_value > 0.34)
     {
-        throw std::runtime_error("Stand height should be between 0.12+\"step_height\" and 0.34.");
+        throw std::runtime_error("Stand height should be no larger than 0.34.");
     } // end if
+    for (int i = 0; i < 4; i++)
+    {
+        if (new_value - ground_offset[i] < 0.12 + step_height)
+        {
+            throw std::runtime_error("Effective stand height should be >= 0.12 + step_height for all legs.");
+        }
+    }
     stand_height = new_value;
     for (int i = 0; i < 4; i++)
     {
         next_hip[i][1] = stand_height;
     } // end for
 } // end set_stand_height
+
+void WalkGait::set_ground_offset(const std::array<double, 4>& new_value)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        if (stand_height - new_value[i] < 0.12 + step_height)
+        {
+            throw std::runtime_error("Effective stand height should be >= 0.12 + step_height for all legs.");
+        }
+    }
+    ground_offset = new_value;
+} // end set_ground_offset
 
 void WalkGait::set_step_length(double new_value)
 {
@@ -292,6 +313,13 @@ void WalkGait::set_step_height(double new_value)
     {
         throw std::runtime_error("Step height should be larger than zero.");
     } // end if
+    for (int i = 0; i < 4; i++)
+    {
+        if (stand_height - ground_offset[i] < 0.12 + new_value)
+        {
+            throw std::runtime_error("Effective stand height should be >= 0.12 + step_height for all legs.");
+        }
+    }
     step_height = new_value;
 } // end set_step_height
 

@@ -8,6 +8,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "corgi_walk/walk_gait.hpp"
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
@@ -17,7 +18,10 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("walk_test");
     auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
+    std_msgs::msg::Int32MultiArray phase_msg;
+    phase_msg.data.resize(4, 0);
     std::array<corgi_msgs::msg::MotorCmd *, 4> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
@@ -102,6 +106,9 @@ int main(int argc, char **argv)
             motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? eta_list[1][i] : -eta_list[1][i];
         }
         motor_pub->publish(motor_cmd);
+            auto swing_phase = walk_gait.get_swing_phase();
+            for (int i = 0; i < 4; i++) { phase_msg.data[i] = swing_phase[i]; }
+            phase_pub->publish(phase_msg);
         // --- Synchronized Sleep ---
         next_time += period;
         if (!node->get_clock()->sleep_until(next_time))
