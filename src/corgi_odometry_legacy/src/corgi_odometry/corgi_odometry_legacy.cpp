@@ -64,7 +64,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     if (RECORD_DATA){output_file_name = msg->output_filename;}
 
     if (trigger && output_file_name != "") {
-        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros_ws/output_data/" + output_file_name;
+        output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros2_ws/output_data/" + output_file_name;
 
         int index = 1;
         std::string file_path_with_extension = output_file_path + "_odom.csv";
