@@ -38,6 +38,7 @@ Eigen::Vector3f v_init;
 Eigen::Vector3f a;
 Eigen::Vector3f w;
 Eigen::Quaternionf q;
+Eigen::Quaternionf q_prev;
 
 geometry_msgs::msg::Vector3 prev_v;
 
@@ -104,7 +105,6 @@ void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg){
 
 void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
     imu = *msg;
-    imu.angular_velocity.x = 0.0;
 }
 
 void contact_cb(const corgi_msgs::msg::ContactStateStamped::SharedPtr msg){
@@ -283,8 +283,14 @@ int main(int argc, char **argv) {
                 q_init = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
                 R_init = q_init.toRotationMatrix();
                 R_init = rot * R_init;
+                q_prev = q_init;
 
                 initialized = true;
+                // Skip filter update on the initialization tick; wait for next timer cycle
+                // so the first UpdateState computes a real derivative over a full dt interval.
+                next_time += period;
+                node->get_clock()->sleep_until(next_time);
+                continue;
             }
             //Update encoder states
             a = Eigen::Vector3f(imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z);
@@ -296,7 +302,7 @@ int main(int argc, char **argv) {
             encoder_rh.UpdateState(dt);
             encoder_lh.UpdateState(dt);
 
-            R = ESTIMATE_POSITION_FRAME ? q.toRotationMatrix() : Eigen::Matrix3f::Identity();
+            R = q_prev.toRotationMatrix();
             u.push_data(a, w, dt);
             lf.push_data(encoder_lf.GetState(), w, dt, alpha_lf);
             rf.push_data(encoder_rf.GetState(), w, dt, alpha_rf);
@@ -364,6 +370,7 @@ int main(int argc, char **argv) {
                 estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
                 logger.logState(estimate_state);
             }
+            q_prev = q;
             counter ++;
         }
         

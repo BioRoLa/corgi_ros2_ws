@@ -2,7 +2,7 @@
 
 /*******  switch *******/ 
 // true → simulation, false → real robot
-inline constexpr bool SIM = true;        
+inline constexpr bool SIM = false;        
 // use KLD or not (if KLD is not used, need to input the contact state for EKF estimation)
 inline constexpr bool KLD = true;               
 // publish contact state (only if KLD is used)
@@ -19,7 +19,7 @@ inline constexpr Method Z_POS_METHOD = AVG;
 
 /******* odometry *******/
 
-inline constexpr float ODOM_ESTIMATOR_RATE = 500.0; //Hz
+inline constexpr float ODOM_ESTIMATOR_RATE = 200.0; //Hz
 inline constexpr float THRESHOLD = 0.08; //threshold of KLD
 inline constexpr float ODOM_ESTIMATION_TIME_RANGE = 10.0; // matrix size
 
