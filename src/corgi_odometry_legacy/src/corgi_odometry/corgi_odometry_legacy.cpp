@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
             encoder_rh.UpdateState(dt);
             encoder_lh.UpdateState(dt);
 
-            R = q_prev.toRotationMatrix();
+            R = ESTIMATE_POSITION_FRAME ? q_prev.toRotationMatrix() : Eigen::Matrix3f::Identity();
             u.push_data(a, w, dt);
             lf.push_data(encoder_lf.GetState(), w, dt, alpha_lf);
             rf.push_data(encoder_rf.GetState(), w, dt, alpha_rf);
