@@ -4,7 +4,6 @@ esekf:
   sigma_w:       [0.001, 0.01, 0.001]
   sigma_ba:      [1.0e-5, 1.0e-5, 1.0e-5]
   sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
-  sigma_bv:      [1.0e-6, 1.0e-6, 1.0e-6]
   sigma_leg_vec: [0.05, 1.5, 1.2]
   mahalanobis_threshold: 16.27
 observer:

@@ -90,17 +90,16 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m, floa
     // ba, bw, bv: constant (random walk, corrected in update)
 
     // ----------------------------------------------------------
-    // 4. Error-state Jacobian Fx (18×18)
+    // 4. Error-state Jacobian Fx (15×15)
     //
     //    δx_{k+1} = Fx * δx_k + noise
     //
-    //    Fx structure (block rows: δp, δv, δθ, δba, δbw, δbv):
-    //      δp  row: I | R*dt | -R*[v]× dt |  0   |  0     | 0
-    //      δv  row: 0 | R_Δ^T| -R_Δ^T[â]× dt| -R_Δ^T dt| 0  | 0
-    //      δθ  row: 0 |  0   |  R_Δ^T     |  0   | -I*dt  | 0
-    //      δba row: 0 |  0   |   0        |  I   |  0     | 0
-    //      δbw row: 0 |  0   |   0        |  0   |  I     | 0
-    //      δbv row: 0 |  0   |   0        |  0   |  0     | I
+    //    Fx structure (block rows: δp, δv, δθ, δba, δbw):
+    //      δp  row: I | R*dt | -R*[v]× dt |  0   |  0
+    //      δv  row: 0 | R_Δ^T| -R_Δ^T[g_body]× dt| -R_Δ^T dt| 0
+    //      δθ  row: 0 |  0   |  R_Δ^T     |  0   | -I*dt
+    //      δba row: 0 |  0   |   0        |  I   |  0
+    //      δbw row: 0 |  0   |   0        |  0   |  I
     // ----------------------------------------------------------
     Eigen::MatrixXf Fx = Eigen::MatrixXf::Identity(ERR_STATE_DIM, ERR_STATE_DIM);
 
@@ -140,7 +139,6 @@ void ESEKF::predict(const Eigen::Vector3f& a_m, const Eigen::Vector3f& w_m, floa
     Qc.block<3,3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt * dt);
     Qc.block<3,3>(BA_IDX, BA_IDX) = noise_.sigma_ba.array().square().matrix().asDiagonal();
     Qc.block<3,3>(BW_IDX, BW_IDX) = noise_.sigma_bw.array().square().matrix().asDiagonal();
-    Qc.block<3,3>(BV_IDX, BV_IDX) = noise_.sigma_bv.array().square().matrix().asDiagonal();
 
     // ----------------------------------------------------------
     // 6. Covariance propagation: P = Fx * P * Fx^T + Qc
@@ -187,6 +185,14 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
 
     // z_leg = -contact_velocity(v=0) = "observed" body velocity
     Eigen::Vector3f z_leg = -obs.leg->contact_velocity;
+
+    // Apply external velocity bias correction (from Outer Fusion EKF).
+    // bv_outer_ is in world frame; z_leg is in body frame.
+    // z_corrected = z_leg - R_body^T * bv_outer
+    if (!bv_outer_.isZero()) {
+        Eigen::Matrix3f R_body = x_nom_.q.toRotationMatrix();
+        z_leg -= R_body.transpose() * bv_outer_;
+    }
 
     // ----------------------------------------------------------
     // 2. Innovation (residual)
@@ -285,7 +291,6 @@ void ESEKF::inject_and_reset() {
     x_nom_.v  += dx_.segment<3>(V_IDX);
     x_nom_.ba += dx_.segment<3>(BA_IDX);
     x_nom_.bw += dx_.segment<3>(BW_IDX);
-    x_nom_.bv += dx_.segment<3>(BV_IDX);
 
     // Attitude: q_true = q_nom ⊗ [1, ½δθ]
     Eigen::Vector3f dtheta = dx_.segment<3>(TH_IDX);
@@ -302,6 +307,14 @@ void ESEKF::inject_and_reset() {
     // TODO: Covariance reset with G matrix (G ≈ I for small δθ)
     //       P = G * P * G^T  where G = I - [½δθ]×  (in θ block)
     //       Currently skipped since δθ is small after injection
+}
+
+// ============================================================
+// External velocity bias setter (from Outer Fusion EKF)
+// ============================================================
+
+void ESEKF::set_bv_outer(const Eigen::Vector3f& bv_outer) {
+    bv_outer_ = bv_outer;
 }
 
 } // namespace estimation_model

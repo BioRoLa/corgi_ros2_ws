@@ -26,7 +26,6 @@ esekf:
   sigma_w: [0.001, 0.01, 0.001]
   sigma_ba: [1.0e-05, 1.0e-04, 5.0e-06]
   sigma_bw: [1.0e-08, 1.0e-08, 1.0e-08]
-  sigma_bv: [1.0e-06, 1.0e-06, 1.0e-06]
   sigma_leg_vec: [0.02, 1.5, 0.8]
   mahalanobis_threshold: 16.27 # 16.27(default) // 1e+30(no_maha)
 observer: {cutoff_freq: 15.0, encoder_cutoff_freq: 30.0}

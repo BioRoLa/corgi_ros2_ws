@@ -47,7 +47,6 @@ EstimationPipeline::EstimationPipeline(const Params& params)
     np.sigma_w       = params.sigma_w;
     np.sigma_ba      = params.sigma_ba;
     np.sigma_bw      = params.sigma_bw;
-    np.sigma_bv      = params.sigma_bv;
     np.sigma_leg_vec = params.sigma_leg_vec;
     np.mahalanobis_threshold = params.mahalanobis_threshold;
     esekf_.set_noise_params(np);

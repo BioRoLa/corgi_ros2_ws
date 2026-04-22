@@ -94,7 +94,7 @@ int OfflineTestNode::run() {
               << "est_vel_x,est_vel_y,est_vel_z,"
               << "contact_a,contact_b,contact_c,contact_d,"
               << "z_avg_x,z_avg_y,z_avg_z,"
-              << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z,"
+              << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,"
               << "est_qw,est_qx,est_qy,est_qz,"
               << "gt_qw,gt_qx,gt_qy,gt_qz,"
               << "d2_a,d2_b,d2_c,d2_d,"
@@ -280,7 +280,6 @@ int OfflineTestNode::run() {
                       << result.z_avg.x() << "," << result.z_avg.y() << "," << result.z_avg.z() << ","
                       << st.ba.x() << "," << st.ba.y() << "," << st.ba.z() << ","
                       << st.bw.x() << "," << st.bw.y() << "," << st.bw.z() << ","
-                      << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << ","
                       << st.q.w() << "," << st.q.x() << "," << st.q.y() << "," << st.q.z() << ","
                       << d.imu_orien_w << "," << d.imu_orien_x << ","
                       << d.imu_orien_y << "," << d.imu_orien_z << ",";
@@ -334,7 +333,6 @@ int OfflineTestNode::run() {
         std::cout << "Velocity: [" << final_st.v.x() << ", " << final_st.v.y() << ", " << final_st.v.z() << "]\n";
         std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
         std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
-        std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
         const size_t final_idx = start_index + processed_count - 1;
         double gt_final_x = data[final_idx].sim_pos_x - gt_offset_x;
         double gt_final_y = data[final_idx].sim_pos_y - gt_offset_y;

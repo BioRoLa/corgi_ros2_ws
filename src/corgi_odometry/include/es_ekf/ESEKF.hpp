@@ -11,7 +11,7 @@
 namespace estimation_model {
 
 // ============================================================
-// Error state index definitions (18-dim error state)
+// Error state index definitions (15-dim error state)
 // Attitude uses 3-dim rotation vector (not 4-dim quaternion)
 // ============================================================
 enum StateIdx {
@@ -20,8 +20,7 @@ enum StateIdx {
     TH_IDX = 6,   // attitude error (rot vec)(3)
     BA_IDX = 9,   // accelerometer bias error(3)
     BW_IDX = 12,  // gyroscope bias error    (3)
-    BV_IDX = 15,  // velocity bias error     (3)
-    ERR_STATE_DIM = 18
+    ERR_STATE_DIM = 15
 };
 
 // ============================================================
@@ -33,7 +32,6 @@ struct NominalState {
     Eigen::Quaternionf q = Eigen::Quaternionf::Identity();     // attitude (body->world)
     Eigen::Vector3f ba = Eigen::Vector3f::Zero();              // accelerometer bias
     Eigen::Vector3f bw = Eigen::Vector3f::Zero();              // gyroscope bias
-    Eigen::Vector3f bv = Eigen::Vector3f::Zero();              // velocity bias (extended, init 0)
 };
 
 // ============================================================
@@ -47,7 +45,6 @@ struct NoiseParams {
     // Bias random walk (from original system: dba, new: dbw, dbv)
     Eigen::Vector3f sigma_ba = {1e-5f, 1e-5f, 1e-5f}; // accel bias
     Eigen::Vector3f sigma_bw = {1e-8f, 1e-8f, 1e-8f};             // gyro bias
-    Eigen::Vector3f sigma_bv = {1e-6f, 1e-6f, 1e-6f};             // velocity bias
 
     // Leg measurement noise per axis: sigma_leg_vec = [std_x, std_y, std_z] [m/s].
     // R_leg = diag(sigma_leg_vec.sq())  (per-axis variance, NOT std).
@@ -147,15 +144,24 @@ public:
     /// @brief Set noise parameters (optional, has defaults)
     void set_noise_params(const NoiseParams& params) { noise_ = params; }
 
+    /// @brief Set external velocity bias from Outer Fusion EKF.
+    ///        Applied in update_leg(): z_corrected = z_leg - R_body^T * bv_outer
+    /// @param bv_outer  velocity bias in world frame [m/s]
+    void set_bv_outer(const Eigen::Vector3f& bv_outer);
+
+    /// @brief Get current external velocity bias (world frame)
+    const Eigen::Vector3f& bv_outer() const { return bv_outer_; }
+
 private:
     // --- Helper ---
     /// @brief Compute skew-symmetric matrix [v]×
     static Eigen::Matrix3f skew(const Eigen::Vector3f& v);
 
     // --- State ---
-    NominalState x_nom_;                 // nominal state (19-dim)
-    Eigen::VectorXf dx_;                 // error state   (18-dim)
-    Eigen::MatrixXf P_;                  // error covariance (18×18)
+    NominalState x_nom_;                 // nominal state (16-dim)
+    Eigen::VectorXf dx_;                 // error state   (15-dim)
+    Eigen::MatrixXf P_;                  // error covariance (15×15)
+    Eigen::Vector3f bv_outer_ = Eigen::Vector3f::Zero();  // from Outer EKF (world frame)
 
     // --- Parameters ---
     NoiseParams noise_;
