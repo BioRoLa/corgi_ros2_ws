@@ -36,7 +36,7 @@ int main (int argc, char* argv[]) {
 
     std::string filename = std::string(argv[1]);
     std::string filepath = std::getenv("HOME");
-    filepath += "/corgi_ws/corgi_ros2_ws/src/corgi_odometry_legacy/data/";
+    filepath += "/corgi_ws/corgi_ros2_ws/output_data/";
     DataProcessor::DataFrame df =  DataProcessor::read_csv(filepath+filename+".csv");
     int n = df.row;
     Eigen::initParallel();
@@ -213,7 +213,7 @@ int main (int argc, char* argv[]) {
         estimate_state.row(counter).segment(15, 3) = 1. / dt / (float) j * lh.z(dt);
         // estimate_state.row(counter).segment(18, 3) = 1. / dt / (float) j * t265.z(dt);
         estimate_state.row(counter).segment(21, 3) = x.segment(6 * j - 3, 3);
-        estimate_state.row(counter).segment(24, 4) = Eigen::Vector4f(filter.exclude[0], filter.exclude[1], filter.exclude[2], filter.exclude[3]);
+        estimate_state.row(counter).segment(24, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);
         estimate_state.row(counter).segment(28, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);
         // estimate_state.row(counter).segment(32, 4) = Eigen::Vector4f(df.iloc("lf.contact", i), df.iloc("rf.contact", i), df.iloc("rh.contact", i), df.iloc("lh.contact", i));
         estimate_state.row(counter)(36) = filter.threshold;

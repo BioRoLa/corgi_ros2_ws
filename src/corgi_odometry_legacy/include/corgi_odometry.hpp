@@ -10,7 +10,7 @@ inline constexpr bool PUB_CONTACT = true;
 // velocity are estimated in body frame, choose the frame that you want to estimate position
 inline constexpr bool BODY_FRAME = false; 
 inline constexpr bool WORLD_FRAME = true;
-inline constexpr bool ESTIMATE_POSITION_FRAME = BODY_FRAME; // BODY_FRAME or WORLD_FRAME
+inline constexpr bool ESTIMATE_POSITION_FRAME = WORLD_FRAME; // BODY_FRAME or WORLD_FRAME
 //record data or not
 inline constexpr bool RECORD_DATA = false;
 // z_position calcution method
@@ -19,7 +19,7 @@ inline constexpr Method Z_POS_METHOD = AVG;
 
 /******* odometry *******/
 
-inline constexpr float ODOM_ESTIMATOR_RATE = 500.0; //Hz
+inline constexpr float ODOM_ESTIMATOR_RATE = 200.0; //Hz
 inline constexpr float THRESHOLD = 0.08; //threshold of KLD
 inline constexpr float ODOM_ESTIMATION_TIME_RANGE = 10.0; // matrix size
 
