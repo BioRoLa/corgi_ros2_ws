@@ -156,8 +156,8 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         imp_cmd_modules_[3]->gamma = eta[2];
 
         legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-        double s_front = 0.222 + legmodel.contact_p_3d[0];
-        double f_hind = -mg_/2.0*(s_front/0.444);
+        double s_front = 0.255 + legmodel.contact_p_3d[0];
+        double f_hind = -mg_/2.0*(s_front/0.510);
         imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
         imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
         imp_cmd_modules_[2]->fz = f_hind;
@@ -233,8 +233,8 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
             imp_cmd_modules_[3]->gamma = eta[2];
 
             legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-            double s_front = 0.222 + legmodel.contact_p_3d[0];
-            double f_hind = -mg_/2.0*(s_front/0.444);
+            double s_front = 0.255 + legmodel.contact_p_3d[0];
+            double f_hind = -mg_/2.0*(s_front/0.510);
             imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
             imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
             imp_cmd_modules_[2]->fz = f_hind;
