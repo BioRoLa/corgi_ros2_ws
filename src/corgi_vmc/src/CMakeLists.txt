@@ -5,6 +5,8 @@ set(dependencies
   sensor_msgs
   corgi_msgs
   tf2_msgs
+  tf2_ros
+  tf2
   corgi_utils
   corgi_walk
   corgi_force_estimation
