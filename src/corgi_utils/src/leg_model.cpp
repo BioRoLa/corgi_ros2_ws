@@ -289,7 +289,7 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
     this->gamma = gamma_in;
     
     // Step 2: Calculate alpha from ground slope (in degrees)
-    double alpha = (slope - beta_in) * 180.0 / M_PI;
+    alpha = (slope - beta_in) * 180.0 / M_PI;
     
     // Step 3: Calculate sin(γ) and cos(γ)
     double sin_g = std::sin(gamma);
