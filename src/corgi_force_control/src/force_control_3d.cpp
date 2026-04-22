@@ -88,13 +88,13 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     LegModel& legmodel = kinematics_.get_leg_model();
     
     // Note: Use contact_map_3d and 3D position logic
-    legmodel.contact_map_3d(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
+    //legmodel.contact_map_3d(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
     // TODO: should be modifiled
-    int target_rim = legmodel.rim;
+    RCLCPP_INFO(this->get_logger(), "Alpha: %.2f", legmodel.alpha);
     int target_alpha = legmodel.alpha;
 
     pos_des << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
-
+    //RCLCPP_INFO(this->get_logger(), "Desired Position: [%.4f, %.4f, %.4f]", pos_des(0, 0), pos_des(1, 0), pos_des(2, 0));
     Eigen::MatrixXd pos_fb(3, 1);
 
     legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
@@ -131,7 +131,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(motor_state_->theta, i); 
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i); 
-    
+    RCLCPP_INFO(this->get_logger(), "P_theta: [%.4f, %.4f]", P_theta(0, 0), P_theta(1, 0));
     Eigen::MatrixXd J_fb(3, 3);
     // Note: Assumes kinematics_.calculate_jacobian_3d exists and takes gamma & d_wheel
     J_fb = kinematics_.calculate_jacobian_3d(P_theta, P_theta_deriv, motor_state_->beta + pitch, motor_state_->gamma, legmodel.d_wheel);
