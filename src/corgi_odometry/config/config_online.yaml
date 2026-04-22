@@ -4,14 +4,20 @@
 # at startup via yaml-cpp (no recompile needed).
 # ─────────────────────────────────────────────────────────────────
 
-# Disturbance observer / encoder filter
-observer:
-  cutoff_freq:         15.0    # Observer LPF [Hz]
-  encoder_cutoff_freq: 30.0    # Encoder velocity LPF [Hz]
-
-# Schmitt-trigger contact thresholds
-contact:
-  rm_threshold_high:   25.0
-  rm_threshold_low:    15.0
-  beta_threshold_high: 10.0
-  beta_threshold_low:   1.0
+esekf:
+  sigma_a: [5.0, 3.0, 2.0]
+  sigma_w: [0.001, 0.01, 0.001]
+  sigma_ba: [1.0e-05, 1.0e-04, 5.0e-06]
+  sigma_bw: [1.0e-08, 1.0e-08, 1.0e-08]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27 # 16.27(default) // 1e+30(no_maha)
+observer: {cutoff_freq: 15.0, encoder_cutoff_freq: 30.0}
+contact: {rm_threshold_high: 25.0, rm_threshold_low: 15.0, beta_threshold_high: 10.0,
+  beta_threshold_low: 1.0}
+simulate_imu_noise: true
+use_esekf_state: true
+quiet: true
+offline: {csv_filename: walk_2m_01,   # walk_obs // walk_2m_01
+  start_index: 0, max_processed: 12000, rmse_skip: 0,
+  enable_logging: true, log_details: false, imu_noise_seed: 42}
+gt_velocity_lpf_cutoff: 10.0
