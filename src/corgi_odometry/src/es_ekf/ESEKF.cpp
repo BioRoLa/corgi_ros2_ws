@@ -172,14 +172,12 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0);
     obs.leg->PointContact(obs.rim, obs.alpha);
 
-    // Use bias-corrected gyro for the ω×r term (pitch-only)
-    // Only w_y (pitch rate) is used: the leg model is planar (XZ), so
-    // roll/yaw gyro × large y-offset produces spurious velocity that
-    // destabilises the filter.  Yaw observability requires external
-    // heading reference (magnetometer, vision).
+    // Use full bias-corrected angular velocity for ω×r contact point correction.
+    // Previously only w_y was used (pitch-only), which left (ω_x × r_cz) and
+    // (ω_z × r_cx) unmodelled in z_leg_y, causing ~50-200 mm/s systematic Vy bias.
+    // With full ω the H matrix (bw_x, bw_z columns) is also populated below,
+    // making all three gyro biases observable and keeping the filter consistent.
     Eigen::Vector3f w_corrected = w_m - x_nom_.bw;
-    w_corrected.x() = 0.0f;
-    w_corrected.z() = 0.0f;
     Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
     obs.leg->PointVelocity(v_zero, w_corrected, obs.rim, obs.alpha, true);
 
@@ -207,20 +205,25 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     // ----------------------------------------------------------
     // 3. Observation Jacobian H (3×18)
     //
-    //    Only w_y is used ⇒ only bw_y column of H_bw is non-zero.
-    //    z_leg = -(w×r_c + ...), ∂z/∂δbw_y:
-    //      δw_y = -δbw_y
-    //      (δw × r_c)_x = δw_y · r_cz  →  δz_x = -(δw_y · r_cz) = +δbw_y · r_cz
-    //      (δw × r_c)_z = -δw_y · r_cx →  δz_z = -(-δw_y · r_cx) = -δbw_y · r_cx
-    //    ⇒  ∂z_x/∂δbw_y = +r_c.z()
-    //    ⇒  ∂z_z/∂δbw_y = -r_c.x()
+    //    z_leg = -(ω × r_c + …), ω = ω_m − bw
+    //    Full ω×r partial derivatives w.r.t. δbw:
+    //      (ω × r_c)_x = ω_y r_z − ω_z r_y  →  ∂z_x/∂bw_y = +r_z, ∂z_x/∂bw_z = −r_y
+    //      (ω × r_c)_y = ω_z r_x − ω_x r_z  →  ∂z_y/∂bw_x = −r_z, ∂z_y/∂bw_z = +r_x
+    //      (ω × r_c)_z = ω_x r_y − ω_y r_x  →  ∂z_z/∂bw_x = +r_y, ∂z_z/∂bw_y = −r_x
     // ----------------------------------------------------------
     Eigen::MatrixXf H = Eigen::MatrixXf::Zero(3, ERR_STATE_DIM);
     H.block<3,3>(0, V_IDX) = Eigen::Matrix3f::Identity();  // ∂h/∂δv
     // NOTE: bv deliberately excluded from H to preserve observability
     const Eigen::Vector3f& r_c = obs.leg->contact_point;
+    // bw_y (pitch) — existing terms
     H(0, BW_IDX + 1) =  r_c.z();   // ∂z_leg_x / ∂δbw_y = +r_c.z()
     H(2, BW_IDX + 1) = -r_c.x();   // ∂z_leg_z / ∂δbw_y = -r_c.x()
+    // bw_x (roll) — new terms (key Vy fix: eliminates ω_x·r_cz bias)
+    H(1, BW_IDX + 0) = -r_c.z();   // ∂z_leg_y / ∂δbw_x = -r_c.z()
+    H(2, BW_IDX + 0) =  r_c.y();   // ∂z_leg_z / ∂δbw_x = +r_c.y()
+    // bw_z (yaw) — new terms
+    H(0, BW_IDX + 2) = -r_c.y();   // ∂z_leg_x / ∂δbw_z = -r_c.y()
+    H(1, BW_IDX + 2) =  r_c.x();   // ∂z_leg_y / ∂δbw_z = +r_c.x()
 
     // ----------------------------------------------------------
     // 4. Kalman gain & state/covariance update
