@@ -1,10 +1,15 @@
 float64 theta
 float64 beta
+float64 gamma
 float64 fx
 float64 fy
+float64 fz
 float64 mx
 float64 my
+float64 mz
 float64 bx
 float64 by
+float64 bz
 float64 kx
 float64 ky
+float64 kz

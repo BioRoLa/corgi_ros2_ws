@@ -3,259 +3,325 @@
 #include <sstream>
 #include <iomanip>
 
-namespace corgi {
-
-DisturbanceObserver::DisturbanceObserver(
-    double dt,
-    double cutoff_freq,
-    int dof,
-    bool logging,
-    const std::string& output_filename,
-    bool log_detail
-) : dt_(dt), 
-    cutoff_freq_(cutoff_freq), 
-    dof_(dof),
-    logging_(logging),
-    output_filename_(output_filename),
-    log_detail_(log_detail),
-    initialized_(false) 
+namespace corgi
 {
-    validate_params(dt, cutoff_freq);
-    compute_filter_params();
-    initialize_observer_states();
-    initialize_selection_matrix();
-    
-    if (logging_) {
-        initialize_logging();
+
+    DisturbanceObserver::DisturbanceObserver(
+        double dt,
+        double cutoff_freq,
+        int dof,
+        bool logging,
+        const std::string &output_filename,
+        bool log_detail) : dt_(dt),
+                           cutoff_freq_(cutoff_freq),
+                           dof_(dof),
+                           actuated_dof_(dof >= 16 ? 12 : 8),
+                           logging_(logging),
+                           output_filename_(output_filename),
+                           log_detail_(log_detail),
+                           initialized_(false)
+    {
+        validate_params(dt, cutoff_freq);
+        compute_filter_params();
+        initialize_observer_states();
+        initialize_selection_matrix();
+
+        if (logging_)
+        {
+            initialize_logging();
+        }
+
+        print_init_info();
     }
-    
-    print_init_info();
-}
 
-void DisturbanceObserver::reset() {
-    initialize_observer_states();
-}
-
-void DisturbanceObserver::validate_params(double dt, double cutoff_freq) {
-    if (dt <= 0) {
-        throw std::invalid_argument("採樣時間 dt 必須大於 0");
+    void DisturbanceObserver::reset()
+    {
+        initialize_observer_states();
     }
-    if (cutoff_freq <= 0) {
-        throw std::invalid_argument("截止頻率必須大於 0");
+
+    void DisturbanceObserver::validate_params(double dt, double cutoff_freq)
+    {
+        if (dt <= 0)
+        {
+            throw std::invalid_argument("採樣時間 dt 必須大於 0");
+        }
+        if (cutoff_freq <= 0)
+        {
+            throw std::invalid_argument("截止頻率必須大於 0");
+        }
+
+        // Check Nyquist condition
+        double nyquist_freq = 1.0 / (2.0 * dt);
+        if (cutoff_freq >= nyquist_freq)
+        {
+            std::cerr << "Warning: 截止頻率 (" << cutoff_freq << " Hz) 接近 nyquist_freq ("
+                      << nyquist_freq << " Hz)" << std::endl;
+        }
     }
-    
-    // Check Nyquist condition
-    double nyquist_freq = 1.0 / (2.0 * dt);
-    if (cutoff_freq >= nyquist_freq) {
-        std::cerr << "Warning: 截止頻率 (" << cutoff_freq << " Hz) 接近 nyquist_freq (" 
-                  << nyquist_freq << " Hz)" << std::endl;
+
+    void DisturbanceObserver::compute_filter_params()
+    {
+        // Convert cutoff frequency to rad/s
+        double omega_c = 2.0 * M_PI * cutoff_freq_;
+
+        // Z-domain pole (γ in paper)
+        gamma_ = std::exp(-omega_c * dt_);
+
+        // Feedforward gain (β in paper)
+        beta_ = (1.0 - gamma_) / (gamma_ * dt_);
     }
-}
 
-void DisturbanceObserver::compute_filter_params() {
-    // Convert cutoff frequency to rad/s
-    double omega_c = 2.0 * M_PI * cutoff_freq_;
-    
-    // Z-domain pole (γ in paper)
-    gamma_ = std::exp(-omega_c * dt_);
-    
-    // Feedforward gain (β in paper)
-    beta_ = (1.0 - gamma_) / (gamma_ * dt_);
-}
-
-void DisturbanceObserver::print_init_info() {
-    std::cout << "============================================================\n";
-    std::cout << "Discrete-Time Disturbance Observer\n";
-    std::cout << "============================================================\n";
-    std::cout << "Sampling Time: " << (dt_ * 1000.0) << " ms\n";
-    std::cout << "Cutoff frequency: " << cutoff_freq_ << " Hz\n";
-    std::cout << std::fixed << std::setprecision(6);
-    std::cout << "γ (Z-domain Pole): " << gamma_ << "\n";
-    std::cout << std::fixed << std::setprecision(2);
-    std::cout << "β: " << beta_ << "\n";
-    std::cout << "============================================================\n";
-}
-
-void DisturbanceObserver::initialize_observer_states() {
-    estimated_disturbance_ = Eigen::VectorXd::Zero(dof_);
-    Y_filtered_prev_ = Eigen::VectorXd::Zero(dof_);
-    
-    // Initialize temporary matrices
-    M_ = Eigen::MatrixXd::Zero(dof_, dof_);
-    C_ = Eigen::MatrixXd::Zero(dof_, dof_);
-    G_ = Eigen::VectorXd::Zero(dof_);
-    D_ = Eigen::MatrixXd::Zero(dof_, dof_);
-    
-    initialized_ = true;
-}
-
-void DisturbanceObserver::initialize_selection_matrix() {
-    // S^T is (dof x actuated_dof) = (12 x 8)
-    // Maps 8 actuated joint torques to 12-DOF generalized forces
-    
-    S_T_ = Eigen::MatrixXd::Zero(dof_, 8);
-    
-    // Base DOFs (0-3: x, z, roll, pitch) are unactuated -> zeros
-    // Leg DOFs (4-11: beta_lf, Rm_lf, beta_rf, Rm_rf, beta_rh, Rm_rh, beta_lh, Rm_lh)
-    // are actuated -> identity mapping
-    
-    for (int i = 0; i < 8; ++i) {
-        S_T_(i + 4, i) = 1.0;  // Start from index 4 (skip base DOFs)
+    void DisturbanceObserver::print_init_info()
+    {
+        std::cout << "============================================================\n";
+        std::cout << "Discrete-Time Disturbance Observer\n";
+        std::cout << "============================================================\n";
+        std::cout << "Sampling Time: " << (dt_ * 1000.0) << " ms\n";
+        std::cout << "Cutoff frequency: " << cutoff_freq_ << " Hz\n";
+        std::cout << std::fixed << std::setprecision(6);
+        std::cout << "γ (Z-domain Pole): " << gamma_ << "\n";
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << "β: " << beta_ << "\n";
+        std::cout << "============================================================\n";
     }
-}
 
-void DisturbanceObserver::initialize_logging() {
-    // Define DOF suffixes
-    std::vector<std::string> dof_suffixes = {
-        "x", "z", "roll", "pitch",
-        "beta_a", "rm_a", "beta_b", "rm_b",
-        "beta_c", "rm_c", "beta_d", "rm_d"
-    };
-    
-    column_names_.push_back("Index");
-    
-    if (log_detail_) {
-        // Add columns for all state variables with all DOF suffixes
-        std::vector<std::string> state_names = {
-            "p_k", "Y_k", "Y_filtered_k", "S_T_tau", 
-            "C_q_dot", "g", "estimated_disturbance"
-        };
-        
-        for (const auto& state_name : state_names) {
-            for (const auto& suffix : dof_suffixes) {
-                column_names_.push_back(state_name + "_" + suffix);
+    void DisturbanceObserver::initialize_observer_states()
+    {
+        estimated_disturbance_ = Eigen::VectorXd::Zero(dof_);
+        Y_filtered_prev_ = Eigen::VectorXd::Zero(dof_);
+
+        // Initialize temporary matrices
+        M_ = Eigen::MatrixXd::Zero(dof_, dof_);
+        C_ = Eigen::MatrixXd::Zero(dof_, dof_);
+        G_ = Eigen::VectorXd::Zero(dof_);
+        D_ = Eigen::MatrixXd::Zero(dof_, dof_);
+
+        initialized_ = true;
+    }
+
+    void DisturbanceObserver::initialize_selection_matrix()
+    {
+        // S^T maps actuated joint torques to generalized forces.
+        // ABAD mode (dof>=16): [beta, rm, gamma] x 4 => 12 actuated channels.
+        // Legacy mode         : [beta, rm] x 4       => 8 actuated channels.
+
+        S_T_ = Eigen::MatrixXd::Zero(dof_, actuated_dof_);
+
+        if (dof_ >= 16)
+        {
+            constexpr int beta_idx[4] = {4, 6, 8, 10};
+            constexpr int rm_idx[4] = {5, 7, 9, 11};
+            constexpr int gamma_idx[4] = {12, 13, 14, 15};
+            for (int leg = 0; leg < 4; ++leg)
+            {
+                const int col = 3 * leg;
+                S_T_(beta_idx[leg], col + 0) = 1.0;
+                S_T_(rm_idx[leg], col + 1) = 1.0;
+                S_T_(gamma_idx[leg], col + 2) = 1.0;
             }
         }
-        
-        std::cout << "✓ Logging enabled (detailed mode)\n";
-    } else {
-        // Only log estimated_disturbance
-        for (const auto& suffix : dof_suffixes) {
-            column_names_.push_back("estimated_disturbance_" + suffix);
+        else
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                S_T_(i + 4, i) = 1.0;
+            }
         }
-        
-        std::cout << "✓ Logging enabled (simple mode - disturbance only)\n";
     }
-}
 
-Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
-    const Eigen::Ref<const Eigen::VectorXd>& q,
-    const Eigen::Ref<const Eigen::VectorXd>& q_dot,
-    const Eigen::Ref<const Eigen::VectorXd>& tau,
-    const Eigen::Ref<const Eigen::VectorXd>& I_c,
-    int index,
-    bool print_info
-) {
-    // Validate input dimensions
-    if (q.size() != dof_ || q_dot.size() != dof_) {
-        throw std::invalid_argument("輸入維度不一致");
-    }
-    if (tau.size() != 8) {
-        throw std::invalid_argument("tau 維度必須為 8 (actuated DOFs)");
-    }
-    if (I_c.size() != 4) {
-        throw std::invalid_argument("I_c 維度必須為 4 (4 legs)");
-    }
-    
-    // Compute robot dynamics
-    simplify_dynamics::compute_dynamics(q, q_dot, I_c, M_, C_, G_, D_);
-    
-    // === Discrete-time Disturbance Observer Core Algorithm ===
-    
-    // Step 1: Compute generalized momentum p_k = M(q_k) * q̇_k
-    Eigen::VectorXd p_k = M_ * q_dot;
-    
-    // Step 2: Compute filter input term (term inside brackets in paper formula)
-    // Y_k = β*p + S^T*τ + C^T*q̇ - g
-    Eigen::VectorXd S_T_tau = S_T_ * tau;
-    Eigen::VectorXd C_q_dot = C_.transpose() * q_dot;
-    Eigen::VectorXd Y_k = beta_ * p_k + S_T_tau + C_q_dot - G_;
-    
-    // Step 3: Apply discrete-time low-pass filter
-    // Y_filtered_k = (1-γ)*Y_k + γ*Y_filtered_{k-1}
-    Eigen::VectorXd Y_filtered_k = (1.0 - gamma_) * Y_k + gamma_ * Y_filtered_prev_;
-    
-    // Step 4: Compute estimated disturbance torque (paper core formula)
-    // τ̂_d_k = β*p_k - Y_filtered_k
-    estimated_disturbance_ = beta_ * p_k - Y_filtered_k;
-    
-    if (logging_) {
-        log_details_to_file(index, p_k, Y_k, Y_filtered_k, S_T_tau, C_q_dot, G_, estimated_disturbance_);
-    }
-    
-    // Update filter state for next iteration
-    Y_filtered_prev_ = Y_filtered_k;
-
-    if (print_info) {
-        std::cout << "=== Disturbance Observer Details (Index " << index << ") ===\n";
-        std::cout << "Base:\n";
-        std::cout << "  x:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(0) << "\n";
-        std::cout << "  z:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(1) << "\n";
-        std::cout << "  roll:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(2) << "\n";
-        std::cout << "  pitch: " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(3) << "\n";
-        std::cout << "Leg A (LF):\n";
-        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(4) << "\n";
-        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(5) << "\n";
-        std::cout << "Leg B (RF):\n";
-        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(6) << "\n";
-        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(7) << "\n";
-        std::cout << "Leg C (RH):\n";
-        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(8) << "\n";
-        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(9) << "\n";
-        std::cout << "Leg D (LH):\n";
-        std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(10) << "\n";
-        std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(11) << "\n";
-        std::cout << "=============================================\n";
-    }
-    
-    return estimated_disturbance_;
-}
-
-void DisturbanceObserver::log_details_to_file(
-    int index,
-    const Eigen::VectorXd& p_k,
-    const Eigen::VectorXd& Y_k,
-    const Eigen::VectorXd& Y_filtered_k,
-    const Eigen::VectorXd& S_T_tau,
-    const Eigen::VectorXd& C_q_dot,
-    const Eigen::VectorXd& g,
-    const Eigen::VectorXd& estimated_disturbance
-) {
-    // Open file if not already open
-    if (!log_file_.is_open()) {
-        std::string filename = "output_data/" + output_filename_ + "_gmo.csv";
-        log_file_.open(filename);
-        
-        // Write header
-        for (size_t i = 0; i < column_names_.size(); ++i) {
-            log_file_ << column_names_[i];
-            if (i < column_names_.size() - 1) log_file_ << ",";
+    void DisturbanceObserver::initialize_logging()
+    {
+        // Define DOF suffixes
+        std::vector<std::string> dof_suffixes = {
+            "x", "z", "roll", "pitch",
+            "beta_a", "rm_a", "beta_b", "rm_b",
+            "beta_c", "rm_c", "beta_d", "rm_d"};
+        if (dof_ >= 16)
+        {
+            dof_suffixes.push_back("gamma_a");
+            dof_suffixes.push_back("gamma_b");
+            dof_suffixes.push_back("gamma_c");
+            dof_suffixes.push_back("gamma_d");
         }
+        while (static_cast<int>(dof_suffixes.size()) < dof_)
+        {
+            dof_suffixes.push_back("q" + std::to_string(dof_suffixes.size()));
+        }
+        if (static_cast<int>(dof_suffixes.size()) > dof_)
+        {
+            dof_suffixes.resize(dof_);
+        }
+
+        column_names_.push_back("Index");
+
+        if (log_detail_)
+        {
+            // Add columns for all state variables with all DOF suffixes
+            std::vector<std::string> state_names = {
+                "p_k", "Y_k", "Y_filtered_k", "S_T_tau",
+                "C_q_dot", "g", "estimated_disturbance"};
+
+            for (const auto &state_name : state_names)
+            {
+                for (const auto &suffix : dof_suffixes)
+                {
+                    column_names_.push_back(state_name + "_" + suffix);
+                }
+            }
+
+            std::cout << "✓ Logging enabled (detailed mode)\n";
+        }
+        else
+        {
+            // Only log estimated_disturbance
+            for (const auto &suffix : dof_suffixes)
+            {
+                column_names_.push_back("estimated_disturbance_" + suffix);
+            }
+
+            std::cout << "✓ Logging enabled (simple mode - disturbance only)\n";
+        }
+    }
+
+    Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
+        const Eigen::Ref<const Eigen::VectorXd> &q,
+        const Eigen::Ref<const Eigen::VectorXd> &q_dot,
+        const Eigen::Ref<const Eigen::VectorXd> &tau,
+        const Eigen::Ref<const Eigen::VectorXd> &I_c,
+        int index,
+        bool print_info)
+    {
+        // Validate input dimensions
+        if (q.size() != dof_ || q_dot.size() != dof_)
+        {
+            throw std::invalid_argument("輸入維度不一致");
+        }
+        if (tau.size() != actuated_dof_)
+        {
+            throw std::invalid_argument("tau 維度與 actuated DOFs 不一致");
+        }
+        if (I_c.size() != 4)
+        {
+            throw std::invalid_argument("I_c 維度必須為 4 (4 legs)");
+        }
+
+        // Compute robot dynamics
+        simplify_dynamics::compute_dynamics(q, q_dot, I_c, M_, C_, G_, D_);
+
+        // === Discrete-time Disturbance Observer Core Algorithm ===
+
+        // Step 1: Compute generalized momentum p_k = M(q_k) * q̇_k
+        Eigen::VectorXd p_k = M_ * q_dot;
+
+        // Step 2: Compute filter input term (term inside brackets in paper formula)
+        // Y_k = β*p + S^T*τ + C^T*q̇ - g
+        Eigen::VectorXd S_T_tau = S_T_ * tau;
+        Eigen::VectorXd C_q_dot = C_.transpose() * q_dot;
+        Eigen::VectorXd Y_k = beta_ * p_k + S_T_tau + C_q_dot - G_;
+
+        // Step 3: Apply discrete-time low-pass filter
+        // Y_filtered_k = (1-γ)*Y_k + γ*Y_filtered_{k-1}
+        Eigen::VectorXd Y_filtered_k = (1.0 - gamma_) * Y_k + gamma_ * Y_filtered_prev_;
+
+        // Step 4: Compute estimated disturbance torque (paper core formula)
+        // τ̂_d_k = β*p_k - Y_filtered_k
+        estimated_disturbance_ = beta_ * p_k - Y_filtered_k;
+
+        if (logging_)
+        {
+            log_details_to_file(index, p_k, Y_k, Y_filtered_k, S_T_tau, C_q_dot, G_, estimated_disturbance_);
+        }
+
+        // Update filter state for next iteration
+        Y_filtered_prev_ = Y_filtered_k;
+
+        if (print_info)
+        {
+            std::cout << "=== Disturbance Observer Details (Index " << index << ") ===\n";
+            std::cout << "Base:\n";
+            std::cout << "  x:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(0) << "\n";
+            std::cout << "  z:     " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(1) << "\n";
+            std::cout << "  roll:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(2) << "\n";
+            std::cout << "  pitch: " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(3) << "\n";
+            std::cout << "Leg A (LF):\n";
+            std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(4) << "\n";
+            std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(5) << "\n";
+            std::cout << "Leg B (RF):\n";
+            std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(6) << "\n";
+            std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(7) << "\n";
+            std::cout << "Leg C (RH):\n";
+            std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(8) << "\n";
+            std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(9) << "\n";
+            std::cout << "Leg D (LH):\n";
+            std::cout << "  beta:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(10) << "\n";
+            std::cout << "  F_rm:  " << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(11) << "\n";
+            if (dof_ >= 16)
+            {
+                std::cout << "ABAD:\n";
+                std::cout << "  gamma_a:" << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(12) << "\n";
+                std::cout << "  gamma_b:" << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(13) << "\n";
+                std::cout << "  gamma_c:" << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(14) << "\n";
+                std::cout << "  gamma_d:" << std::setw(8) << std::fixed << std::setprecision(2) << estimated_disturbance_(15) << "\n";
+            }
+            std::cout << "=============================================\n";
+        }
+
+        return estimated_disturbance_;
+    }
+
+    void DisturbanceObserver::log_details_to_file(
+        int index,
+        const Eigen::VectorXd &p_k,
+        const Eigen::VectorXd &Y_k,
+        const Eigen::VectorXd &Y_filtered_k,
+        const Eigen::VectorXd &S_T_tau,
+        const Eigen::VectorXd &C_q_dot,
+        const Eigen::VectorXd &g,
+        const Eigen::VectorXd &estimated_disturbance)
+    {
+        // Open file if not already open
+        if (!log_file_.is_open())
+        {
+            std::string filename = "output_data/" + output_filename_ + "_gmo.csv";
+            log_file_.open(filename);
+
+            // Write header
+            for (size_t i = 0; i < column_names_.size(); ++i)
+            {
+                log_file_ << column_names_[i];
+                if (i < column_names_.size() - 1)
+                    log_file_ << ",";
+            }
+            log_file_ << "\n";
+        }
+
+        // Write data row
+        log_file_ << index;
+
+        if (log_detail_)
+        {
+            // Log all detailed information
+            std::vector<const Eigen::VectorXd *> arrays = {
+                &p_k, &Y_k, &Y_filtered_k, &S_T_tau, &C_q_dot, &g, &estimated_disturbance};
+
+            for (const auto *arr : arrays)
+            {
+                for (int i = 0; i < arr->size(); ++i)
+                {
+                    log_file_ << "," << std::setprecision(10) << (*arr)(i);
+                }
+            }
+        }
+        else
+        {
+            // Log only estimated_disturbance
+            for (int i = 0; i < estimated_disturbance.size(); ++i)
+            {
+                log_file_ << "," << std::setprecision(10) << estimated_disturbance(i);
+            }
+        }
+
         log_file_ << "\n";
+        log_file_.flush();
     }
-    
-    // Write data row
-    log_file_ << index;
-    
-    if (log_detail_) {
-        // Log all detailed information
-        std::vector<const Eigen::VectorXd*> arrays = {
-            &p_k, &Y_k, &Y_filtered_k, &S_T_tau, &C_q_dot, &g, &estimated_disturbance
-        };
-        
-        for (const auto* arr : arrays) {
-            for (int i = 0; i < arr->size(); ++i) {
-                log_file_ << "," << std::setprecision(10) << (*arr)(i);
-            }
-        }
-    } else {
-        // Log only estimated_disturbance
-        for (int i = 0; i < estimated_disturbance.size(); ++i) {
-            log_file_ << "," << std::setprecision(10) << estimated_disturbance(i);
-        }
-    }
-    
-    log_file_ << "\n";
-    log_file_.flush();
-}
 } // namespace quadruped

@@ -12,7 +12,8 @@
  * Mirrors the fields of CSVReader::RobotData so that the same
  * processing logic can be shared between online and offline modes.
  */
-struct RawRecord {
+struct RawRecord
+{
     // Base position and orientation (Ground Truth)
     double sim_pos_x = 0, sim_pos_y = 0, sim_pos_z = 0;
     double sim_orien_x = 0, sim_orien_y = 0, sim_orien_z = 0, sim_orien_w = 0;
@@ -27,6 +28,12 @@ struct RawRecord {
     double state_theta_b = 0, state_beta_b = 0, state_vel_r_b = 0, state_vel_l_b = 0, state_trq_r_b = 0, state_trq_l_b = 0;
     double state_theta_c = 0, state_beta_c = 0, state_vel_r_c = 0, state_vel_l_c = 0, state_trq_r_c = 0, state_trq_l_c = 0;
     double state_theta_d = 0, state_beta_d = 0, state_vel_r_d = 0, state_vel_l_d = 0, state_trq_r_d = 0, state_trq_l_d = 0;
+
+    // ABAD data (optional in offline CSV; defaults to 0 when unavailable)
+    double state_gamma_a = 0, state_vel_h_a = 0, state_trq_h_a = 0;
+    double state_gamma_b = 0, state_vel_h_b = 0, state_trq_h_b = 0;
+    double state_gamma_c = 0, state_vel_h_c = 0, state_trq_h_c = 0;
+    double state_gamma_d = 0, state_vel_h_d = 0, state_trq_h_d = 0;
 };
 
 /**
@@ -35,32 +42,33 @@ struct RawRecord {
  * Converts raw sensor data to the generalized-coordinate representation
  * used by the disturbance observer and ES-EKF.
  */
-class DataProcessor {
+class DataProcessor
+{
 public:
     DataProcessor(double dt, double encoder_cutoff_freq = 30.0);
-    
-    struct ProcessedData {
-        Eigen::VectorXd q;      // (12,) - generalized coordinates
-        Eigen::VectorXd q_dot;  // (12,) - generalized velocities
-        Eigen::VectorXd tau;    // (8,) - joint torques
-        Eigen::VectorXd I_c;    // (4,) - leg inertias
+
+    struct ProcessedData
+    {
+        Eigen::VectorXd q;     // (16,) - generalized coordinates
+        Eigen::VectorXd q_dot; // (16,) - generalized velocities
+        Eigen::VectorXd tau;   // (12,) - generalized actuation [beta, rm, gamma] x4
+        Eigen::VectorXd I_c;   // (4,) - leg inertias
     };
 
     /**
      * @brief Process offline CSV record (with stateful velocity LPF).
      */
-    ProcessedData process_record(const RawRecord& record);
+    ProcessedData process_record(const RawRecord &record);
 
     /**
      * @brief Process real-time data from ROS messages.
      */
     ProcessedData process_realtime_data(
-        const geometry_msgs::msg::Vector3& position,
-        const geometry_msgs::msg::Vector3& velocity,
-        const corgi_msgs::msg::ImuStamped& imu,
-        const corgi_msgs::msg::MotorStateStamped& motor_state
-    );
-    
+        const geometry_msgs::msg::Vector3 &position,
+        const geometry_msgs::msg::Vector3 &velocity,
+        const corgi_msgs::msg::ImuStamped &imu,
+        const corgi_msgs::msg::MotorStateStamped &motor_state);
+
 private:
     double dt_;
     double low_pass_alpha_;
@@ -70,12 +78,12 @@ private:
     double last_sim_pos_x_ = 0.0, last_sim_pos_z_ = 0.0;
     double last_x_dot_ = 0.0, last_z_dot_ = 0.0;
 
-    void cal_quaternion_to_euler(double x, double y, double z, double w, double& roll, double& pitch);
+    void cal_quaternion_to_euler(double x, double y, double z, double w, double &roll, double &pitch);
     double cal_theta_to_Rm(double theta);
     double cal_theta_dot_to_Rm_dot(double theta, double theta_dot);
     double cal_theta_to_Ic(double theta);
     void cal_motor_to_joint_torque(double theta, double torque_right, double torque_left,
-                                    double& torque_beta, double& force_Rm);
+                                   double &torque_beta, double &force_Rm);
 };
 
 #endif // DATA_PROCESSOR_HPP
