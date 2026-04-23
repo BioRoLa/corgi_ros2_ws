@@ -4,6 +4,7 @@
 using namespace estimation_model;
 
 DataProcessor::CsvLogger logger;
+DataProcessor::CsvLogger input_logger;
 
 std::vector<std::string> odo_headers = {
         "v_.x", "v_.y", "v_.z", 
@@ -19,9 +20,40 @@ std::vector<std::string> odo_headers = {
         "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
 };
 
+// Input CSV: records estimator inputs + outputs with data_recorder-compatible headers
+// Layout: 1 trigger + 8 motor theta/beta + 8 encoder derivatives + 10 imu + 39 estimation
+constexpr int INPUT_STATE_SIZE = 27 + ODOM_DATA_SIZE;
+std::vector<std::string> input_headers = {
+        "trigger",
+        "state_theta_a", "state_beta_a",
+        "state_theta_b", "state_beta_b",
+        "state_theta_c", "state_beta_c",
+        "state_theta_d", "state_beta_d",
+        "enc_beta_d_a", "enc_theta_d_a",
+        "enc_beta_d_b", "enc_theta_d_b",
+        "enc_beta_d_c", "enc_theta_d_c",
+        "enc_beta_d_d", "enc_theta_d_d",
+        "imu_orien_x", "imu_orien_y", "imu_orien_z", "imu_orien_w",
+        "imu_ang_vel_x", "imu_ang_vel_y", "imu_ang_vel_z",
+        "imu_lin_acc_x", "imu_lin_acc_y", "imu_lin_acc_z",
+        "v_.x", "v_.y", "v_.z",
+        "p.x", "p.y", "p.z",
+        "zLF.x", "zLF.y", "zLF.z",
+        "zRF.x", "zRF.y", "zRF.z",
+        "zRH.x", "zRH.y", "zRH.z",
+        "zLH.x", "zLH.y", "zLH.z",
+        "ba.x", "ba.y", "ba.z",
+        "lf.contact","rf.contact","rh.contact","lh.contact",
+        "lf.cscore","rf.cscore","rh.cscore","lh.cscore",
+        "threshold",
+        "cov.xx", "cov.xy", "cov.xz", "cov.yx", "cov.yy", "cov.yz", "cov.zx", "cov.zy", "cov.zz"
+};
+
 std::string output_file_path;
+std::string input_file_path;
 std::string output_file_name = "";
 Eigen::VectorXf estimate_state = Eigen::VectorXf::Zero(ODOM_DATA_SIZE);
+Eigen::VectorXf input_state   = Eigen::VectorXf::Zero(INPUT_STATE_SIZE);
 
 // Variables
 int J = ODOM_ESTIMATION_TIME_RANGE;
@@ -33,7 +65,7 @@ Eigen::Vector3f p;
 Eigen::Quaternionf q_init;
 Eigen::Matrix3f R_init;
 Eigen::Matrix3f R;
-Eigen::Matrix3f rot;
+Eigen::Matrix3f rot = Eigen::Matrix3f::Identity();
 Eigen::Vector3f v_init;
 Eigen::Vector3f a;
 Eigen::Vector3f w;
@@ -63,6 +95,8 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
 
     if (RECORD_DATA){output_file_name = msg->output_filename;}
+
+    std::string raw_filename = msg->output_filename;
 
     if (trigger && output_file_name != "") {
         output_file_path = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros2_ws/output_data/" + output_file_name;
@@ -95,6 +129,26 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
         if(logger.init){
             logger.finalizeCSV();
             RCLCPP_INFO(node_logger, "Saved data to %s", output_file_name.c_str());
+        }
+    }
+
+    // Input logger: always active independent of RECORD_DATA
+    if (trigger && raw_filename != "") {
+        if (!input_logger.init) {
+            std::string base = std::string(getenv("HOME")) + "/corgi_ws/corgi_ros2_ws/output_data/" + raw_filename;
+            input_file_path = base + "_input_odom.csv";
+            int idx = 1;
+            while (input_logger.file_exists(input_file_path)) {
+                input_file_path = base + "_" + std::to_string(idx++) + "_input_odom.csv";
+            }
+            input_logger.initCSV(input_file_path, input_headers);
+            RCLCPP_INFO(node_logger, "Saving input data to %s", input_file_path.c_str());
+        }
+    }
+    else {
+        if (input_logger.init) {
+            input_logger.finalizeCSV();
+            RCLCPP_INFO(node_logger, "Saved input data to %s", input_file_path.c_str());
         }
     }
 }
@@ -220,17 +274,7 @@ int main(int argc, char **argv) {
     DP rh(J + 1, rh_leg, &u);
     DP lh(J + 1, lh_leg, &u);
 
-    if(SIM){
-        rot <<  1,  0,  0, 
-                0,  1,  0,
-                0,  0,  1;
-    }
-    else{
-        //Rotate imu data to body frame
-        rot <<  1,  0,  0, 
-                0,  -1,  0,
-                0,  0,  -1;
-    }
+    rot = Eigen::Matrix3f::Identity();
     v_init << 0, 0, 0;
 
     //initial state
@@ -355,20 +399,55 @@ int main(int argc, char **argv) {
                 contact_pub->publish(contact_msg);
             }
 
+            // Always populate estimate_state (used by both odo logger and input logger)
+            estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
+            estimate_state.segment(3, 3) = p;                                                       //position
+            estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
+            estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);                          //rf leg velocity
+            estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
+            estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
+            estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
+            estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);  //contact
+            estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]); //contact score
+            estimate_state(29) = filter.threshold;                                                    //threshold
+            estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
+
             if (RECORD_DATA){
-                // Store the estimated state to a csv file
-                estimate_state.segment(0, 3) = x.segment(3 * J - 3, 3);                                 //velocity
-                estimate_state.segment(3, 3) = p;                                                       //position
-                estimate_state.segment(6, 3) = 1. / dt / (float) J * lf.z(dt);                          //lf leg velocity
-                estimate_state.segment(9, 3) = 1. / dt / (float) J * rf.z(dt);                          //rf leg velocity
-                estimate_state.segment(12, 3) = 1. / dt / (float) J * rh.z(dt);                         //rh leg velocity
-                estimate_state.segment(15, 3) = 1. / dt / (float) J * lh.z(dt);                         //lh leg velocity
-                estimate_state.segment(18, 3) = x.segment(6 * J - 3, 3);                                //bias
-                estimate_state.segment(21, 4) = Eigen::Vector4f(!filter.exclude[0], !filter.exclude[1], !filter.exclude[2], !filter.exclude[3]);            //contact
-                estimate_state.segment(25, 4) = Eigen::Vector<float, 4>(filter.scores[0], filter.scores[1], filter.scores[2], filter.scores[3]);        //contact score
-                estimate_state(29) = filter.threshold;                                                                                                  //threshold
-                estimate_state.segment(30, 9) = Eigen::Map<const Eigen::VectorXf>(P_cov.data(), P_cov.size());
                 logger.logState(estimate_state);
+            }
+
+            // Record inputs + outputs to input_logger (always, when initialized)
+            if (input_logger.init) {
+                input_state(0)  = 1.0f; // trigger
+                input_state(1)  = static_cast<float>(motor_state.module_a.theta);
+                input_state(2)  = static_cast<float>(motor_state.module_a.beta);
+                input_state(3)  = static_cast<float>(motor_state.module_b.theta);
+                input_state(4)  = static_cast<float>(motor_state.module_b.beta);
+                input_state(5)  = static_cast<float>(motor_state.module_c.theta);
+                input_state(6)  = static_cast<float>(motor_state.module_c.beta);
+                input_state(7)  = static_cast<float>(motor_state.module_d.theta);
+                input_state(8)  = static_cast<float>(motor_state.module_d.beta);
+                // encoder derivatives as computed by Encoder::UpdateState
+                input_state(9)  = encoder_lf.GetState()(2); // enc_beta_d_a
+                input_state(10) = encoder_lf.GetState()(4); // enc_theta_d_a
+                input_state(11) = encoder_rf.GetState()(2); // enc_beta_d_b
+                input_state(12) = encoder_rf.GetState()(4); // enc_theta_d_b
+                input_state(13) = encoder_rh.GetState()(2); // enc_beta_d_c
+                input_state(14) = encoder_rh.GetState()(4); // enc_theta_d_c
+                input_state(15) = encoder_lh.GetState()(2); // enc_beta_d_d
+                input_state(16) = encoder_lh.GetState()(4); // enc_theta_d_d
+                input_state(17) = static_cast<float>(imu.orientation.x);
+                input_state(18) = static_cast<float>(imu.orientation.y);
+                input_state(19) = static_cast<float>(imu.orientation.z);
+                input_state(20) = static_cast<float>(imu.orientation.w);
+                input_state(21) = static_cast<float>(imu.angular_velocity.x);
+                input_state(22) = static_cast<float>(imu.angular_velocity.y);
+                input_state(23) = static_cast<float>(imu.angular_velocity.z);
+                input_state(24) = static_cast<float>(imu.linear_acceleration.x);
+                input_state(25) = static_cast<float>(imu.linear_acceleration.y);
+                input_state(26) = static_cast<float>(imu.linear_acceleration.z);
+                input_state.segment(27, ODOM_DATA_SIZE) = estimate_state;
+                input_logger.logState(input_state);
             }
             q_prev = q;
             counter ++;

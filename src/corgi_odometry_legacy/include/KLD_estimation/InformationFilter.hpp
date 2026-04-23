@@ -39,7 +39,7 @@ namespace estimation_model {
             Eigen::MatrixXf Q(float dt);
             Eigen::VectorXf z(float dt);
             Eigen::MatrixXf C(float dt);
-            void push_data(Eigen::Vector<float, 5> encoders, Eigen::Vector3f wk, float dt, float alpha = -100) ; // encoders: theta, beta, beta_d, omega
+            void push_data(const Eigen::Vector<float, 5>& encoders, const Eigen::Vector3f& wk, float dt, float alpha = -100) ; // encoders: theta, beta, beta_d, omega
         private:
             std::deque<trajectory> trajectories;
             std::deque<float> theta_d;

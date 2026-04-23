@@ -12,7 +12,6 @@ using namespace estimation_model;
 //define constant
 const float INPUT_CSV_RATE = 1000;
 const float SAMPLE_RATE = 200;
-const float SAMPLE_RATIO = INPUT_CSV_RATE / SAMPLE_RATE;
 const float GRAVITY = 9.81;
 
 template<size_t n>
@@ -46,13 +45,29 @@ int main (int argc, char* argv[]) {
         thres = std::atof(argv[2]);
     }
     std::cout << "thres : " << thres << "\n";  //add threshold of KLD
+    // argv[3]: sample_ratio — rows to skip per estimator step.
+    // For 1000Hz data with 200Hz estimator use 5 (default).
+    // For 200Hz data (online input CSV) use 1.
+    int SAMPLE_RATIO = 5;
+    if (argc >= 4) {
+        SAMPLE_RATIO = std::atoi(argv[3]);
+    }
+    // argv[4]: CSV recording rate in Hz (default INPUT_CSV_RATE=1000).
+    // For online input CSV recorded at 200Hz, pass 200.
+    float csv_rate = INPUT_CSV_RATE;
+    if (argc >= 5) {
+        csv_rate = std::atof(argv[4]);
+    }
+    float dt = (float)SAMPLE_RATIO / csv_rate;  // actual time between processed rows
+    std::cout << "sample_ratio : " << SAMPLE_RATIO << "  csv_rate : " << csv_rate << "  dt : " << dt << "\n";
     int start_index = 0;
     while (1) {
         start_index ++;
         if (df.iloc("trigger", start_index))  // FIXME: if cannot find "trigger", function return first colume 
             break;
     }
-    Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero((float)(n - start_index)/SAMPLE_RATIO, 46);  //TODO: refactor to make it more readable, "magic number" 46
+    int total_rows = (int)std::ceil((float)(n - start_index - 1) / SAMPLE_RATIO);
+    Eigen::MatrixXf estimate_state = Eigen::MatrixXf::Zero(total_rows, 46);  //TODO: refactor to make it more readable, "magic number" 46
 
     // read data from csv
     Eigen::Vector3f a(df.iloc("imu_lin_acc_x", start_index), df.iloc("imu_lin_acc_y", start_index), df.iloc("imu_lin_acc_z", start_index));
@@ -75,14 +90,17 @@ int main (int argc, char* argv[]) {
     Eigen::Vector<float, 2> motor_data_d_lh = Eigen::Vector<float, 2>(0, 0);
     
 
+    // Check if encoder derivatives are recorded (enc_beta_d_a column exists)
+    bool has_enc_deriv = df.has_column("enc_beta_d_a");
+    std::cout << "use recorded encoder derivatives : " << (has_enc_deriv ? "yes" : "no") << "\n";
+
     Eigen::Vector3f v_init(0, 0, 0) ;
     const int j = 10; // sample time (matrix size)
-    float dt = 1 / (float)SAMPLE_RATE;
     U u(j, Eigen::Vector3f(0, 0, 0), Eigen::Vector3f(0, 0, 0), dt); //IMU data
-    Leg lf_leg(Eigen::Vector3f(0.222, 0.193, 0), 0.1, 0.012);
-    Leg rf_leg(Eigen::Vector3f(0.222, -0.193, 0), 0.1, 0.012);
-    Leg rh_leg(Eigen::Vector3f(-0.222, -0.193, 0), 0.1, 0.012);
-    Leg lh_leg(Eigen::Vector3f(-0.222, 0.193, 0), 0.1, 0.012);
+    Leg lf_leg(Eigen::Vector3f(0.222, 0.193, 0), 0.1, 0.019);
+    Leg rf_leg(Eigen::Vector3f(0.222, -0.193, 0), 0.1, 0.019);
+    Leg rh_leg(Eigen::Vector3f(-0.222, -0.193, 0), 0.1, 0.019);
+    Leg lh_leg(Eigen::Vector3f(-0.222, 0.193, 0), 0.1, 0.019);
     DP lf(j + 1, lf_leg, encoder_lf, 0, &u);
     DP rf(j + 1, rf_leg, encoder_rf, 0, &u);
     DP rh(j + 1, rh_leg, encoder_rh, 0, &u);
@@ -137,15 +155,7 @@ int main (int argc, char* argv[]) {
         Eigen::Quaternionf q(df.iloc("imu_orien_w", i-SAMPLE_RATIO), df.iloc("imu_orien_x", i-SAMPLE_RATIO), df.iloc("imu_orien_y", i-SAMPLE_RATIO), df.iloc("imu_orien_z", i-SAMPLE_RATIO));
         Eigen::Vector3f w(df.iloc("imu_ang_vel_x", i), df.iloc("imu_ang_vel_y", i), df.iloc("imu_ang_vel_z", i));
 
-        // calculate encoder angular velocity
-        motor_data_d_lf(0) = (df.iloc("state_theta_a", i) - motor_data_lf_prev(0))/dt;
-        motor_data_d_lf(1) = (df.iloc("state_beta_a", i) - motor_data_lf_prev(1))/dt;
-        motor_data_d_rf(0) = (df.iloc("state_theta_b", i) - motor_data_rf_prev(0))/dt;
-        motor_data_d_rf(1) = (-df.iloc("state_beta_b", i) - motor_data_rf_prev(1))/dt;
-        motor_data_d_rh(0) = (df.iloc("state_theta_c", i) - motor_data_rh_prev(0))/dt;
-        motor_data_d_rh(1) = (-df.iloc("state_beta_c", i) - motor_data_rh_prev(1))/dt;
-        motor_data_d_lh(0) = (df.iloc("state_theta_d", i) - motor_data_lh_prev(0))/dt;
-        motor_data_d_lh(1) = (df.iloc("state_beta_d", i) - motor_data_lh_prev(1))/dt;
+        // calculate encoder angular velocity (or read from recorded derivatives)
         motor_data_lf_prev(0) = df.iloc("state_theta_a", i);
         motor_data_lf_prev(1) = df.iloc("state_beta_a", i);
         motor_data_rf_prev(0) = df.iloc("state_theta_b", i);
@@ -154,6 +164,25 @@ int main (int argc, char* argv[]) {
         motor_data_rh_prev(1) = -df.iloc("state_beta_c", i);
         motor_data_lh_prev(0) = df.iloc("state_theta_d", i);
         motor_data_lh_prev(1) = df.iloc("state_beta_d", i);
+        if (has_enc_deriv) {
+            motor_data_d_lf(0) = df.iloc("enc_theta_d_a", i);
+            motor_data_d_lf(1) = df.iloc("enc_beta_d_a", i);
+            motor_data_d_rf(0) = df.iloc("enc_theta_d_b", i);
+            motor_data_d_rf(1) = df.iloc("enc_beta_d_b", i);
+            motor_data_d_rh(0) = df.iloc("enc_theta_d_c", i);
+            motor_data_d_rh(1) = df.iloc("enc_beta_d_c", i);
+            motor_data_d_lh(0) = df.iloc("enc_theta_d_d", i);
+            motor_data_d_lh(1) = df.iloc("enc_beta_d_d", i);
+        } else {
+            motor_data_d_lf(0) = (motor_data_lf_prev(0) - (i > start_index ? df.iloc("state_theta_a", i - SAMPLE_RATIO) : motor_data_lf_prev(0)))/dt;
+            motor_data_d_lf(1) = (motor_data_lf_prev(1) - (i > start_index ? df.iloc("state_beta_a",  i - SAMPLE_RATIO) : motor_data_lf_prev(1)))/dt;
+            motor_data_d_rf(0) = (motor_data_rf_prev(0) - (i > start_index ? -df.iloc("state_theta_b", i - SAMPLE_RATIO) : motor_data_rf_prev(0)))/dt;
+            motor_data_d_rf(1) = (motor_data_rf_prev(1) - (i > start_index ? -df.iloc("state_beta_b",  i - SAMPLE_RATIO) : motor_data_rf_prev(1)))/dt;
+            motor_data_d_rh(0) = (motor_data_rh_prev(0) - (i > start_index ? -df.iloc("state_theta_c", i - SAMPLE_RATIO) : motor_data_rh_prev(0)))/dt;
+            motor_data_d_rh(1) = (motor_data_rh_prev(1) - (i > start_index ? -df.iloc("state_beta_c",  i - SAMPLE_RATIO) : motor_data_rh_prev(1)))/dt;
+            motor_data_d_lh(0) = (motor_data_lh_prev(0) - (i > start_index ? df.iloc("state_theta_d",  i - SAMPLE_RATIO) : motor_data_lh_prev(0)))/dt;
+            motor_data_d_lh(1) = (motor_data_lh_prev(1) - (i > start_index ? df.iloc("state_beta_d",   i - SAMPLE_RATIO) : motor_data_lh_prev(1)))/dt;
+        }
 
         Eigen::Vector<float, 5> encoder_lf(motor_data_lf_prev(0), motor_data_lf_prev(1), motor_data_d_lf(1), df.iloc("imu_ang_vel_y", i), motor_data_d_lf(0));
         Eigen::Vector<float, 5> encoder_rf(motor_data_rf_prev(0), motor_data_rf_prev(1), motor_data_d_rf(1), df.iloc("imu_ang_vel_y", i), motor_data_d_rf(0));
