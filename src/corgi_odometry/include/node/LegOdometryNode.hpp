@@ -10,7 +10,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
-#include <corgi_msgs/msg/contact_state_stamped.hpp>
+#include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
 
 #include "general_momentum_observer/DisturbanceObserver.hpp"
@@ -100,7 +100,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
 
-    rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr    contact_state_pub_;
+    rclcpp::Publisher<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr    contact_state_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;

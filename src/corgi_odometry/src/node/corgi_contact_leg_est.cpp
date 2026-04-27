@@ -10,7 +10,7 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
-#include <corgi_msgs/msg/contact_state_stamped.hpp>
+#include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "common/Config.hpp"
@@ -86,7 +86,7 @@ public:
         );
 
         // Create publishers
-        contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
+        contact_state_pub_ = this->create_publisher<corgi_msgs::msg::GMOContactStateStamped>(
             corgi::Config::TOPIC_CONTACT_STATE,
             corgi::Config::QUEUE_SIZE_PUB
         );
@@ -181,7 +181,7 @@ private:
      * @param disturbance Disturbance observer output vector
      */
     inline void publish_contact_state(const Eigen::VectorXd& disturbance) {
-        corgi_msgs::msg::ContactStateStamped contact_msg;
+        corgi_msgs::msg::GMOContactStateStamped contact_msg;
         contact_msg.header.stamp = this->now();
 
         // Indices for Rm forces in the disturbance vector
@@ -230,7 +230,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr velocity_sub_;
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
-    rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr contact_state_pub_;
+    rclcpp::Publisher<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr contact_state_pub_;
     
     // Data storage
     corgi_msgs::msg::MotorStateStamped motor_state_;

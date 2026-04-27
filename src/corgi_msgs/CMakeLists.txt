@@ -17,6 +17,8 @@ set(msg_files
   "msg/ConfigStamped.msg"
   "msg/ContactState.msg"
   "msg/ContactStateStamped.msg"
+  "msg/GMOContactState.msg"
+  "msg/GMOContactStateStamped.msg"
   "msg/ForceState.msg"
   "msg/ForceStateStamped.msg"
   "msg/FsmCmdStamped.msg"
