@@ -43,6 +43,11 @@ namespace corgi
         static constexpr double SAMPLE_RATE = 1000.0;   // Sampling frequency [Hz]
         static constexpr double DT = 1.0 / SAMPLE_RATE; // Time step [s]
 
+        // ES-EKF rate (runs at half the main loop rate)
+        static constexpr double ESEKF_RATE = 500.0;                                         // ESEKF prediction rate [Hz]
+        static constexpr double ESEKF_DT = 1.0 / ESEKF_RATE;                                // Nominal ESEKF time step [s]
+        static constexpr int ESEKF_DECIMATION = static_cast<int>(SAMPLE_RATE / ESEKF_RATE); // =2
+
         // Polynomial coefficients for Rm calculation
         // Rm(theta) = A[0]*theta^4 + A[1]*theta^3 + A[2]*theta^2 + A[3]*theta + A[4]
         static constexpr std::array<double, 5> RM_COEFF = {

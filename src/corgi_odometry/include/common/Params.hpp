@@ -20,7 +20,6 @@ struct Params {
     Eigen::Vector3f sigma_w       = {0.001f, 0.01f, 0.001f};
     Eigen::Vector3f sigma_ba      = {1e-5f, 1e-5f, 1e-5f};
     Eigen::Vector3f sigma_bw      = {1e-8f, 1e-8f, 1e-8f};
-    Eigen::Vector3f sigma_bv      = {1e-6f, 1e-6f, 1e-6f};
     Eigen::Vector3f sigma_leg_vec = {0.05f, 1.5f, 1.2f};
     float mahalanobis_threshold   = 16.27f;
 
@@ -47,6 +46,7 @@ struct Params {
     bool   enable_logging    = true;
     bool   log_details       = false;
     uint64_t imu_noise_seed  = 42;
+    bool   use_dynamic_dt    = true;   // use IMU timestamps for ESEKF dt (offline)
 
     // ── GT velocity filter ──────────────────────────────────────
     double gt_velocity_lpf_cutoff = 10.0;  // [Hz]

@@ -125,6 +125,23 @@ private:
     bool is_triggered_         = false;
 
     // ============================================================
+    // IMU timestamp tracking (for dynamic ESEKF dt)
+    // ============================================================
+    rclcpp::Time last_esekf_imu_time_{0, 0, RCL_ROS_TIME};
+    bool last_esekf_imu_time_valid_ = false;
+
+    // ESEKF decimation counter (runs at ESEKF_RATE = 500Hz in a 1000Hz loop)
+    size_t esekf_tick_ = 0;
+
+    // ============================================================
+    // IMU trapezoidal averaging for ESEKF predict
+    // ============================================================
+    /// Previous tick's IMU (intermediate sample between ESEKF triggers)
+    Eigen::Vector3f prev_imu_a_{0.f, 0.f, 0.f};
+    Eigen::Vector3f prev_imu_w_{0.f, 0.f, 0.f};
+    bool prev_imu_valid_ = false;
+
+    // ============================================================
     // Contact state (Schmitt trigger memory)
     // ============================================================
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};

@@ -49,7 +49,6 @@ inline Params load_params(const std::string& yaml_path) {
         p.sigma_w       = detail::read_vec3f(n["sigma_w"],       p.sigma_w);
         p.sigma_ba      = detail::read_vec3f(n["sigma_ba"],      p.sigma_ba);
         p.sigma_bw      = detail::read_vec3f(n["sigma_bw"],      p.sigma_bw);
-        p.sigma_bv      = detail::read_vec3f(n["sigma_bv"],      p.sigma_bv);
         p.sigma_leg_vec = detail::read_vec3f(n["sigma_leg_vec"], p.sigma_leg_vec);
         p.mahalanobis_threshold = detail::val(n, "mahalanobis_threshold",
                                               p.mahalanobis_threshold);
@@ -83,6 +82,7 @@ inline Params load_params(const std::string& yaml_path) {
         p.enable_logging = detail::val(n, "enable_logging", p.enable_logging);
         p.log_details    = detail::val(n, "log_details",    p.log_details);
         p.imu_noise_seed = detail::val(n, "imu_noise_seed", p.imu_noise_seed);
+        p.use_dynamic_dt = detail::val(n, "use_dynamic_dt", p.use_dynamic_dt);
     }
 
     // ── GT velocity filter ──────────────────────────────────────

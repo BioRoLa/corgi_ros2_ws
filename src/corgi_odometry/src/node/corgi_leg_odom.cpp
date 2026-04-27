@@ -65,7 +65,7 @@ LegOdometryNode::LegOdometryNode()
           false, // CSV logging
           ""     // No CSV filename
           ),
-      esekf_(static_cast<float>(corgi::Config::DT))
+      esekf_()
 {
     contact_rm_threshold_high_ = params_.contact_rm_threshold_high;
     contact_rm_threshold_low_ = params_.contact_rm_threshold_low;
@@ -136,10 +136,15 @@ void LegOdometryNode::process()
         iteration_count_++;
         observer_.reset();
         esekf_initialized_ = false;
+        last_esekf_imu_time_valid_ = false;
+        prev_imu_valid_ = false;
+        esekf_tick_ = 0;
         return;
     }
 
-    // --- Contact estimation (disturbance observer) ---
+    // ==========================================================
+    // GMO pipeline (runs every tick @ 1000 Hz)
+    // ==========================================================
     auto processed = processor_.process_realtime_data(position_, velocity_, imu_, motor_state_);
 
     auto disturbance = observer_.estimate_disturbance(
@@ -149,111 +154,132 @@ void LegOdometryNode::process()
     publish_contact_state(disturbance);
 
     // ==========================================================
-    // ES-EKF pipeline
+    // ES-EKF pipeline (runs every ESEKF_DECIMATION ticks @ 500 Hz)
     // ==========================================================
-
-    // --- Initialize ESEKF on first triggered tick ---
-    if (!esekf_initialized_)
+    esekf_tick_++;
+    if (esekf_tick_ >= static_cast<size_t>(corgi::Config::ESEKF_DECIMATION))
     {
-        estimation_model::NominalState x0;
-        // Start at zero position/velocity; attitude from IMU quaternion
-        x0.q = Eigen::Quaternionf(
-                   static_cast<float>(imu_.orientation.w),
-                   static_cast<float>(imu_.orientation.x),
-                   static_cast<float>(imu_.orientation.y),
-                   static_cast<float>(imu_.orientation.z))
-                   .normalized();
-        esekf_.init(x0);
+        esekf_tick_ = 0;
 
-        // Remove esekf contact_beta_ accumulations as we just use current state beta + pitch
-        esekf_initialized_ = true;
-        RCLCPP_INFO(this->get_logger(), "ES-EKF initialized");
+        // --- Compute dynamic dt from IMU timestamp ---
+        rclcpp::Time current_imu_time(imu_.header.stamp);
+        float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT); // nominal fallback
+        if (last_esekf_imu_time_valid_)
+        {
+            double dt_sec = (current_imu_time - last_esekf_imu_time_).seconds();
+            // Sanity check: clamp to [0.5×nominal, 2×nominal] to reject outliers
+            constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
+            constexpr double dt_max = corgi::Config::ESEKF_DT * 2.0;
+            if (dt_sec > dt_min && dt_sec < dt_max)
+            {
+                esekf_dt = static_cast<float>(dt_sec);
+            }
+        }
+        last_esekf_imu_time_ = current_imu_time;
+        last_esekf_imu_time_valid_ = true;
+
+        // --- Initialize ESEKF on first triggered tick ---
+        if (!esekf_initialized_)
+        {
+            estimation_model::NominalState x0;
+            x0.q = Eigen::Quaternionf(
+                       static_cast<float>(imu_.orientation.w),
+                       static_cast<float>(imu_.orientation.x),
+                       static_cast<float>(imu_.orientation.y),
+                       static_cast<float>(imu_.orientation.z))
+                       .normalized();
+            esekf_.init(x0);
+            esekf_initialized_ = true;
+            RCLCPP_INFO(this->get_logger(), "ES-EKF initialized (%.0f Hz, nominal dt=%.4f s)",
+                        corgi::Config::ESEKF_RATE, corgi::Config::ESEKF_DT);
+        }
+
+        // --- 1. Extract IMU measurements (raw, in sensor frame) ---
+        Eigen::Vector3f a_m(
+            static_cast<float>(imu_.linear_acceleration.x),
+            static_cast<float>(imu_.linear_acceleration.y),
+            static_cast<float>(imu_.linear_acceleration.z));
+        Eigen::Vector3f w_m(
+            static_cast<float>(imu_.angular_velocity.x),
+            static_cast<float>(imu_.angular_velocity.y),
+            static_cast<float>(imu_.angular_velocity.z));
+
+        // Trapezoidal average with the intermediate tick's IMU sample.
+        // predict uses average over the 2ms interval; update uses the
+        // instantaneous measurement at the current tick.
+        Eigen::Vector3f a_pred = prev_imu_valid_ ? 0.5f * (prev_imu_a_ + a_m) : a_m;
+        Eigen::Vector3f w_pred = prev_imu_valid_ ? 0.5f * (prev_imu_w_ + w_m) : w_m;
+
+        // --- 2. Predict (IMU propagation with dynamic dt) ---
+        esekf_.predict(a_pred, w_pred, esekf_dt);
+
+        // --- 3. Build per-leg observations ---
+        const float w_y = static_cast<float>(imu_.angular_velocity.y) - static_cast<float>(esekf_.nominal().bw.y());
+
+        const corgi_msgs::msg::MotorState *modules[4] = {
+            &motor_state_.module_a,
+            &motor_state_.module_b,
+            &motor_state_.module_c,
+            &motor_state_.module_d};
+
+        std::vector<estimation_model::LegObservation> observations;
+        observations.reserve(4);
+        std::array<bool, 4> exclude_flags{};
+
+        for (int i = 0; i < 4; ++i)
+        {
+            auto obs = build_leg_observation(*modules[i], legs_[i], i, w_y);
+            exclude_flags[i] = !obs.in_contact;
+            observations.push_back(obs);
+        }
+
+        // --- Debug: publish per-leg observation inputs and z_leg ---
+        publish_debug(observations, w_m);
+
+        // --- 4. Update (sequential per-leg velocity constraint) ---
+        esekf_.update_all_legs(observations, w_m, exclude_flags);
+
+        // --- 5. Inject error state into nominal + reset ---
+        esekf_.inject_and_reset();
+
+        // --- 6. Publish ESEKF state ---
+        {
+            const auto &st = esekf_.nominal();
+            nav_msgs::msg::Odometry odom_msg;
+            odom_msg.header.stamp = this->now();
+            odom_msg.header.frame_id = "odom";
+            odom_msg.child_frame_id = "base_link";
+
+            odom_msg.pose.pose.position.x = st.p.x();
+            odom_msg.pose.pose.position.y = st.p.y();
+            odom_msg.pose.pose.position.z = st.p.z();
+
+            odom_msg.pose.pose.orientation.w = st.q.w();
+            odom_msg.pose.pose.orientation.x = st.q.x();
+            odom_msg.pose.pose.orientation.y = st.q.y();
+            odom_msg.pose.pose.orientation.z = st.q.z();
+
+            odom_msg.twist.twist.linear.x = st.v.x();
+            odom_msg.twist.twist.linear.y = st.v.y();
+            odom_msg.twist.twist.linear.z = st.v.z();
+
+            Eigen::Vector3f w_corrected = w_m - st.bw;
+            odom_msg.twist.twist.angular.x = w_corrected.x();
+            odom_msg.twist.twist.angular.y = w_corrected.y();
+            odom_msg.twist.twist.angular.z = w_corrected.z();
+
+            ekf_pub_->publish(odom_msg);
+        }
     }
 
-    // --- 1. Extract IMU measurements (raw, in sensor frame) ---
-    // NOTE: Following original convention — filter operates in IMU sensor frame.
-    //       Roll rate (w.x) is zeroed to match the original system.
-    Eigen::Vector3f a_m(
-        static_cast<float>(imu_.linear_acceleration.x),
+    // Store current IMU for trapezoidal averaging at next ESEKF tick
+    prev_imu_a_ << static_cast<float>(imu_.linear_acceleration.x),
         static_cast<float>(imu_.linear_acceleration.y),
-        static_cast<float>(imu_.linear_acceleration.z));
-    Eigen::Vector3f w_m(
-        static_cast<float>(imu_.angular_velocity.x),
+        static_cast<float>(imu_.linear_acceleration.z);
+    prev_imu_w_ << static_cast<float>(imu_.angular_velocity.x),
         static_cast<float>(imu_.angular_velocity.y),
-        static_cast<float>(imu_.angular_velocity.z));
-
-    // --- 2. Predict (IMU propagation) ---
-    esekf_.predict(a_m, w_m);
-
-    // --- 3. Build per-leg observations ---
-    // Use bias-corrected pitch rate for contact_beta accumulation
-    const float w_y = static_cast<float>(imu_.angular_velocity.y) - static_cast<float>(esekf_.nominal().bw.y());
-
-    // Module order: [LF=a, RF=b, RH=c, LH=d] → leg_idx [0,1,2,3]
-    const corgi_msgs::msg::MotorState *modules[4] = {
-        &motor_state_.module_a,
-        &motor_state_.module_b,
-        &motor_state_.module_c,
-        &motor_state_.module_d};
-
-    std::vector<estimation_model::LegObservation> observations;
-    observations.reserve(4);
-    std::array<bool, 4> exclude_flags{};
-
-    for (int i = 0; i < 4; ++i)
-    {
-        auto obs = build_leg_observation(*modules[i], legs_[i], i, w_y);
-        exclude_flags[i] = !obs.in_contact;
-        observations.push_back(obs);
-    }
-
-    // --- Debug: publish per-leg observation inputs and z_leg ---
-    publish_debug(observations, w_m);
-
-    // --- 4. Update (sequential per-leg velocity constraint) ---
-    esekf_.update_all_legs(observations, w_m, exclude_flags);
-
-    // --- 5. Inject error state into nominal + reset ---
-    esekf_.inject_and_reset();
-
-    // --- 6. Publish ESEKF state ---
-    {
-        const auto &st = esekf_.nominal();
-        nav_msgs::msg::Odometry odom_msg;
-        odom_msg.header.stamp = this->now();
-        odom_msg.header.frame_id = "odom";
-        odom_msg.child_frame_id = "base_link";
-
-        // Position (world frame)
-        odom_msg.pose.pose.position.x = st.p.x();
-        odom_msg.pose.pose.position.y = st.p.y();
-        odom_msg.pose.pose.position.z = st.p.z();
-
-        // Orientation (body→world quaternion)
-        odom_msg.pose.pose.orientation.w = st.q.w();
-        odom_msg.pose.pose.orientation.x = st.q.x();
-        odom_msg.pose.pose.orientation.y = st.q.y();
-        odom_msg.pose.pose.orientation.z = st.q.z();
-
-        // Velocity (body frame)
-        odom_msg.twist.twist.linear.x = st.v.x();
-        odom_msg.twist.twist.linear.y = st.v.y();
-        odom_msg.twist.twist.linear.z = st.v.z();
-
-        // Angular velocity (bias-corrected gyro)
-        Eigen::Vector3f w_corrected = w_m - st.bw;
-        odom_msg.twist.twist.angular.x = w_corrected.x();
-        odom_msg.twist.twist.angular.y = w_corrected.y();
-        odom_msg.twist.twist.angular.z = w_corrected.z();
-
-        ekf_pub_->publish(odom_msg);
-    }
-
-    // TODO: Once EKF output is validated and stable:
-    //       - Remove position_sub_ and velocity_sub_ (and their callbacks)
-    //       - Feed ESEKF position/velocity into the disturbance observer
-    //         instead of the external topics, making this a fully
-    //         closed-loop estimation node.
+        static_cast<float>(imu_.angular_velocity.z);
+    prev_imu_valid_ = true;
 
     iteration_count_++;
 }
@@ -312,8 +338,7 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
 
     // --- Motor velocities → joint velocities ---
     // theta_d = (-velocity_r + velocity_l) / 2
-    // beta_d  = -( velocity_r + velocity_l) / 2   (negated for right-side legs)
-    // NOTE: motor sum gives -beta_d by convention; negate to get true beta_d
+    // beta_d  = ( velocity_r + velocity_l) / 2   (negated for right-side legs)
     float theta_d = static_cast<float>((-module.velocity_r + module.velocity_l) / 2.0);
     float beta_d = -static_cast<float>((module.velocity_r + module.velocity_l) / 2.0);
     float gamma = static_cast<float>(module.gamma);

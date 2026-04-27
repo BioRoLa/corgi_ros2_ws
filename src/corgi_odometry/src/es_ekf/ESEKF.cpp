@@ -21,7 +21,7 @@ namespace estimation_model
     // Constructor & Init
     // ============================================================
 
-    ESEKF::ESEKF(float dt) : dt_(dt)
+    ESEKF::ESEKF()
     {
         dx_ = Eigen::VectorXf::Zero(ERR_STATE_DIM);
 
@@ -51,7 +51,7 @@ namespace estimation_model
     // Predict (IMU propagation)
     // ============================================================
 
-    void ESEKF::predict(const Eigen::Vector3f &a_m, const Eigen::Vector3f &w_m)
+    void ESEKF::predict(const Eigen::Vector3f &a_m, const Eigen::Vector3f &w_m, float dt)
     {
         // ----------------------------------------------------------
         // 1. Bias-corrected IMU measurements
@@ -70,7 +70,7 @@ namespace estimation_model
         // ----------------------------------------------------------
         // 2. Rotation increment R_delta = Exp(w_hat * dt)
         // ----------------------------------------------------------
-        Eigen::Vector3f dw = w_hat * dt_;
+        Eigen::Vector3f dw = w_hat * dt;
         float angle = dw.norm();
         Eigen::Matrix3f R_delta;
         if (angle > 1e-8f)
@@ -91,8 +91,8 @@ namespace estimation_model
         //    q_{k+1} = q_k ⊗ q(R_delta)
         //    biases:  unchanged
         // ----------------------------------------------------------
-        x_nom_.p += R_body * x_nom_.v * dt_;
-        x_nom_.v = R_delta.transpose() * x_nom_.v + (a_hat + g_body) * dt_;
+        x_nom_.p += R_body * x_nom_.v * dt;
+        x_nom_.v = R_delta.transpose() * x_nom_.v + (a_hat + g_body) * dt;
         x_nom_.q = (x_nom_.q * Eigen::Quaternionf(R_delta)).normalized();
         // ba, bw, bv: constant (random walk, corrected in update)
 
@@ -112,8 +112,8 @@ namespace estimation_model
         Eigen::MatrixXf Fx = Eigen::MatrixXf::Identity(ERR_STATE_DIM, ERR_STATE_DIM);
 
         // δp row
-        Fx.block<3, 3>(P_IDX, V_IDX) = R_body * dt_;
-        Fx.block<3, 3>(P_IDX, TH_IDX) = -R_body * skew(x_nom_.v) * dt_;
+        Fx.block<3, 3>(P_IDX, V_IDX) = R_body * dt;
+        Fx.block<3, 3>(P_IDX, TH_IDX) = -R_body * skew(x_nom_.v) * dt;
 
         // δv row  (v_{k+1} = R_Δ^T v_k + ...)
         Fx.block<3, 3>(V_IDX, V_IDX) = R_delta.transpose();
@@ -121,12 +121,12 @@ namespace estimation_model
         //   δ(g_body) = [g_body]× · δθ   ⇒   Fx(V,TH) = R_Δ^T · [g_body]× · dt
         // NOTE: The previous formula used -[a_hat + g_body]× which ≈ 0 (gravity cancels
         //       specific force), destroying attitude–velocity coupling and observability.
-        Fx.block<3, 3>(V_IDX, TH_IDX) = R_delta.transpose() * skew(g_body) * dt_;
-        Fx.block<3, 3>(V_IDX, BA_IDX) = -Eigen::Matrix3f::Identity() * dt_;
+        Fx.block<3, 3>(V_IDX, TH_IDX) = R_delta.transpose() * skew(g_body) * dt;
+        Fx.block<3, 3>(V_IDX, BA_IDX) = -Eigen::Matrix3f::Identity() * dt;
 
         // δθ row
         Fx.block<3, 3>(TH_IDX, TH_IDX) = R_delta.transpose();
-        Fx.block<3, 3>(TH_IDX, BW_IDX) = -Eigen::Matrix3f::Identity() * dt_;
+        Fx.block<3, 3>(TH_IDX, BW_IDX) = -Eigen::Matrix3f::Identity() * dt;
 
         // δba, δbw, δbv rows: already Identity on diagonal
 
@@ -143,11 +143,10 @@ namespace estimation_model
         // NOTE: σ_a here is the per-sample std (m/s²), not spectral density.
         // With σ_a=0.1, dt=0.001 → Q_v = 1e-8.  Steady-state Kalman gain ≈ 0.9%.
         // To get higher gain, increase σ_a (e.g. 1.0 → Q_v=1e-6, gain≈9%).
-        Qc.block<3, 3>(V_IDX, V_IDX) = noise_.sigma_a.array().square().matrix().asDiagonal() * (dt_ * dt_);
-        Qc.block<3, 3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt_ * dt_);
+        Qc.block<3, 3>(V_IDX, V_IDX) = noise_.sigma_a.array().square().matrix().asDiagonal() * (dt * dt);
+        Qc.block<3, 3>(TH_IDX, TH_IDX) = noise_.sigma_w.array().square().matrix().asDiagonal() * (dt * dt);
         Qc.block<3, 3>(BA_IDX, BA_IDX) = noise_.sigma_ba.array().square().matrix().asDiagonal();
         Qc.block<3, 3>(BW_IDX, BW_IDX) = noise_.sigma_bw.array().square().matrix().asDiagonal();
-        Qc.block<3, 3>(BV_IDX, BV_IDX) = noise_.sigma_bv.array().square().matrix().asDiagonal();
 
         // ----------------------------------------------------------
         // 6. Covariance propagation: P = Fx * P * Fx^T + Qc
@@ -189,13 +188,26 @@ namespace estimation_model
                            obs.gamma, obs.gamma_d, 0);
         obs.leg->PointContact(obs.rim, obs.alpha);
 
-        // Use full 3D bias-corrected gyro for the ω×r term.
+        // Use full bias-corrected angular velocity for ω×r contact point correction.
+        // Previously only w_y was used (pitch-only), which left (ω_x × r_cz) and
+        // (ω_z × r_cx) unmodelled in z_leg_y, causing ~50-200 mm/s systematic Vy bias.
+        // With full ω the H matrix (bw_x, bw_z columns) is also populated below,
+        // making all three gyro biases observable and keeping the filter consistent.
         Eigen::Vector3f w_corrected = w_m - x_nom_.bw;
         Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
         obs.leg->PointVelocity(v_zero, w_corrected, obs.rim, obs.alpha, true);
 
         // z_leg = -contact_velocity(v=0) = "observed" body velocity
         Eigen::Vector3f z_leg = -obs.leg->contact_velocity;
+
+        // Apply external velocity bias correction (from Outer Fusion EKF).
+        // bv_outer_ is in world frame; z_leg is in body frame.
+        // z_corrected = z_leg - R_body^T * bv_outer
+        if (!bv_outer_.isZero())
+        {
+            Eigen::Matrix3f R_body = x_nom_.q.toRotationMatrix();
+            z_leg -= R_body.transpose() * bv_outer_;
+        }
 
         // ----------------------------------------------------------
         // 2. Innovation (residual)
@@ -209,16 +221,26 @@ namespace estimation_model
 
         // ----------------------------------------------------------
         // 3. Observation Jacobian H (3×18)
+        //
+        //    z_leg = -(ω × r_c + …), ω = ω_m − bw
+        //    Full ω×r partial derivatives w.r.t. δbw:
+        //      (ω × r_c)_x = ω_y r_z − ω_z r_y  →  ∂z_x/∂bw_y = +r_z, ∂z_x/∂bw_z = −r_y
+        //      (ω × r_c)_y = ω_z r_x − ω_x r_z  →  ∂z_y/∂bw_x = −r_z, ∂z_y/∂bw_z = +r_x
+        //      (ω × r_c)_z = ω_x r_y − ω_y r_x  →  ∂z_z/∂bw_x = +r_y, ∂z_z/∂bw_y = −r_x
         // ----------------------------------------------------------
         Eigen::MatrixXf H = Eigen::MatrixXf::Zero(3, ERR_STATE_DIM);
         H.block<3, 3>(0, V_IDX) = Eigen::Matrix3f::Identity(); // ∂h/∂δv
         // NOTE: bv deliberately excluded from H to preserve observability
         const Eigen::Vector3f &r_c = obs.leg->contact_point;
-        Eigen::Matrix3f r_c_skew;
-        r_c_skew << 0.0f, -r_c.z(), r_c.y(),
-            r_c.z(), 0.0f, -r_c.x(),
-            -r_c.y(), r_c.x(), 0.0f;
-        H.block<3, 3>(0, BW_IDX) = r_c_skew;
+        // bw_y (pitch) — existing terms
+        H(0, BW_IDX + 1) = r_c.z();  // ∂z_leg_x / ∂δbw_y = +r_c.z()
+        H(2, BW_IDX + 1) = -r_c.x(); // ∂z_leg_z / ∂δbw_y = -r_c.x()
+        // bw_x (roll) — new terms (key Vy fix: eliminates ω_x·r_cz bias)
+        H(1, BW_IDX + 0) = -r_c.z(); // ∂z_leg_y / ∂δbw_x = -r_c.z()
+        H(2, BW_IDX + 0) = r_c.y();  // ∂z_leg_z / ∂δbw_x = +r_c.y()
+        // bw_z (yaw) — new terms
+        H(0, BW_IDX + 2) = -r_c.y(); // ∂z_leg_x / ∂δbw_z = -r_c.y()
+        H(1, BW_IDX + 2) = r_c.x();  // ∂z_leg_y / ∂δbw_z = +r_c.x()
 
         // ----------------------------------------------------------
         // 4. Kalman gain & state/covariance update
@@ -314,6 +336,15 @@ namespace estimation_model
         // TODO: Covariance reset with G matrix (G ≈ I for small δθ)
         //       P = G * P * G^T  where G = I - [½δθ]×  (in θ block)
         //       Currently skipped since δθ is small after injection
+    }
+
+    // ============================================================
+    // External velocity bias setter (from Outer Fusion EKF)
+    // ============================================================
+
+    void ESEKF::set_bv_outer(const Eigen::Vector3f &bv_outer)
+    {
+        bv_outer_ = bv_outer;
     }
 
 } // namespace estimation_model

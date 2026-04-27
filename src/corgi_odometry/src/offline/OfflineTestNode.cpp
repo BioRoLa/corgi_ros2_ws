@@ -18,6 +18,7 @@ RawRecord OfflineTestNode::to_raw(const CSVReader::RobotData& d) {
     r.sim_pos_x = d.sim_pos_x;  r.sim_pos_y = d.sim_pos_y;  r.sim_pos_z = d.sim_pos_z;
     r.sim_orien_x = d.sim_orien_x; r.sim_orien_y = d.sim_orien_y;
     r.sim_orien_z = d.sim_orien_z; r.sim_orien_w = d.sim_orien_w;
+    r.imu_seq = d.imu_seq; r.imu_sec = d.imu_sec; r.imu_nsec = d.imu_nsec;
     r.imu_orien_x = d.imu_orien_x; r.imu_orien_y = d.imu_orien_y;
     r.imu_orien_z = d.imu_orien_z; r.imu_orien_w = d.imu_orien_w;
     r.imu_ang_vel_x = d.imu_ang_vel_x; r.imu_ang_vel_y = d.imu_ang_vel_y; r.imu_ang_vel_z = d.imu_ang_vel_z;
@@ -85,14 +86,15 @@ int OfflineTestNode::run() {
     // ── Output CSV ──────────────────────────────────────────────
     const auto output_dir = std::filesystem::current_path() / "output_data";
     std::filesystem::create_directories(output_dir);
-    const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf.csv");
+    const std::string dt_suffix = params_.use_dynamic_dt ? "_dynamic_dt" : "_fixed_dt";
+    const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf" + dt_suffix + ".csv");
     std::ofstream esekf_out(esekf_out_path);
     esekf_out << "Index,sim_pos_x,sim_pos_y,sim_pos_z,"
               << "est_pos_x,est_pos_y,est_pos_z,"
               << "est_vel_x,est_vel_y,est_vel_z,"
               << "contact_a,contact_b,contact_c,contact_d,"
               << "z_avg_x,z_avg_y,z_avg_z,"
-              << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,bv_x,bv_y,bv_z,"
+              << "ba_x,ba_y,ba_z,bw_x,bw_y,bw_z,"
               << "est_qw,est_qx,est_qy,est_qz,"
               << "gt_qw,gt_qx,gt_qy,gt_qz,"
               << "d2_a,d2_b,d2_c,d2_d,"
@@ -135,6 +137,11 @@ int OfflineTestNode::run() {
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t processed_count = 0;
 
+    // ── IMU timestamp tracking for dynamic ESEKF dt ─────────────
+    int32_t prev_imu_sec = 0;
+    int32_t prev_imu_nsec = 0;
+    bool prev_imu_time_valid = false;
+
     for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
         if (!quiet && i % 100 == 0) {
             std::cout << "Processing index: " << i << " / " << data.size() << "\r" << std::flush;
@@ -142,6 +149,26 @@ int OfflineTestNode::run() {
 
         const auto& d = data[i];
         RawRecord raw = to_raw(d);
+
+        // ── Compute dynamic dt from IMU timestamps ──────────────
+        float esekf_dt = static_cast<float>(Config::DT);   // fallback / fixed-dt mode
+        if (params_.use_dynamic_dt) {
+            if (prev_imu_time_valid && (raw.imu_sec != 0 || raw.imu_nsec != 0)) {
+                double cur_t  = raw.imu_sec  + raw.imu_nsec  * 1e-9;
+                double prev_t = prev_imu_sec + prev_imu_nsec * 1e-9;
+                double dt_imu = cur_t - prev_t;
+                // Sanity clamp: [0.5×, 2×] nominal DT
+                constexpr double lo = Config::DT * 0.5;
+                constexpr double hi = Config::DT * 2.0;
+                if (dt_imu >= lo && dt_imu <= hi)
+                    esekf_dt = static_cast<float>(dt_imu);
+            }
+            if (raw.imu_sec != 0 || raw.imu_nsec != 0) {
+                prev_imu_sec  = raw.imu_sec;
+                prev_imu_nsec = raw.imu_nsec;
+                prev_imu_time_valid = true;
+            }
+        }
 
         // Process raw data → generalized coordinates
         auto processed = processor.process_record(raw);
@@ -201,7 +228,7 @@ int OfflineTestNode::run() {
         }
 
         // ── Pipeline step ───────────────────────────────────────
-        auto result = pipeline.step(processed, a_m, w_m, raw, i);
+        auto result = pipeline.step(processed, a_m, w_m, raw, i, esekf_dt);
 
         // ── Accumulate RMSE ─────────────────────────────────────
         {
@@ -253,7 +280,6 @@ int OfflineTestNode::run() {
                       << result.z_avg.x() << "," << result.z_avg.y() << "," << result.z_avg.z() << ","
                       << st.ba.x() << "," << st.ba.y() << "," << st.ba.z() << ","
                       << st.bw.x() << "," << st.bw.y() << "," << st.bw.z() << ","
-                      << st.bv.x() << "," << st.bv.y() << "," << st.bv.z() << ","
                       << st.q.w() << "," << st.q.x() << "," << st.q.y() << "," << st.q.z() << ","
                       << d.imu_orien_w << "," << d.imu_orien_x << ","
                       << d.imu_orien_y << "," << d.imu_orien_z << ",";
@@ -307,7 +333,6 @@ int OfflineTestNode::run() {
         std::cout << "Velocity: [" << final_st.v.x() << ", " << final_st.v.y() << ", " << final_st.v.z() << "]\n";
         std::cout << "Bias_a:   [" << final_st.ba.x() << ", " << final_st.ba.y() << ", " << final_st.ba.z() << "]\n";
         std::cout << "Bias_w:   [" << final_st.bw.x() << ", " << final_st.bw.y() << ", " << final_st.bw.z() << "]\n";
-        std::cout << "Bias_v:   [" << final_st.bv.x() << ", " << final_st.bv.y() << ", " << final_st.bv.z() << "]\n";
         const size_t final_idx = start_index + processed_count - 1;
         double gt_final_x = data[final_idx].sim_pos_x - gt_offset_x;
         double gt_final_y = data[final_idx].sim_pos_y - gt_offset_y;

@@ -111,8 +111,7 @@ namespace estimation_model
     {
     public:
         /// @brief Constructor
-        /// @param dt  time step [s]
-        ESEKF(float dt);
+        ESEKF();
 
         /// @brief Initialize nominal state (call once at startup)
         void init(const NominalState &x0);
@@ -122,7 +121,8 @@ namespace estimation_model
         ///   - Propagate error-state covariance P via linearized Jacobian Fx
         /// @param a_m  raw accelerometer measurement in body frame [m/s^2]
         /// @param w_m  raw gyroscope measurement in body frame [rad/s]
-        void predict(const Eigen::Vector3f &a_m, const Eigen::Vector3f &w_m);
+        /// @param dt   time step [s] (dynamic, from IMU timestamp difference)
+        void predict(const Eigen::Vector3f &a_m, const Eigen::Vector3f &w_m, float dt);
 
         /// @brief Single-leg measurement update (sequential EKF update)
         ///   Observation model:  z_leg = v + bv + noise
@@ -156,15 +156,24 @@ namespace estimation_model
         /// @brief Set noise parameters (optional, has defaults)
         void set_noise_params(const NoiseParams &params) { noise_ = params; }
 
+        /// @brief Set external velocity bias from Outer Fusion EKF.
+        ///        Applied in update_leg(): z_corrected = z_leg - R_body^T * bv_outer
+        /// @param bv_outer  velocity bias in world frame [m/s]
+        void set_bv_outer(const Eigen::Vector3f &bv_outer);
+
+        /// @brief Get current external velocity bias (world frame)
+        const Eigen::Vector3f &bv_outer() const { return bv_outer_; }
+
     private:
         // --- Helper ---
         /// @brief Compute skew-symmetric matrix [v]×
         static Eigen::Matrix3f skew(const Eigen::Vector3f &v);
 
         // --- State ---
-        NominalState x_nom_; // nominal state (19-dim)
-        Eigen::VectorXf dx_; // error state   (18-dim)
-        Eigen::MatrixXf P_;  // error covariance (18×18)
+        NominalState x_nom_;                                 // nominal state (16-dim)
+        Eigen::VectorXf dx_;                                 // error state   (15-dim)
+        Eigen::MatrixXf P_;                                  // error covariance (15×15)
+        Eigen::Vector3f bv_outer_ = Eigen::Vector3f::Zero(); // from Outer EKF (world frame)
 
         // --- Parameters ---
         float dt_;

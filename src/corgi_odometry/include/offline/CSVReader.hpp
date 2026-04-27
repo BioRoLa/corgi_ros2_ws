@@ -20,6 +20,11 @@ public:
         double sim_pos_x = 0, sim_pos_y = 0, sim_pos_z = 0;
         double sim_orien_x = 0, sim_orien_y = 0, sim_orien_z = 0, sim_orien_w = 0;
 
+        // IMU timestamp
+        int32_t imu_seq = 0;
+        int32_t imu_sec = 0;
+        int32_t imu_nsec = 0;
+
         // IMU data
         double imu_orien_x = 0, imu_orien_y = 0, imu_orien_z = 0, imu_orien_w = 0;
         double imu_ang_vel_x = 0, imu_ang_vel_y = 0, imu_ang_vel_z = 0;
@@ -75,6 +80,14 @@ public:
             row.sim_orien_y = values[column_indices.at("sim_orien_y")];
             row.sim_orien_z = values[column_indices.at("sim_orien_z")];
             row.sim_orien_w = values[column_indices.at("sim_orien_w")];
+
+            // IMU timestamp (optional — absent in simulation CSVs)
+            if (column_indices.count("imu_seq"))
+                row.imu_seq  = static_cast<int32_t>(values[column_indices.at("imu_seq")]);
+            if (column_indices.count("imu_sec"))
+                row.imu_sec  = static_cast<int32_t>(values[column_indices.at("imu_sec")]);
+            if (column_indices.count("imu_nsec"))
+                row.imu_nsec = static_cast<int32_t>(values[column_indices.at("imu_nsec")]);
 
             row.imu_orien_x   = values[column_indices.at("imu_orien_x")];
             row.imu_orien_y   = values[column_indices.at("imu_orien_y")];
