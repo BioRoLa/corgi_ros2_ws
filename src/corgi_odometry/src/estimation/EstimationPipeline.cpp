@@ -40,7 +40,9 @@ namespace corgi
                 params.contact_rm_threshold_high,
                 params.contact_rm_threshold_low,
                 params.contact_beta_threshold_high,
-                params.contact_beta_threshold_low);
+                params.contact_beta_threshold_low,
+                params.contact_gamma_threshold_high,
+                params.contact_gamma_threshold_low);
         }
 
         // ESEKF noise params
@@ -93,13 +95,16 @@ namespace corgi
         // ── Schmitt trigger contact detection (always) ──────────────
         // Disturbance layout: [4]=beta_a [5]=rm_a [6]=beta_b [7]=rm_b
         //                     [8]=beta_c [9]=rm_c [10]=beta_d [11]=rm_d
+        //                     [12]=gamma_a [13]=gamma_b [14]=gamma_c [15]=gamma_d
         constexpr int rm_idx[4] = {5, 7, 9, 11};
         constexpr int beta_idx[4] = {4, 6, 8, 10};
+        constexpr int gamma_idx[4] = {12, 13, 14, 15};
         for (int j = 0; j < 4; ++j)
         {
             contact_triggers_[j].update(
                 result.disturbance(rm_idx[j]),
-                result.disturbance(beta_idx[j]));
+                result.disturbance(beta_idx[j]),
+                result.disturbance(gamma_idx[j]));
             result.contacts[j] = contact_triggers_[j].state();
         }
 

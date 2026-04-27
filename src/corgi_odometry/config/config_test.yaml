@@ -5,38 +5,40 @@
 
 # ES-EKF noise tuning
 esekf:
-  sigma_a:       [5.0, 1.0, 1.0]
-  sigma_w:       [0.001, 0.01, 0.001]
-  sigma_ba:      [1.0e-5, 1.0e-5, 1.0e-5]
-  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_a: [5.0, 1.0, 1.0]
+  sigma_w: [0.001, 0.01, 0.001]
+  sigma_ba: [1.0e-5, 1.0e-5, 1.0e-5]
+  sigma_bw: [1.0e-8, 1.0e-8, 1.0e-8]
   sigma_leg_vec: [0.05, 1.5, 1.2]
   mahalanobis_threshold: 16.27
 
 # Disturbance observer / encoder filter
 observer:
-  cutoff_freq:        15.0    # Observer LPF [Hz]
-  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+  cutoff_freq: 15.0 # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0 # Encoder velocity LPF [Hz]
 
 # Schmitt-trigger contact thresholds
 contact:
-  rm_threshold_high:   25.0
-  rm_threshold_low:    15.0
+  rm_threshold_high: 25.0
+  rm_threshold_low: 15.0
   beta_threshold_high: 10.0
-  beta_threshold_low:   1.0
+  beta_threshold_low: 1.0
+  gamma_threshold_high: 10.0
+  gamma_threshold_low: 1.0
 
 # Logic switches
 simulate_imu_noise: true
-use_esekf_state:    true
-quiet:              true
+use_esekf_state: true
+quiet: true
 
 # Offline processing
 offline:
-  csv_filename:  walk_2m_01
-  start_index:   0
+  csv_filename: walk_2m_01
+  start_index: 0
   max_processed: 12000
-  rmse_skip:     0
+  rmse_skip: 0
   enable_logging: true
-  log_details:   false
+  log_details: false
   imu_noise_seed: 42
 
 # Ground-truth velocity low-pass filter

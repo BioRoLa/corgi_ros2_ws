@@ -71,6 +71,8 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_ = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_ = params_.contact_beta_threshold_low;
+    contact_gamma_threshold_high_ = params_.contact_gamma_threshold_high;
+    contact_gamma_threshold_low_ = params_.contact_gamma_threshold_low;
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         corgi::Config::TOPIC_MOTOR_STATE, corgi::Config::QUEUE_SIZE_SUB,
@@ -447,17 +449,20 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd &disturbance)
     // Disturbance vector indices  (order: LF, RF, RH, LH)
     constexpr int rm_idx[4] = {5, 7, 9, 11};
     constexpr int beta_idx[4] = {4, 6, 8, 10};
+    constexpr int gamma_idx[4] = {12, 13, 14, 15};
 
     // Schmitt-trigger contact detection
     for (int i = 0; i < 4; ++i)
     {
         double rm = disturbance(rm_idx[i]);
         double beta = disturbance(beta_idx[i]);
+        double gamma = (disturbance.size() > gamma_idx[i]) ? disturbance(gamma_idx[i]) : 0.0;
 
         if (!leg_contact_state_[i])
         {
             if (std::abs(rm) > contact_rm_threshold_high_ ||
-                std::abs(beta) > contact_beta_threshold_high_)
+                std::abs(beta) > contact_beta_threshold_high_ ||
+                std::abs(gamma) > contact_gamma_threshold_high_)
             {
                 leg_contact_state_[i] = true;
             }
@@ -465,7 +470,8 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd &disturbance)
         else
         {
             if (std::abs(rm) < contact_rm_threshold_low_ &&
-                std::abs(beta) < contact_beta_threshold_low_)
+                std::abs(beta) < contact_beta_threshold_low_ &&
+                std::abs(gamma) < contact_gamma_threshold_low_)
             {
                 leg_contact_state_[i] = false;
             }
@@ -477,8 +483,9 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd &disturbance)
     {
         const double rm = disturbance(rm_idx[idx]);
         const double beta = disturbance(beta_idx[idx]);
+        const double gamma = (disturbance.size() > gamma_idx[idx]) ? disturbance(gamma_idx[idx]) : 0.0;
         module.contact = leg_contact_state_[idx];
-        module.score = std::max(std::abs(rm), std::abs(beta));
+        module.score = std::max(std::max(std::abs(rm), std::abs(beta)), std::abs(gamma));
     };
     fill(contact_msg.module_a, 0);
     fill(contact_msg.module_b, 1);

@@ -56,6 +56,8 @@ public:
         contact_rm_threshold_low_ = params_.contact_rm_threshold_low;
         contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
         contact_beta_threshold_low_ = params_.contact_beta_threshold_low;
+        contact_gamma_threshold_high_ = params_.contact_gamma_threshold_high;
+        contact_gamma_threshold_low_ = params_.contact_gamma_threshold_low;
         // Create subscribers
         motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
             corgi::Config::TOPIC_MOTOR_STATE,
@@ -194,23 +196,29 @@ private:
         // Indices for Rm forces in the disturbance vector
         constexpr int rm_force_indices[4] = {5, 7, 9, 11}; // LF, RF, RH, LH
         constexpr int beta_torque_indices[4] = {4, 6, 8, 10};
+        constexpr int gamma_torque_indices[4] = {12, 13, 14, 15};
 
         // Schmitt trigger for contact detection
         for (int i = 0; i < 4; ++i)
         {
             double rm_force = disturbance(rm_force_indices[i]);
             double beta_torque = disturbance(beta_torque_indices[i]);
+            double gamma_torque = (disturbance.size() > gamma_torque_indices[i]) ? disturbance(gamma_torque_indices[i]) : 0.0;
 
             if (!leg_contact_state_[i])
             { // Currently no contact
-                if (std::abs(rm_force) > contact_rm_threshold_high_ || std::abs(beta_torque) > contact_beta_threshold_high_)
+                if (std::abs(rm_force) > contact_rm_threshold_high_ ||
+                    std::abs(beta_torque) > contact_beta_threshold_high_ ||
+                    std::abs(gamma_torque) > contact_gamma_threshold_high_)
                 {
                     leg_contact_state_[i] = true;
                 }
             }
             else
             { // Currently in contact
-                if (std::abs(rm_force) < contact_rm_threshold_low_ && std::abs(beta_torque) < contact_beta_threshold_low_)
+                if (std::abs(rm_force) < contact_rm_threshold_low_ &&
+                    std::abs(beta_torque) < contact_beta_threshold_low_ &&
+                    std::abs(gamma_torque) < contact_gamma_threshold_low_)
                 {
                     leg_contact_state_[i] = false;
                 }
@@ -219,16 +227,20 @@ private:
 
         // Populate message
         contact_msg.module_a.contact = leg_contact_state_[0];
-        contact_msg.module_a.score = std::max(std::abs(disturbance(rm_force_indices[0])), std::abs(disturbance(beta_torque_indices[0])));
+        contact_msg.module_a.score = std::max(std::max(std::abs(disturbance(rm_force_indices[0])), std::abs(disturbance(beta_torque_indices[0]))),
+                                              (disturbance.size() > gamma_torque_indices[0]) ? std::abs(disturbance(gamma_torque_indices[0])) : 0.0);
 
         contact_msg.module_b.contact = leg_contact_state_[1];
-        contact_msg.module_b.score = std::max(std::abs(disturbance(rm_force_indices[1])), std::abs(disturbance(beta_torque_indices[1])));
+        contact_msg.module_b.score = std::max(std::max(std::abs(disturbance(rm_force_indices[1])), std::abs(disturbance(beta_torque_indices[1]))),
+                                              (disturbance.size() > gamma_torque_indices[1]) ? std::abs(disturbance(gamma_torque_indices[1])) : 0.0);
 
         contact_msg.module_c.contact = leg_contact_state_[2];
-        contact_msg.module_c.score = std::max(std::abs(disturbance(rm_force_indices[2])), std::abs(disturbance(beta_torque_indices[2])));
+        contact_msg.module_c.score = std::max(std::max(std::abs(disturbance(rm_force_indices[2])), std::abs(disturbance(beta_torque_indices[2]))),
+                                              (disturbance.size() > gamma_torque_indices[2]) ? std::abs(disturbance(gamma_torque_indices[2])) : 0.0);
 
         contact_msg.module_d.contact = leg_contact_state_[3];
-        contact_msg.module_d.score = std::max(std::abs(disturbance(rm_force_indices[3])), std::abs(disturbance(beta_torque_indices[3])));
+        contact_msg.module_d.score = std::max(std::max(std::abs(disturbance(rm_force_indices[3])), std::abs(disturbance(beta_torque_indices[3]))),
+                                              (disturbance.size() > gamma_torque_indices[3]) ? std::abs(disturbance(gamma_torque_indices[3])) : 0.0);
 
         contact_state_pub_->publish(contact_msg);
     }
@@ -268,6 +280,8 @@ private:
     double contact_rm_threshold_low_ = 15.0;
     double contact_beta_threshold_high_ = 10.0;
     double contact_beta_threshold_low_ = 1.0;
+    double contact_gamma_threshold_high_ = 10.0;
+    double contact_gamma_threshold_low_ = 1.0;
 
     // YAML config + processing components
     // NOTE: params_ must be declared before processor_ and observer_

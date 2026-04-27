@@ -36,7 +36,8 @@
  *       closed-loop estimator that does not depend on external
  *       position/velocity topics.
  */
-class LegOdometryNode : public rclcpp::Node {
+class LegOdometryNode : public rclcpp::Node
+{
 public:
     LegOdometryNode();
 
@@ -58,7 +59,7 @@ private:
     // ============================================================
 
     /// @brief Schmitt-trigger contact detection + publish contact state
-    void publish_contact_state(const Eigen::VectorXd& disturbance);
+    void publish_contact_state(const Eigen::VectorXd &disturbance);
 
     // ============================================================
     // ES-EKF helpers
@@ -73,8 +74,8 @@ private:
     /// @param w_y      IMU pitch angular velocity [rad/s]
     /// @return fully populated LegObservation
     estimation_model::LegObservation build_leg_observation(
-        const corgi_msgs::msg::MotorState& module,
-        Leg* leg, int leg_idx, float w_y);
+        const corgi_msgs::msg::MotorState &module,
+        Leg *leg, int leg_idx, float w_y);
 
     // ============================================================
     // Leg factory
@@ -84,45 +85,45 @@ private:
     // ============================================================
     // Leg kinematic models  (order: LF, RF, RH, LH)
     // ============================================================
-    Leg lf_leg_ = createLeg( 1,  1);
-    Leg rf_leg_ = createLeg( 1, -1);
+    Leg lf_leg_ = createLeg(1, 1);
+    Leg rf_leg_ = createLeg(1, -1);
     Leg rh_leg_ = createLeg(-1, -1);
-    Leg lh_leg_ = createLeg(-1,  1);
+    Leg lh_leg_ = createLeg(-1, 1);
 
     /// Leg pointers in indexed order [LF, RF, RH, LH]
-    std::array<Leg*, 4> legs_ = {&lf_leg_, &rf_leg_, &rh_leg_, &lh_leg_};
+    std::array<Leg *, 4> legs_ = {&lf_leg_, &rf_leg_, &rh_leg_, &lh_leg_};
 
     // ============================================================
     // ROS subscribers & publishers
     // ============================================================
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
-    rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr          imu_sub_;
-    rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr      trigger_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
 
     // TODO: Remove position/velocity subs once ESEKF output is validated
     //       and disturbance observer is decoupled or fed from ESEKF state.
-    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr position_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr velocity_sub_;
 
-    rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr    contact_state_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 ekf_pub_;
+    rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr contact_state_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr ekf_pub_;
 
     // ============================================================
     // Latest message storage
     // ============================================================
     corgi_msgs::msg::MotorStateStamped motor_state_;
-    corgi_msgs::msg::ImuStamped        imu_;
-    geometry_msgs::msg::Vector3        position_;
-    geometry_msgs::msg::Vector3        velocity_;
+    corgi_msgs::msg::ImuStamped imu_;
+    geometry_msgs::msg::Vector3 position_;
+    geometry_msgs::msg::Vector3 velocity_;
 
     // ============================================================
     // Data-ready flags
     // ============================================================
     bool motor_state_received_ = false;
-    bool imu_received_         = false;
-    bool position_received_    = false;
-    bool velocity_received_    = false;
-    bool is_triggered_         = false;
+    bool imu_received_ = false;
+    bool position_received_ = false;
+    bool velocity_received_ = false;
+    bool is_triggered_ = false;
 
     // ============================================================
     // IMU timestamp tracking (for dynamic ESEKF dt)
@@ -147,10 +148,12 @@ private:
     std::array<bool, 4> leg_contact_state_{{false, false, false, false}};
 
     // Contact thresholds (loaded from YAML config)
-    double contact_rm_threshold_high_   = 25.0;
-    double contact_rm_threshold_low_    = 15.0;
+    double contact_rm_threshold_high_ = 25.0;
+    double contact_rm_threshold_low_ = 15.0;
     double contact_beta_threshold_high_ = 10.0;
-    double contact_beta_threshold_low_  =  1.0;
+    double contact_beta_threshold_low_ = 1.0;
+    double contact_gamma_threshold_high_ = 10.0;
+    double contact_gamma_threshold_low_ = 1.0;
 
     // ============================================================
     // YAML config (loaded once at startup via yaml-cpp)
@@ -160,7 +163,7 @@ private:
     // ============================================================
     // Processing components — disturbance observer
     // ============================================================
-    DataProcessor              processor_;
+    DataProcessor processor_;
     corgi::DisturbanceObserver observer_;
 
     // ============================================================
@@ -186,8 +189,8 @@ private:
     /// @param observations  4-leg observation vector (const ref, but FK is re-run internally)
     /// @param w_m           raw IMU angular velocity [rad/s]
     void publish_debug(
-        std::vector<estimation_model::LegObservation>& observations,
-        const Eigen::Vector3f& w_m);
+        std::vector<estimation_model::LegObservation> &observations,
+        const Eigen::Vector3f &w_m);
 
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_leg_obs_pub_;
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_imu_pub_;
