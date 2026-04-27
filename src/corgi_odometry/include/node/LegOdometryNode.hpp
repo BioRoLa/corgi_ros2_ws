@@ -30,7 +30,7 @@
  *
  * When use_esekf_state=true (config_online.yaml), GMO inputs are overridden
  * with the ESEKF estimated state instead of external velocity_estimator
- * topics (sim/position, sim/odometry). position_sub_ and
+ * topics (sim/position, sim/velocity). position_sub_ and
  * velocity_sub_ remain active for use_esekf_state=false (legacy mode).
  */
 class LegOdometryNode : public rclcpp::Node {

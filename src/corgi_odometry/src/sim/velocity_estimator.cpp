@@ -82,7 +82,7 @@ public:
         // Declare parameters
         this->declare_parameter<double>("cutoff_freq", 30.0);
         this->declare_parameter<double>("sample_rate", corgi::Config::ONLINE_LOOP_RATE);
-        this->declare_parameter<std::string>("velocity_topic", "sim/odometry");
+        this->declare_parameter<std::string>("velocity_topic", "sim/velocity");
         this->declare_parameter<std::string>("position_topic", "sim/position");
         this->declare_parameter<std::string>("parent_frame", "odom");
         this->declare_parameter<std::string>("child_frame", "base_link");
@@ -113,11 +113,17 @@ public:
             position_topic,
             10
         );
+
+        body_velocity_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(
+            "sim/body_velocity",
+            10
+        );
         
         RCLCPP_INFO(this->get_logger(), "Velocity Estimator Node Started");
         RCLCPP_INFO(this->get_logger(), "  Listening to TF: %s -> %s", parent_frame_.c_str(), child_frame_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing velocity to: %s", velocity_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing position to: %s", position_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "  Publishing body velocity to: sim/body_velocity");
         RCLCPP_INFO(this->get_logger(), "  Filter cutoff frequency: %.1f Hz", cutoff_freq);
         RCLCPP_INFO(this->get_logger(), "  Sample rate: %.1f Hz", sample_rate);
     }
@@ -197,6 +203,20 @@ public:
         velocity_msg.y = filtered_vy;
         velocity_msg.z = filtered_vz;
         velocity_pub_->publish(velocity_msg);
+
+        // Convert odom-frame velocity to body-frame velocity using current yaw.
+        const auto &q = transform.transform.rotation;
+        const double siny_cosp = 2.0 * (q.w * q.z + q.x * q.y);
+        const double cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+        const double yaw = std::atan2(siny_cosp, cosy_cosp);
+        const double cos_yaw = std::cos(yaw);
+        const double sin_yaw = std::sin(yaw);
+
+        geometry_msgs::msg::Vector3 body_velocity_msg;
+        body_velocity_msg.x = cos_yaw * filtered_vx + sin_yaw * filtered_vy;
+        body_velocity_msg.y = -sin_yaw * filtered_vx + cos_yaw * filtered_vy;
+        body_velocity_msg.z = filtered_vz;
+        body_velocity_pub_->publish(body_velocity_msg);
         
         // Update previous values
         last_position_x_ = current_x;
@@ -221,6 +241,7 @@ private:
     // ROS2 publishers
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr position_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr body_velocity_pub_;
     
     // TF2 listener
     tf2_ros::Buffer tf_buffer_;

@@ -85,7 +85,7 @@ Main input topics (shared by both):
 - `motor/state`
 - `imu`
 - `sim/position`
-- `sim/odometry`
+- `sim/velocity`
 - `trigger`
 
 Main output topics:

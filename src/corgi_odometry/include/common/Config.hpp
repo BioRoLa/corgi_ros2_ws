@@ -73,7 +73,7 @@ public:
 
     // Sim odometry topic names (used when use_esekf_state=false)
     static constexpr const char* TOPIC_ODOMETRY_POSITION = "sim/position";
-    static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "sim/odometry";
+    static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "sim/velocity";
     
     // Topic names for publications
     static constexpr const char* TOPIC_CONTACT_STATE   = "gmo/contact_state";
