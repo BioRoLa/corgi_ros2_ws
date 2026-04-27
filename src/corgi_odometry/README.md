@@ -89,8 +89,8 @@ Main input topics (shared by both):
 - `trigger`
 
 Main output topics:
-- `corgi_contact_leg_est`: `contact_state`
-- `corgi_leg_odom`: `contact_state`, `ekf`
+- `corgi_contact_leg_est`: `gmo/contact_state`
+- `corgi_leg_odom`: `gmo/contact_state`, `ekf/position`, `ekf/velocity`, `ekf/orientation`, `ekf/ba`, `ekf/bw`
 
 ---
 
@@ -112,17 +112,14 @@ Note: `--config` expects a **basename (without `.yaml`)**, and the file must be 
 
 ### Other common option
 
-```bash
-# Disable dynamic dt (use fixed dt instead)
-ros2 run corgi_odometry offline_test --config tuned_0422 --fixed-dt
-```
+To disable dynamic dt, set `offline.use_dynamic_dt: false` in the YAML config. There is no CLI flag for this — it is controlled exclusively via the config file.
 
 ### Output files
 
 Offline outputs are written to `output_data/` under your current working directory, for example:
 
 - `<csv_filename>_gmo.csv`
-- `<csv_filename>_esekf_dynamic_dt.csv` or `<csv_filename>_esekf_fixed_dt.csv`
+- `<csv_filename>_esekf.csv`
 
 ---
 
@@ -136,7 +133,7 @@ src/corgi_odometry/config/
 
 Common files:
 - `config_online.yaml` (default for online nodes)
-- `config_test.yaml`, `tuned_offline_example.yaml`, `tuned_0422.yaml` (commonly used for offline testing)
+- `tuned_offline_example.yaml`, `tuned_0422.yaml` (commonly used for offline testing)
 
 ### Parameter structure
 
