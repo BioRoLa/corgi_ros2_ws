@@ -118,8 +118,7 @@ LegOdometryNode::LegOdometryNode()
     ekf_bw_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
         corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
 
-    RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
-    RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
+    RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
 }
 
 // ============================================================
@@ -191,19 +190,22 @@ void LegOdometryNode::process() {
     if (esekf_tick_ >= static_cast<size_t>(corgi::Config::ESEKF_DECIMATION)) {
         esekf_tick_ = 0;
 
-        // --- Compute dynamic dt from IMU timestamp ---
-        rclcpp::Time current_imu_time(imu_.header.stamp);
+        // --- Compute dynamic dt from IMU header.stamp (identical to offline pipeline) ---
+        const int32_t  cur_imu_sec  = imu_.header.stamp.sec;
+        const uint32_t cur_imu_nsec = imu_.header.stamp.nanosec;
         float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT);  // nominal fallback
         if (params_.use_dynamic_dt && last_esekf_imu_time_valid_) {
-            double dt_sec = (current_imu_time - last_esekf_imu_time_).seconds();
-            // Sanity check: clamp to [0.5×nominal, 2×nominal] to reject outliers
+            double cur_t  = cur_imu_sec  + cur_imu_nsec  * 1e-9;
+            double prev_t = last_esekf_imu_sec_ + last_esekf_imu_nsec_ * 1e-9;
+            double dt_sec = cur_t - prev_t;
             constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
             constexpr double dt_max = corgi::Config::ESEKF_DT * 2.0;
             if (dt_sec > dt_min && dt_sec < dt_max) {
                 esekf_dt = static_cast<float>(dt_sec);
             }
         }
-        last_esekf_imu_time_ = current_imu_time;
+        last_esekf_imu_sec_  = cur_imu_sec;
+        last_esekf_imu_nsec_ = cur_imu_nsec;
         last_esekf_imu_time_valid_ = true;
 
         // --- Initialize ESEKF on first triggered tick ---
@@ -319,6 +321,9 @@ void LegOdometryNode::process() {
 void LegOdometryNode::cb_motor_state(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
     motor_state_ = *msg;
     motor_state_received_ = true;
+    // Drive the processing loop: one call per motor_state arrival
+    // (matches offline pipeline which processes every row exactly once)
+    process();
 }
 
 void LegOdometryNode::cb_imu(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
@@ -470,20 +475,10 @@ int main(int argc, char** argv) {
         wait_for_clock_sync(g_node);
     }
 
-    const rclcpp::Duration period(0, static_cast<int>(1e9 / corgi::Config::ONLINE_LOOP_RATE));
-
+    // Event-driven: process() is called inside cb_motor_state, so each
+    // motor_state arrival triggers exactly one processing tick (same as offline).
     try {
-        rclcpp::Time next_time = g_node->now();
-        while (rclcpp::ok()) {
-            rclcpp::spin_some(g_node);
-            std::dynamic_pointer_cast<LegOdometryNode>(g_node)->process();
-
-            next_time += period;
-            if (!g_node->get_clock()->sleep_until(next_time)) {
-                RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
-                break;
-            }
-        }
+        rclcpp::spin(g_node);
     } catch (const std::exception& e) {
         RCLCPP_ERROR(g_node->get_logger(), "Exception: %s", e.what());
         return 1;

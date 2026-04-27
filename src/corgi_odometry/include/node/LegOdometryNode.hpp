@@ -126,9 +126,11 @@ private:
 
     // ============================================================
     // IMU timestamp tracking (for dynamic ESEKF dt)
+    // Stored as raw sec/nsec to match offline pipeline arithmetic exactly.
     // ============================================================
-    rclcpp::Time last_esekf_imu_time_{0, 0, RCL_ROS_TIME};
-    bool last_esekf_imu_time_valid_ = false;
+    int32_t  last_esekf_imu_sec_  = 0;
+    uint32_t last_esekf_imu_nsec_ = 0;
+    bool     last_esekf_imu_time_valid_ = false;
 
     // ESEKF decimation counter (runs at ESEKF_RATE = 500Hz in a 1000Hz loop)
     size_t esekf_tick_ = 0;

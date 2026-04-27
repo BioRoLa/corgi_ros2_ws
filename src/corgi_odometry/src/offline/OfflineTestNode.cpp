@@ -136,11 +136,6 @@ int OfflineTestNode::run() {
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t processed_count = 0;
 
-    // ── IMU timestamp tracking for dynamic ESEKF dt ─────────────
-    int32_t prev_imu_sec = 0;
-    int32_t prev_imu_nsec = 0;
-    bool prev_imu_time_valid = false;
-
     for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
         if (!quiet && i % 100 == 0) {
             std::cout << "Processing index: " << i << " / " << data.size() << "\r" << std::flush;
@@ -148,26 +143,6 @@ int OfflineTestNode::run() {
 
         const auto& d = data[i];
         RawRecord raw = to_raw(d);
-
-        // ── Compute dynamic dt from IMU timestamps ──────────────
-        float esekf_dt = static_cast<float>(Config::DT);   // fallback / fixed-dt mode
-        if (params_.use_dynamic_dt) {
-            if (prev_imu_time_valid && (raw.imu_sec != 0 || raw.imu_nsec != 0)) {
-                double cur_t  = raw.imu_sec  + raw.imu_nsec  * 1e-9;
-                double prev_t = prev_imu_sec + prev_imu_nsec * 1e-9;
-                double dt_imu = cur_t - prev_t;
-                // Sanity clamp: [0.5×, 2×] nominal DT
-                constexpr double lo = Config::DT * 0.5;
-                constexpr double hi = Config::DT * 2.0;
-                if (dt_imu >= lo && dt_imu <= hi)
-                    esekf_dt = static_cast<float>(dt_imu);
-            }
-            if (raw.imu_sec != 0 || raw.imu_nsec != 0) {
-                prev_imu_sec  = raw.imu_sec;
-                prev_imu_nsec = raw.imu_nsec;
-                prev_imu_time_valid = true;
-            }
-        }
 
         // Process raw data → generalized coordinates
         auto processed = processor.process_record(raw);
