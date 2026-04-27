@@ -50,14 +50,6 @@ int main(int argc, char** argv) {
             if (argc >= 8) params.use_esekf_state       = (std::string(argv[7]) == "1");
         }
 
-        // Named flag: --fixed-dt  (disable dynamic dt, use Config::DT)
-        for (int i = 1; i < argc; ++i) {
-            if (std::string(argv[i]) == "--fixed-dt") {
-                params.use_dynamic_dt = false;
-                break;
-            }
-        }
-
         corgi::OfflineTestNode node(params);
         return node.run();
 

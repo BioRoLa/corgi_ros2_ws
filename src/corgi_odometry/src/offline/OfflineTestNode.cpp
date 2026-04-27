@@ -86,8 +86,7 @@ int OfflineTestNode::run() {
     // ── Output CSV ──────────────────────────────────────────────
     const auto output_dir = std::filesystem::current_path() / "output_data";
     std::filesystem::create_directories(output_dir);
-    const std::string dt_suffix = params_.use_dynamic_dt ? "_dynamic_dt" : "_fixed_dt";
-    const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf" + dt_suffix + ".csv");
+    const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf.csv");
     std::ofstream esekf_out(esekf_out_path);
     esekf_out << "Index,sim_pos_x,sim_pos_y,sim_pos_z,"
               << "est_pos_x,est_pos_y,est_pos_z,"

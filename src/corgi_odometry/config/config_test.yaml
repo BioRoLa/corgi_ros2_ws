@@ -26,6 +26,7 @@ contact:
 
 # Logic switches
 simulate_imu_noise: true
+use_dynamic_dt:     true
 use_esekf_state:    true
 quiet:              true
 

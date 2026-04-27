@@ -14,5 +14,6 @@ esekf:
 observer: {cutoff_freq: 15.0, encoder_cutoff_freq: 30.0}
 contact: {rm_threshold_high: 25.0, rm_threshold_low: 15.0, beta_threshold_high: 10.0,
   beta_threshold_low: 1.0}
+use_dynamic_dt: true
 use_esekf_state: true
 quiet: true

@@ -180,7 +180,7 @@ void LegOdometryNode::process() {
         // --- Compute dynamic dt from IMU timestamp ---
         rclcpp::Time current_imu_time(imu_.header.stamp);
         float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT);  // nominal fallback
-        if (last_esekf_imu_time_valid_) {
+        if (params_.use_dynamic_dt && last_esekf_imu_time_valid_) {
             double dt_sec = (current_imu_time - last_esekf_imu_time_).seconds();
             // Sanity check: clamp to [0.5×nominal, 2×nominal] to reject outliers
             constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
