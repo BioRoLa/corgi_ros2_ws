@@ -19,6 +19,14 @@ Below is a complete list of all messages and services defined in this package. M
     * **`Headers.msg`**: A custom header structure containing a sequence number, timestamp, and frame ID.
     * **`TriggerStamped.msg`**: A generic, timestamped trigger message used to enable/disable processes and specify output filenames.
     * **`SensorEnableStamped.msg`**: A timestamped command to enable or disable specific sensors like the camera, lidar, or IMU.
+    * **`ConfigStamped.msg`**: A timestamped configuration command for reading or writing motor/module parameters (address, value, mode, etc.).
+    * **`LogStamped.msg`**: A timestamped log message carrying a severity level, source node name, and log string.
+    * **`RobotCmdStamped.msg`**: A timestamped command to request a robot operating mode transition.
+    * **`RobotStateStamped.msg`**: A timestamped message reporting the current robot operating mode.
+
+* #### IMU Messages
+    * **`ImuStamped.msg`**: A timestamped IMU message containing orientation (quaternion), angular velocity, and linear acceleration.
+    * **`ImuRawStamped.msg`**: A timestamped raw IMU message containing angular velocity and linear acceleration without orientation.
 
 * #### Motor & Power Messages
     * **`MotorState.msg`**: Contains the measured state (angles `theta`/`beta`, velocities, torques) of a single leg module's two motors.
@@ -48,8 +56,9 @@ Below is a complete list of all messages and services defined in this package. M
 
 * #### Simulation Messages
     * **`SimDataStamped.msg`**: A timestamped message for sending comprehensive data from the simulation environment, including position, orientation, and contact points.
-    * **`SimContactPoint.msg`**: Reports detailed contact point information within the simulation.
+    * **`SimLegContact.msg`**: Reports the per-rim contact state for a single leg within the simulation.
+    * **`SimLegContactStamped.msg`**: A timestamped message aggregating the `SimLegContact` state for all four leg modules.
 
 ### Services (`.srv`)
 
-* **`imu.srv`**: A service to send a command (`mode`) to the IMU and receive a status reply (`mode`), typically used to trigger actions like calibration or resetting its state.
+* **`Imu.srv`**: A service to send a command (`mode`) to the IMU and receive a status reply (`mode`), typically used to trigger actions like calibration or resetting its state.
