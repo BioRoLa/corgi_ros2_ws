@@ -67,11 +67,10 @@ private:
     /// @param module   motor state of one leg module
     /// @param leg      pointer to corresponding Leg kinematic model
     /// @param leg_idx  index in the 4-leg array (0=LF,1=RF,2=RH,3=LH)
-    /// @param w_y      IMU pitch angular velocity [rad/s]
     /// @return fully populated LegObservation
     estimation_model::LegObservation build_leg_observation(
         const corgi_msgs::msg::MotorState& module,
-        Leg* leg, int leg_idx, float w_y);
+        Leg* leg, int leg_idx);
 
     // ============================================================
     // Leg factory
@@ -105,6 +104,8 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_ba_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_bw_pub_;
 
     // ============================================================
     // Latest message storage

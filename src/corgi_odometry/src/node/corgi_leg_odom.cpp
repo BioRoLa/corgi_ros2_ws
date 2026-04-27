@@ -60,6 +60,16 @@ LegOdometryNode::LegOdometryNode()
       ),
       esekf_()
 {
+    // Apply YAML noise params to ESEKF (must be done before first predict/update)
+    estimation_model::NoiseParams np;
+    np.sigma_a               = params_.sigma_a;
+    np.sigma_w               = params_.sigma_w;
+    np.sigma_ba              = params_.sigma_ba;
+    np.sigma_bw              = params_.sigma_bw;
+    np.sigma_leg_vec         = params_.sigma_leg_vec;
+    np.mahalanobis_threshold = params_.mahalanobis_threshold;
+    esekf_.set_noise_params(np);
+
     contact_rm_threshold_high_   = params_.contact_rm_threshold_high;
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
@@ -103,6 +113,10 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_EKF_VELOCITY, corgi::Config::QUEUE_SIZE_PUB);
     ekf_orientation_pub_ = this->create_publisher<geometry_msgs::msg::Quaternion>(
         corgi::Config::TOPIC_EKF_ORIENTATION, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_ba_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
+        corgi::Config::TOPIC_EKF_BA, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_bw_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
+        corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
     RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
@@ -226,8 +240,6 @@ void LegOdometryNode::process() {
         esekf_.predict(a_pred, w_pred, esekf_dt);
 
         // --- 3. Build per-leg observations ---
-        const float w_y = static_cast<float>(imu_.angular_velocity.y) - static_cast<float>(esekf_.nominal().bw.y());
-
         const corgi_msgs::msg::MotorState* modules[4] = {
             &motor_state_.module_a,
             &motor_state_.module_b,
@@ -240,7 +252,7 @@ void LegOdometryNode::process() {
         std::array<bool, 4> exclude_flags{};
 
         for (int i = 0; i < 4; ++i) {
-            auto obs = build_leg_observation(*modules[i], legs_[i], i, w_y);
+            auto obs = build_leg_observation(*modules[i], legs_[i], i);
             exclude_flags[i] = !obs.in_contact;
             observations.push_back(obs);
         }
@@ -273,6 +285,18 @@ void LegOdometryNode::process() {
             orientation_msg.y = static_cast<double>(st.q.y());
             orientation_msg.z = static_cast<double>(st.q.z());
             ekf_orientation_pub_->publish(orientation_msg);
+
+            geometry_msgs::msg::Vector3 ba_msg;
+            ba_msg.x = static_cast<double>(st.ba.x());
+            ba_msg.y = static_cast<double>(st.ba.y());
+            ba_msg.z = static_cast<double>(st.ba.z());
+            ekf_ba_pub_->publish(ba_msg);
+
+            geometry_msgs::msg::Vector3 bw_msg;
+            bw_msg.x = static_cast<double>(st.bw.x());
+            bw_msg.y = static_cast<double>(st.bw.y());
+            bw_msg.z = static_cast<double>(st.bw.z());
+            ekf_bw_pub_->publish(bw_msg);
         }
     }
 
@@ -322,7 +346,7 @@ void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPt
 
 estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     const corgi_msgs::msg::MotorState& module,
-    Leg* leg, int leg_idx, float w_y)
+    Leg* leg, int leg_idx)
 {
     // --- Extract theta (opening angle) ---
     float theta   = static_cast<float>(module.theta);

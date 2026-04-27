@@ -75,8 +75,7 @@ StepResult EstimationPipeline::step(
         const Eigen::Vector3f& a_m,
         const Eigen::Vector3f& w_m,
         const RawRecord& raw,
-        size_t index,
-        float esekf_dt)
+        size_t index)
 {
     StepResult result;
 

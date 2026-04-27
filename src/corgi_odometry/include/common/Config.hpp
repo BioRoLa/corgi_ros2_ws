@@ -80,6 +80,8 @@ public:
     static constexpr const char* TOPIC_EKF_POSITION    = "ekf/position";
     static constexpr const char* TOPIC_EKF_VELOCITY    = "ekf/velocity";
     static constexpr const char* TOPIC_EKF_ORIENTATION = "ekf/orientation";
+    static constexpr const char* TOPIC_EKF_BA          = "ekf/ba";
+    static constexpr const char* TOPIC_EKF_BW          = "ekf/bw";
     
     // Queue sizes
     static constexpr int QUEUE_SIZE_SUB = 1;          // Subscriber queue size (use latest value)

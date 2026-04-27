@@ -227,7 +227,7 @@ int OfflineTestNode::run() {
         }
 
         // ── Pipeline step ───────────────────────────────────────
-        auto result = pipeline.step(processed, a_m, w_m, raw, i, esekf_dt);
+        auto result = pipeline.step(processed, a_m, w_m, raw, i);
 
         // ── Accumulate RMSE ─────────────────────────────────────
         {
