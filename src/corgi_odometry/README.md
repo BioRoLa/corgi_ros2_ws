@@ -136,7 +136,7 @@ src/corgi_odometry/config/
 
 Common files:
 - `config_online.yaml` (default for online nodes)
-- `config_test.yaml`, `config_tuned_v1.yaml`, `tuned_0422.yaml` (commonly used for offline testing)
+- `config_test.yaml`, `tuned_offline_example.yaml`, `tuned_0422.yaml` (commonly used for offline testing)
 
 ### Parameter structure
 

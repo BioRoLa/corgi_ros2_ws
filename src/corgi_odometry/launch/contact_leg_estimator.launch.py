@@ -14,10 +14,6 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    config = os.path.join(
-        get_package_share_directory('corgi_odometry'), 'config', 'config_online.yaml'
-    )
-
     contact_leg_estimator_node = Node(
         package='corgi_odometry',
         executable='corgi_contact_leg_est',
