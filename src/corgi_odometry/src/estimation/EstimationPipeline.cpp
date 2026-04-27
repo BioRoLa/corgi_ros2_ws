@@ -189,9 +189,8 @@ StepResult EstimationPipeline::step(
     }
 
     // ── Compute average z_leg diagnostic ────────────────────────
+    // Uses full w_m (consistent with actual ESEKF update that also uses full w_m).
     {
-        Eigen::Vector3f w_raw(0.0f,
-            static_cast<float>(raw.imu_ang_vel_y), 0.0f);
         Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
         int n_contact = 0;
         for (int j = 0; j < 4; ++j) {
@@ -199,7 +198,7 @@ StepResult EstimationPipeline::step(
                 auto& o = observations[j];
                 o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
                 o.leg->PointContact(o.rim, o.alpha);
-                o.leg->PointVelocity(v_zero, w_raw, o.rim, o.alpha, true);
+                o.leg->PointVelocity(v_zero, w_m, o.rim, o.alpha, true);
                 result.z_avg += -o.leg->contact_velocity;
                 n_contact++;
             }
