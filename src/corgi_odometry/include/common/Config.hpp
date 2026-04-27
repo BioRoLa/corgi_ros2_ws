@@ -69,12 +69,17 @@ public:
     // Topic names for subscriptions
     static constexpr const char* TOPIC_MOTOR_STATE = "motor/state";
     static constexpr const char* TOPIC_IMU = "imu";
-    static constexpr const char* TOPIC_ODOMETRY_POSITION = "odometry/position";
-    static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "odometry/velocity";
     static constexpr const char* TOPIC_TRIGGER = "trigger";
+
+    // Sim odometry topic names (used when use_esekf_state=false)
+    static constexpr const char* TOPIC_ODOMETRY_POSITION = "sim/position";
+    static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "sim/odometry";
     
     // Topic names for publications
-    static constexpr const char* TOPIC_CONTACT_STATE = "contact_state";
+    static constexpr const char* TOPIC_CONTACT_STATE   = "gmo/contact_state";
+    static constexpr const char* TOPIC_EKF_POSITION    = "ekf/position";
+    static constexpr const char* TOPIC_EKF_VELOCITY    = "ekf/velocity";
+    static constexpr const char* TOPIC_EKF_ORIENTATION = "ekf/orientation";
     
     // Queue sizes
     static constexpr int QUEUE_SIZE_SUB = 1;          // Subscriber queue size (use latest value)

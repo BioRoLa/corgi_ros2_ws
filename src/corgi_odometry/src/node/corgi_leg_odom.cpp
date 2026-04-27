@@ -2,7 +2,6 @@
 #include <chrono>
 #include <signal.h>
 #include "rclcpp/rclcpp.hpp"
-#include <nav_msgs/msg/odometry.hpp>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "node/LegOdometryNode.hpp"
 #include "common/Config.hpp"
@@ -65,6 +64,15 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
+    use_esekf_state_             = params_.use_esekf_state;
+    if (use_esekf_state_) {
+        RCLCPP_INFO(rclcpp::get_logger("leg_odometry"),
+                    "use_esekf_state=true: GMO inputs overridden by ESEKF state");
+    }
+    if (params_.simulate_imu_noise) {
+        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
+                    "simulate_imu_noise=true has no effect in online mode");
+    }
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         corgi::Config::TOPIC_MOTOR_STATE, corgi::Config::QUEUE_SIZE_SUB,
@@ -87,15 +95,14 @@ LegOdometryNode::LegOdometryNode()
         std::bind(&LegOdometryNode::cb_trigger, this, std::placeholders::_1));
 
     // --- Publishers ---
-    contact_state_pub_ = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
+    contact_state_pub_   = this->create_publisher<corgi_msgs::msg::ContactStateStamped>(
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
-    ekf_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("ekf", corgi::Config::QUEUE_SIZE_PUB);
-
-    // --- Debug Publishers ---
-    debug_leg_obs_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
-        "debug/leg_obs", corgi::Config::QUEUE_SIZE_PUB);
-    debug_zleg_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
-        "debug/z_leg", corgi::Config::QUEUE_SIZE_PUB);
+    ekf_position_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
+        corgi::Config::TOPIC_EKF_POSITION, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_velocity_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
+        corgi::Config::TOPIC_EKF_VELOCITY, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_orientation_pub_ = this->create_publisher<geometry_msgs::msg::Quaternion>(
+        corgi::Config::TOPIC_EKF_ORIENTATION, corgi::Config::QUEUE_SIZE_PUB);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
     RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
@@ -106,12 +113,22 @@ LegOdometryNode::LegOdometryNode()
 // ============================================================
 
 void LegOdometryNode::process() {
-    // Gate: wait until all topics have been received at least once
-    if (!motor_state_received_ || !imu_received_ || !position_received_ || !velocity_received_) {
+    // Gate: wait until required topics have been received at least once.
+    // When use_esekf_state=true, position/velocity are not required (fed from ESEKF).
+    const bool data_ready = use_esekf_state_
+        ? (motor_state_received_ && imu_received_)
+        : (motor_state_received_ && imu_received_ && position_received_ && velocity_received_);
+    if (!data_ready) {
         if (iteration_count_ % static_cast<size_t>(corgi::Config::ONLINE_LOOP_RATE) == 0) {
-            RCLCPP_WARN(this->get_logger(),
-                "Waiting for data... Motor: %d, IMU: %d, Position: %d, Velocity: %d",
-                motor_state_received_, imu_received_, position_received_, velocity_received_);
+            if (use_esekf_state_) {
+                RCLCPP_WARN(this->get_logger(),
+                    "Waiting for data... Motor: %d, IMU: %d",
+                    motor_state_received_, imu_received_);
+            } else {
+                RCLCPP_WARN(this->get_logger(),
+                    "Waiting for data... Motor: %d, IMU: %d, Position: %d, Velocity: %d",
+                    motor_state_received_, imu_received_, position_received_, velocity_received_);
+            }
         }
         iteration_count_++;
         return;
@@ -135,6 +152,17 @@ void LegOdometryNode::process() {
     // GMO pipeline (runs every tick @ 1000 Hz)
     // ==========================================================
     auto processed = processor_.process_realtime_data(position_, velocity_, imu_, motor_state_);
+
+    // Override GMO inputs with ESEKF estimated state (uses state from previous tick)
+    if (use_esekf_state_ && esekf_initialized_) {
+        const auto& est = esekf_.nominal();
+        processed.q(0) = static_cast<double>(est.p.x());
+        processed.q(1) = static_cast<double>(est.p.z());
+        Eigen::Matrix3f R_est = est.q.toRotationMatrix();
+        Eigen::Vector3f v_world = R_est * est.v;
+        processed.q_dot(0) = static_cast<double>(v_world.x());
+        processed.q_dot(1) = static_cast<double>(v_world.z());
+    }
 
     auto disturbance = observer_.estimate_disturbance(
         processed.q, processed.q_dot, processed.tau, processed.I_c,
@@ -217,9 +245,6 @@ void LegOdometryNode::process() {
             observations.push_back(obs);
         }
 
-        // --- Debug: publish per-leg observation inputs and z_leg ---
-        publish_debug(observations, w_m);
-
         // --- 4. Update (sequential per-leg velocity constraint) ---
         esekf_.update_all_legs(observations, w_m, exclude_flags);
 
@@ -229,30 +254,25 @@ void LegOdometryNode::process() {
         // --- 6. Publish ESEKF state ---
         {
             const auto& st = esekf_.nominal();
-            nav_msgs::msg::Odometry odom_msg;
-            odom_msg.header.stamp    = this->now();
-            odom_msg.header.frame_id = "odom";
-            odom_msg.child_frame_id  = "base_link";
 
-            odom_msg.pose.pose.position.x = st.p.x();
-            odom_msg.pose.pose.position.y = st.p.y();
-            odom_msg.pose.pose.position.z = st.p.z();
+            geometry_msgs::msg::Vector3 position_msg;
+            position_msg.x = static_cast<double>(st.p.x());
+            position_msg.y = static_cast<double>(st.p.y());
+            position_msg.z = static_cast<double>(st.p.z());
+            ekf_position_pub_->publish(position_msg);
 
-            odom_msg.pose.pose.orientation.w = st.q.w();
-            odom_msg.pose.pose.orientation.x = st.q.x();
-            odom_msg.pose.pose.orientation.y = st.q.y();
-            odom_msg.pose.pose.orientation.z = st.q.z();
+            geometry_msgs::msg::Vector3 velocity_msg;
+            velocity_msg.x = static_cast<double>(st.v.x());
+            velocity_msg.y = static_cast<double>(st.v.y());
+            velocity_msg.z = static_cast<double>(st.v.z());
+            ekf_velocity_pub_->publish(velocity_msg);
 
-            odom_msg.twist.twist.linear.x = st.v.x();
-            odom_msg.twist.twist.linear.y = st.v.y();
-            odom_msg.twist.twist.linear.z = st.v.z();
-
-            Eigen::Vector3f w_corrected = w_m - st.bw;
-            odom_msg.twist.twist.angular.x = w_corrected.x();
-            odom_msg.twist.twist.angular.y = w_corrected.y();
-            odom_msg.twist.twist.angular.z = w_corrected.z();
-
-            ekf_pub_->publish(odom_msg);
+            geometry_msgs::msg::Quaternion orientation_msg;
+            orientation_msg.w = static_cast<double>(st.q.w());
+            orientation_msg.x = static_cast<double>(st.q.x());
+            orientation_msg.y = static_cast<double>(st.q.y());
+            orientation_msg.z = static_cast<double>(st.q.z());
+            ekf_orientation_pub_->publish(orientation_msg);
         }
     }
 
@@ -348,65 +368,6 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     return estimation_model::LegObservation{
         leg, theta, theta_d, beta, beta_d, rim, alpha, in_contact
     };
-}
-
-// ============================================================
-// Debug publisher
-// ============================================================
-
-void LegOdometryNode::publish_debug(
-    std::vector<estimation_model::LegObservation>& observations,
-    const Eigen::Vector3f& w_m)
-{
-    // --- debug/leg_obs ---
-    // Layout: 4 legs × 9 values = 36 floats
-    //   [theta, theta_d, beta, beta_d, contact_beta(0), alpha, rim, in_contact, contact_flag]
-    {
-        std_msgs::msg::Float64MultiArray dbg;
-        for (int i = 0; i < 4; ++i) {
-            const auto& o = observations[i];
-            dbg.data.push_back(o.theta);
-            dbg.data.push_back(o.theta_d);
-            dbg.data.push_back(o.beta);
-            dbg.data.push_back(o.beta_d);
-            dbg.data.push_back(0.0);  // contact_beta deprecated, placeholder
-            dbg.data.push_back(o.alpha);
-            dbg.data.push_back(static_cast<double>(o.rim));
-            dbg.data.push_back(o.in_contact ? 1.0 : 0.0);
-            dbg.data.push_back(leg_contact_state_[i] ? 1.0 : 0.0);
-        }
-        debug_leg_obs_pub_->publish(dbg);
-    }
-
-    // --- debug/z_leg ---
-    // z_leg = observed body velocity from encoder kinematics
-    // Layout: 4 legs × 6 values = 24 floats
-    //   [z_leg.x, z_leg.y, z_leg.z, contact_pt.x, contact_pt.y, contact_pt.z]
-    {
-        std_msgs::msg::Float64MultiArray dbg;
-        Eigen::Vector3f w_corrected = w_m - esekf_.nominal().bw;
-        // Zero w_x/w_z: XZ-plane robot, only pitch rate matters for leg kinematics
-        w_corrected.x() = 0.0f;
-        w_corrected.z() = 0.0f;
-
-        for (int i = 0; i < 4; ++i) {
-            auto& o = observations[i];
-            // Recompute FK + contact for debug (same as ESEKF::update_leg)
-            o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
-            o.leg->PointContact(o.rim, o.alpha);
-            Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
-            o.leg->PointVelocity(v_zero, w_corrected, o.rim, o.alpha, true);
-            Eigen::Vector3f z_leg = -o.leg->contact_velocity;
-
-            dbg.data.push_back(z_leg.x());
-            dbg.data.push_back(z_leg.y());
-            dbg.data.push_back(z_leg.z());
-            dbg.data.push_back(o.leg->contact_point.x());
-            dbg.data.push_back(o.leg->contact_point.y());
-            dbg.data.push_back(o.leg->contact_point.z());
-        }
-        debug_zleg_pub_->publish(dbg);
-    }
 }
 
 // ============================================================

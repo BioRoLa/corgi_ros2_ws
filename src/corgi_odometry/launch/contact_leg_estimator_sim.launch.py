@@ -28,8 +28,8 @@ def generate_launch_description():
             'use_sim_time': True,
             'sample_rate': 1000.0,
             'position_topic': 'sim/data',
-            'velocity_topic': 'odometry/velocity',
-            'position_output_topic': 'odometry/position',
+            'velocity_topic': 'sim/odometry',
+            'position_topic': 'sim/position',
         }]
     )
 

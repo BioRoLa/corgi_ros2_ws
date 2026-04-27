@@ -34,6 +34,8 @@ struct Params {
     double contact_beta_threshold_low  =  1.0;
 
     // ── Logic switches ──────────────────────────────────────────
+    // simulate_imu_noise is used only by offline_test.
+    // use_esekf_state is used by offline_test and leg_odom_sim.
     bool simulate_imu_noise = false;
     bool use_esekf_state    = false;
     bool quiet              = false;

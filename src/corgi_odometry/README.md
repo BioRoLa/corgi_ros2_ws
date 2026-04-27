@@ -45,13 +45,25 @@ Launched nodes:
 ### C. Leg odometry simulation pipeline (Simulation)
 
 ```bash
-ros2 launch corgi_odometry contact_leg_odom_sim.launch.py
+ros2 launch corgi_odometry leg_odom_sim.launch.py
 ```
 
 Launched nodes:
 - `velocity_estimator`
 - `imu_noise_sim`
 - `corgi_leg_odom`
+
+### D. Leg odometry (Real robot)
+
+```bash
+ros2 launch corgi_odometry leg_odom.launch.py
+```
+
+Launched nodes:
+- `corgi_leg_odom`
+
+IMU remapping in this launch:
+- `/imu` -> `/imu_raw`
 
 ---
 
@@ -72,8 +84,8 @@ ros2 run corgi_odometry corgi_leg_odom
 Main input topics (shared by both):
 - `motor/state`
 - `imu`
-- `odometry/position`
-- `odometry/velocity`
+- `sim/position`
+- `sim/odometry`
 - `trigger`
 
 Main output topics:

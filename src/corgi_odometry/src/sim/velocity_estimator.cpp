@@ -82,8 +82,8 @@ public:
         // Declare parameters
         this->declare_parameter<double>("cutoff_freq", 30.0);
         this->declare_parameter<double>("sample_rate", corgi::Config::ONLINE_LOOP_RATE);
-        this->declare_parameter<std::string>("velocity_topic", "odometry/velocity");
-        this->declare_parameter<std::string>("position_output_topic", "odometry/position");
+        this->declare_parameter<std::string>("velocity_topic", "sim/odometry");
+        this->declare_parameter<std::string>("position_topic", "sim/position");
         this->declare_parameter<std::string>("parent_frame", "odom");
         this->declare_parameter<std::string>("child_frame", "base_link");
         
@@ -91,7 +91,7 @@ public:
         double cutoff_freq = this->get_parameter("cutoff_freq").as_double();
         double sample_rate = this->get_parameter("sample_rate").as_double();
         std::string velocity_topic = this->get_parameter("velocity_topic").as_string();
-        std::string position_output_topic = this->get_parameter("position_output_topic").as_string();
+        std::string position_topic = this->get_parameter("position_topic").as_string();
         parent_frame_ = this->get_parameter("parent_frame").as_string();
         child_frame_ = this->get_parameter("child_frame").as_string();
         
@@ -110,14 +110,14 @@ public:
         );
         
         position_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(
-            position_output_topic,
+            position_topic,
             10
         );
         
         RCLCPP_INFO(this->get_logger(), "Velocity Estimator Node Started");
         RCLCPP_INFO(this->get_logger(), "  Listening to TF: %s -> %s", parent_frame_.c_str(), child_frame_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing velocity to: %s", velocity_topic.c_str());
-        RCLCPP_INFO(this->get_logger(), "  Publishing position to: %s", position_output_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "  Publishing position to: %s", position_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "  Filter cutoff frequency: %.1f Hz", cutoff_freq);
         RCLCPP_INFO(this->get_logger(), "  Sample rate: %.1f Hz", sample_rate);
     }

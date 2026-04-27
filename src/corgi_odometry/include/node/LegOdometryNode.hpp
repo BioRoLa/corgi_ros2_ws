@@ -7,13 +7,11 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <geometry_msgs/msg/vector3.hpp>
+#include <geometry_msgs/msg/quaternion.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/contact_state_stamped.hpp>
 #include <corgi_msgs/msg/trigger_stamped.hpp>
-#include <nav_msgs/msg/odometry.hpp>
-
-#include <std_msgs/msg/float64_multi_array.hpp>
 
 #include "general_momentum_observer/DisturbanceObserver.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
@@ -30,11 +28,10 @@
  *   2. Run disturbance observer → publish contact state
  *   3. Run ES-EKF for odometry estimation
  *
- * TODO: Once ES-EKF output is validated, remove position_sub_ and
- *       velocity_sub_ (currently only used by disturbance observer).
- *       Publish nav_msgs/Odometry so this node becomes a fully
- *       closed-loop estimator that does not depend on external
- *       position/velocity topics.
+ * When use_esekf_state=true (config_online.yaml), GMO inputs are overridden
+ * with the ESEKF estimated state instead of external velocity_estimator
+ * topics (sim/position, sim/odometry). position_sub_ and
+ * velocity_sub_ remain active for use_esekf_state=false (legacy mode).
  */
 class LegOdometryNode : public rclcpp::Node {
 public:
@@ -105,7 +102,9 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
 
     rclcpp::Publisher<corgi_msgs::msg::ContactStateStamped>::SharedPtr    contact_state_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 ekf_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_velocity_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;
 
     // ============================================================
     // Latest message storage
@@ -179,23 +178,9 @@ private:
     bool esekf_initialized_ = false;
 
     // ============================================================
-    // Debug
-    // ============================================================
-
-    /// @brief Publish per-leg observation inputs and z_leg debug topics.
-    /// @param observations  4-leg observation vector (const ref, but FK is re-run internally)
-    /// @param w_m           raw IMU angular velocity [rad/s]
-    void publish_debug(
-        std::vector<estimation_model::LegObservation>& observations,
-        const Eigen::Vector3f& w_m);
-
-    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_leg_obs_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_imu_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_zleg_pub_;
-
-    // ============================================================
     // Misc
     // ============================================================
+    bool   use_esekf_state_ = false;
     size_t iteration_count_ = 0;
 };
 
