@@ -1,4 +1,4 @@
-Kp: [100, 200, 0, 0, 0, 300]
-Kd: [80, 150, 0, 0, 0, 30]
-wrench_weight: [8000, 12000, 0, 0, 0, 10000]
+Kp: [120, 240, 0, 0, 0, 60]  # roll, pitch, yaw, x, y, z
+Kd: [80, 150, 0, 0, 0, 30] # omega_x, omega_y, omega_z, v_x, v_y, v_z
+wrench_weight: [10000, 12000, 0, 0, 0, 6000] # tau_roll, tau_pitch, tau_yaw, f_x, f_y, f_z
 force_weight: 1e-4

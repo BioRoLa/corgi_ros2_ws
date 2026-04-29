@@ -35,11 +35,11 @@ class VirtualModelController {
         double Bx_swing = 200;
         double By_swing = 200;
         double Bx_stance = 200;
-        double By_stance = 200;
+        double By_stance = 100;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 2000;
+        double Ky_stance = 1000;
 
         const int freq = 500;
         const double dt = 1.0 / freq;
