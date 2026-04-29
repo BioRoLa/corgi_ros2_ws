@@ -104,6 +104,10 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_TRIGGER, corgi::Config::QUEUE_SIZE_SUB,
         std::bind(&LegOdometryNode::cb_trigger, this, std::placeholders::_1));
 
+    bv_outer_sub_ = this->create_subscription<geometry_msgs::msg::Vector3Stamped>(
+        "/fusion/bv", rclcpp::QoS(10),
+        std::bind(&LegOdometryNode::cb_bv_outer, this, std::placeholders::_1));
+
     // --- Publishers ---
     contact_state_pub_   = this->create_publisher<corgi_msgs::msg::GMOContactStateStamped>(
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
@@ -117,6 +121,8 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_EKF_BA, corgi::Config::QUEUE_SIZE_PUB);
     ekf_bw_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
         corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_odom_pub_        = this->create_publisher<nav_msgs::msg::Odometry>(
+        "/ekf", corgi::Config::QUEUE_SIZE_PUB);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
 }
@@ -299,6 +305,20 @@ void LegOdometryNode::process() {
             bw_msg.y = static_cast<double>(st.bw.y());
             bw_msg.z = static_cast<double>(st.bw.z());
             ekf_bw_pub_->publish(bw_msg);
+
+            // Combined nav_msgs/Odometry for FusionNode (includes header timestamp)
+            nav_msgs::msg::Odometry odom_msg;
+            odom_msg.header.stamp    = imu_.header.stamp;
+            odom_msg.header.frame_id = "odom";
+            odom_msg.child_frame_id  = "base_link";
+            odom_msg.pose.pose.position.x    = position_msg.x;
+            odom_msg.pose.pose.position.y    = position_msg.y;
+            odom_msg.pose.pose.position.z    = position_msg.z;
+            odom_msg.pose.pose.orientation.w = orientation_msg.w;
+            odom_msg.pose.pose.orientation.x = orientation_msg.x;
+            odom_msg.pose.pose.orientation.y = orientation_msg.y;
+            odom_msg.pose.pose.orientation.z = orientation_msg.z;
+            ekf_odom_pub_->publish(odom_msg);
         }
     }
 
@@ -343,6 +363,23 @@ void LegOdometryNode::cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr m
 
 void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
     is_triggered_ = msg->enable;
+}
+
+void LegOdometryNode::cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
+    // Low-pass filter + hard clamp, then forward to ESEKF.
+    // bv is in world frame (as published by FusionNode).
+    constexpr float LPF_ALPHA = 0.3f;    // smoothing factor [0=frozen, 1=no filter]
+    constexpr float BV_MAX    = 0.15f;   // hard clamp per-axis [m/s]
+
+    Eigen::Vector3f bv_raw(
+        static_cast<float>(msg->vector.x),
+        static_cast<float>(msg->vector.y),
+        static_cast<float>(msg->vector.z));
+
+    bv_outer_filtered_ = LPF_ALPHA * bv_raw + (1.0f - LPF_ALPHA) * bv_outer_filtered_;
+    bv_outer_filtered_ = bv_outer_filtered_.cwiseMax(-BV_MAX).cwiseMin(BV_MAX);
+
+    esekf_.set_bv_outer(bv_outer_filtered_);
 }
 
 // ============================================================

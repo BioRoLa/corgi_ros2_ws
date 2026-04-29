@@ -7,7 +7,9 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <geometry_msgs/msg/vector3.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
@@ -49,6 +51,7 @@ private:
     void cb_position(const geometry_msgs::msg::Vector3::SharedPtr msg);
     void cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr msg);
     void cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg);
+    void cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg);
 
     // ============================================================
     // Contact estimation
@@ -99,6 +102,7 @@ private:
     //       and disturbance observer is decoupled or fed from ESEKF state.
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3Stamped>::SharedPtr   bv_outer_sub_;
 
     rclcpp::Publisher<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr    contact_state_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
@@ -106,6 +110,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_ba_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_bw_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 ekf_odom_pub_;
 
     // ============================================================
     // Latest message storage
@@ -179,6 +184,9 @@ private:
 
     /// Whether the ESEKF has been initialized (on first triggered tick)
     bool esekf_initialized_ = false;
+
+    /// Low-pass filtered velocity bias from Outer Fusion EKF (world frame, m/s)
+    Eigen::Vector3f bv_outer_filtered_{0.f, 0.f, 0.f};
 
     // ============================================================
     // Misc

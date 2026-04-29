@@ -1,5 +1,6 @@
 #include "offline/OfflineTestNode.hpp"
 #include "common/Config.hpp"
+#include "fusion/OuterEKF.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <random>
 
 namespace corgi {
 
@@ -110,13 +112,36 @@ int OfflineTestNode::run() {
               << "pred_vel_x,pred_vel_y,pred_vel_z,"
               << "imu_gyro_pos_x,imu_gyro_pos_y,imu_gyro_pos_z,"
               << "imu_gyro_vel_bx,imu_gyro_vel_by,imu_gyro_vel_bz,"
-              << "imu_gyro_qw,imu_gyro_qx,imu_gyro_qy,imu_gyro_qz\n";
+              << "imu_gyro_qw,imu_gyro_qx,imu_gyro_qy,imu_gyro_qz,"
+              << "odom_map_x,odom_map_y,odom_map_z,"
+              << "bv_x,bv_y,bv_z,"
+              << "odom_mapping_x,odom_mapping_y,odom_mapping_z\n";
     esekf_out << std::fixed << std::setprecision(8);
 
     // ── GT offset (ESEKF starts at origin) ──────────────────────
     const double gt_offset_x = data[start_index].sim_pos_x;
     const double gt_offset_y = data[start_index].sim_pos_y;
     const double gt_offset_z = data[start_index].sim_pos_z;
+
+    // ── Outer Fusion EKF (Phase 2) ──────────────────────────────
+    fusion::OuterEKF outer_ekf;
+    {
+        fusion::OuterEKF::NoiseParams onp;
+        onp.q_p  = 1e-4f;
+        onp.q_th = 1e-5f;
+        onp.q_bv = 1e-5f;   // low: prevent bv from chasing random ESEKF noise
+        onp.r_p  = 4e-4f;   // sigma_p = 0.02 m → var = 4e-4 m²
+        onp.r_th = 2.5e-5f; // sigma_q = 0.005 rad
+        outer_ekf.set_noise(onp);
+    }
+    // Fake-LiDAR parameters (mirroring fake_lidar_odom.cpp defaults)
+    static constexpr size_t N_LIDAR_PERIOD = 100; // steps between LiDAR (1000Hz→10Hz)
+    static constexpr size_t LATENCY_STEPS  = 80;  // 80 ms at 1000Hz
+    static constexpr float  SIGMA_P_LIDAR  = 0.02f;
+    static constexpr float  SIGMA_Q_LIDAR  = 0.005f;
+    std::mt19937 rng_lidar(12345);
+    std::normal_distribution<float> lidar_dist(0.f, 1.f);
+    size_t lidar_update_count = 0;
 
     // ── RMSE accumulators ───────────────────────────────────────
     RmseAccumulator pos_rmse, vel_rmse;
@@ -204,6 +229,61 @@ int OfflineTestNode::run() {
         // ── Pipeline step ───────────────────────────────────────
         auto result = pipeline.step(processed, a_m, w_m, raw, i);
 
+        // ── Outer EKF predict ────────────────────────────────────
+        if (outer_ekf.initialized()) {
+            outer_ekf.predict(static_cast<float>(dt));
+        }
+
+        // ── Fake LiDAR update (every N_LIDAR_PERIOD steps) ───────
+        if (processed_count % N_LIDAR_PERIOD == 0) {
+            // Use delayed data index to simulate latency
+            size_t lidar_src = (i >= LATENCY_STEPS) ? (i - LATENCY_STEPS) : start_index;
+            const auto& ld = data[lidar_src];
+
+            Eigen::Vector3f p_gt(
+                static_cast<float>(ld.sim_pos_x - gt_offset_x),
+                static_cast<float>(ld.sim_pos_y - gt_offset_y),
+                static_cast<float>(ld.sim_pos_z - gt_offset_z));
+            Eigen::Quaternionf q_gt(
+                static_cast<float>(ld.sim_orien_w),
+                static_cast<float>(ld.sim_orien_x),
+                static_cast<float>(ld.sim_orien_y),
+                static_cast<float>(ld.sim_orien_z));
+            q_gt.normalize();
+
+            // Position noise
+            Eigen::Vector3f p_noisy = p_gt + SIGMA_P_LIDAR * Eigen::Vector3f(
+                lidar_dist(rng_lidar), lidar_dist(rng_lidar), lidar_dist(rng_lidar));
+            // Attitude noise
+            Eigen::Vector3f ax = Eigen::Vector3f(
+                lidar_dist(rng_lidar), lidar_dist(rng_lidar), lidar_dist(rng_lidar));
+            float ax_norm = ax.norm();
+            if (ax_norm < 1e-6f) ax = Eigen::Vector3f(1, 0, 0); else ax /= ax_norm;
+            float noise_ang = SIGMA_Q_LIDAR * lidar_dist(rng_lidar);
+            Eigen::Quaternionf q_noisy = (q_gt * Eigen::Quaternionf(
+                Eigen::AngleAxisf(noise_ang, ax))).normalized();
+
+            // Use inner-ESEKF state at current step as approximation for ring-buffer
+            const auto& st = result.state;
+
+            if (!outer_ekf.initialized()) {
+                // Initialise: T_map^odom = p_lidar - R_lidar * p_odom
+                Eigen::Vector3f p_mo = p_noisy - q_noisy.toRotationMatrix() * st.p;
+                Eigen::Quaternionf q_mo = (q_noisy * st.q.inverse()).normalized();
+                outer_ekf.init(p_mo, q_mo);
+            } else {
+                float dt_lidar_val = static_cast<float>(N_LIDAR_PERIOD) *
+                                     static_cast<float>(dt);
+                outer_ekf.update_lidar(p_noisy, q_noisy, st.p, st.q, dt_lidar_val);
+                ++lidar_update_count;
+            }
+        }
+
+        // ── Phase 3: feed outer-EKF bv back to inner ESEKF ──────
+        if (params_.use_bv_feedback && outer_ekf.initialized()) {
+            pipeline.set_bv_outer(outer_ekf.bv());
+        }
+
         // ── Accumulate RMSE ─────────────────────────────────────
         {
             const auto& st = result.state;
@@ -273,7 +353,18 @@ int OfflineTestNode::run() {
                 Eigen::Vector3f imu_gyro_vel_b_log = imu_gyro_q.toRotationMatrix().transpose() * imu_gyro_vel_w;
                 esekf_out << imu_gyro_pos_w.x() << "," << imu_gyro_pos_w.y() << "," << imu_gyro_pos_w.z() << ","
                           << imu_gyro_vel_b_log.x() << "," << imu_gyro_vel_b_log.y() << "," << imu_gyro_vel_b_log.z() << ","
-                          << imu_gyro_q.w() << "," << imu_gyro_q.x() << "," << imu_gyro_q.y() << "," << imu_gyro_q.z() << "\n";
+                          << imu_gyro_q.w() << "," << imu_gyro_q.x() << "," << imu_gyro_q.y() << "," << imu_gyro_q.z() << ",";
+            }
+            // Outer EKF columns
+            {
+                const Eigen::Vector3f& p_mo = outer_ekf.initialized() ? outer_ekf.p_mo() : Eigen::Vector3f::Zero();
+                const Eigen::Vector3f& bv   = outer_ekf.initialized() ? outer_ekf.bv()   : Eigen::Vector3f::Zero();
+                Eigen::Vector3f p_mapping = outer_ekf.initialized()
+                    ? outer_ekf.map_position(result.state.p)
+                    : Eigen::Vector3f::Zero();
+                esekf_out << p_mo.x()      << "," << p_mo.y()      << "," << p_mo.z()      << ","
+                          << bv.x()        << "," << bv.y()        << "," << bv.z()        << ","
+                          << p_mapping.x() << "," << p_mapping.y() << "," << p_mapping.z() << "\n";
             }
         }
 
@@ -337,6 +428,25 @@ int OfflineTestNode::run() {
         std::cout << "IMU Pos RMSE total:  " << imu_pos_rmse.total_rmse() << " m\n";
         std::cout << "IMU Vel RMSE total:  " << imu_vel_rmse.total_rmse() << " m/s\n";
         std::cout << "====================================\n";
+    }
+
+    // Outer EKF summary
+    if (outer_ekf.initialized()) {
+        std::cout << "\n========== Outer EKF Summary ==========\n";
+        std::cout << "LiDAR updates processed: " << lidar_update_count << "\n";
+        std::cout << "Final p_mo: ["
+                  << outer_ekf.p_mo().x() << ", "
+                  << outer_ekf.p_mo().y() << ", "
+                  << outer_ekf.p_mo().z() << "]\n";
+        std::cout << "Final bv:   ["
+                  << outer_ekf.bv().x() << ", "
+                  << outer_ekf.bv().y() << ", "
+                  << outer_ekf.bv().z() << "] m/s\n";
+        std::cout << "odom_mapping (final): ["
+                  << outer_ekf.map_position(pipeline.nominal().p).x() << ", "
+                  << outer_ekf.map_position(pipeline.nominal().p).y() << ", "
+                  << outer_ekf.map_position(pipeline.nominal().p).z() << "]\n";
+        std::cout << "========================================\n";
     }
 
     return 0;

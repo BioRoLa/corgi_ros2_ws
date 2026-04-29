@@ -71,6 +71,7 @@ inline Params load_params(const std::string& yaml_path) {
     // ── Logic switches ──────────────────────────────────────────
     p.simulate_imu_noise = detail::val(root, "simulate_imu_noise", p.simulate_imu_noise);
     p.use_esekf_state    = detail::val(root, "use_esekf_state",    p.use_esekf_state);
+    p.use_bv_feedback    = detail::val(root, "use_bv_feedback",    p.use_bv_feedback);
     p.quiet              = detail::val(root, "quiet",              p.quiet);
 
     // ── Offline ─────────────────────────────────────────────────

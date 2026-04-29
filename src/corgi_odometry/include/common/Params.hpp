@@ -38,6 +38,7 @@ struct Params {
     // use_esekf_state is used by offline_test and leg_odom_sim.
     bool simulate_imu_noise = false;
     bool use_esekf_state    = false;
+    bool use_bv_feedback    = false;   // Phase 3: feed outer-EKF bv back to inner ESEKF
     bool quiet              = false;
 
     // ── Offline ─────────────────────────────────────────────────
