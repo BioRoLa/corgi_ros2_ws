@@ -2,7 +2,7 @@
 
 /*******  switch *******/ 
 // true → simulation, false → real robot
-inline constexpr bool SIM = true;        
+inline constexpr bool SIM = false;        
 // use KLD or not (if KLD is not used, need to input the contact state for EKF estimation)
 inline constexpr bool KLD = true;               
 // publish contact state (only if KLD is used)

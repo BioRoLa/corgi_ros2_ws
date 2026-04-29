@@ -45,6 +45,8 @@ corgi_msgs::msg::ForceStateStamped force_state;
 corgi_msgs::msg::SimLegContactStamped sim_leg_contact_state;
 geometry_msgs::msg::TransformStamped tf_data;
 bool tf_data_valid = false;
+rclcpp::Time recording_start_time;
+bool recording_start_time_set = false;
 
 std::ofstream output_file;
 std::string output_file_name = "";
@@ -181,6 +183,7 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
     else {
         if (output_file.is_open()) {
             output_file.close();
+            recording_start_time_set = false;
             RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Stopped recording data");
         }
     }
@@ -279,7 +282,16 @@ void write_data(rclcpp::Node::SharedPtr node) {
         return;
     }
 
-    output_file << node->now().nanoseconds() / 1e9 << ","
+    if (!recording_start_time_set) {
+        recording_start_time = node->now();
+        recording_start_time_set = true;
+    }
+
+    const double elapsed_time_sec = recording_start_time_set
+                                    ? (node->now() - recording_start_time).nanoseconds() / 1e9
+                                    : 0.0;
+
+    output_file << elapsed_time_sec << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << ","

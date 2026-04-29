@@ -105,7 +105,7 @@ namespace estimation_model {
         }
     }
 
-    void DP::push_data(Eigen::Vector<float, 5> encoders, Eigen::Vector3f wk, float dt, float alpha) {
+    void DP::push_data(const Eigen::Vector<float, 5>& encoders, const Eigen::Vector3f& wk, float dt, float alpha) {
         trajectory last = trajectories.back();
         float contact_beta = (encoders(2) + encoders(3)) * dt + std::get<2>(last);
         if (alpha != -100) contact_beta = encoders(1) + alpha;
@@ -132,7 +132,6 @@ namespace estimation_model {
             last_rot = last_rot * (std::get<3>(trajectories[i])).transpose();
         }
         Eigen::Vector3f last_point = last_rot * leg.contact_point;
-
 
         leg.Calculate(std::get<0>(last) + dM(0), 0, 0, std::get<1>(last) + dM(1), 0, 0);
         leg.PointContact(last_contact_rim, std::get<2>(last) - std::get<1>(last));

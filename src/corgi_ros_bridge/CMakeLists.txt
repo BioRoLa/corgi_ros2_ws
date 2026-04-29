@@ -18,7 +18,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 
 
-set(LOCAL_PACKAGE_PATH ${CMAKE_PREFIX_PATH} CACHE STRING "Path to grpc and core installation")
+if(DEFINED ENV{LOCAL_PACKAGE_PATH})
+  # Environment variable always takes priority (handles stale cmake cache)
+  set(LOCAL_PACKAGE_PATH "$ENV{LOCAL_PACKAGE_PATH}" CACHE PATH "Path to grpc and core installation" FORCE)
+elseif(NOT DEFINED LOCAL_PACKAGE_PATH OR "${LOCAL_PACKAGE_PATH}" STREQUAL "")
+  # No cache variable and no env var: use default
+  set(LOCAL_PACKAGE_PATH "$ENV{HOME}/corgi_ws/install" CACHE PATH "Path to grpc and core installation")
+endif()
+# If -DLOCAL_PACKAGE_PATH was passed explicitly and no env var: preserve the -D value
 set(CORE_PREFIX_PATH ${LOCAL_PACKAGE_PATH})
 set(CMAKE_PREFIX_PATH "/opt/ros/humble;${LOCAL_PACKAGE_PATH}")
 

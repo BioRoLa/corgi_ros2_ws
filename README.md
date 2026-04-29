@@ -12,16 +12,17 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
 
 ## Table of Contents
 
-- [**_System Architecture_**](#system-architecture)
-- [**_System Requirements & Dependencies_**](#system-requirements--dependencies)
-  - [_Hardware_](#hardware)
-  - [_Software_](#software)
-- [**_Installation and Build Instructions_**](#installation-and-build-instructions)
-- [**_Usage Guide_**](#usage-guide)
-  - [_Running the Simulation_](#running-the-simulation)
-  - [_Running on the Real Robot_](#running-on-the-real-robot)
-- [**_Workspace Structure & Key Packages_**](#workspace-structure--key-packages)
-- [**_Notes & Contact_**](#notes--contact)
+- [Corgi Robot ROS 2 Workspace](#corgi-robot-ros-2-workspace)
+  - [Table of Contents](#table-of-contents)
+  - [System Architecture](#system-architecture)
+  - [System Requirements \& Dependencies](#system-requirements--dependencies)
+    - [Hardware](#hardware)
+    - [Software](#software)
+  - [Installation and Build Instructions](#installation-and-build-instructions)
+  - [Usage Guide](#usage-guide)
+    - [Running on the Real Robot](#running-on-the-real-robot)
+  - [Workspace Structure \& Key Packages](#workspace-structure--key-packages)
+    - [Key Packages in `src/`](#key-packages-in-src)
 
 ## System Architecture
 The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
@@ -40,7 +41,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
 - **NI sbRIO-9629**
 
   - [**fpga_driver**](https://github.com/Yatinghsu000627/fpga_driver)
-  - [**grpc_core**](https://github.com/kyle1548/grpc_core)
+  - [**grpc_core**](https://github.com/BioRoLa/grpc_core)
 
 - **PC / Nvidia Jetson**
   - **OS**: Ubuntu 22.04
@@ -57,9 +58,9 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     - [**osqp (v0.6.3)**](https://github.com/osqp/osqp/tree/v0.6.3)
     - [**osqp-eigen**](https://github.com/robotology/osqp-eigen)
 
-> **_CRITICAL INSTALLATION NOTE_**
+> **_NOTE_**
 >
-> To avoid build errors, it is **strongly recommended** to install all C++ dependencies listed above into the `~/corgi_ws/install/` directory. If you install them elsewhere, you **must** manually update the compile commands or the paths in the `CMakeLists.txt` files.
+> All C++ dependencies are installed system-wide via `sudo make install` (to `/usr/local/`), except for `grpc_core` and `gRPC`, which are installed in `~/corgi_ws/install/`.
 
 ## Installation and Build Instructions
 
@@ -90,7 +91,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     mkdir install/
     ```
     1. **yaml-cpp**
-    Clone the `yaml-cpp` repository and follow the installation instructions:
+      Clone the `yaml-cpp` repository and follow the installation instructions:
       ```bash
       cd ~/corgi_ws/install
       git clone https://github.com/jbeder/yaml-cpp.git
@@ -101,7 +102,8 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       sudo make install
       ```
     2. **Eigen**
-    Clone the `Eigen` repository and follow the installation instructions:
+   
+      Clone the `Eigen` repository and follow the installation instructions:
       ```bash
       cd ~/corgi_ws/install
       git clone https://gitlab.com/libeigen/eigen.git
@@ -114,8 +116,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     3. **grpc_core**
     Install gRPC & grpc_core as follows: [**grpc_core**](https://github.com/BioRoLa/grpc_core)
 
-    4. **osqp**
-    Install osqp as follow: [**osqp**](https://osqp.org/docs/get_started/sources.html)
+    4. **[osqp](https://osqp.org/docs/get_started/sources.html)**
       ```bash
       git clone https://github.com/osqp/osqp
       cd osqp
@@ -126,11 +127,20 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       sudo make install
       ```
     
-    5. **osqp_eigen**
-    Install osqp_eigen as follows: [**osqp_eigen**](https://github.com/robotology/osqp-eigen)
+    5. **[osqp_eigen](https://github.com/gbionics/osqp-eigen)**
+      ```bash
+      git clone https://github.com/gbionics/osqp-eigen.git
+      cd osqp-eigen
+      mkdir build
+      cd build
+      cmake ..
+      make
+      make install
+      ```
 
-    6. **MIP_SDK**
-    Clone the `mip_sdk` repository and follow the installation instructions:
+    6. **[MIP_SDK](https://github.com/hiho817/mip_sdk.git)**
+    
+      Clone the `mip_sdk` repository and follow the installation instructions:
       ```bash
       cd corgi_ws
       git clone --branch fix-install-interface --single-branch https://github.com/hiho817/mip_sdk.git
@@ -152,17 +162,34 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
       ```bash
       sudo apt install ros-humble-joy
       ```
-    
-5.  **Build the ROS Workspace**
 
-    If you installed C++ dependencies to the recommended path, use the following command.
+    9.  **Livox-SDK2 (required by livox_ros_driver2)**
+    Install Livox-SDK2 to provide `/usr/local/lib/liblivox_lidar_sdk_shared.so`:
+      ```bash
+      cd ~/corgi_ws/
+      git clone https://github.com/Livox-SDK/Livox-SDK2.git
+      cd Livox-SDK2
+      mkdir -p build && cd build
+      cmake ..
+      make -j$(nproc)
+      sudo make install
+      ```
+    
+4.  **Build the ROS Workspace**
+
+    Per-package CMake arguments (e.g. `ROS_EDITION`, `yaml-cpp_DIR`) are configured in [`colcon.meta`](colcon.meta), so you only need:
 
     ```bash
     cd ~/corgi_ws/corgi_ros2_ws/
-    colcon build --cmake-args -DLOCAL_PACKAGE_PATH=${HOME}/corgi_ws/install
+    source /opt/ros/humble/setup.bash
+    colcon build
     ```
 
-6.  **Source the Environment (ROS 2)**
+    > **Note:** If you installed C++ dependencies to a non-default path, update the paths in `colcon.meta` accordingly.
+
+    - Do **not** run `src/livox_ros_driver2/build.sh` inside this combined workspace. That script deletes `build/` and `install/` which affects all packages.
+
+5.  **Source the Environment (ROS 2)**
 
     You can also add this to your own `~/.bashrc`:
 
@@ -170,6 +197,7 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     source /opt/ros/humble/setup.bash
     source $HOME/corgi_ws/corgi_ros2_ws/install/setup.bash
     ```
+
 ## Usage Guide
 
 ### Running on the Real Robot
@@ -205,14 +233,20 @@ For more details on a specific package, please see its respective `README.md` fi
 
 - **Sensing & Estimation**
 
-  - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+  - [`corgi_odometry_legacy`](src/corgi_odometry_legacy): Legacy odometry estimation node.
+  - [`corgi_force_estimation`](src/corgi_force_estimation): Estimates contact forces and ground reaction forces during locomotion.
+  - [`livox_ros_driver2`](src/livox_ros_driver2): ROS 2 driver for Livox MID-360 LiDAR (fork of [Livox-SDK/livox_ros_driver2](https://github.com/Livox-SDK/livox_ros_driver2)).
 
 - **Control & Planning**
-  - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
-  - [`corgi_set_zero`](src/corgi_set_zero): Adjust all motors to the standard zero position.
+  - [`corgi_mpc`](src/corgi_mpc): Model predictive control solver for gait optimization.
+  - [`corgi_force_control`](src/corgi_force_control): Impedance and force control for FPGA low-level commands.
   - [`corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
   - [`corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
   - [`corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
   - [`corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
+  - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
+  - [`corgi_set_zero`](src/corgi_set_zero): Adjust all motors to the standard zero position.
 
-## Notes
+- **Simulation**
+  - [`corgi_sim`](src/corgi_sim): Webots simulator integration for virtual robot testing and validation.

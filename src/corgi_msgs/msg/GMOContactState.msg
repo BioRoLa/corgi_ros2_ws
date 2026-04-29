@@ -1,0 +1,3 @@
+bool contact
+float64 rm_force
+float64 beta_torque

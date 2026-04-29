@@ -43,6 +43,10 @@ namespace DataProcessor
         {
             return data[row].data[columns[col]];
         }
+        bool has_column(const string &col) const
+        {
+            return columns.find(col) != columns.end();
+        }
     };
 
     DataFrame read_csv(string filename, bool header=true)

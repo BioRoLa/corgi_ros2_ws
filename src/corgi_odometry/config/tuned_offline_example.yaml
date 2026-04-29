@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────
+# Tuned parameters — 2026-04-22, dual-dataset grid sweep
+#   Datasets: walk_2m_01 + walk_obs  (with full-ω fix in ESEKF.cpp)
+#
+# Key tuning rationale:
+# - Full-ω fix (ESEKF.cpp): ESEKF now uses full angular velocity (ω_x, ω_z included)
+#                         in PointVelocity and extends H with all bw cross-axis terms.
+#                         Previously zeroing ω_x/ω_z left (ω_x·r_cz − ω_z·r_cx)
+#                         unmodelled in z_leg_y, causing ~50-200 mm/s systematic Vy bias.
+# - sigma_a_y=3.0:       Allows Vy covariance P_vy to grow → larger Kalman gain →
+#                         Vy is observable through leg odometry.
+# - sigma_leg_y=0.10:    With the full-ω fix the Vy observation is unbiased, so
+#                         sigma_leg_y can be tight. 0.10 m/s sweeps best on both
+#                         datasets (vs old 1.5).
+# - sigma_leg_z=0.8:     Vz noise; unmodeled dynamics remain → keep moderate.
+# - sigma_leg_x=0.02:    Vx is well-observed (stance kinematics in sagittal plane).
+#                         Tight sigma provides effective Mahalanobis filtering: 100%
+#                         of obstacle-contact rejections are Vx-driven (walk_obs).
+# - sigma_ba_y=1e-4:     Allows ba_y to track slowly-varying systematic IMU bias.
+# - mahalanobis=16.27:   χ²(3, p=0.999) — rejects contacts with D²>16.27.
+#                         walk_obs: obstacle contact rejections still all Vx-driven.
+#
+# Final RMSE (walk_2m_01):  Vx=14.6  Vy= 9.8  Vz= 9.8  mm/s
+# Final RMSE (walk_obs):    Vx=18.3  Vy=11.9  Vz=15.8  mm/s
+# ─────────────────────────────────────────────────────────────────
+
+# ES-EKF noise tuning
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
+
+# Disturbance observer / encoder filter
+observer:
+  cutoff_freq:         15.0   # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+
+# Schmitt-trigger contact thresholds
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+# Logic switches
+simulate_imu_noise: true
+use_dynamic_dt:     true
+use_esekf_state:    true
+quiet:              true
+
+# Offline processing
+offline:
+  csv_filename:   walk_2m_01   # walk_obs // walk_2m_01
+  start_index:    0
+  max_processed:  12000
+  rmse_skip:      0
+  enable_logging: false
+  log_details:    false
+  imu_noise_seed: 42
+
+# Ground-truth velocity low-pass filter
+gt_velocity_lpf_cutoff: 10.0
