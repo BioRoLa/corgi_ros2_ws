@@ -34,10 +34,10 @@ int main(int argc, char **argv) {
     ModelPredictiveController mpc;
     mpc.load_config();
 
-    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 1000);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 1000);
-    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 1000, trigger_cb);
-    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 1000, force_state_cb);
+    auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
+    auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
+    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = node->now();
@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     // walk_gait.stand_height = 0.25;
     walk_gait.velocity = velocity;
     walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
+    walk_gait.step_height = 0.08;
 
 
     walk_gait.initialize(init_eta);

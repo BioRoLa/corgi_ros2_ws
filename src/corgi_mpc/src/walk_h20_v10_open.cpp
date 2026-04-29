@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     walk_gait.stand_height = 0.2;
     walk_gait.velocity = velocity;
     walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
+    walk_gait.step_height = 0.08;
 
 
     walk_gait.initialize(init_eta);
