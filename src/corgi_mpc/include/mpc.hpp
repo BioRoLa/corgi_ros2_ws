@@ -38,17 +38,17 @@ class ModelPredictiveController {
         double By_swing = 200;
         double Bx_stance = 200;
         // double Bx_stance = 50;
-        double By_stance = 200;
+        double By_stance = 20;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 1500;
+        double Ky_stance = 200;
 
 
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const double m = 19.68;
+        const double m = 20.66;
         const double gravity = 9.81;
 
         const int N = 10;
