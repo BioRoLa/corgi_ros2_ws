@@ -16,55 +16,60 @@ set(dependencies
   yaml-cpp
 )
 
-# Walk h20 v10
-add_executable(walk_h20_v10_open walk_h20_v10_open.cpp mpc.cpp)
-ament_target_dependencies(walk_h20_v10_open ${dependencies})
-target_link_libraries(walk_h20_v10_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+# ---------------------------------------------------------------------------
+# Internal static library: compile mpc.cpp exactly once, shared by all targets
+# ---------------------------------------------------------------------------
+add_library(corgi_mpc_lib STATIC mpc.cpp)
+ament_target_dependencies(corgi_mpc_lib ${dependencies})
+target_link_libraries(corgi_mpc_lib
+  ${CMAKE_DL_LIBS}
+  ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR}
+  osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp
+)
 
-add_executable(walk_h20_v10_closed walk_h20_v10_closed.cpp mpc.cpp)
-ament_target_dependencies(walk_h20_v10_closed ${dependencies})
-target_link_libraries(walk_h20_v10_closed ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+# Precompiled headers on the library — compiled once and reused by every executable
+target_precompile_headers(corgi_mpc_lib PRIVATE
+  <OsqpEigen/OsqpEigen.h>
+  <Eigen/Dense>
+  <Eigen/Geometry>
+  <unsupported/Eigen/MatrixFunctions>
+  <yaml-cpp/yaml.h>
+  <rclcpp/rclcpp.hpp>
+  <vector>
+  <array>
+  <cmath>
+)
+
+# Helper macro to avoid repeating the same 3 lines for every executable
+macro(add_walk_executable target_name source_file)
+  add_executable(${target_name} ${source_file})
+  ament_target_dependencies(${target_name} ${dependencies})
+  target_link_libraries(${target_name} corgi_mpc_lib)
+  target_precompile_headers(${target_name} REUSE_FROM corgi_mpc_lib)
+endmacro()
+
+# Walk h20 v10
+add_walk_executable(walk_h20_v10_open   walk_h20_v10_open.cpp)
+add_walk_executable(walk_h20_v10_closed walk_h20_v10_closed.cpp)
 
 # Walk h20 v15
-add_executable(walk_h20_v15_open walk_h20_v15_open.cpp mpc.cpp)
-ament_target_dependencies(walk_h20_v15_open ${dependencies})
-target_link_libraries(walk_h20_v15_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
-
-add_executable(walk_h20_v15_closed walk_h20_v15_closed.cpp mpc.cpp)
-ament_target_dependencies(walk_h20_v15_closed ${dependencies})
-target_link_libraries(walk_h20_v15_closed ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+add_walk_executable(walk_h20_v15_open   walk_h20_v15_open.cpp)
+add_walk_executable(walk_h20_v15_closed walk_h20_v15_closed.cpp)
 
 # Walk h25 v10
-add_executable(walk_h25_v10_open walk_h25_v10_open.cpp mpc.cpp)
-ament_target_dependencies(walk_h25_v10_open ${dependencies})
-target_link_libraries(walk_h25_v10_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
-
-add_executable(walk_h25_v10_closed walk_h25_v10_closed.cpp mpc.cpp)
-ament_target_dependencies(walk_h25_v10_closed ${dependencies})
-target_link_libraries(walk_h25_v10_closed ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+add_walk_executable(walk_h25_v10_open   walk_h25_v10_open.cpp)
+add_walk_executable(walk_h25_v10_closed walk_h25_v10_closed.cpp)
 
 # Walk h25 v15
-add_executable(walk_h25_v15_open walk_h25_v15_open.cpp mpc.cpp)
-ament_target_dependencies(walk_h25_v15_open ${dependencies})
-target_link_libraries(walk_h25_v15_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
-
-add_executable(walk_h25_v15_closed walk_h25_v15_closed.cpp mpc.cpp)
-ament_target_dependencies(walk_h25_v15_closed ${dependencies})
-target_link_libraries(walk_h25_v15_closed ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+add_walk_executable(walk_h25_v15_open   walk_h25_v15_open.cpp)
+add_walk_executable(walk_h25_v15_closed walk_h25_v15_closed.cpp)
 
 # Walk obstacle variants
-add_executable(walk_obs_closed walk_obs_closed.cpp mpc.cpp)
-ament_target_dependencies(walk_obs_closed ${dependencies})
-target_link_libraries(walk_obs_closed ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+add_walk_executable(walk_obs_closed walk_obs_closed.cpp)
+add_walk_executable(walk_obs_open   walk_obs_open.cpp)
 
-add_executable(walk_obs_open walk_obs_open.cpp mpc.cpp)
-ament_target_dependencies(walk_obs_open ${dependencies})
-target_link_libraries(walk_obs_open ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
-
-# Walk collapse
-add_executable(walk_probing walk_probing.cpp mpc.cpp)
-ament_target_dependencies(walk_probing ${dependencies})
-target_link_libraries(walk_probing ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+# Walk probing
+add_walk_executable(walk_probing walk_probing.cpp)
 
 # Install all executables
 install(TARGETS

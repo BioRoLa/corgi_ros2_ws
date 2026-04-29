@@ -1,4 +1,12 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.16)
+
+# Use ccache to speed up incremental rebuilds
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  message(STATUS "ccache found: ${CCACHE_PROGRAM}")
+endif()
 
 set(CMAKE_C_COMPILER "/usr/bin/gcc")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++")
@@ -58,5 +66,13 @@ find_library(CORGI_GAIT_SELECTOR corgi_gait_selector)
 find_library(CORGI_HYBRID corgi_hybrid)
 
 add_subdirectory(src)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config")
+  install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
+endif()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/launch")
+  install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+endif()
 
 ament_package()
