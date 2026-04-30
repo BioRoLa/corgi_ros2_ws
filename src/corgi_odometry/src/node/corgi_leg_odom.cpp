@@ -111,10 +111,6 @@ LegOdometryNode::LegOdometryNode()
     // --- Publishers ---
     contact_state_pub_   = this->create_publisher<corgi_msgs::msg::GMOContactStateStamped>(
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
-    ekf_position_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
-        corgi::Config::TOPIC_EKF_POSITION, corgi::Config::QUEUE_SIZE_PUB);
-    ekf_velocity_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
-        corgi::Config::TOPIC_EKF_VELOCITY, corgi::Config::QUEUE_SIZE_PUB);
     ekf_orientation_pub_ = this->create_publisher<geometry_msgs::msg::Quaternion>(
         corgi::Config::TOPIC_EKF_ORIENTATION, corgi::Config::QUEUE_SIZE_PUB);
     ekf_ba_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
@@ -275,18 +271,6 @@ void LegOdometryNode::process() {
         {
             const auto& st = esekf_.nominal();
 
-            geometry_msgs::msg::Vector3 position_msg;
-            position_msg.x = static_cast<double>(st.p.x());
-            position_msg.y = static_cast<double>(st.p.y());
-            position_msg.z = static_cast<double>(st.p.z());
-            ekf_position_pub_->publish(position_msg);
-
-            geometry_msgs::msg::Vector3 velocity_msg;
-            velocity_msg.x = static_cast<double>(st.v.x());
-            velocity_msg.y = static_cast<double>(st.v.y());
-            velocity_msg.z = static_cast<double>(st.v.z());
-            ekf_velocity_pub_->publish(velocity_msg);
-
             geometry_msgs::msg::Quaternion orientation_msg;
             orientation_msg.w = static_cast<double>(st.q.w());
             orientation_msg.x = static_cast<double>(st.q.x());
@@ -306,18 +290,29 @@ void LegOdometryNode::process() {
             bw_msg.z = static_cast<double>(st.bw.z());
             ekf_bw_pub_->publish(bw_msg);
 
-            // Combined nav_msgs/Odometry for FusionNode (includes header timestamp)
+            // Body-frame velocity: v_body = R^T * v_world
+            const Eigen::Vector3f v_body = st.q.toRotationMatrix().transpose() * st.v;
+            // Bias-corrected angular velocity
+            const Eigen::Vector3f w_corr = w_m - st.bw;
+
+            // Combined nav_msgs/Odometry — pose + twist
             nav_msgs::msg::Odometry odom_msg;
             odom_msg.header.stamp    = imu_.header.stamp;
             odom_msg.header.frame_id = "odom";
             odom_msg.child_frame_id  = "base_link";
-            odom_msg.pose.pose.position.x    = position_msg.x;
-            odom_msg.pose.pose.position.y    = position_msg.y;
-            odom_msg.pose.pose.position.z    = position_msg.z;
+            odom_msg.pose.pose.position.x    = static_cast<double>(st.p.x());
+            odom_msg.pose.pose.position.y    = static_cast<double>(st.p.y());
+            odom_msg.pose.pose.position.z    = static_cast<double>(st.p.z());
             odom_msg.pose.pose.orientation.w = orientation_msg.w;
             odom_msg.pose.pose.orientation.x = orientation_msg.x;
             odom_msg.pose.pose.orientation.y = orientation_msg.y;
             odom_msg.pose.pose.orientation.z = orientation_msg.z;
+            odom_msg.twist.twist.linear.x    = static_cast<double>(v_body.x());
+            odom_msg.twist.twist.linear.y    = static_cast<double>(v_body.y());
+            odom_msg.twist.twist.linear.z    = static_cast<double>(v_body.z());
+            odom_msg.twist.twist.angular.x   = static_cast<double>(w_corr.x());
+            odom_msg.twist.twist.angular.y   = static_cast<double>(w_corr.y());
+            odom_msg.twist.twist.angular.z   = static_cast<double>(w_corr.z());
             ekf_odom_pub_->publish(odom_msg);
         }
     }

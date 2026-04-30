@@ -105,8 +105,6 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Vector3Stamped>::SharedPtr   bv_outer_sub_;
 
     rclcpp::Publisher<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr    contact_state_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_ba_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_bw_pub_;
