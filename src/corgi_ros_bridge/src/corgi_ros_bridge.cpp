@@ -93,14 +93,19 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
     for (int i = 0; i < 4; i++) {
         grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta, 17/180.0*M_PI), 160/180.0*M_PI));
         grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta);
+        grpc_motor_modules[i]->set_gamma(ros_motor_modules[i].gamma);
         grpc_motor_modules[i]->set_kp_r(ros_motor_modules[i].kp_r);
         grpc_motor_modules[i]->set_kp_l(ros_motor_modules[i].kp_l);
+        grpc_motor_modules[i]->set_kp_h(ros_motor_modules[i].kp_h);
         grpc_motor_modules[i]->set_ki_r(ros_motor_modules[i].ki_r);
         grpc_motor_modules[i]->set_ki_l(ros_motor_modules[i].ki_l);
+        grpc_motor_modules[i]->set_ki_h(ros_motor_modules[i].ki_h);
         grpc_motor_modules[i]->set_kd_r(ros_motor_modules[i].kd_r);
         grpc_motor_modules[i]->set_kd_l(ros_motor_modules[i].kd_l);
+        grpc_motor_modules[i]->set_kd_h(ros_motor_modules[i].kd_h);
         grpc_motor_modules[i]->set_torque_r(ros_motor_modules[i].torque_r);
         grpc_motor_modules[i]->set_torque_l(ros_motor_modules[i].torque_l);
+        grpc_motor_modules[i]->set_torque_h(ros_motor_modules[i].torque_h);
     }
 
     grpc_motor_cmd.mutable_header()->set_seq(ros_motor_cmd.header.seq);
@@ -184,10 +189,13 @@ void grpc_motor_state_cb(const motor_msg::MotorStateStamped state) {
     for (int i = 0; i < 4; i++) {
         ros_motor_modules[i]->theta = grpc_motor_modules[i]->theta();
         ros_motor_modules[i]->beta = grpc_motor_modules[i]->beta();
+        ros_motor_modules[i]->gamma = grpc_motor_modules[i]->gamma();
         ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r();
         ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l();
+        ros_motor_modules[i]->velocity_h = grpc_motor_modules[i]->velocity_h();
         ros_motor_modules[i]->torque_r = grpc_motor_modules[i]->torque_r();
         ros_motor_modules[i]->torque_l = grpc_motor_modules[i]->torque_l();
+        ros_motor_modules[i]->torque_h = grpc_motor_modules[i]->torque_h();
     }
 
     ros_motor_state.motor_mode = static_cast<int32_t>(grpc_motor_state.motor_mode());
