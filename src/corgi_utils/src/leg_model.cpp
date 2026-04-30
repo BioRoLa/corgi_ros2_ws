@@ -23,6 +23,7 @@ LegModel::LegModel(bool sim) :
     foot_offset(0.02225),      // 22.25 mm
     tyre_thickness(0.01225),   // 12.25 mm
     foot_radius(R + foot_offset + tyre_thickness),
+    wheel_thickness(0.04),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
     arc_BC(M_PI * 101.0 / 180.0),
@@ -43,8 +44,6 @@ LegModel::LegModel(bool sim) :
     ang_BCF(std::acos((l3*l3 + l7*l7 - l_BF*l_BF) / (2.0*l3*l7)))
 {
     // Initialize positions
-    this->gamma = 0.0;
-    this->d_wheel = 0.05; // TODO: update actual value after determination
     this->forward(theta0, 0.0);
 }//end LegModel
 
@@ -281,7 +280,7 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             double y_new = contact_p[0]*sin(slope) + contact_p[1]*cos(slope);
             contact_p = {x_new, y_new};
         }//end if
-}//end contact_map
+}//end contact_mapcontact_map_3d
 // TODO: Consider the other two rims
 void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope, bool contact_upper, bool contact_lower) {
     // Step 1: Forward kinematics in Leg Frame
@@ -298,7 +297,7 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
     // Step 4: Determine wheel thickness based on gamma sign
     // Select opposite sign to minimize Z height
     double half_w = tyre_thickness / 2.0;
-    double d_wheel = (sin_g > 0) ? -half_w : half_w;
+    d_wheel = (sin_g > 0) ? -half_w : half_w;
     
     // Step 5: Optimization for small gamma
     if (std::abs(sin_g) < 1e-4) {
@@ -312,7 +311,7 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
     // [X]   [1   0        0    ] [x_2D  ]
     // [Y] = [0  cos(γ) -sin(γ)] [d_wheel ]
     // [Z]   [0  sin(γ)  cos(γ)] [z_2D  ]
-    contact_p_3d[0] = contact_2d[0];                           // X = x_2D
+    contact_p_3d[0] = contact_2d[0];                            // X
     contact_p_3d[1] = d_wheel * cos_g - contact_2d[1] * sin_g;  // Y
     contact_p_3d[2] = d_wheel * sin_g + contact_2d[1] * cos_g;  // Z
 }//end contact_map_3d
