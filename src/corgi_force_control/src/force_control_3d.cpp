@@ -81,67 +81,74 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     force_err << force_des(0, 0)-force_state_->fx, 
                  force_des(1, 0)-force_state_->fy, 
                  force_des(2, 0)-force_state_->fz;
-
+    
     // position command and state (3D)
     Eigen::MatrixXd pos_des(3, 1);
 
     LegModel& legmodel = kinematics_.get_leg_model();
-    
-    // Note: Use contact_map_3d and 3D position logic
-    //legmodel.contact_map_3d(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
-    // TODO: should be modifiled
-    RCLCPP_INFO(this->get_logger(), "Alpha: %.2f", legmodel.alpha);
-    int target_alpha = legmodel.alpha;
-
-    pos_des << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
-    //RCLCPP_INFO(this->get_logger(), "Desired Position: [%.4f, %.4f, %.4f]", pos_des(0, 0), pos_des(1, 0), pos_des(2, 0));
-    Eigen::MatrixXd pos_fb(3, 1);
-
+        
+    /* TODO: Check this part functionality
     legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
-    pos_fb << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
-    /* TODO: should be modifiled                                  
-    if (target_rim == 0 || target_rim > 5) {
+    pos_des << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
+    RCLCPP_INFO(this->get_logger(), "Desired Position: [%.4f, %.4f, %.4f]", pos_des(0, 0), pos_des(1, 0), pos_des(2, 0));
+    
+    Eigen::MatrixXd pos_fb(3, 1);
+    
+    legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
+    if      (target_rim == 1 && (target_alpha > -M_PI*1/2.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
+    else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
+    else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
+    else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
+    else if (target_rim == 5 && (target_alpha < M_PI*1/2.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
+    else {
         motor_cmd_->theta = imp_cmd_->theta;
         motor_cmd_->beta = imp_cmd_->beta;
-        motor_cmd_->gamma = imp_cmd_->gamma;
-        motor_cmd_->kp_r = 50;
-        motor_cmd_->kp_l = 50;
-        motor_cmd_->kp_h = 50;
-        motor_cmd_->kd_r = 1;
-        motor_cmd_->kd_l = 1;
-        motor_cmd_->kd_h = 1;
+        motor_cmd_->gamma = 0.0;
+        motor_cmd_->kp_r = 90;
+        motor_cmd_->kp_l = 90;
+        motor_cmd_->kp_h = 90;
+        motor_cmd_->kd_r = 1.75;
+        motor_cmd_->kd_l = 1.75;
+        motor_cmd_->kd_h = 1.75;
         motor_cmd_->torque_r = 0;
         motor_cmd_->torque_l = 0;
         motor_cmd_->torque_h = 0;
         return;
-    }*/
+    }
 
     Eigen::MatrixXd pos_err(3, 1);
     pos_err = pos_des - pos_fb;
+    */
     
-    // calculate jacobian
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
     Eigen::MatrixXd P_poly_deriv = Eigen::MatrixXd::Zero(2, 7);
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
-    // TODO: should be modifiled 
-    P_poly = kinematics_.calculate_P_poly_3d(legmodel.alpha);
     
+    // Use contact_map_3d to get alpha and contact point
+    legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
+    RCLCPP_INFO(this->get_logger(), "Contact Point: [%.4f, %.4f]", legmodel.contact_p_3d[0], legmodel.contact_p_3d[2]);
+    //RCLCPP_INFO(this->get_logger(), "Alpha: %.2f", legmodel.alpha);
+    
+    // calculate jacobian
+    P_poly = kinematics_.calculate_P_poly_3d(-legmodel.alpha);
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
-
     for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(motor_state_->theta, i); 
-    for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i); 
+    for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i);
+    //P_theta(0,0) = legmodel.contact_p_3d[0];
+    //P_theta(1,0) = legmodel.contact_p_3d[2]; 
     RCLCPP_INFO(this->get_logger(), "P_theta: [%.4f, %.4f]", P_theta(0, 0), P_theta(1, 0));
+
     Eigen::MatrixXd J_fb(3, 3);
-    // Note: Assumes kinematics_.calculate_jacobian_3d exists and takes gamma & d_wheel
+    RCLCPP_INFO(this->get_logger(), "d_wheel: %.4f", legmodel.d_wheel);
     J_fb = kinematics_.calculate_jacobian_3d(P_theta, P_theta_deriv, motor_state_->beta + pitch, motor_state_->gamma, legmodel.d_wheel);
 
     Eigen::MatrixXd phi_vel(3, 1);
-    phi_vel << motor_state_->velocity_r, motor_state_->velocity_l, motor_state_->velocity_h;
-
+    phi_vel << motor_state_->velocity_l, motor_state_->velocity_r, motor_state_->velocity_h;
+    //RCLCPP_INFO(this->get_logger(), "Phi Vel: [%.4f, %.4f, %.4f]", phi_vel(0, 0), phi_vel(1, 0), phi_vel(2, 0));
     Eigen::MatrixXd vel_fb = J_fb.transpose() * phi_vel;
     Eigen::MatrixXd acc_fb = (vel_fb - J_fb.transpose() * phi_vel_prev_) * 1000;
-
+    
     // impedance control
     Eigen::MatrixXd M = Eigen::MatrixXd::Zero(3, 3);
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(3, 3);
@@ -159,13 +166,13 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     // calculate phi command
     Eigen::MatrixXd phi_des(3, 1);
-    phi_des << eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI,
-               eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI,
+    phi_des << eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI,
+               eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI,
                eta_cmd(2, 0);
 
     Eigen::MatrixXd phi_fb(3, 1);
-    phi_fb << motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
-              motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI,
+    phi_fb << motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI,
+              motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
               motor_state_->gamma;
 
     Eigen::MatrixXd phi_err = phi_des-phi_fb;
@@ -175,12 +182,12 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd B_joint = J_fb.transpose() * B * J_fb;
 
     // Extract diagonal terms for actual PD controller
-    double kp_r_cmd = K_joint(0, 0);
-    double kp_l_cmd = K_joint(1, 1);
+    double kp_l_cmd = K_joint(0, 0);
+    double kp_r_cmd = K_joint(1, 1);
     double kp_h_cmd = K_joint(2, 2);
 
-    double kd_r_cmd = B_joint(0, 0);
-    double kd_l_cmd = B_joint(1, 1);
+    double kd_l_cmd = B_joint(0, 0);
+    double kd_r_cmd = B_joint(1, 1);
     double kd_h_cmd = B_joint(2, 2);
 
     // Initial torque command
@@ -200,14 +207,14 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     motor_cmd_->theta = eta_cmd(0, 0);
     motor_cmd_->beta = eta_cmd(1, 0);
     motor_cmd_->gamma = eta_cmd(2, 0);
-    motor_cmd_->kp_r = kp_r_cmd;
     motor_cmd_->kp_l = kp_l_cmd;
+    motor_cmd_->kp_r = kp_r_cmd;
     motor_cmd_->kp_h = kp_h_cmd;
-    motor_cmd_->kd_r = kd_r_cmd;
     motor_cmd_->kd_l = kd_l_cmd;
+    motor_cmd_->kd_r = kd_r_cmd;
     motor_cmd_->kd_h = kd_h_cmd;
-    motor_cmd_->torque_r = trq_cmd(0, 0);
-    motor_cmd_->torque_l = trq_cmd(1, 0);
+    motor_cmd_->torque_l = trq_cmd(0, 0);
+    motor_cmd_->torque_r = trq_cmd(1, 0);
     motor_cmd_->torque_h = trq_cmd(2, 0);
 }
 
@@ -273,31 +280,33 @@ void ForceControl3DNode::timer_cb() {
             if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
 
             if (i == 1 || i == 2) {
+                RCLCPP_INFO(this->get_logger(), "Module number: %d", i);
                 force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
             }
             else {
+                RCLCPP_INFO(this->get_logger(), "Module number: %d", i);
                 force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
             }
             
         }
-        phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_h;
+        phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;
     }
 
     // dynamic friction compensation
     if (!kinematics_.is_sim()){
         for (int i=0; i<4; i++) {
-            double phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
-            double phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
+            double phi_l = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
+            double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
             double gamma_fb = motor_state_modules[i]->gamma;
 
-            if (phi_r > phi_prev_modules_[i](0, 0)){
+            if (phi_r > phi_prev_modules_[i](1, 0)){
                 motor_cmd_modules[i]->torque_r -= friction_[2*i];
             }
             else {
                 motor_cmd_modules[i]->torque_r += friction_[2*i];
             }
 
-            if (phi_l > phi_prev_modules_[i](1, 0)){
+            if (phi_l > phi_prev_modules_[i](0, 0)){
                 motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
             }
             else {
@@ -307,7 +316,7 @@ void ForceControl3DNode::timer_cb() {
             // NOTE: assuming zero constant friction for gamma for now since it wasn't specified.
             // if needed, similar compensation can be added.
 
-            phi_prev_modules_[i] << phi_r, phi_l, gamma_fb;
+            phi_prev_modules_[i] << phi_l, phi_r, gamma_fb;
         }
     }
 

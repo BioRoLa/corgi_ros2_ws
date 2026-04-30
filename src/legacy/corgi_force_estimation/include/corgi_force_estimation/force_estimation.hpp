@@ -70,7 +70,7 @@ private:
 class ForceEstimator {
 public:
     explicit ForceEstimator(bool sim);
-    Eigen::MatrixXd estimate(double theta, double beta, double torque_r, double torque_l);
+    Eigen::MatrixXd estimate(double theta, double beta, double gamma, double torque_l, double torque_r, double torque_h);
 
 private:
     KinematicsHelper kinematics_;
