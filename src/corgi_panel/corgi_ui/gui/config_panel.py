@@ -379,7 +379,7 @@ class CorgiConfigPanel(QWidget):
         # Build read queue (all INT addresses, then all FLOAT addresses)
         for addr in range(8):
             self.load_queue.append((ConfigType.INT, addr))
-        for addr in range(30):
+        for addr in range(36):
             self.load_queue.append((ConfigType.FLOAT, addr))
         
         self.total_load_items = len(self.load_queue)
