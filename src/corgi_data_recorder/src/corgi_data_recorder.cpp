@@ -143,10 +143,10 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "imp_cmd_bx_d"    << "," << "imp_cmd_by_d"   << "," << "imp_cmd_bz_d"   << ","
 
                         << "force_seq" << "," << "force_sec" << "," << "force_nsec" << ","
-                        << "force_Fx_a" << "," << "force_Fy_a" << ","
-                        << "force_Fx_b" << "," << "force_Fy_b" << ","
-                        << "force_Fx_c" << "," << "force_Fy_c" << ","
-                        << "force_Fx_d" << "," << "force_Fy_d" << ","
+                        << "force_Fx_a" << "," << "force_Fy_a" << "," << "force_Fz_a" << ","
+                        << "force_Fx_b" << "," << "force_Fy_b" << "," << "force_Fz_b" << ","
+                        << "force_Fx_c" << "," << "force_Fy_c" << "," << "force_Fz_c" << ","
+                        << "force_Fx_d" << "," << "force_Fy_d" << "," << "force_Fz_d" << ","
 
                         << "sim_sec" << "," << "sim_nsec" << ","
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
@@ -330,10 +330,10 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << imp_cmd.module_d.bx    << "," << imp_cmd.module_d.by << "," << imp_cmd.module_d.bz << ","
 
                 << force_state.header.seq << "," << force_state.header.stamp.sec << "," << force_state.header.stamp.nanosec << ","
-                << force_state.module_a.fx    << "," << force_state.module_a.fy << ","
-                << force_state.module_b.fx    << "," << force_state.module_b.fy << ","
-                << force_state.module_c.fx    << "," << force_state.module_c.fy << ","
-                << force_state.module_d.fx    << "," << force_state.module_d.fy << ","
+                << force_state.module_a.fx    << "," << force_state.module_a.fy << "," << force_state.module_a.fz << ","
+                << force_state.module_b.fx    << "," << force_state.module_b.fy << "," << force_state.module_b.fz << ","
+                << force_state.module_c.fx    << "," << force_state.module_c.fy << "," << force_state.module_c.fz << ","
+                << force_state.module_d.fx    << "," << force_state.module_d.fy << "," << force_state.module_d.fz << ","
 
                 << tf_data.header.stamp.sec << "," << tf_data.header.stamp.nanosec << ","
                 << tf_data.transform.translation.x << "," << tf_data.transform.translation.y << "," << tf_data.transform.translation.z << ","
