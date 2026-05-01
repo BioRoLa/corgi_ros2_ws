@@ -30,10 +30,10 @@ class WalkGait {
         std::array<double, 4> get_duty();
         bool if_touchdown();
 
-        double velocity     = 0.1;
-        double stand_height = 0.25;
-        double step_length  = 0.3;
-        double step_height  = 0.04;
+        double velocity     = 0.0; // 0.1;
+        double stand_height = 0.0; // 0.25;
+        double step_length  = 0.0; // 0.3;
+        double step_height  = 0.0; // 0.04;
         std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0};
 
     private:
