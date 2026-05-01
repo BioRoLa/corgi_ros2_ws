@@ -158,10 +158,12 @@ ament_target_dependencies(corgi_fusion_node
   nav_msgs
   geometry_msgs
   tf2_ros
+  ament_index_cpp
 )
 target_link_libraries(corgi_fusion_node
   fusion_ekf
   Eigen3::Eigen
+  yaml-cpp
 )
 
 # Fake LiDAR odometry simulator (GT + noise + latency)

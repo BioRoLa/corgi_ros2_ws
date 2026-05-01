@@ -36,11 +36,18 @@ public:
         // Process noise (per second, added as Q*dt each predict)
         float q_p   = 1e-4f;   // position drift variance/s   [m²/s]
         float q_th  = 1e-5f;   // rotation drift variance/s   [rad²/s]
-        float q_bv  = 1e-3f;   // bv random walk variance/s   [(m/s)²/s]
+        float q_bv  = 1e-5f;   // bv random walk variance/s   [(m/s)²/s]
 
         // LiDAR measurement noise (fixed, isotropic)
         float r_p   = 4e-4f;   // position noise variance      [m²]  (σ=0.02m)
         float r_th  = 2.5e-5f; // rotation noise variance      [rad²](σ=0.005rad)
+    };
+
+    // ── Initial error covariance constants ────────────────────
+    struct InitCovariance {
+        static constexpr float p_mo_m2  = 1.0f;    ///< p_mo initial variance  [m²]   (±1 m)
+        static constexpr float th_mo_r2 = 0.01f;   ///< θ_mo initial variance  [rad²] (±0.1 rad)
+        static constexpr float bv_ms2   = 1e-4f;   ///< bv  initial variance   [(m/s)²] (±0.01 m/s)
     };
 
     // ── Per-update diagnostics ─────────────────────────────────

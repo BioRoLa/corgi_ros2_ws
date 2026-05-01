@@ -55,6 +55,11 @@ private:
     std::deque<BufferedState> state_buffer_;
     static constexpr size_t BUFFER_MAX = 500;  // 0.5 s @ 500 Hz (with some margin)
 
+    // Timing constants
+    static constexpr float  DT_LIDAR_DEFAULT_S = 0.1f;   // nominal 10 Hz LiDAR period [s]
+    static constexpr double DT_LIDAR_MAX_S      = 5.0;   // sanity cap for dt_lidar [s]
+    static constexpr double ACCEPT_WINDOW_S     = 0.5;   // max age for buffered state match [s]
+
     // Timing
     rclcpp::Time last_ekf_stamp_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_lidar_stamp_{0, 0, RCL_ROS_TIME};

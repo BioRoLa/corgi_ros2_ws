@@ -1,6 +1,6 @@
 /// fake_lidar_odom.cpp
 /// Subscribes to TF (odom → base_link), adds Gaussian noise + simulated
-/// latency, and publishes nav_msgs/Odometry to /Odometry to mock Fast-LIO.
+/// latency, and publishes nav_msgs/Odometry to /lidar_odom to mock Fast-LIO.
 ///
 /// ROS 2 parameters:
 ///   use_sim_time  : bool   (default false)
@@ -10,7 +10,7 @@
 ///   latency_ms    : double [ms]  (default 80.0)
 ///   parent_frame  : string (default "odom")
 ///   child_frame   : string (default "base_link")
-///   output_topic  : string (default "/Odometry")
+///   output_topic  : string (default "/lidar_odom")
 ///   gt_pos_topic  : string (default "")
 ///     When non-empty, subscribe to this geometry_msgs/Vector3 topic for
 ///     ground-truth position instead of reading from TF.  Orientation is
@@ -27,6 +27,8 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
+
+#include "sim/FakeLidarSimulator.hpp"
 
 #include <deque>
 #include <random>
@@ -48,9 +50,7 @@ public:
     FakeLidarOdomNode()
         : Node("fake_lidar_odom"),
           tf_buffer_(this->get_clock()),
-          tf_listener_(tf_buffer_),
-          rng_(std::random_device{}()),
-          dist_(0.0, 1.0)
+          tf_listener_(tf_buffer_)
     {
         this->declare_parameter("publish_rate",  10.0);
         this->declare_parameter("sigma_p",       0.02);
@@ -58,7 +58,7 @@ public:
         this->declare_parameter("latency_ms",    80.0);
         this->declare_parameter("parent_frame",  std::string("odom"));
         this->declare_parameter("child_frame",   std::string("base_link"));
-        this->declare_parameter("output_topic",  std::string("/Odometry"));
+        this->declare_parameter("output_topic",  std::string("/lidar_odom"));
         this->declare_parameter("gt_pos_topic",  std::string(""));
 
         publish_rate_  = this->get_parameter("publish_rate").as_double();
@@ -72,6 +72,10 @@ public:
 
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             output_topic_, rclcpp::QoS(10));
+
+        // Initialise shared noise model
+        lidar_sim_ = sim::FakeLidarSimulator(sim::FakeLidarSimulator::Params{
+            sigma_p_, sigma_q_, 0u /* non-deterministic seed */});
 
         // Subscribe to GT position topic if requested
         if (!gt_pos_topic_.empty()) {
@@ -213,20 +217,10 @@ private:
             if (best_diff > 1.0 / publish_rate_) return;
         }
 
-        // Add Gaussian noise to position
-        Eigen::Vector3f p_noisy = delayed.position + Eigen::Vector3f(
-            sigma_p_ * static_cast<float>(dist_(rng_)),
-            sigma_p_ * static_cast<float>(dist_(rng_)),
-            sigma_p_ * static_cast<float>(dist_(rng_)));
-
-        // Add small angle noise to orientation (axis-angle perturbation)
-        Eigen::Vector3f noise_axis = Eigen::Vector3f(
-            static_cast<float>(dist_(rng_)),
-            static_cast<float>(dist_(rng_)),
-            static_cast<float>(dist_(rng_))).normalized();
-        float noise_angle = sigma_q_ * static_cast<float>(dist_(rng_));
-        Eigen::Quaternionf dq(Eigen::AngleAxisf(noise_angle, noise_axis));
-        Eigen::Quaternionf q_noisy = (delayed.orientation * dq).normalized();
+        // Apply shared noise model
+        Eigen::Vector3f p_noisy;
+        Eigen::Quaternionf q_noisy;
+        lidar_sim_.apply_noise(delayed.position, delayed.orientation, p_noisy, q_noisy);
 
         // Publish
         nav_msgs::msg::Odometry msg;
@@ -266,6 +260,9 @@ private:
     std::deque<StampedPose> pose_buffer_;     // TF-based buffer
     std::deque<StampedPose> sim_pos_buffer_;  // GT-position buffer
 
+    // Shared noise model
+    sim::FakeLidarSimulator lidar_sim_;
+
     // Parameters
     double      publish_rate_;
     float       sigma_p_;
@@ -275,10 +272,6 @@ private:
     std::string child_frame_;
     std::string output_topic_;
     std::string gt_pos_topic_;
-
-    // RNG
-    std::mt19937                     rng_;
-    std::normal_distribution<double> dist_;
 };
 
 // ----------------------------------------------------------------

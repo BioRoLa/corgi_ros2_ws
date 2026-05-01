@@ -43,7 +43,7 @@ LegOdometryNode::LegOdometryNode()
           try {
               const std::string pkg =
                   ament_index_cpp::get_package_share_directory("corgi_odometry");
-              return corgi::load_params(pkg + "/config/config_online.yaml");
+              return corgi::load_params(pkg + "/config/leg_odom/config_online.yaml");
           } catch (const std::exception& e) {
               RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
                           "Config load failed (%s), using defaults", e.what());

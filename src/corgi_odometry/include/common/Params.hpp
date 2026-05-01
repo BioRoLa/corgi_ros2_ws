@@ -53,6 +53,12 @@ struct Params {
 
     // ── GT velocity filter ──────────────────────────────────────
     double gt_velocity_lpf_cutoff = 10.0;  // [Hz]
+
+    // ── Fake LiDAR (simulation/offline) ────────────────────────
+    float  fake_lidar_sigma_p    = 0.02f;   // position noise std dev [m]
+    float  fake_lidar_sigma_q    = 0.005f;  // orientation noise std dev [rad]
+    double fake_lidar_latency_ms = 80.0;    // publish latency [ms]
+    double fake_lidar_rate_hz    = 10.0;    // publish rate [Hz]
 };
 
 }  // namespace corgi

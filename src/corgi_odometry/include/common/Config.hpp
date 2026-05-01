@@ -74,17 +74,16 @@ public:
     // Sim odometry topic names (used when use_esekf_state=false)
     static constexpr const char* TOPIC_ODOMETRY_POSITION = "sim/position";
     static constexpr const char* TOPIC_ODOMETRY_VELOCITY = "sim/velocity";
+    static constexpr const char* TOPIC_SIM_BODY_VELOCITY = "sim/body_velocity";
     
     // Topic names for publications
     static constexpr const char* TOPIC_CONTACT_STATE   = "gmo/contact_state";
-    static constexpr const char* TOPIC_EKF_POSITION    = "ekf/position";
-    static constexpr const char* TOPIC_EKF_VELOCITY    = "ekf/velocity";
     static constexpr const char* TOPIC_EKF_ORIENTATION = "ekf/orientation";
     static constexpr const char* TOPIC_EKF_BA          = "ekf/ba";
     static constexpr const char* TOPIC_EKF_BW          = "ekf/bw";
     static constexpr const char* TOPIC_EKF_ODOM        = "/ekf";
     static constexpr const char* TOPIC_FUSION_BV       = "/fusion/bv";
-    static constexpr const char* TOPIC_LIDAR_ODOM      = "/Odometry";
+    static constexpr const char* TOPIC_LIDAR_ODOM      = "/lidar_odom";
     static constexpr const char* TOPIC_ODOM_MAPPING    = "/odom_mapping";
 
     // TF frame IDs

@@ -1,5 +1,7 @@
 #include "fusion/FusionNode.hpp"
+#include "fusion/FusionParamsIO.hpp"
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
@@ -9,14 +11,26 @@ namespace fusion {
 FusionNode::FusionNode(const rclcpp::NodeOptions& opts)
     : Node("corgi_fusion_node", opts)
 {
-    // ── Noise params from ROS parameters ───────────────────────
-    this->declare_parameter("q_p",   1e-4);
-    this->declare_parameter("q_th",  1e-5);
-    this->declare_parameter("q_bv",  1e-3);
-    this->declare_parameter("r_p",   4e-4);
-    this->declare_parameter("r_th",  2.5e-5);
-    this->declare_parameter("map_frame",  std::string("map"));
-    this->declare_parameter("odom_frame", std::string("odom"));
+    // ── Load noise params from YAML (config/fusion/config_fusion.yaml) ─
+    FusionConfig cfg;
+    try {
+        const std::string pkg =
+            ament_index_cpp::get_package_share_directory("corgi_odometry");
+        cfg = load_fusion_config(pkg + "/config/fusion/config_fusion.yaml");
+        RCLCPP_INFO(this->get_logger(), "FusionNode: loaded config/fusion/config_fusion.yaml");
+    } catch (const std::exception& e) {
+        RCLCPP_WARN(this->get_logger(),
+            "FusionNode: YAML load failed (%s), using defaults", e.what());
+    }
+
+    // ── ROS parameter overrides (optional — set in launch to override YAML) ─
+    this->declare_parameter("q_p",        static_cast<double>(cfg.noise.q_p));
+    this->declare_parameter("q_th",       static_cast<double>(cfg.noise.q_th));
+    this->declare_parameter("q_bv",       static_cast<double>(cfg.noise.q_bv));
+    this->declare_parameter("r_p",        static_cast<double>(cfg.noise.r_p));
+    this->declare_parameter("r_th",       static_cast<double>(cfg.noise.r_th));
+    this->declare_parameter("map_frame",  cfg.map_frame);
+    this->declare_parameter("odom_frame", cfg.odom_frame);
 
     noise_params_.q_p  = static_cast<float>(this->get_parameter("q_p").as_double());
     noise_params_.q_th = static_cast<float>(this->get_parameter("q_th").as_double());
@@ -134,10 +148,10 @@ void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     }
 
     // dt since last LiDAR (for bv H-matrix coupling)
-    float dt_lidar = 0.1f;  // default 10 Hz
+    float dt_lidar = DT_LIDAR_DEFAULT_S;  // default 10 Hz
     if (last_lidar_stamp_valid_) {
         double dt = (stamp - last_lidar_stamp_).seconds();
-        if (dt > 0.0 && dt < 5.0)
+        if (dt > 0.0 && dt < DT_LIDAR_MAX_S)
             dt_lidar = static_cast<float>(dt);
     }
 
@@ -202,8 +216,8 @@ bool FusionNode::find_buffered_state(const rclcpp::Time& stamp,
             best_idx = i;
         }
     }
-    // Accept if within 0.5 s
-    if (best_dt > 0.5) return false;
+    // Accept if within ACCEPT_WINDOW_S
+    if (best_dt > ACCEPT_WINDOW_S) return false;
     out = state_buffer_[best_idx];
     return true;
 }

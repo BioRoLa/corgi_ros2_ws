@@ -20,9 +20,9 @@ Eigen::Matrix3f OuterEKF::skew(const Eigen::Vector3f& v) {
 OuterEKF::OuterEKF() {
     P_ = Eigen::MatrixXf::Identity(DIM, DIM);
     // Initial uncertainty: generous but bounded
-    P_.block<3,3>(P_IDX,  P_IDX)  *= 1.0f;    // p_mo   ± 1 m
-    P_.block<3,3>(TH_IDX, TH_IDX) *= 0.01f;   // θ_mo   ± 0.1 rad
-    P_.block<3,3>(BV_IDX, BV_IDX) *= 1e-4f;   // bv     ± 0.01 m/s
+    P_.block<3,3>(P_IDX,  P_IDX)  *= InitCovariance::p_mo_m2;   // p_mo ± 1 m
+    P_.block<3,3>(TH_IDX, TH_IDX) *= InitCovariance::th_mo_r2;  // θ_mo ± 0.1 rad
+    P_.block<3,3>(BV_IDX, BV_IDX) *= InitCovariance::bv_ms2;    // bv   ± 0.01 m/s
 }
 
 // ----------------------------------------------------------------

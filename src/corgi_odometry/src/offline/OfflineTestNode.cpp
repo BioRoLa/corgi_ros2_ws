@@ -1,6 +1,8 @@
 #include "offline/OfflineTestNode.hpp"
 #include "common/Config.hpp"
 #include "fusion/OuterEKF.hpp"
+#include "fusion/FusionParamsIO.hpp"
+#include "sim/FakeLidarSimulator.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -127,21 +129,26 @@ int OfflineTestNode::run() {
     // ── Outer Fusion EKF (Phase 2) ──────────────────────────────
     fusion::OuterEKF outer_ekf;
     {
-        fusion::OuterEKF::NoiseParams onp;
-        onp.q_p  = 1e-4f;
-        onp.q_th = 1e-5f;
-        onp.q_bv = 1e-5f;   // low: prevent bv from chasing random ESEKF noise
-        onp.r_p  = 4e-4f;   // sigma_p = 0.02 m → var = 4e-4 m²
-        onp.r_th = 2.5e-5f; // sigma_q = 0.005 rad
-        outer_ekf.set_noise(onp);
+        // Load noise params from the same YAML used by the online FusionNode
+        fusion::FusionConfig fcfg;
+        try {
+            const std::string yaml_path =
+                (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
+                 / "config" / "fusion" / "config_fusion.yaml").string();
+            fcfg = fusion::load_fusion_config(yaml_path);
+        } catch (const std::exception& e) {
+            if (!quiet) std::cerr << "[OfflineTestNode] Fusion YAML load failed ("
+                                  << e.what() << "), using defaults\n";
+        }
+        outer_ekf.set_noise(fcfg.noise);
     }
-    // Fake-LiDAR parameters (mirroring fake_lidar_odom.cpp defaults)
-    static constexpr size_t N_LIDAR_PERIOD = 100; // steps between LiDAR (1000Hz→10Hz)
-    static constexpr size_t LATENCY_STEPS  = 80;  // 80 ms at 1000Hz
-    static constexpr float  SIGMA_P_LIDAR  = 0.02f;
-    static constexpr float  SIGMA_Q_LIDAR  = 0.005f;
-    std::mt19937 rng_lidar(12345);
-    std::normal_distribution<float> lidar_dist(0.f, 1.f);
+    // Fake-LiDAR parameters (derived from Params; mirroring fake_lidar_odom.cpp defaults)
+    const size_t N_LIDAR_PERIOD = static_cast<size_t>(
+        corgi::Config::SAMPLE_RATE / params_.fake_lidar_rate_hz + 0.5); // steps between LiDAR updates
+    const size_t LATENCY_STEPS = static_cast<size_t>(
+        params_.fake_lidar_latency_ms * corgi::Config::SAMPLE_RATE / 1000.0 + 0.5);
+    sim::FakeLidarSimulator lidar_sim(sim::FakeLidarSimulator::Params{
+        params_.fake_lidar_sigma_p, params_.fake_lidar_sigma_q, 12345u});
     size_t lidar_update_count = 0;
 
     // ── RMSE accumulators ───────────────────────────────────────
@@ -252,17 +259,10 @@ int OfflineTestNode::run() {
                 static_cast<float>(ld.sim_orien_z));
             q_gt.normalize();
 
-            // Position noise
-            Eigen::Vector3f p_noisy = p_gt + SIGMA_P_LIDAR * Eigen::Vector3f(
-                lidar_dist(rng_lidar), lidar_dist(rng_lidar), lidar_dist(rng_lidar));
-            // Attitude noise
-            Eigen::Vector3f ax = Eigen::Vector3f(
-                lidar_dist(rng_lidar), lidar_dist(rng_lidar), lidar_dist(rng_lidar));
-            float ax_norm = ax.norm();
-            if (ax_norm < 1e-6f) ax = Eigen::Vector3f(1, 0, 0); else ax /= ax_norm;
-            float noise_ang = SIGMA_Q_LIDAR * lidar_dist(rng_lidar);
-            Eigen::Quaternionf q_noisy = (q_gt * Eigen::Quaternionf(
-                Eigen::AngleAxisf(noise_ang, ax))).normalized();
+            // Apply shared noise model
+            Eigen::Vector3f p_noisy;
+            Eigen::Quaternionf q_noisy;
+            lidar_sim.apply_noise(p_gt, q_gt, p_noisy, q_noisy);
 
             // Use inner-ESEKF state at current step as approximation for ring-buffer
             const auto& st = result.state;

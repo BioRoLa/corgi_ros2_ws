@@ -19,7 +19,6 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': True,
             'sample_rate': 1000.0,
-            'position_topic': 'sim/data',
             'velocity_topic': 'sim/velocity',
             'position_topic': 'sim/position',
         }]
@@ -65,7 +64,7 @@ def generate_launch_description():
             'latency_ms': 80.0,
             'parent_frame': 'odom',
             'child_frame': 'base_link',
-            'output_topic': '/Odometry',
+            'output_topic': '/lidar_odom',
             'gt_pos_topic': '/sim/position',   # use GT position — breaks ESEKF circular dependency
         }]
     )
@@ -75,16 +74,9 @@ def generate_launch_description():
         executable='corgi_fusion_node',
         name='corgi_fusion_node',
         output='screen',
-        parameters=[{
-            'use_sim_time': True,
-            'q_p':  1e-4,
-            'q_th': 1e-5,
-            'q_bv': 1e-3,
-            'r_p':  4e-4,
-            'r_th': 2.5e-5,
-            'map_frame':  'map',
-            'odom_frame': 'odom',
-        }]
+        # Noise params loaded from config/fusion/config_fusion.yaml by the node.
+        # Override individual params here only if needed.
+        parameters=[{'use_sim_time': True}]
     )
 
     return LaunchDescription([
