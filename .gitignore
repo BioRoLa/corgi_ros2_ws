@@ -13,6 +13,7 @@ input_csv/*
 output_data/*
 !output_data/README.md
 
+# ROS2 specific
 /log
 /install
 /build
@@ -22,3 +23,10 @@ output_data/*
 **/build
 **/log
 **/COLCON_IGNORE
+
+# python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
