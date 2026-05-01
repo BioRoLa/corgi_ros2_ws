@@ -66,6 +66,7 @@ def generate_launch_description():
             'parent_frame': 'odom',
             'child_frame': 'base_link',
             'output_topic': '/Odometry',
+            'gt_pos_topic': '/sim/position',   # use GT position — breaks ESEKF circular dependency
         }]
     )
 

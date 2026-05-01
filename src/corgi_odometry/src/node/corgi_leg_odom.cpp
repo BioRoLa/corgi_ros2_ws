@@ -105,7 +105,7 @@ LegOdometryNode::LegOdometryNode()
         std::bind(&LegOdometryNode::cb_trigger, this, std::placeholders::_1));
 
     bv_outer_sub_ = this->create_subscription<geometry_msgs::msg::Vector3Stamped>(
-        "/fusion/bv", rclcpp::QoS(10),
+        corgi::Config::TOPIC_FUSION_BV, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
         std::bind(&LegOdometryNode::cb_bv_outer, this, std::placeholders::_1));
 
     // --- Publishers ---
@@ -118,7 +118,7 @@ LegOdometryNode::LegOdometryNode()
     ekf_bw_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
         corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
     ekf_odom_pub_        = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/ekf", corgi::Config::QUEUE_SIZE_PUB);
+        corgi::Config::TOPIC_EKF_ODOM, corgi::Config::QUEUE_SIZE_PUB);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
 }
@@ -298,8 +298,8 @@ void LegOdometryNode::process() {
             // Combined nav_msgs/Odometry — pose + twist
             nav_msgs::msg::Odometry odom_msg;
             odom_msg.header.stamp    = imu_.header.stamp;
-            odom_msg.header.frame_id = "odom";
-            odom_msg.child_frame_id  = "base_link";
+            odom_msg.header.frame_id = corgi::Config::FRAME_ODOM;
+            odom_msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
             odom_msg.pose.pose.position.x    = static_cast<double>(st.p.x());
             odom_msg.pose.pose.position.y    = static_cast<double>(st.p.y());
             odom_msg.pose.pose.position.z    = static_cast<double>(st.p.z());

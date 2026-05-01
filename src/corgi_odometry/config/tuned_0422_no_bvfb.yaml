@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────
-# Online node parameters — corgi_odometry
-# Loaded by corgi_leg_odom and corgi_contact_leg_est at startup
-# via yaml-cpp (no recompile needed).
+# Tuned parameters — 2026-04-22, dual-dataset grid sweep
+# Phase 2 (no bv feedback) — same tuning as tuned_0422_bvfb.yaml
+# except use_bv_feedback: false
 # ─────────────────────────────────────────────────────────────────
 
 # ES-EKF noise tuning
@@ -11,12 +11,12 @@ esekf:
   sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
   sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
   sigma_leg_vec: [0.02, 0.10, 0.8]
-  mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
+  mahalanobis_threshold: 16.27
 
 # Disturbance observer / encoder filter
 observer:
-  cutoff_freq:         15.0   # Observer LPF [Hz]
-  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+  cutoff_freq:         15.0
+  encoder_cutoff_freq: 30.0
 
 # Schmitt-trigger contact thresholds
 contact:
@@ -26,7 +26,21 @@ contact:
   beta_threshold_low:   1.0
 
 # Logic switches
-use_dynamic_dt:  true
-use_esekf_state: true
-quiet:           true
-use_bv_feedback: true
+simulate_imu_noise: true
+use_dynamic_dt:     true
+use_esekf_state:    true
+quiet:              true
+
+# Offline processing
+offline:
+  csv_filename:   walk_2m_01
+  start_index:    0
+  max_processed:  12000
+  rmse_skip:      0
+  enable_logging: false
+  log_details:    false
+  imu_noise_seed: 42
+
+# Ground-truth velocity low-pass filter
+gt_velocity_lpf_cutoff: 10.0
+use_bv_feedback: false

@@ -82,7 +82,15 @@ public:
     static constexpr const char* TOPIC_EKF_ORIENTATION = "ekf/orientation";
     static constexpr const char* TOPIC_EKF_BA          = "ekf/ba";
     static constexpr const char* TOPIC_EKF_BW          = "ekf/bw";
-    
+    static constexpr const char* TOPIC_EKF_ODOM        = "/ekf";
+    static constexpr const char* TOPIC_FUSION_BV       = "/fusion/bv";
+    static constexpr const char* TOPIC_LIDAR_ODOM      = "/Odometry";
+    static constexpr const char* TOPIC_ODOM_MAPPING    = "/odom_mapping";
+
+    // TF frame IDs
+    static constexpr const char* FRAME_ODOM       = "odom";
+    static constexpr const char* FRAME_BASE_LINK  = "base_link";
+
     // Queue sizes
     static constexpr int QUEUE_SIZE_SUB = 1;          // Subscriber queue size (use latest value)
     static constexpr int QUEUE_SIZE_PUB = 10;         // Publisher queue size

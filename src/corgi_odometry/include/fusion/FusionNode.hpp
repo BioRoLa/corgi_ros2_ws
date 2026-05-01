@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fusion/OuterEKF.hpp"
+#include "common/Config.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>

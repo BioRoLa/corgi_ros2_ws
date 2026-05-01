@@ -3,17 +3,24 @@
 /// latency, and publishes nav_msgs/Odometry to /Odometry to mock Fast-LIO.
 ///
 /// ROS 2 parameters:
-///   use_sim_time  : bool  (default false)
-///   publish_rate  : double  [Hz]  (default 10.0)
-///   sigma_p       : double  [m]   (default 0.02)
-///   sigma_q       : double  [rad] (default 0.005)
-///   latency_ms    : double  [ms]  (default 80.0)
-///   parent_frame  : string  (default "odom")
-///   child_frame   : string  (default "base_link")
-///   output_topic  : string  (default "/Odometry")
+///   use_sim_time  : bool   (default false)
+///   publish_rate  : double [Hz]  (default 10.0)
+///   sigma_p       : double [m]   (default 0.02)
+///   sigma_q       : double [rad] (default 0.005)
+///   latency_ms    : double [ms]  (default 80.0)
+///   parent_frame  : string (default "odom")
+///   child_frame   : string (default "base_link")
+///   output_topic  : string (default "/Odometry")
+///   gt_pos_topic  : string (default "")
+///     When non-empty, subscribe to this geometry_msgs/Vector3 topic for
+///     ground-truth position instead of reading from TF.  Orientation is
+///     still taken from TF (ESEKF orientation error is negligible for
+///     short straight-line walks).  Use "/sim/position" in simulation to
+///     break the circular dependency where TF = ESEKF estimate.
 
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -52,6 +59,7 @@ public:
         this->declare_parameter("parent_frame",  std::string("odom"));
         this->declare_parameter("child_frame",   std::string("base_link"));
         this->declare_parameter("output_topic",  std::string("/Odometry"));
+        this->declare_parameter("gt_pos_topic",  std::string(""));
 
         publish_rate_  = this->get_parameter("publish_rate").as_double();
         sigma_p_       = static_cast<float>(this->get_parameter("sigma_p").as_double());
@@ -60,9 +68,20 @@ public:
         parent_frame_  = this->get_parameter("parent_frame").as_string();
         child_frame_   = this->get_parameter("child_frame").as_string();
         output_topic_  = this->get_parameter("output_topic").as_string();
+        gt_pos_topic_  = this->get_parameter("gt_pos_topic").as_string();
 
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             output_topic_, rclcpp::QoS(10));
+
+        // Subscribe to GT position topic if requested
+        if (!gt_pos_topic_.empty()) {
+            sim_pos_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
+                gt_pos_topic_, rclcpp::QoS(100),
+                std::bind(&FakeLidarOdomNode::cb_sim_pos, this, std::placeholders::_1));
+            RCLCPP_INFO(this->get_logger(),
+                "GT position source: topic '%s' (breaks ESEKF circular dependency)",
+                gt_pos_topic_.c_str());
+        }
 
         auto period = std::chrono::duration<double>(1.0 / publish_rate_);
         timer_ = this->create_wall_timer(
@@ -77,67 +96,130 @@ public:
     }
 
 private:
-    void timer_cb() {
-        // 1. Fetch the latest GT pose from TF
-        geometry_msgs::msg::TransformStamped tf_msg;
-        try {
-            tf_msg = tf_buffer_.lookupTransform(
-                parent_frame_, child_frame_, tf2::TimePointZero);
-        } catch (const tf2::TransformException& e) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),
-                2000, "FakeLidar: TF lookup failed: %s", e.what());
-            return;
-        }
-
-        StampedPose pose;
-        pose.stamp = rclcpp::Time(tf_msg.header.stamp);
-        pose.position = Eigen::Vector3f(
-            static_cast<float>(tf_msg.transform.translation.x),
-            static_cast<float>(tf_msg.transform.translation.y),
-            static_cast<float>(tf_msg.transform.translation.z));
-        pose.orientation = Eigen::Quaternionf(
-            static_cast<float>(tf_msg.transform.rotation.w),
-            static_cast<float>(tf_msg.transform.rotation.x),
-            static_cast<float>(tf_msg.transform.rotation.y),
-            static_cast<float>(tf_msg.transform.rotation.z)).normalized();
-
-        // 2. Push to latency buffer
-        pose_buffer_.push_back(pose);
-        // Remove entries older than latency window + some margin (2s)
+    // ── GT position subscriber (geometry_msgs/Vector3) ───────
+    void cb_sim_pos(const geometry_msgs::msg::Vector3::SharedPtr msg) {
         const rclcpp::Time now = this->now();
-        while (!pose_buffer_.empty()) {
-            double age = (now - pose_buffer_.front().stamp).seconds();
-            if (age > 2.0)
-                pose_buffer_.pop_front();
-            else
-                break;
+
+        // Detect time jump backward (e.g. bag replay restarting with sim_time)
+        if (!sim_pos_buffer_.empty() &&
+            (sim_pos_buffer_.back().stamp - now).seconds() > 0.5) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                "FakeLidar: sim_pos time jumped back — clearing buffer");
+            sim_pos_buffer_.clear();
         }
 
-        // 3. Find a pose that was buffered `latency_ms_` ago
-        const double latency_s = latency_ms_ * 1e-3;
+        StampedPose p;
+        p.stamp     = now;
+        p.position  = Eigen::Vector3f(
+            static_cast<float>(msg->x),
+            static_cast<float>(msg->y),
+            static_cast<float>(msg->z));
+        p.orientation = Eigen::Quaternionf::Identity(); // filled from TF in timer_cb
+        sim_pos_buffer_.push_back(p);
+        // Trim entries older than 2 s
+        while (!sim_pos_buffer_.empty() &&
+               (now - sim_pos_buffer_.front().stamp).seconds() > 2.0)
+            sim_pos_buffer_.pop_front();
+    }
+
+    void timer_cb() {
         StampedPose delayed;
         bool found = false;
-        double best_diff = std::numeric_limits<double>::max();
-        for (const auto& p : pose_buffer_) {
-            double age = (now - p.stamp).seconds();
-            double diff = std::abs(age - latency_s);
-            if (diff < best_diff) {
-                best_diff = diff;
-                delayed   = p;
-                found     = true;
-            }
-        }
-        if (!found) return;
-        // Accept if within half-period tolerance
-        if (best_diff > 1.0 / publish_rate_) return;
 
-        // 4. Add Gaussian noise to position
+        if (!gt_pos_topic_.empty()) {
+            // ── GT-position path: use /sim/position buffer ──────
+            if (sim_pos_buffer_.empty()) return;
+            const double latency_s = latency_ms_ * 1e-3;
+            const rclcpp::Time now = this->now();
+
+            // Clear if time jumped back
+            if (!sim_pos_buffer_.empty() &&
+                (sim_pos_buffer_.back().stamp - now).seconds() > 0.5) {
+                sim_pos_buffer_.clear();
+                return;
+            }
+            double best_diff = std::numeric_limits<double>::max();
+            for (const auto& p : sim_pos_buffer_) {
+                double age  = (now - p.stamp).seconds();
+                double diff = std::abs(age - latency_s);
+                if (diff < best_diff) { best_diff = diff; delayed = p; found = true; }
+            }
+            if (!found) return;
+            // Accept if within half-period tolerance
+            if (best_diff > 1.0 / publish_rate_) return;
+
+            // Get orientation from TF (ESEKF; orientation error << position error)
+            geometry_msgs::msg::TransformStamped tf_msg;
+            try {
+                tf_msg = tf_buffer_.lookupTransform(
+                    parent_frame_, child_frame_, tf2::TimePointZero);
+            } catch (const tf2::TransformException& e) {
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),
+                    2000, "FakeLidar: TF lookup failed: %s", e.what());
+                return;
+            }
+            delayed.orientation = Eigen::Quaternionf(
+                static_cast<float>(tf_msg.transform.rotation.w),
+                static_cast<float>(tf_msg.transform.rotation.x),
+                static_cast<float>(tf_msg.transform.rotation.y),
+                static_cast<float>(tf_msg.transform.rotation.z)).normalized();
+        } else {
+            // ── Default TF path ──────────────────────────────────
+            geometry_msgs::msg::TransformStamped tf_msg;
+            try {
+                tf_msg = tf_buffer_.lookupTransform(
+                    parent_frame_, child_frame_, tf2::TimePointZero);
+            } catch (const tf2::TransformException& e) {
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(),
+                    2000, "FakeLidar: TF lookup failed: %s", e.what());
+                return;
+            }
+
+            StampedPose pose;
+            pose.stamp = rclcpp::Time(tf_msg.header.stamp);
+            pose.position = Eigen::Vector3f(
+                static_cast<float>(tf_msg.transform.translation.x),
+                static_cast<float>(tf_msg.transform.translation.y),
+                static_cast<float>(tf_msg.transform.translation.z));
+            pose.orientation = Eigen::Quaternionf(
+                static_cast<float>(tf_msg.transform.rotation.w),
+                static_cast<float>(tf_msg.transform.rotation.x),
+                static_cast<float>(tf_msg.transform.rotation.y),
+                static_cast<float>(tf_msg.transform.rotation.z)).normalized();
+
+            pose_buffer_.push_back(pose);
+            const rclcpp::Time now = this->now();
+
+            // Clear if time jumped back
+            if (!pose_buffer_.empty() &&
+                (pose_buffer_.back().stamp - now).seconds() > 0.5) {
+                pose_buffer_.clear();
+                return;
+            }
+
+            while (!pose_buffer_.empty()) {
+                double age = (now - pose_buffer_.front().stamp).seconds();
+                if (age > 2.0) pose_buffer_.pop_front(); else break;
+            }
+
+            const double latency_s = latency_ms_ * 1e-3;
+            double best_diff = std::numeric_limits<double>::max();
+            for (const auto& p : pose_buffer_) {
+                double age  = (now - p.stamp).seconds();
+                double diff = std::abs(age - latency_s);
+                if (diff < best_diff) { best_diff = diff; delayed = p; found = true; }
+            }
+            if (!found) return;
+            if (best_diff > 1.0 / publish_rate_) return;
+        }
+
+        // Add Gaussian noise to position
         Eigen::Vector3f p_noisy = delayed.position + Eigen::Vector3f(
             sigma_p_ * static_cast<float>(dist_(rng_)),
             sigma_p_ * static_cast<float>(dist_(rng_)),
             sigma_p_ * static_cast<float>(dist_(rng_)));
 
-        // 5. Add small angle noise to orientation (axis-angle perturbation)
+        // Add small angle noise to orientation (axis-angle perturbation)
         Eigen::Vector3f noise_axis = Eigen::Vector3f(
             static_cast<float>(dist_(rng_)),
             static_cast<float>(dist_(rng_)),
@@ -146,7 +228,7 @@ private:
         Eigen::Quaternionf dq(Eigen::AngleAxisf(noise_angle, noise_axis));
         Eigen::Quaternionf q_noisy = (delayed.orientation * dq).normalized();
 
-        // 6. Publish
+        // Publish
         nav_msgs::msg::Odometry msg;
         // Stamp the message at the delayed time (to allow ring-buffer matching)
         msg.header.stamp    = delayed.stamp;
@@ -178,9 +260,11 @@ private:
     tf2_ros::TransformListener tf_listener_;
 
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr sim_pos_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
-    std::deque<StampedPose> pose_buffer_;
+    std::deque<StampedPose> pose_buffer_;     // TF-based buffer
+    std::deque<StampedPose> sim_pos_buffer_;  // GT-position buffer
 
     // Parameters
     double      publish_rate_;
@@ -190,6 +274,7 @@ private:
     std::string parent_frame_;
     std::string child_frame_;
     std::string output_topic_;
+    std::string gt_pos_topic_;
 
     // RNG
     std::mt19937                     rng_;

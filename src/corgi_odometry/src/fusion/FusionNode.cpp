@@ -30,19 +30,19 @@ FusionNode::FusionNode(const rclcpp::NodeOptions& opts)
 
     // ── Subscribers ────────────────────────────────────────────
     ekf_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/ekf", rclcpp::QoS(10),
+        corgi::Config::TOPIC_EKF_ODOM, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
         std::bind(&FusionNode::cb_ekf, this, std::placeholders::_1));
 
     lidar_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/Odometry", rclcpp::QoS(10),
+        corgi::Config::TOPIC_LIDAR_ODOM, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
         std::bind(&FusionNode::cb_lidar, this, std::placeholders::_1));
 
     // ── Publishers ─────────────────────────────────────────────
     odom_mapping_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/odom_mapping", rclcpp::QoS(10));
+        corgi::Config::TOPIC_ODOM_MAPPING, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB));
 
     bv_pub_ = this->create_publisher<geometry_msgs::msg::Vector3Stamped>(
-        "/fusion/bv", rclcpp::QoS(10));
+        corgi::Config::TOPIC_FUSION_BV, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB));
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -217,7 +217,7 @@ void FusionNode::publish_odom_mapping(const rclcpp::Time& stamp,
     nav_msgs::msg::Odometry msg;
     msg.header.stamp    = stamp;
     msg.header.frame_id = map_frame_;
-    msg.child_frame_id  = "base_link";
+    msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
     msg.pose.pose.position.x    = static_cast<double>(p_map.x());
     msg.pose.pose.position.y    = static_cast<double>(p_map.y());
     msg.pose.pose.position.z    = static_cast<double>(p_map.z());
