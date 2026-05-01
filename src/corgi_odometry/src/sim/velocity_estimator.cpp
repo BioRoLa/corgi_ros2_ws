@@ -115,7 +115,7 @@ public:
         );
 
         body_velocity_pub_ = this->create_publisher<geometry_msgs::msg::Vector3>(
-            "sim/body_velocity",
+            corgi::Config::TOPIC_SIM_BODY_VELOCITY,
             10
         );
         
@@ -123,7 +123,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "  Listening to TF: %s -> %s", parent_frame_.c_str(), child_frame_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing velocity to: %s", velocity_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "  Publishing position to: %s", position_topic.c_str());
-        RCLCPP_INFO(this->get_logger(), "  Publishing body velocity to: sim/body_velocity");
+        RCLCPP_INFO(this->get_logger(), "  Publishing body velocity to: %s", corgi::Config::TOPIC_SIM_BODY_VELOCITY);
         RCLCPP_INFO(this->get_logger(), "  Filter cutoff frequency: %.1f Hz", cutoff_freq);
         RCLCPP_INFO(this->get_logger(), "  Sample rate: %.1f Hz", sample_rate);
     }

@@ -12,7 +12,7 @@
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
 #include <corgi_msgs/msg/imu_stamped.hpp>
-#include "offline/ImuNoiseSimulator.hpp"
+#include "sim/ImuNoiseSimulator.hpp"
 
 class ImuNoiseSimNode : public rclcpp::Node {
 public:

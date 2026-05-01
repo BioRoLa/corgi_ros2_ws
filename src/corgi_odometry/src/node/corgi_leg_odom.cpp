@@ -43,7 +43,7 @@ LegOdometryNode::LegOdometryNode()
           try {
               const std::string pkg =
                   ament_index_cpp::get_package_share_directory("corgi_odometry");
-              return corgi::load_params(pkg + "/config/config_online.yaml");
+              return corgi::load_params(pkg + "/config/leg_odom/config_online.yaml");
           } catch (const std::exception& e) {
               RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
                           "Config load failed (%s), using defaults", e.what());
@@ -104,22 +104,23 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_TRIGGER, corgi::Config::QUEUE_SIZE_SUB,
         std::bind(&LegOdometryNode::cb_trigger, this, std::placeholders::_1));
 
+    bv_outer_sub_ = this->create_subscription<geometry_msgs::msg::Vector3Stamped>(
+        corgi::Config::TOPIC_FUSION_BV, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
+        std::bind(&LegOdometryNode::cb_bv_outer, this, std::placeholders::_1));
+
     // --- Publishers ---
     contact_state_pub_   = this->create_publisher<corgi_msgs::msg::GMOContactStateStamped>(
         corgi::Config::TOPIC_CONTACT_STATE, corgi::Config::QUEUE_SIZE_PUB);
-    ekf_position_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
-        corgi::Config::TOPIC_EKF_POSITION, corgi::Config::QUEUE_SIZE_PUB);
-    ekf_velocity_pub_    = this->create_publisher<geometry_msgs::msg::Vector3>(
-        corgi::Config::TOPIC_EKF_VELOCITY, corgi::Config::QUEUE_SIZE_PUB);
     ekf_orientation_pub_ = this->create_publisher<geometry_msgs::msg::Quaternion>(
         corgi::Config::TOPIC_EKF_ORIENTATION, corgi::Config::QUEUE_SIZE_PUB);
     ekf_ba_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
         corgi::Config::TOPIC_EKF_BA, corgi::Config::QUEUE_SIZE_PUB);
     ekf_bw_pub_          = this->create_publisher<geometry_msgs::msg::Vector3>(
         corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
+    ekf_odom_pub_        = this->create_publisher<nav_msgs::msg::Odometry>(
+        corgi::Config::TOPIC_EKF_ODOM, corgi::Config::QUEUE_SIZE_PUB);
 
-    RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started");
-    RCLCPP_INFO(this->get_logger(), "Loop rate: %.1f Hz", corgi::Config::ONLINE_LOOP_RATE);
+    RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
 }
 
 // ============================================================
@@ -191,19 +192,22 @@ void LegOdometryNode::process() {
     if (esekf_tick_ >= static_cast<size_t>(corgi::Config::ESEKF_DECIMATION)) {
         esekf_tick_ = 0;
 
-        // --- Compute dynamic dt from IMU timestamp ---
-        rclcpp::Time current_imu_time(imu_.header.stamp);
+        // --- Compute dynamic dt from IMU header.stamp (identical to offline pipeline) ---
+        const int32_t  cur_imu_sec  = imu_.header.stamp.sec;
+        const uint32_t cur_imu_nsec = imu_.header.stamp.nanosec;
         float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT);  // nominal fallback
         if (params_.use_dynamic_dt && last_esekf_imu_time_valid_) {
-            double dt_sec = (current_imu_time - last_esekf_imu_time_).seconds();
-            // Sanity check: clamp to [0.5×nominal, 2×nominal] to reject outliers
+            double cur_t  = cur_imu_sec  + cur_imu_nsec  * 1e-9;
+            double prev_t = last_esekf_imu_sec_ + last_esekf_imu_nsec_ * 1e-9;
+            double dt_sec = cur_t - prev_t;
             constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
             constexpr double dt_max = corgi::Config::ESEKF_DT * 2.0;
             if (dt_sec > dt_min && dt_sec < dt_max) {
                 esekf_dt = static_cast<float>(dt_sec);
             }
         }
-        last_esekf_imu_time_ = current_imu_time;
+        last_esekf_imu_sec_  = cur_imu_sec;
+        last_esekf_imu_nsec_ = cur_imu_nsec;
         last_esekf_imu_time_valid_ = true;
 
         // --- Initialize ESEKF on first triggered tick ---
@@ -267,18 +271,6 @@ void LegOdometryNode::process() {
         {
             const auto& st = esekf_.nominal();
 
-            geometry_msgs::msg::Vector3 position_msg;
-            position_msg.x = static_cast<double>(st.p.x());
-            position_msg.y = static_cast<double>(st.p.y());
-            position_msg.z = static_cast<double>(st.p.z());
-            ekf_position_pub_->publish(position_msg);
-
-            geometry_msgs::msg::Vector3 velocity_msg;
-            velocity_msg.x = static_cast<double>(st.v.x());
-            velocity_msg.y = static_cast<double>(st.v.y());
-            velocity_msg.z = static_cast<double>(st.v.z());
-            ekf_velocity_pub_->publish(velocity_msg);
-
             geometry_msgs::msg::Quaternion orientation_msg;
             orientation_msg.w = static_cast<double>(st.q.w());
             orientation_msg.x = static_cast<double>(st.q.x());
@@ -297,6 +289,31 @@ void LegOdometryNode::process() {
             bw_msg.y = static_cast<double>(st.bw.y());
             bw_msg.z = static_cast<double>(st.bw.z());
             ekf_bw_pub_->publish(bw_msg);
+
+            // Body-frame velocity: v_body = R^T * v_world
+            const Eigen::Vector3f v_body = st.q.toRotationMatrix().transpose() * st.v;
+            // Bias-corrected angular velocity
+            const Eigen::Vector3f w_corr = w_m - st.bw;
+
+            // Combined nav_msgs/Odometry — pose + twist
+            nav_msgs::msg::Odometry odom_msg;
+            odom_msg.header.stamp    = imu_.header.stamp;
+            odom_msg.header.frame_id = corgi::Config::FRAME_ODOM;
+            odom_msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
+            odom_msg.pose.pose.position.x    = static_cast<double>(st.p.x());
+            odom_msg.pose.pose.position.y    = static_cast<double>(st.p.y());
+            odom_msg.pose.pose.position.z    = static_cast<double>(st.p.z());
+            odom_msg.pose.pose.orientation.w = orientation_msg.w;
+            odom_msg.pose.pose.orientation.x = orientation_msg.x;
+            odom_msg.pose.pose.orientation.y = orientation_msg.y;
+            odom_msg.pose.pose.orientation.z = orientation_msg.z;
+            odom_msg.twist.twist.linear.x    = static_cast<double>(v_body.x());
+            odom_msg.twist.twist.linear.y    = static_cast<double>(v_body.y());
+            odom_msg.twist.twist.linear.z    = static_cast<double>(v_body.z());
+            odom_msg.twist.twist.angular.x   = static_cast<double>(w_corr.x());
+            odom_msg.twist.twist.angular.y   = static_cast<double>(w_corr.y());
+            odom_msg.twist.twist.angular.z   = static_cast<double>(w_corr.z());
+            ekf_odom_pub_->publish(odom_msg);
         }
     }
 
@@ -319,6 +336,9 @@ void LegOdometryNode::process() {
 void LegOdometryNode::cb_motor_state(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
     motor_state_ = *msg;
     motor_state_received_ = true;
+    // Drive the processing loop: one call per motor_state arrival
+    // (matches offline pipeline which processes every row exactly once)
+    process();
 }
 
 void LegOdometryNode::cb_imu(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
@@ -338,6 +358,23 @@ void LegOdometryNode::cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr m
 
 void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
     is_triggered_ = msg->enable;
+}
+
+void LegOdometryNode::cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
+    // Low-pass filter + hard clamp, then forward to ESEKF.
+    // bv is in world frame (as published by FusionNode).
+    constexpr float LPF_ALPHA = 0.3f;    // smoothing factor [0=frozen, 1=no filter]
+    constexpr float BV_MAX    = 0.15f;   // hard clamp per-axis [m/s]
+
+    Eigen::Vector3f bv_raw(
+        static_cast<float>(msg->vector.x),
+        static_cast<float>(msg->vector.y),
+        static_cast<float>(msg->vector.z));
+
+    bv_outer_filtered_ = LPF_ALPHA * bv_raw + (1.0f - LPF_ALPHA) * bv_outer_filtered_;
+    bv_outer_filtered_ = bv_outer_filtered_.cwiseMax(-BV_MAX).cwiseMin(BV_MAX);
+
+    esekf_.set_bv_outer(bv_outer_filtered_);
 }
 
 // ============================================================
@@ -470,20 +507,10 @@ int main(int argc, char** argv) {
         wait_for_clock_sync(g_node);
     }
 
-    const rclcpp::Duration period(0, static_cast<int>(1e9 / corgi::Config::ONLINE_LOOP_RATE));
-
+    // Event-driven: process() is called inside cb_motor_state, so each
+    // motor_state arrival triggers exactly one processing tick (same as offline).
     try {
-        rclcpp::Time next_time = g_node->now();
-        while (rclcpp::ok()) {
-            rclcpp::spin_some(g_node);
-            std::dynamic_pointer_cast<LegOdometryNode>(g_node)->process();
-
-            next_time += period;
-            if (!g_node->get_clock()->sleep_until(next_time)) {
-                RCLCPP_WARN(g_node->get_logger(), "Sleep until failed!");
-                break;
-            }
-        }
+        rclcpp::spin(g_node);
     } catch (const std::exception& e) {
         RCLCPP_ERROR(g_node->get_logger(), "Exception: %s", e.what());
         return 1;

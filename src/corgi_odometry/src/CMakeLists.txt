@@ -20,6 +20,7 @@ add_executable(offline_test
   offline/offline_test.cpp
   offline/OfflineTestNode.cpp
   estimation/EstimationPipeline.cpp
+  fusion/OuterEKF.cpp
 )
 
 ament_target_dependencies(offline_test 
@@ -84,6 +85,7 @@ ament_target_dependencies(corgi_leg_odom
   std_msgs 
   rosgraph_msgs 
   geometry_msgs 
+  nav_msgs
   corgi_msgs
   ament_index_cpp
 )
@@ -134,4 +136,49 @@ target_link_libraries(imu_noise_sim
 )
 
 install(TARGETS imu_noise_sim
+  DESTINATION lib/${PROJECT_NAME})
+
+# ----------------------------------------------------------------
+# Outer Fusion EKF library (no ROS dependency)
+# ----------------------------------------------------------------
+add_library(fusion_ekf
+  fusion/OuterEKF.cpp
+)
+target_link_libraries(fusion_ekf
+  Eigen3::Eigen
+)
+
+# Fusion EKF node (outer EKF + ring buffer + TF publisher)
+add_executable(corgi_fusion_node
+  fusion/FusionNode.cpp
+  fusion/fusion_node.cpp
+)
+ament_target_dependencies(corgi_fusion_node
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2_ros
+  ament_index_cpp
+)
+target_link_libraries(corgi_fusion_node
+  fusion_ekf
+  Eigen3::Eigen
+  yaml-cpp
+)
+
+# Fake LiDAR odometry simulator (GT + noise + latency)
+add_executable(fake_lidar_odom
+  sim/fake_lidar_odom.cpp
+)
+ament_target_dependencies(fake_lidar_odom
+  rclcpp
+  nav_msgs
+  tf2_ros
+  tf2_geometry_msgs
+)
+target_link_libraries(fake_lidar_odom
+  Eigen3::Eigen
+)
+
+install(TARGETS corgi_fusion_node fake_lidar_odom
   DESTINATION lib/${PROJECT_NAME})

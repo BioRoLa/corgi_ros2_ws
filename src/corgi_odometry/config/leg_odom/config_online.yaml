@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────
+# Online node parameters — corgi_odometry
+# Loaded by corgi_leg_odom and corgi_contact_leg_est at startup
+# via yaml-cpp (no recompile needed).
+# ─────────────────────────────────────────────────────────────────
+
+# ES-EKF noise tuning
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
+
+# Disturbance observer / encoder filter
+observer:
+  cutoff_freq:         15.0   # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+
+# Schmitt-trigger contact thresholds
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+# Logic switches
+use_dynamic_dt:  true
+use_esekf_state: true
+quiet:           true
+use_bv_feedback: true
