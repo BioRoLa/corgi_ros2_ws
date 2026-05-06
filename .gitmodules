@@ -3,4 +3,4 @@
 	url = git@github.com:BioRoLa/corgi_sim.git
 [submodule "src/vendor/LegWheel"]
 	path = src/vendor/LegWheel
-	url = https://github.com/BioRoLa/LegWheel.git
+	url = git@github.com:BioRoLa/LegWheel.git
