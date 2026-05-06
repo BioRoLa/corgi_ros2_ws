@@ -135,6 +135,7 @@ class ControlPanelRosWorker(RosWorkerBase):
         # Publishers
         self.power_cmd_pub = None
         self.robot_cmd_pub = None
+        self.motor_cmd_pub = None
         self.trigger_pub = None
         
         # Subscribers
@@ -150,6 +151,9 @@ class ControlPanelRosWorker(RosWorkerBase):
         )
         self.robot_cmd_pub = self.node.create_publisher(
             RobotCmdStamped, 'robot/command', 10
+        )
+        self.motor_cmd_pub = self.node.create_publisher(
+            MotorCmdStamped, 'motor/command', 10
         )
         self.trigger_pub = self.node.create_publisher(
             TriggerStamped, 'trigger', 10
@@ -219,6 +223,16 @@ class ControlPanelRosWorker(RosWorkerBase):
         """
         if self.robot_cmd_pub and self._running:
             self.robot_cmd_pub.publish(msg)
+
+    def send_motor_command(self, msg: MotorCmdStamped) -> None:
+        """
+        Publish motor command (theta/beta/gamma and gains)
+
+        Args:
+            msg: MotorCmdStamped message to publish
+        """
+        if self.motor_cmd_pub and self._running:
+            self.motor_cmd_pub.publish(msg)
     
     def send_trigger(self, msg: TriggerStamped) -> None:
         """

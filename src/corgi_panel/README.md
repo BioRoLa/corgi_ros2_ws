@@ -10,7 +10,8 @@ corgi_panel/
 ├── scripts/
 │   ├── __init__.py
 │   ├── run_control.py   # Control Panel entry point
-│   └── run_config.py    # Config Panel entry point
+│   ├── run_config.py    # Config Panel entry point
+│   └── normalize_sequence_json.py  # Convert auto-generated JSON to sequence format
 └── corgi_ui/            # Main package source
     ├── __init__.py
     ├── assets/
@@ -19,10 +20,12 @@ corgi_panel/
     │   ├── constants.py
     │   ├── motor_data.py
     │   ├── process_manager.py
-    │   └── ros_worker.py
+    │   ├── ros_worker.py
+    │   └── sequence_model.py   # Sequence data model and execution records
     └── gui/
         ├── control_panel.py
         ├── config_panel.py
+        ├── custom_sequence_window.py  # Custom Command Sequence editor window
         └── widgets/
             └── log_widget.py
 ```
@@ -144,6 +147,88 @@ source install/setup.bash
 - ✅ Reusable UI components (LogWidget)
 - ✅ Shared theme system (theme.qss)
 - ✅ Modular architecture (easy to test and extend)
+- ✅ Custom Command Sequence editor with per-node PD gains, joint targets, limit profiles
+
+## Custom Command Sequence
+
+The **Custom Command Sequence** feature allows you to define and execute multi-node position sequences on the robot.
+
+### Enabling the feature
+
+The feature is disabled by default. Pass the `enable_custom_sequence` parameter when launching the control panel:
+
+```bash
+ros2 run corgi_panel corgi_control_panel --ros-args -p enable_custom_sequence:=true
+```
+
+Or in a launch file:
+```python
+control_panel = Node(
+    package='corgi_panel',
+    executable='corgi_control_panel',
+    parameters=[{
+        'use_sim_time': True,
+        'enable_custom_sequence': True,
+    }],
+    output='screen'
+)
+```
+
+Once enabled, a **Custom Command Sequence** button appears in the tools sidebar.
+
+### Features
+
+- **Sequence editor**: Add, remove, reorder, duplicate nodes in a list
+- **Per-node targets**: Set individual theta/beta/gamma angles (degrees) for each of the 4 legs (A/B/C/D)
+- **Per-node PD gains**: Override global leg_kp/leg_kd/gamma_kp/gamma_kd per node
+- **Duration**: Configurable time (seconds) for each node transition
+- **Templates**: Built-in pose templates (Stand 90°, Squat 45°, Low 17.5°, Neutral 60°); save/load custom templates
+- **Limit profiles**: Load/save joint angle and speed limits per leg per joint
+- **Smooth interpolation**: Speed-limited interpolation from actual start pose (no jump on first node)
+- **Dry-run mode**: Validate and preview without sending commands
+- **Progress tracking**: Progress bar with ETA during execution
+- **Auto-save execution record**: Results saved to `output_data/` as JSON
+
+### JSON format
+
+Sequences are saved/loaded as JSON files. The canonical format:
+```json
+{
+  "version": 1,
+  "name": "my_sequence",
+  "nodes": [
+    {
+      "name": "Stand",
+      "duration_sec": 2.0,
+      "targets": {
+        "A": {"theta": 90.0, "beta": 0.0, "gamma": 0.0},
+        "B": {"theta": 90.0, "beta": 0.0, "gamma": 0.0},
+        "C": {"theta": 90.0, "beta": 0.0, "gamma": 0.0},
+        "D": {"theta": 90.0, "beta": 0.0, "gamma": 0.0}
+      },
+      "gains": {
+        "leg_kp": 60.0, "leg_kd": 1.0,
+        "gamma_kp": 20.0, "gamma_kd": 0.5
+      },
+      "notes": ""
+    }
+  ]
+}
+```
+
+Auto-generated execution records from `output_data/` can also be loaded directly.
+
+### Converting auto-generated JSON
+
+Use the provided script to convert auto-generated JSON to canonical sequence format:
+```bash
+python3 scripts/normalize_sequence_json.py input.json output.json
+```
+
+### Timing and simulation
+
+- **Header timestamps** (`msg.header.stamp`): use ROS clock → respects `use_sim_time`
+- **Node duration timing**: also uses ROS clock → durations match simulated time when `use_sim_time=true`
 
 ## Next Steps
 

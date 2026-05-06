@@ -6,16 +6,19 @@ Refactored version with modular architecture (MVC pattern)
 import os
 import sys
 import logging
+import time
+import csv
 import yaml
 import numpy as np
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication
+    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
+    QDoubleSpinBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from corgi_msgs.msg import RobotCmdStamped, TriggerStamped
+from corgi_msgs.msg import MotorCmdStamped, RobotCmdStamped, TriggerStamped
 
 # Import from corgi_ui package
 from corgi_ui.core.constants import (
@@ -26,6 +29,12 @@ from corgi_ui.core.constants import (
 from corgi_ui.core.ros_worker import ControlPanelRosWorker
 from corgi_ui.core.process_manager import ProcessManager
 from corgi_ui.gui.widgets.log_widget import LogWidget
+from corgi_ui.core.sequence_model import (
+    ExecutionState, NodeExecutionRecord,
+    check_sequence_reachability, save_execution_record,
+    LEGS, JOINTS,
+)
+from corgi_ui.gui.custom_sequence_window import CustomSequenceWindow
 
 # GPIO Support (optional)
 GPIO_defined = True
@@ -65,6 +74,9 @@ class CorgiControlPanel(QWidget):
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
+
+        # Check if custom sequence feature is enabled
+        self.enable_custom_sequence = self._check_bool_param('enable_custom_sequence', False)
         
         # ROS Worker (thread-safe communication layer)
         self.ros_worker = ControlPanelRosWorker()
@@ -103,6 +115,41 @@ class CorgiControlPanel(QWidget):
         # Sim time tracking for clock jump detection
         self._last_sim_time_sec = 0.0
 
+        # Manual joint command state
+        self._manual_cmd_active = False
+        self._last_manual_cmd_ts = None
+        self._manual_max_rpm = 300.0
+        self._manual_current_deg = {
+            leg: {'theta': 0.0, 'beta': 0.0, 'gamma': 0.0}
+            for leg in ('A', 'B', 'C', 'D')
+        }
+        self._manual_target_deg = {
+            leg: {'theta': 0.0, 'beta': 0.0, 'gamma': 0.0}
+            for leg in ('A', 'B', 'C', 'D')
+        }
+        self._manual_session_started = None
+        self._pid_tune_samples = {axis: [] for axis in ('theta', 'beta', 'gamma')}
+        self._pid_tune_initial_avg = {axis: 0.0 for axis in ('theta', 'beta', 'gamma')}
+        self._pid_tune_target_avg = {axis: 0.0 for axis in ('theta', 'beta', 'gamma')}
+        self._csv_tune_active = False
+        self._csv_tune_start_ts = None
+        self._csv_tune_samples = {'t': [], 'theta': [], 'beta': []}
+
+        # Custom sequence executor state
+        self._seq_state: ExecutionState = ExecutionState.IDLE
+        self._seq_nodes: list = []
+        self._seq_node_idx: int = 0
+        self._seq_limit_profile = None
+        self._seq_sequence_name: str = ""
+        self._seq_dry_run: bool = False
+        self._seq_node_start_ts: float = 0.0
+        self._seq_last_tick_ts: float = 0.0
+        self._seq_node_start_pos: dict = {
+            leg: {'theta': 0.0, 'beta': 0.0, 'gamma': 0.0} for leg in LEGS
+        }
+        self._seq_node_records: list = []
+        self._custom_seq_window: CustomSequenceWindow | None = None
+
         # Auto-start data recorder
         self._start_data_recorder()
     
@@ -130,6 +177,25 @@ class CorgiControlPanel(QWidget):
             print(f"Warning: Could not check use_sim_time parameter: {e}")
             return False
     
+    def _check_bool_param(self, param_name: str, default: bool = False) -> bool:
+        """Check a boolean ROS parameter via a temporary node."""
+        try:
+            import rclpy
+            if not rclpy.ok():
+                rclpy.init()
+            temp_node = rclpy.create_node(
+                'corgi_control_panel',
+                automatically_declare_parameters_from_overrides=True
+            )
+            if not temp_node.has_parameter(param_name):
+                temp_node.declare_parameter(param_name, default)
+            result = temp_node.get_parameter(param_name).value
+            temp_node.destroy_node()
+            return bool(result)
+        except Exception as e:
+            print(f"Warning: Could not check parameter '{param_name}': {e}")
+            return default
+
     def _setup_file_logger(self) -> logging.Logger:
         """Setup file logger for persistent logging"""
         return setup_file_logger('CorgiControlPanel', self.log_filepath)
@@ -174,7 +240,10 @@ class CorgiControlPanel(QWidget):
         if self.use_sim_time:
             title += ' [SIMULATION MODE]'
         self.setWindowTitle(title)
-        self.resize(1024, 768)
+        self.setMinimumSize(900, 650)
+        self.resize(1280, 860)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setWindowFlag(Qt.WindowMinMaxButtonsHint, True)
         
         # Setup timer for periodic updates
         self.timer = QTimer(self)
@@ -338,6 +407,10 @@ class CorgiControlPanel(QWidget):
         self.btn_csv_run.setCheckable(True)
         self.btn_csv_run.clicked.connect(self._on_csv_run_clicked)
         self.btn_csv_run.setEnabled(False)
+
+        self.btn_csv_pid_tune = QPushButton('Tune PID from Last CSV Run')
+        self.btn_csv_pid_tune.clicked.connect(self._on_tune_pid_from_csv_clicked)
+        self.btn_csv_pid_tune.setEnabled(False)
         
         csv_btn_layout.addWidget(self.btn_csv_select)
         csv_btn_layout.addWidget(self.btn_csv_run)
@@ -345,9 +418,10 @@ class CorgiControlPanel(QWidget):
         grp_csv_layout.addWidget(self.label_csv)
         grp_csv_layout.addWidget(self.edit_csv)
         grp_csv_layout.addLayout(csv_btn_layout)
+        grp_csv_layout.addWidget(self.btn_csv_pid_tune)
         grp_csv.setLayout(grp_csv_layout)
         sidebar.addWidget(grp_csv)
-        
+
         # Recorder Group
         grp_rec = QGroupBox("Recorder")
         grp_rec_layout = QVBoxLayout()
@@ -372,7 +446,17 @@ class CorgiControlPanel(QWidget):
         self.btn_imu.clicked.connect(self._on_imu_clicked)
         self.btn_imu.setEnabled(False)
         sidebar.addWidget(self.btn_imu)
-        
+
+        # Custom Command Sequence button (only shown when enable_custom_sequence=True)
+        self.btn_custom_cmd = QPushButton('Custom Command Sequence')
+        self.btn_custom_cmd.setStyleSheet(
+            'background: #1a3a5c; font-weight: bold;'
+        )
+        self.btn_custom_cmd.clicked.connect(self._on_custom_cmd_clicked)
+        self.btn_custom_cmd.setVisible(self.enable_custom_sequence)
+        sidebar.addWidget(self.btn_custom_cmd)
+
+        sidebar.addWidget(self._create_motor_config_display())
         sidebar.addStretch(1)
         return sidebar
     
@@ -381,34 +465,144 @@ class CorgiControlPanel(QWidget):
         monitor_layout = QVBoxLayout()
 
         grid_motors = QGridLayout()
-        self.motor_labels = {}
+        self.angle_feedback_labels = {}
+        self.joint_cmd_inputs = {}
 
-        # Define legs: (name, row, col, motors)
         legs = [
-            ('LF', 0, 0, ['M1', 'M2']),
-            ('RF', 0, 1, ['M3', 'M4']),
-            ('LH', 1, 0, ['M5', 'M6']),
-            ('RH', 1, 1, ['M7', 'M8'])
+            ('A', 0, 0),
+            ('B', 0, 1),
+            ('C', 1, 0),
+            ('D', 1, 1),
         ]
 
-        for leg_name, r, c, motors in legs:
+        for leg_name, r, c in legs:
             leg_group = QGroupBox(leg_name)
             leg_layout = QVBoxLayout()
 
-            for motor_key in motors:
-                lbl = QLabel(f"{motor_key}: --")
-                lbl.setObjectName("MotorLabel")
+            target_layout = QGridLayout()
+            target_layout.addWidget(QLabel('Target θ'), 0, 0)
+            target_layout.addWidget(QLabel('Target β'), 0, 1)
+            target_layout.addWidget(QLabel('Target γ'), 0, 2)
+
+            for col, key in (
+                (0, 'theta'),
+                (1, 'beta'),
+                (2, 'gamma'),
+            ):
+                spin = QDoubleSpinBox()
+                spin.setDecimals(2)
+                spin.setSingleStep(0.5)
+                spin.setRange(-1e9, 1e9)
+                spin.setValue(0.0)
+                self.joint_cmd_inputs[(leg_name, key)] = spin
+                target_layout.addWidget(spin, 1, col)
+
+            leg_layout.addLayout(target_layout)
+
+            for key, title in (
+                ('current', 'Current θ/β/γ (deg)'),
+                ('target', 'Target  θ/β/γ (deg)'),
+                ('error', 'Error    θ/β/γ (deg)'),
+                ('vel', 'Gamma velocity (deg/s)'),
+            ):
+                lbl = QLabel(f"{title}: -- / -- / --" if key != 'vel' else f"{title}: --")
+                lbl.setObjectName('MotorLabel')
                 leg_layout.addWidget(lbl)
-                self.motor_labels[motor_key] = lbl
+                self.angle_feedback_labels[(leg_name, key)] = lbl
 
             leg_group.setLayout(leg_layout)
             grid_motors.addWidget(leg_group, r, c)
 
+        monitor_layout.addWidget(self._create_joint_command_group())
         monitor_layout.addLayout(grid_motors)
-        monitor_layout.addWidget(self._create_motor_config_display())
         monitor_layout.addStretch(1)
 
         return monitor_layout
+
+    def _create_joint_command_group(self) -> QGroupBox:
+        """Create combined joint command and PID tuning group."""
+        grp_joint = QGroupBox("Integrated Command + PID")
+        grp_joint_layout = QVBoxLayout()
+
+        joint_hint = QLabel('Use target boxes inside A/B/C/D cards, then send and tune by cmd/state response')
+        joint_hint.setStyleSheet('color: #aaa; font-size: 12px;')
+        grp_joint_layout.addWidget(joint_hint)
+
+        joint_btn_layout = QHBoxLayout()
+        self.btn_joint_load_state = QPushButton('Load Current θ/β/γ')
+        self.btn_joint_load_state.clicked.connect(self._on_joint_load_state_clicked)
+        self.btn_joint_load_state.setEnabled(False)
+        self.btn_joint_send = QPushButton('Send Joint Command')
+        self.btn_joint_send.clicked.connect(self._on_joint_send_clicked)
+        self.btn_joint_send.setEnabled(False)
+        joint_btn_layout.addWidget(self.btn_joint_load_state)
+        joint_btn_layout.addWidget(self.btn_joint_send)
+        grp_joint_layout.addLayout(joint_btn_layout)
+
+        pid_grid = QGridLayout()
+        pid_grid.addWidget(QLabel('θ/β Kp:'), 0, 0)
+        self.spin_leg_kp = QDoubleSpinBox()
+        self.spin_leg_kp.setDecimals(2)
+        self.spin_leg_kp.setRange(-1e9, 1e9)
+        self.spin_leg_kp.setSingleStep(1.0)
+        self.spin_leg_kp.setValue(90.0)
+        pid_grid.addWidget(self.spin_leg_kp, 0, 1)
+
+        pid_grid.addWidget(QLabel('θ/β Kd:'), 0, 2)
+        self.spin_leg_kd = QDoubleSpinBox()
+        self.spin_leg_kd.setDecimals(2)
+        self.spin_leg_kd.setRange(-1e9, 1e9)
+        self.spin_leg_kd.setSingleStep(0.1)
+        self.spin_leg_kd.setValue(1.75)
+        pid_grid.addWidget(self.spin_leg_kd, 0, 3)
+
+        pid_grid.addWidget(QLabel('γ Kp:'), 1, 0)
+        self.spin_gamma_kp = QDoubleSpinBox()
+        self.spin_gamma_kp.setDecimals(2)
+        self.spin_gamma_kp.setRange(-1e9, 1e9)
+        self.spin_gamma_kp.setSingleStep(0.5)
+        self.spin_gamma_kp.setValue(10.0)
+        pid_grid.addWidget(self.spin_gamma_kp, 1, 1)
+
+        pid_grid.addWidget(QLabel('γ Kd:'), 1, 2)
+        self.spin_gamma_kd = QDoubleSpinBox()
+        self.spin_gamma_kd.setDecimals(2)
+        self.spin_gamma_kd.setRange(-1e9, 1e9)
+        self.spin_gamma_kd.setSingleStep(0.1)
+        self.spin_gamma_kd.setValue(0.5)
+        pid_grid.addWidget(self.spin_gamma_kd, 1, 3)
+        grp_joint_layout.addLayout(pid_grid)
+
+        tune_btn_layout = QHBoxLayout()
+        self.btn_pid_auto_tune = QPushButton('Auto Tune PID')
+        self.btn_pid_auto_tune.clicked.connect(self._on_pid_auto_tune_clicked)
+        self.btn_pid_auto_tune.setEnabled(False)
+        self.btn_gamma_auto_tune = self.btn_pid_auto_tune
+        tune_btn_layout.addWidget(self.btn_pid_auto_tune)
+
+        self.btn_gamma_live_tune = QPushButton('Live Tune PID')
+        self.btn_gamma_live_tune.setCheckable(True)
+        self.btn_gamma_live_tune.setEnabled(False)
+        tune_btn_layout.addWidget(self.btn_gamma_live_tune)
+        grp_joint_layout.addLayout(tune_btn_layout)
+
+        rpm_layout = QHBoxLayout()
+        rpm_layout.addWidget(QLabel('Speed limit (rpm):'))
+        self.spin_joint_rpm_limit = QDoubleSpinBox()
+        self.spin_joint_rpm_limit.setDecimals(1)
+        self.spin_joint_rpm_limit.setRange(0.0, 1e9)
+        self.spin_joint_rpm_limit.setSingleStep(10.0)
+        self.spin_joint_rpm_limit.setValue(300.0)
+        self.spin_joint_rpm_limit.valueChanged.connect(self._on_joint_rpm_changed)
+        rpm_layout.addWidget(self.spin_joint_rpm_limit)
+        grp_joint_layout.addLayout(rpm_layout)
+
+        self.label_pid_tune_status = QLabel('PID tune status: waiting for a manual move')
+        self.label_pid_tune_status.setStyleSheet('color: #888; font-size: 11px;')
+        grp_joint_layout.addWidget(self.label_pid_tune_status)
+
+        grp_joint.setLayout(grp_joint_layout)
+        return grp_joint
 
     def _load_motor_config(self) -> dict:
         """Load motor_config.yaml from the corgi_driver_pkg directory.
@@ -440,18 +634,49 @@ class CorgiControlPanel(QWidget):
 
         return {}
 
-    def _create_motor_config_display(self) -> QGroupBox:
-        """Create a read-only display of the motor direction config (motor_config.yaml)."""
+    def _create_motor_config_display(self) -> QWidget:
+        """Create a collapsible read-only display of the motor direction config (motor_config.yaml)."""
         cfg = self._load_motor_config()
 
-        grp = QGroupBox("Motor Direction Config  (motor_config.yaml)")
-        outer = QVBoxLayout()
+        # Outer container (not a QGroupBox – we build a custom header + body)
+        wrapper = QWidget()
+        wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(2)
+
+        # ── Header row: toggle button ──────────────────────────────────────
+        self._btn_config_toggle = QPushButton("▶  Motor Direction Config  (motor_config.yaml)")
+        self._btn_config_toggle.setCheckable(True)
+        self._btn_config_toggle.setChecked(False)   # collapsed by default
+        self._btn_config_toggle.setStyleSheet(
+            "QPushButton { text-align: left; padding: 4px 8px; "
+            "background: #3a3a3a; border: 1px solid #555; border-radius: 4px; }"
+            "QPushButton:checked { background: #2d4a6a; }"
+        )
+        wrapper_layout.addWidget(self._btn_config_toggle)
+
+        # ── Body widget (hidden by default) ───────────────────────────────
+        self._config_body = QWidget()
+        body_layout = QVBoxLayout(self._config_body)
+        body_layout.setContentsMargins(4, 4, 4, 4)
+        body_layout.setSpacing(4)
+        self._config_body.setVisible(False)
+
+        def _toggle_config(checked):
+            self._config_body.setVisible(checked)
+            arrow = '▼' if checked else '▶'
+            self._btn_config_toggle.setText(
+                f"{arrow}  Motor Direction Config  (motor_config.yaml)")
+
+        self._btn_config_toggle.toggled.connect(_toggle_config)
 
         # Reload button
         self.btn_reload_config = QPushButton("↺  Reload Config")
         self.btn_reload_config.setMaximumWidth(160)
         self.btn_reload_config.clicked.connect(self._reload_motor_config_display)
-        outer.addWidget(self.btn_reload_config, alignment=Qt.AlignLeft)
+        body_layout.addWidget(self.btn_reload_config, alignment=Qt.AlignLeft)
+
+        outer = body_layout   # alias so the rest of the method works unchanged
 
         # Grid: one column per module (A B C D), rows = each direction field
         self._config_grid = QGridLayout()
@@ -492,8 +717,8 @@ class CorgiControlPanel(QWidget):
                 self._config_value_labels[(mod_id, section, key)] = lbl
 
         outer.addLayout(self._config_grid)
-        grp.setLayout(outer)
-        return grp
+        wrapper_layout.addWidget(self._config_body)
+        return wrapper
 
     @staticmethod
     def _fmt_dir(val) -> str:
@@ -799,6 +1024,10 @@ class CorgiControlPanel(QWidget):
             if self.process_manager.is_running('csv_control'):
                 self.log_widget.add_log('CSV Control already running; skip start', LOGLEVEL.WARN, 'system')
                 return
+
+            self._csv_tune_active = True
+            self._csv_tune_start_ts = time.monotonic()
+            self._csv_tune_samples = {'t': [], 'theta': [], 'beta': [], 'gamma': []}
             
             # Build command with use_sim_time parameter if needed
             cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg]
@@ -820,9 +1049,396 @@ class CorgiControlPanel(QWidget):
                 self.btn_csv_run.setText('Run')
         else:
             self.btn_csv_run.setText('Run')
+            self._csv_tune_active = False
             
             if self.process_manager.stop_process('csv_control', timeout=3.0):
                 self.log_widget.add_log('CSV Control Stopped', LOGLEVEL.WARN, 'system')
+
+    def _resolve_csv_file_path(self) -> str:
+        """Resolve CSV file path from input field to an absolute path."""
+        csv_file = self.edit_csv.text().strip()
+        if not csv_file:
+            return ''
+
+        if os.path.isabs(csv_file) and os.path.exists(csv_file):
+            return csv_file
+
+        if os.path.exists(csv_file):
+            return os.path.abspath(csv_file)
+
+        base_name = os.path.basename(csv_file)
+        candidate = os.path.join(PATHS.DEFAULT_CSV_DIR, base_name)
+        if os.path.exists(candidate):
+            return candidate
+
+        if not base_name.endswith('.csv'):
+            candidate_csv = os.path.join(PATHS.DEFAULT_CSV_DIR, f'{base_name}.csv')
+            if os.path.exists(candidate_csv):
+                return candidate_csv
+
+        return ''
+
+    def _on_tune_pid_from_csv_clicked(self):
+        """Tune theta/beta/gamma PID by comparing recorded state against selected CSV trajectory."""
+        csv_path = self._resolve_csv_file_path()
+        if not csv_path:
+            self.log_widget.add_log('CSV PID tune failed: invalid CSV path', LOGLEVEL.WARN, 'system')
+            return
+
+        if len(self._csv_tune_samples['theta']) < 30:
+            self.log_widget.add_log('CSV PID tune failed: not enough state samples, run CSV first', LOGLEVEL.WARN, 'system')
+            return
+
+        cmd_theta = []
+        cmd_beta = []
+        cmd_gamma = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) < 8:
+                        continue
+                    try:
+                        vals = [float(v) for v in row[:12]]
+                    except ValueError:
+                        continue
+                    cmd_theta.append(np.degrees(np.mean([vals[0], vals[2], vals[4], vals[6]])))
+                    cmd_beta.append(np.degrees(np.mean([vals[1], vals[3], vals[5], vals[7]])))
+                    if len(vals) >= 12:
+                        cmd_gamma.append(np.degrees(np.mean([vals[8], vals[9], vals[10], vals[11]])))
+        except Exception as e:
+            self.log_widget.add_log(f'CSV PID tune failed: {e}', LOGLEVEL.ERROR, 'system')
+            return
+
+        if len(cmd_theta) < 10:
+            self.log_widget.add_log('CSV PID tune failed: CSV format unsupported', LOGLEVEL.WARN, 'system')
+            return
+
+        state_theta = np.array(self._csv_tune_samples['theta'], dtype=np.float64)
+        state_beta = np.array(self._csv_tune_samples['beta'], dtype=np.float64)
+        cmd_theta = np.array(cmd_theta, dtype=np.float64)
+        cmd_beta = np.array(cmd_beta, dtype=np.float64)
+
+        idx = np.linspace(0, len(cmd_theta) - 1, len(state_theta)).astype(np.int64)
+        cmd_theta_rs = cmd_theta[idx]
+        cmd_beta_rs = cmd_beta[idx]
+
+        err_theta = cmd_theta_rs - state_theta
+        err_beta = cmd_beta_rs - state_beta
+
+        rmse_theta = float(np.sqrt(np.mean(err_theta ** 2)))
+        rmse_beta = float(np.sqrt(np.mean(err_beta ** 2)))
+        cmd_span_theta = float(max(np.max(cmd_theta_rs) - np.min(cmd_theta_rs), 1.0))
+        cmd_span_beta = float(max(np.max(cmd_beta_rs) - np.min(cmd_beta_rs), 1.0))
+
+        kp = float(self.spin_leg_kp.value())
+        kd = float(self.spin_leg_kd.value())
+
+        scale_theta = min(1.0, rmse_theta / cmd_span_theta)
+        scale_beta = min(1.0, rmse_beta / cmd_span_beta)
+        err_scale = max(scale_theta, scale_beta)
+
+        de_theta = np.diff(err_theta)
+        de_beta = np.diff(err_beta)
+        cmd_d_theta = np.diff(cmd_theta_rs)
+        cmd_d_beta = np.diff(cmd_beta_rs)
+        jitter_theta = float(np.std(de_theta) / (np.std(cmd_d_theta) + 1e-6))
+        jitter_beta = float(np.std(de_beta) / (np.std(cmd_d_beta) + 1e-6))
+        jitter_scale = min(1.0, max(jitter_theta, jitter_beta))
+
+        kp_new = float(kp * (1.0 + 0.6 * err_scale))
+        kd_new = float(kd * (1.0 + 0.35 * jitter_scale))
+
+        self.spin_leg_kp.setValue(kp_new)
+        self.spin_leg_kd.setValue(kd_new)
+
+        # ── Gamma PID tune ────────────────────────────────────────────────
+        gamma_tune_msg = ''
+        if cmd_gamma and len(self._csv_tune_samples['gamma']) >= 30:
+            state_gamma = np.array(self._csv_tune_samples['gamma'], dtype=np.float64)
+            cmd_gamma_arr = np.array(cmd_gamma, dtype=np.float64)
+            idx_g = np.linspace(0, len(cmd_gamma_arr) - 1, len(state_gamma)).astype(np.int64)
+            cmd_gamma_rs = cmd_gamma_arr[idx_g]
+            err_gamma = cmd_gamma_rs - state_gamma
+            rmse_gamma = float(np.sqrt(np.mean(err_gamma ** 2)))
+            cmd_span_gamma = float(max(np.max(cmd_gamma_rs) - np.min(cmd_gamma_rs), 1.0))
+
+            gkp = float(self.spin_gamma_kp.value())
+            gkd = float(self.spin_gamma_kd.value())
+            scale_gamma = min(1.0, rmse_gamma / cmd_span_gamma)
+            de_gamma = np.diff(err_gamma)
+            cmd_d_gamma = np.diff(cmd_gamma_rs)
+            jitter_gamma = min(1.0, float(np.std(de_gamma) / (np.std(cmd_d_gamma) + 1e-6)))
+            gkp_new = float(gkp * (1.0 + 0.6 * scale_gamma))
+            gkd_new = float(gkd * (1.0 + 0.35 * jitter_gamma))
+            self.spin_gamma_kp.setValue(gkp_new)
+            self.spin_gamma_kd.setValue(gkd_new)
+            gamma_tune_msg = f', γ RMSE={rmse_gamma:.2f}° -> γ Kp={gkp_new:.2f}, Kd={gkd_new:.2f}'
+
+        self.label_pid_tune_status.setText(
+            f'PID tune: CSV RMSE θ={rmse_theta:.2f}°, β={rmse_beta:.2f}° -> θ/β Kp={kp_new:.2f}, Kd={kd_new:.2f}'
+            + gamma_tune_msg
+        )
+        self.log_widget.add_log(
+            f'CSV PID tune done: RMSE θ={rmse_theta:.2f}°, β={rmse_beta:.2f}°; new θ/β Kp={kp_new:.2f}, Kd={kd_new:.2f}'
+            + gamma_tune_msg,
+            LOGLEVEL.INFO,
+            'system'
+        )
+
+    def _on_joint_load_state_clicked(self):
+        """Load current motor state into joint command boxes (degree)."""
+        if not hasattr(self, 'motor_state'):
+            self.log_widget.add_log('No motor state yet, cannot load current pose', LOGLEVEL.WARN, 'system')
+            return
+
+        modules = [
+            getattr(self.motor_state, 'module_a', None),
+            getattr(self.motor_state, 'module_b', None),
+            getattr(self.motor_state, 'module_c', None),
+            getattr(self.motor_state, 'module_d', None),
+        ]
+
+        loaded_count = 0
+        for leg_id, module in zip(('A', 'B', 'C', 'D'), modules):
+            if module is None:
+                continue
+
+            if hasattr(module, 'theta') and hasattr(module, 'beta'):
+                theta_deg = float(np.degrees(module.theta))
+                beta_deg = float(np.degrees(module.beta))
+                gamma_deg = float(np.degrees(module.gamma)) if hasattr(module, 'gamma') else 0.0
+            elif hasattr(module, 'position') and len(module.position) >= 2:
+                theta_deg = float(np.degrees(module.position[0]))
+                beta_deg = float(np.degrees(module.position[1]))
+                gamma_deg = 0.0
+            else:
+                continue
+
+            self.joint_cmd_inputs[(leg_id, 'theta')].setValue(theta_deg)
+            self.joint_cmd_inputs[(leg_id, 'beta')].setValue(beta_deg)
+            self.joint_cmd_inputs[(leg_id, 'gamma')].setValue(gamma_deg)
+            loaded_count += 1
+
+        if loaded_count > 0:
+            self.log_widget.add_log(f'Loaded current pose for {loaded_count} leg modules', LOGLEVEL.INFO, 'system')
+        else:
+            self.log_widget.add_log('Motor state format is unsupported for loading', LOGLEVEL.WARN, 'system')
+
+    def _on_joint_send_clicked(self):
+        """Set manual target and start speed-limited publish to /motor/command."""
+        if self._seq_state == ExecutionState.RUNNING_NODE:
+            self.log_widget.add_log(
+                'Cannot send manual command while sequence is running – stop the sequence first.',
+                LOGLEVEL.WARN, 'system'
+            )
+            return
+        if not self.ros_worker.is_running:
+            self.log_widget.add_log('ROS worker is not running', LOGLEVEL.WARN, 'system')
+            return
+
+        self._manual_max_rpm = self.spin_joint_rpm_limit.value()
+        for leg_id in ('A', 'B', 'C', 'D'):
+            for key in ('theta', 'beta', 'gamma'):
+                self._manual_target_deg[leg_id][key] = float(
+                    self.joint_cmd_inputs[(leg_id, key)].value()
+                )
+
+        # Initialize current command from measured state if available.
+        if hasattr(self, 'motor_state') and hasattr(self.motor_state, 'module_a'):
+            for leg_id, module in zip(
+                ('A', 'B', 'C', 'D'),
+                [self.motor_state.module_a, self.motor_state.module_b, self.motor_state.module_c, self.motor_state.module_d],
+            ):
+                if hasattr(module, 'theta') and hasattr(module, 'beta'):
+                    self._manual_current_deg[leg_id]['theta'] = float(np.degrees(module.theta))
+                    self._manual_current_deg[leg_id]['beta'] = float(np.degrees(module.beta))
+                    self._manual_current_deg[leg_id]['gamma'] = float(np.degrees(module.gamma))
+
+        self._manual_cmd_active = True
+        self._last_manual_cmd_ts = None
+        self._manual_session_started = time.monotonic()
+        self._reset_pid_tune_session()
+        self._publish_manual_joint_command_step(force_first=True)
+        self.log_widget.add_log(
+            f'Manual target accepted with speed limit {self._manual_max_rpm:.1f} rpm',
+            LOGLEVEL.INFO,
+            'orin'
+        )
+
+    def _on_joint_rpm_changed(self, value: float):
+        """Update speed limit for manual joint ramp command."""
+        self._manual_max_rpm = float(value)
+
+    def _reset_pid_tune_session(self):
+        """Reset command/response sample buffer for PID tuning."""
+        self._pid_tune_samples = {axis: [] for axis in ('theta', 'beta', 'gamma')}
+        if hasattr(self, 'motor_state') and hasattr(self.motor_state, 'module_a'):
+            modules = [self.motor_state.module_a, self.motor_state.module_b, self.motor_state.module_c, self.motor_state.module_d]
+            for axis in ('theta', 'beta', 'gamma'):
+                values = [float(np.degrees(getattr(module, axis))) for module in modules if hasattr(module, axis)]
+                self._pid_tune_initial_avg[axis] = float(np.mean(values)) if values else 0.0
+                self._pid_tune_target_avg[axis] = float(np.mean([self._manual_target_deg[leg][axis] for leg in ('A', 'B', 'C', 'D')]))
+        self.label_pid_tune_status.setText('PID tune status: sampling command/state response...')
+
+    def _record_pid_tune_sample(self, modules):
+        """Record averaged target/current response for each axis."""
+        if self._manual_session_started is None:
+            return
+        elapsed = time.monotonic() - self._manual_session_started
+        for axis in ('theta', 'beta', 'gamma'):
+            current_values = [float(np.degrees(getattr(module, axis))) for module in modules if hasattr(module, axis)]
+            if not current_values:
+                continue
+            current_avg = float(np.mean(current_values))
+            target_avg = float(np.mean([self._manual_target_deg[leg][axis] for leg in ('A', 'B', 'C', 'D')]))
+            error = target_avg - current_avg
+            self._pid_tune_samples[axis].append({
+                't': elapsed,
+                'current': current_avg,
+                'target': target_avg,
+                'error': error,
+            })
+
+    def _suggest_pid_from_response(self, axis: str, current_kp: float, current_kd: float) -> tuple[float, float, dict]:
+        """Suggest PID gains from recorded command/state response."""
+        samples = self._pid_tune_samples.get(axis, [])
+        if len(samples) < 4:
+            return current_kp, current_kd, {'reason': 'not enough samples'}
+
+        initial = self._pid_tune_initial_avg[axis]
+        target = self._pid_tune_target_avg[axis]
+        step = target - initial
+        step_mag = max(abs(step), 1e-3)
+        sign = 1.0 if step >= 0.0 else -1.0
+        abs_errors = [abs(sample['error']) for sample in samples]
+        mean_abs_error = float(np.mean(abs_errors))
+        final_abs_error = abs(samples[-1]['error'])
+
+        overshoot = 0.0
+        for sample in samples:
+            signed_progress = sign * (sample['current'] - target)
+            overshoot = max(overshoot, signed_progress)
+        overshoot_ratio = max(0.0, overshoot) / step_mag
+        error_ratio = mean_abs_error / step_mag
+        final_error_ratio = final_abs_error / step_mag
+
+        kp_scale = 1.0 + 0.45 * min(error_ratio, 1.0)
+        if final_error_ratio < 0.03:
+            kp_scale *= 0.98
+
+        kd_scale = 1.0 + 1.2 * min(overshoot_ratio, 0.8)
+        if overshoot_ratio < 0.02 and final_error_ratio > 0.08:
+            kd_scale *= 0.95
+
+        kp_new = float(current_kp * kp_scale)
+        kd_new = float(current_kd * kd_scale)
+        return kp_new, kd_new, {
+            'step_mag': step_mag,
+            'mean_abs_error': mean_abs_error,
+            'final_abs_error': final_abs_error,
+            'overshoot_ratio': overshoot_ratio,
+        }
+
+    def _on_pid_auto_tune_clicked(self, log_result: bool = True):
+        """Tune θ/β and γ PID from recorded command/state response."""
+        leg_kp, leg_kd, leg_stats = self._suggest_pid_from_response(
+            'theta',
+            float(self.spin_leg_kp.value()),
+            float(self.spin_leg_kd.value()),
+        )
+        gamma_kp, gamma_kd, gamma_stats = self._suggest_pid_from_response(
+            'gamma',
+            float(self.spin_gamma_kp.value()),
+            float(self.spin_gamma_kd.value()),
+        )
+
+        self.spin_leg_kp.setValue(leg_kp)
+        self.spin_leg_kd.setValue(leg_kd)
+        self.spin_gamma_kp.setValue(gamma_kp)
+        self.spin_gamma_kd.setValue(gamma_kd)
+
+        status = (
+            f"PID tune status: θ/β avg err={leg_stats.get('mean_abs_error', 0.0):.2f} deg, "
+            f"γ avg err={gamma_stats.get('mean_abs_error', 0.0):.2f} deg"
+        )
+        self.label_pid_tune_status.setText(status)
+        if log_result:
+            self.log_widget.add_log(
+                f"Auto tuned PID from cmd/state response -> θ/β Kp={leg_kp:.2f}, Kd={leg_kd:.2f}; γ Kp={gamma_kp:.2f}, Kd={gamma_kd:.2f}",
+                LOGLEVEL.INFO,
+                'system'
+            )
+
+    def _publish_manual_joint_command_step(self, force_first: bool = False):
+        """Publish one speed-limited interpolation step toward manual target."""
+        if not self.ros_worker.is_running:
+            self._manual_cmd_active = False
+            return
+
+        now_ts = time.monotonic()
+        if self._last_manual_cmd_ts is None:
+            dt = 0.02 if force_first else 0.1
+        else:
+            dt = max(0.005, min(0.2, now_ts - self._last_manual_cmd_ts))
+        self._last_manual_cmd_ts = now_ts
+
+        # rpm -> deg/s = rpm * 6
+        max_delta_deg = self._manual_max_rpm * 6.0 * dt
+        reached = True
+
+        for leg_id in ('A', 'B', 'C', 'D'):
+            for key in ('theta', 'beta', 'gamma'):
+                current = self._manual_current_deg[leg_id][key]
+                target = self._manual_target_deg[leg_id][key]
+                delta = target - current
+                if abs(delta) > max_delta_deg:
+                    step = np.sign(delta) * max_delta_deg
+                    self._manual_current_deg[leg_id][key] = current + step
+                    reached = False
+                else:
+                    self._manual_current_deg[leg_id][key] = target
+
+        msg = MotorCmdStamped()
+        msg.header.seq = self._robot_cmd_seq + 1
+        msg.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+        msg.header.frame_id = ''
+
+        leg_kp = float(self.spin_leg_kp.value())
+        leg_kd = float(self.spin_leg_kd.value())
+        gamma_kp = float(self.spin_gamma_kp.value())
+        gamma_kd = float(self.spin_gamma_kd.value())
+
+        for module_name, leg_id in (
+            ('module_a', 'A'),
+            ('module_b', 'B'),
+            ('module_c', 'C'),
+            ('module_d', 'D'),
+        ):
+            module = getattr(msg, module_name)
+            module.theta = np.radians(self._manual_current_deg[leg_id]['theta'])
+            module.beta = np.radians(self._manual_current_deg[leg_id]['beta'])
+            module.gamma = np.radians(self._manual_current_deg[leg_id]['gamma'])
+
+            module.kp_r = leg_kp
+            module.kp_l = leg_kp
+            module.kp_h = gamma_kp
+            module.ki_r = 0.0
+            module.ki_l = 0.0
+            module.ki_h = 0.0
+            module.kd_r = leg_kd
+            module.kd_l = leg_kd
+            module.kd_h = gamma_kd
+            module.torque_r = 0.0
+            module.torque_l = 0.0
+            module.torque_h = 0.0
+
+        self.ros_worker.send_motor_command(msg)
+        self._robot_cmd_seq += 1
+
+        if reached:
+            self._manual_cmd_active = False
+            self.log_widget.add_log('Reached manual joint target', LOGLEVEL.INFO, 'system')
     
     def _on_recording_input_entered(self):
         """Handle recording filename input (Enter key pressed)"""
@@ -946,38 +1562,40 @@ class CorgiControlPanel(QWidget):
             return
         
         modules = [state.module_a, state.module_b, state.module_c, state.module_d]
-        
-        for module_idx, module in enumerate(modules):
-            if not hasattr(module, 'motor_mode'):
-                continue
-            
-            for motor_idx in range(2):  # L and R motors
-                motor_num = module_idx * 2 + motor_idx + 1
-                key = f'M{motor_num}'
-                
-                if key not in self.motor_labels:
-                    continue
-                
-                # Get position
-                pos = 0.0
-                if hasattr(module, 'position') and len(module.position) > motor_idx:
-                    pos = np.degrees(module.position[motor_idx])
-                
-                # Get temperature
-                temp = 0
-                if hasattr(module, 'temperature') and len(module.temperature) > motor_idx:
-                    temp = module.temperature[motor_idx]
-                
-                # Update label
-                self.motor_labels[key].setText(f"{key}: {pos:.1f}° | {temp}°C")
-                
-                # Color code by temperature
-                if temp > 60:
-                    self.motor_labels[key].setStyleSheet(
-                        f"color: {COLORS.STATUS_ERROR}; font-weight: bold;"
-                    )
-                else:
-                    self.motor_labels[key].setStyleSheet("color: #aaa;")
+        self._record_pid_tune_sample(modules)
+
+        if self._csv_tune_active and self._csv_tune_start_ts is not None:
+            theta_avg = float(np.degrees(np.mean([module.theta for module in modules if hasattr(module, 'theta')])))
+            beta_avg = float(np.degrees(np.mean([module.beta for module in modules if hasattr(module, 'beta')])))
+            gamma_avg = float(np.degrees(np.mean([module.gamma for module in modules if hasattr(module, 'gamma')]))) if any(hasattr(m, 'gamma') for m in modules) else 0.0
+            self._csv_tune_samples['t'].append(time.monotonic() - self._csv_tune_start_ts)
+            self._csv_tune_samples['theta'].append(theta_avg)
+            self._csv_tune_samples['beta'].append(beta_avg)
+            self._csv_tune_samples['gamma'].append(gamma_avg)
+
+        for leg_id, module in zip(('A', 'B', 'C', 'D'), modules):
+            theta = float(np.degrees(module.theta)) if hasattr(module, 'theta') else 0.0
+            beta = float(np.degrees(module.beta)) if hasattr(module, 'beta') else 0.0
+            gamma = float(np.degrees(module.gamma)) if hasattr(module, 'gamma') else 0.0
+            gamma_vel = float(np.degrees(module.velocity_h)) if hasattr(module, 'velocity_h') else 0.0
+
+            target = self._manual_target_deg.get(leg_id, {'theta': 0.0, 'beta': 0.0, 'gamma': 0.0})
+            err_theta = target['theta'] - theta
+            err_beta = target['beta'] - beta
+            err_gamma = target['gamma'] - gamma
+
+            self.angle_feedback_labels[(leg_id, 'current')].setText(
+                f"Current θ/β/γ (deg): {theta:6.2f} / {beta:6.2f} / {gamma:6.2f}"
+            )
+            self.angle_feedback_labels[(leg_id, 'target')].setText(
+                f"Target  θ/β/γ (deg): {target['theta']:6.2f} / {target['beta']:6.2f} / {target['gamma']:6.2f}"
+            )
+            self.angle_feedback_labels[(leg_id, 'error')].setText(
+                f"Error    θ/β/γ (deg): {err_theta:6.2f} / {err_beta:6.2f} / {err_gamma:6.2f}"
+            )
+            self.angle_feedback_labels[(leg_id, 'vel')].setText(
+                f"Gamma velocity (deg/s): {gamma_vel:6.2f}"
+            )
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
@@ -1041,6 +1659,11 @@ class CorgiControlPanel(QWidget):
         self.btn_trigger.setEnabled(enable_basic)
         self.btn_csv_select.setEnabled(enable_basic)
         self.btn_csv_run.setEnabled(enable_basic)
+        self.btn_csv_pid_tune.setEnabled(enable_basic)
+        self.btn_joint_load_state.setEnabled(enable_basic)
+        self.btn_joint_send.setEnabled(enable_basic)
+        self.btn_pid_auto_tune.setEnabled(enable_basic)
+        self.btn_gamma_live_tune.setEnabled(enable_basic)
         
         # Set zero button (only in STANDBY mode)
         if hasattr(self, 'robot_state') and hasattr(self.robot_state, 'robot_mode'):
@@ -1145,7 +1768,373 @@ class CorgiControlPanel(QWidget):
                 self._last_sim_time_sec = current
             except Exception:
                 pass
+
+        if self._manual_cmd_active:
+            if self.btn_gamma_live_tune.isChecked():
+                self._on_pid_auto_tune_clicked(log_result=False)
+            self._publish_manual_joint_command_step()
+        elif self._seq_state == ExecutionState.RUNNING_NODE:
+            self._seq_tick()
     
+    # ========================================================================
+    # Custom Sequence – window
+    # ========================================================================
+
+    def _on_custom_cmd_clicked(self) -> None:
+        """Open (or raise) the Custom Command Sequence window."""
+        if self._custom_seq_window is None:
+            self._custom_seq_window = CustomSequenceWindow(
+                get_current_pose_fn=self._seq_get_current_pose,
+                output_dir=PATHS.DEFAULT_OUTPUT_DIR,
+            )
+            self._custom_seq_window.run_requested.connect(self._seq_run)
+            self._custom_seq_window.stop_requested.connect(self._seq_stop)
+        self._custom_seq_window.show()
+        self._custom_seq_window.raise_()
+        self._custom_seq_window.activateWindow()
+
+    def _seq_get_current_pose(self) -> dict | None:
+        """Return current motor positions as dict[leg][joint] in degrees."""
+        if not hasattr(self, 'motor_state') or not hasattr(self.motor_state, 'module_a'):
+            return None
+        pose: dict = {}
+        for leg_id, module in zip(
+            LEGS,
+            [self.motor_state.module_a, self.motor_state.module_b,
+             self.motor_state.module_c, self.motor_state.module_d],
+        ):
+            pose[leg_id] = {
+                'theta': float(np.degrees(module.theta)),
+                'beta':  float(np.degrees(module.beta)),
+                'gamma': float(np.degrees(module.gamma)),
+            }
+        return pose
+
+    # ========================================================================
+    # Custom Sequence – executor
+    # ========================================================================
+
+    def _seq_run(self, sequence, limit_profile, dry_run: bool) -> None:
+        """
+        Called when CustomSequenceWindow emits run_requested.
+        Validates and either simulates (dry_run) or starts execution.
+        """
+        if not sequence.nodes:
+            self.log_widget.add_log('Sequence is empty – nothing to run.', LOGLEVEL.WARN, 'seq')
+            return
+
+        # Warn if CSV control is running
+        if self.process_manager.is_running('csv_control'):
+            self.log_widget.add_log(
+                'WARNING: csv_control is running while starting sequence. '
+                'Stop CSV control to avoid conflicting commands.',
+                LOGLEVEL.WARN, 'seq'
+            )
+
+        # Validate reachability
+        pose = self._seq_get_current_pose()
+        errors = check_sequence_reachability(sequence, limit_profile, pose)
+        if errors:
+            self.log_widget.add_log(
+                f'Sequence validation failed with {len(errors)} error(s):', LOGLEVEL.ERROR, 'seq'
+            )
+            for err in errors:
+                self.log_widget.add_log(
+                    f'  Node[{err.node_idx}] "{err.node_name}" '
+                    f'leg={err.leg} joint={err.joint}: {err.message}',
+                    LOGLEVEL.ERROR, 'seq'
+                )
+            if self._custom_seq_window:
+                self._custom_seq_window.update_execution_state(
+                    ExecutionState.FAILED, 0, len(sequence.nodes),
+                    0.0, 0.0, 'Validation failed'
+                )
+            return
+
+        total_time = sum(n.duration_sec for n in sequence.nodes)
+
+        # ---- dry-run: simulate and report without sending commands ----------
+        if dry_run:
+            self.log_widget.add_log(
+                f'[DRY-RUN] Sequence "{sequence.name}" – '
+                f'{len(sequence.nodes)} nodes, total {total_time:.2f}s',
+                LOGLEVEL.INFO, 'seq'
+            )
+            t_accum = 0.0
+            for i, node in enumerate(sequence.nodes):
+                self.log_widget.add_log(
+                    f'  Node[{i}] "{node.name}"  duration={node.duration_sec:.2f}s  '
+                    f'starts_at={t_accum:.2f}s',
+                    LOGLEVEL.INFO, 'seq'
+                )
+                t_accum += node.duration_sec
+            self.log_widget.add_log('[DRY-RUN] Complete (no commands sent)', LOGLEVEL.INFO, 'seq')
+            if self._custom_seq_window:
+                self._custom_seq_window.log_node_event(
+                    f'[DRY-RUN] Validation OK – {len(sequence.nodes)} nodes, '
+                    f'{total_time:.2f}s total', LOGLEVEL.INFO
+                )
+            return
+
+        # ---- real run -------------------------------------------------------
+        if not self.ros_worker.is_running:
+            self.log_widget.add_log('ROS worker is not running.', LOGLEVEL.ERROR, 'seq')
+            return
+
+        # Stop any ongoing manual command
+        self._manual_cmd_active = False
+
+        # Store sequence metadata
+        self._seq_nodes        = list(sequence.nodes)
+        self._seq_limit_profile = limit_profile
+        self._seq_sequence_name = sequence.name
+        self._seq_dry_run       = False
+        self._seq_node_records  = []
+
+        self._seq_state = ExecutionState.RUNNING_NODE
+        self.log_widget.add_log(
+            f'Starting sequence "{sequence.name}"  '
+            f'({len(sequence.nodes)} nodes, {total_time:.2f}s total)',
+            LOGLEVEL.INFO, 'seq'
+        )
+        self._seq_start_node(0)
+
+    def _seq_start_node(self, idx: int) -> None:
+        """Begin execution of node *idx*."""
+        self._seq_node_idx    = idx
+        self._seq_node_start_ts = self.ros_worker.node.get_clock().now().nanoseconds / 1e9
+        self._seq_last_tick_ts = self._seq_node_start_ts
+
+        # Record start position from measured state to avoid startup jump.
+        pose = self._seq_get_current_pose()
+        if pose is not None:
+            for leg in LEGS:
+                for joint in JOINTS:
+                    val = float(pose[leg][joint])
+                    self._seq_node_start_pos[leg][joint] = val
+                    self._manual_current_deg[leg][joint] = val
+        else:
+            for leg in LEGS:
+                for joint in JOINTS:
+                    self._seq_node_start_pos[leg][joint] = self._manual_current_deg[leg][joint]
+
+        node = self._seq_nodes[idx]
+        record = NodeExecutionRecord(
+            node_idx=idx,
+            node_name=node.name,
+            started_at_wall=datetime.now().isoformat(timespec='milliseconds'),
+            duration_planned_sec=node.duration_sec,
+        )
+        self._seq_node_records.append(record)
+
+        msg = f'[{idx + 1}/{len(self._seq_nodes)}] Starting node "{node.name}"  ({node.duration_sec:.2f}s)'
+        self.log_widget.add_log(msg, LOGLEVEL.INFO, 'seq')
+        if self._custom_seq_window:
+            self._custom_seq_window.log_node_event(msg, LOGLEVEL.INFO)
+            # Highlight node in list
+            self._custom_seq_window.list_nodes.setCurrentRow(idx)
+
+    def _seq_tick(self) -> None:
+        """Called every timer tick while RUNNING_NODE.  Publishes interpolated command."""
+        if self._seq_state != ExecutionState.RUNNING_NODE:
+            return
+        if not self.ros_worker.is_running:
+            self._seq_fail('ROS worker stopped unexpectedly')
+            return
+
+        node     = self._seq_nodes[self._seq_node_idx]
+        now      = self.ros_worker.node.get_clock().now().nanoseconds / 1e9
+        elapsed  = now - self._seq_node_start_ts
+        t        = min(1.0, elapsed / max(node.duration_sec, 1e-6))
+        dt       = max(0.005, min(0.2, now - self._seq_last_tick_ts))
+        self._seq_last_tick_ts = now
+
+        # Build interpolated MotorCmdStamped
+        msg = MotorCmdStamped()
+        msg.header.seq   = self._robot_cmd_seq + 1
+        msg.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+
+        gains = getattr(node, 'gains', {}) if isinstance(getattr(node, 'gains', {}), dict) else {}
+        leg_kp   = float(gains.get('leg_kp', self.spin_leg_kp.value()))
+        leg_kd   = float(gains.get('leg_kd', self.spin_leg_kd.value()))
+        gamma_kp = float(gains.get('gamma_kp', self.spin_gamma_kp.value()))
+        gamma_kd = float(gains.get('gamma_kd', self.spin_gamma_kd.value()))
+
+        for module_name, leg_id in (
+            ('module_a', 'A'), ('module_b', 'B'),
+            ('module_c', 'C'), ('module_d', 'D'),
+        ):
+            module = getattr(msg, module_name)
+            for joint in JOINTS:
+                start  = self._seq_node_start_pos[leg_id][joint]
+                target = getattr(node.targets[leg_id], joint)
+                desired_deg = start + t * (target - start)
+                current_deg = self._manual_current_deg[leg_id][joint]
+                speed_limit = self._seq_joint_speed_limit(leg_id, joint)
+                max_step = speed_limit * dt
+                delta = desired_deg - current_deg
+                if abs(delta) > max_step:
+                    current_deg += np.sign(delta) * max_step
+                    all_reached = False
+                else:
+                    current_deg = desired_deg
+                self._manual_current_deg[leg_id][joint] = current_deg
+                setattr(module, joint, np.radians(current_deg))
+
+            module.kp_r = leg_kp
+            module.kp_l = leg_kp
+            module.kp_h = gamma_kp
+            module.kd_r = leg_kd
+            module.kd_l = leg_kd
+            module.kd_h = gamma_kd
+            module.ki_r = module.ki_l = module.ki_h = 0.0
+            module.torque_r = module.torque_l = module.torque_h = 0.0
+
+        self.ros_worker.send_motor_command(msg)
+        self._robot_cmd_seq += 1
+
+        # Update window progress
+        if self._custom_seq_window:
+            remaining_nodes_time = sum(
+                n.duration_sec for n in self._seq_nodes[self._seq_node_idx + 1:]
+            )
+            eta = node.duration_sec * (1.0 - t) + remaining_nodes_time
+            self._custom_seq_window.update_execution_state(
+                ExecutionState.RUNNING_NODE,
+                self._seq_node_idx,
+                len(self._seq_nodes),
+                t, eta,
+            )
+
+        # Advance to next node when this one completes
+        if t >= 1.0:
+            reached = True
+            for leg in LEGS:
+                for joint in JOINTS:
+                    target = getattr(node.targets[leg], joint)
+                    if abs(self._manual_current_deg[leg][joint] - target) > 0.5:
+                        reached = False
+                        break
+                if not reached:
+                    break
+            if reached or elapsed > node.duration_sec + 0.5:
+                # Snap final value if timeout grace elapsed.
+                for leg in LEGS:
+                    for joint in JOINTS:
+                        self._manual_current_deg[leg][joint] = float(getattr(node.targets[leg], joint))
+                self._seq_advance_node(now)
+
+    def _seq_joint_speed_limit(self, leg_id: str, joint: str) -> float:
+        """Return deg/s speed limit from profile, or a very large default."""
+        if self._seq_limit_profile is None:
+            return 1e6
+        try:
+            entry = self._seq_limit_profile.limits.get((leg_id, joint))
+            if entry is None:
+                return 1e6
+            return float(max(0.0, entry.max_speed_deg_per_sec))
+        except Exception:
+            return 1e6
+
+    def _seq_advance_node(self, now: float) -> None:
+        """Finalise current node and move to the next (or complete)."""
+        idx  = self._seq_node_idx
+        node = self._seq_nodes[idx]
+        rec  = self._seq_node_records[idx]
+        rec.finished_at_wall   = datetime.now().isoformat(timespec='milliseconds')
+        rec.duration_actual_sec = now - self._seq_node_start_ts
+        rec.result             = 'success'
+
+        self.log_widget.add_log(
+            f'  Node "{node.name}" done  (actual {rec.duration_actual_sec:.2f}s)',
+            LOGLEVEL.INFO, 'seq'
+        )
+
+        next_idx = idx + 1
+        if next_idx < len(self._seq_nodes):
+            self._seq_start_node(next_idx)
+        else:
+            self._seq_complete()
+
+    def _seq_complete(self) -> None:
+        self._seq_state = ExecutionState.COMPLETED
+        self.log_widget.add_log(
+            f'Sequence "{self._seq_sequence_name}" completed successfully.',
+            LOGLEVEL.INFO, 'seq'
+        )
+        self._seq_finalise_records('success')
+        if self._custom_seq_window:
+            self._custom_seq_window.update_execution_state(
+                ExecutionState.COMPLETED, len(self._seq_nodes) - 1,
+                len(self._seq_nodes), 1.0, 0.0
+            )
+
+    def _seq_stop(self) -> None:
+        """Stop sequence execution (user-initiated or window close)."""
+        if self._seq_state != ExecutionState.RUNNING_NODE:
+            return
+        self._seq_state = ExecutionState.STOPPED
+        idx = self._seq_node_idx
+        self.log_widget.add_log(
+            f'Sequence stopped at node [{idx}] "{self._seq_nodes[idx].name}".',
+            LOGLEVEL.WARN, 'seq'
+        )
+        # Finalise current node record
+        if idx < len(self._seq_node_records):
+            rec = self._seq_node_records[idx]
+            if rec.finished_at_wall is None:
+                rec.finished_at_wall   = datetime.now().isoformat(timespec='milliseconds')
+                rec.duration_actual_sec = self.ros_worker.node.get_clock().now().nanoseconds / 1e9 - self._seq_node_start_ts
+                rec.result             = 'stopped'
+        self._seq_finalise_records('stopped')
+        if self._custom_seq_window:
+            self._custom_seq_window.update_execution_state(
+                ExecutionState.STOPPED, idx, len(self._seq_nodes), 0.0, 0.0
+            )
+
+    def _seq_fail(self, message: str) -> None:
+        """Abort sequence due to an error."""
+        self._seq_state = ExecutionState.FAILED
+        idx = self._seq_node_idx
+        self.log_widget.add_log(
+            f'Sequence FAILED at node [{idx}]: {message}', LOGLEVEL.ERROR, 'seq'
+        )
+        if idx < len(self._seq_node_records):
+            rec = self._seq_node_records[idx]
+            if rec.finished_at_wall is None:
+                rec.finished_at_wall   = datetime.now().isoformat(timespec='milliseconds')
+                rec.duration_actual_sec = self.ros_worker.node.get_clock().now().nanoseconds / 1e9 - self._seq_node_start_ts
+                rec.result             = 'failed'
+                rec.message            = message
+        self._seq_finalise_records('failed')
+        if self._custom_seq_window:
+            self._custom_seq_window.update_execution_state(
+                ExecutionState.FAILED, idx, len(self._seq_nodes),
+                0.0, 0.0, message
+            )
+
+    def _seq_finalise_records(self, overall_result: str) -> None:
+        """Mark any still-running records as *overall_result* and save to disk."""
+        now_str = datetime.now().isoformat(timespec='milliseconds')
+        for rec in self._seq_node_records:
+            if rec.finished_at_wall is None:
+                rec.finished_at_wall   = now_str
+                rec.duration_actual_sec = 0.0
+                rec.result             = overall_result
+
+        # Auto-save execution record
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_name = self._seq_sequence_name.replace(' ', '_') or 'sequence'
+        rec_path  = os.path.join(
+            PATHS.DEFAULT_OUTPUT_DIR,
+            f'{safe_name}_{timestamp}.json'
+        )
+        try:
+            save_execution_record(rec_path, self._seq_sequence_name, self._seq_node_records)
+            self.log_widget.add_log(f'Execution record saved → {rec_path}', LOGLEVEL.INFO, 'seq')
+        except Exception as e:
+            self.log_widget.add_log(f'Could not save execution record: {e}', LOGLEVEL.WARN, 'seq')
+
     def reset(self):
         """Reset panel to initial state"""
         self.btn_systemon.setChecked(False)
@@ -1176,7 +2165,12 @@ class CorgiControlPanel(QWidget):
         
         # Stop all processes
         self.process_manager.cleanup_all(timeout=2.0)
-        
+
+        # Close sequence window
+        if self._custom_seq_window is not None:
+            self._custom_seq_window.close()
+            self._custom_seq_window = None
+
         # Stop ROS worker
         self.ros_worker.stop_ros()
         
