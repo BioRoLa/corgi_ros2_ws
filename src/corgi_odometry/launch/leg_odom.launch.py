@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Real-robot launch for leg odometry.
 
-This launch starts only corgi_leg_odom and remaps IMU input:
-  /imu -> /imu_raw
+This launch starts imu_raw_node and corgi_leg_odom.
+corgi_leg_odom remaps IMU input:
+    /imu -> /imu_raw
 """
 
 from launch import LaunchDescription
@@ -10,6 +11,13 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    imu_raw_node = Node(
+        package='corgi_imu',
+        executable='imu_raw_node',
+        name='imu_raw_node',
+        output='screen',
+    )
+
     corgi_leg_odom_node = Node(
         package='corgi_odometry',
         executable='corgi_leg_odom',
@@ -22,5 +30,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        imu_raw_node,
         corgi_leg_odom_node,
     ])
