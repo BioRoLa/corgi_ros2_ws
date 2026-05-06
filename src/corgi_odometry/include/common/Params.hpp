@@ -33,6 +33,15 @@ struct Params {
     double contact_beta_threshold_high = 10.0;
     double contact_beta_threshold_low  =  1.0;
 
+    // ── Static IMU initialization ──────────────────────────────
+    // Window length (ms) to average IMU before first ESEKF tick.
+    // Accumulates in cb_imu(); used to estimate ba, bw, and gravity direction.
+    // If fewer samples are available, degrades gracefully to ba=bw=0.
+    int   static_init_window_ms      = 200;
+    // Gyro norm threshold for motion detection during init window [rad/s].
+    // If |w_mean| > this, log a warning (but still proceed).
+    float static_motion_gyro_thresh  = 0.02f;
+
     // ── Logic switches ──────────────────────────────────────────
     // simulate_imu_noise: offline_test only — adds synthetic noise to IMU.
     // use_esekf_state: sim / offline nodes only — feeds ESEKF-estimated

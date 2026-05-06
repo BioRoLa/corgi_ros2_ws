@@ -33,3 +33,8 @@ contact:
 use_dynamic_dt:  true
 quiet:           true
 use_bv_feedback: true
+
+# Static IMU initialization (bias calibration before first ESEKF tick)
+static_init:
+  window_ms:          200    # Collect this many ms of IMU before trigger
+  motion_gyro_thresh: 0.02   # Warn if |w_mean| > this [rad/s]

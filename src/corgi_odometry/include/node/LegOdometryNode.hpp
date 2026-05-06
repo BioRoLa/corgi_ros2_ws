@@ -2,6 +2,7 @@
 #define LEG_ODOMETRY_NODE_HPP
 
 #include <array>
+#include <deque>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -182,6 +183,13 @@ private:
 
     /// Whether the ESEKF has been initialized (on first triggered tick)
     bool esekf_initialized_ = false;
+
+    // ============================================================
+    // Static IMU initialization buffer
+    // Filled continuously by cb_imu(); consumed once on first init.
+    // ============================================================
+    std::deque<Eigen::Vector3f> imu_init_buf_a_;   ///< accel samples
+    std::deque<Eigen::Vector3f> imu_init_buf_w_;   ///< gyro  samples
 
     /// Low-pass filtered velocity bias from Outer Fusion EKF (world frame, m/s)
     Eigen::Vector3f bv_outer_filtered_{0.f, 0.f, 0.f};

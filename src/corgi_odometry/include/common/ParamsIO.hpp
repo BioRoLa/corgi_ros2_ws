@@ -68,6 +68,12 @@ inline Params load_params(const std::string& yaml_path) {
         p.contact_beta_threshold_low  = detail::val(n, "beta_threshold_low",  p.contact_beta_threshold_low);
     }
 
+    // ── Static IMU initialization ──────────────────────────────
+    if (auto n = root["static_init"]) {
+        p.static_init_window_ms     = detail::val(n, "window_ms",          p.static_init_window_ms);
+        p.static_motion_gyro_thresh = detail::val(n, "motion_gyro_thresh", p.static_motion_gyro_thresh);
+    }
+
     // ── Logic switches ──────────────────────────────────────────
     p.simulate_imu_noise = detail::val(root, "simulate_imu_noise", p.simulate_imu_noise);
     p.use_esekf_state    = detail::val(root, "use_esekf_state",    p.use_esekf_state);
