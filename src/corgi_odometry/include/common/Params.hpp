@@ -33,6 +33,12 @@ struct Params {
     double contact_beta_threshold_high = 10.0;
     double contact_beta_threshold_low  =  1.0;
 
+    // ── ZUPT (Zero Velocity Update) ────────────────────────────
+    // Applied when all 4 legs are off the ground and gyro norm < zupt_gyro_thresh.
+    bool            zupt_enabled    = true;
+    Eigen::Vector3f zupt_sigma_vec  = {0.01f, 0.01f, 0.01f};  // velocity noise std [m/s]
+    float           zupt_gyro_thresh = 0.3f;   // skip ZUPT if |w_corr| > this [rad/s]
+
     // ── Static IMU initialization ──────────────────────────────
     // Window length (ms) to average IMU before first ESEKF tick.
     // Accumulates in cb_imu(); used to estimate ba, bw, and gravity direction.

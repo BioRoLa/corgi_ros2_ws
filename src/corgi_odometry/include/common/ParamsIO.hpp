@@ -68,6 +68,13 @@ inline Params load_params(const std::string& yaml_path) {
         p.contact_beta_threshold_low  = detail::val(n, "beta_threshold_low",  p.contact_beta_threshold_low);
     }
 
+    // ── ZUPT ────────────────────────────────────────────────────
+    if (auto n = root["zupt"]) {
+        p.zupt_enabled     = detail::val(n, "enabled",      p.zupt_enabled);
+        p.zupt_sigma_vec   = detail::read_vec3f(n["sigma_vec"], p.zupt_sigma_vec);
+        p.zupt_gyro_thresh = detail::val(n, "gyro_thresh",  p.zupt_gyro_thresh);
+    }
+
     // ── Static IMU initialization ──────────────────────────────
     if (auto n = root["static_init"]) {
         p.static_init_window_ms     = detail::val(n, "window_ms",          p.static_init_window_ms);

@@ -166,8 +166,12 @@ void LegOdometryNode::process() {
         last_esekf_imu_time_valid_ = false;
         prev_imu_valid_ = false;
         esekf_tick_ = 0;
-        imu_init_buf_a_.clear();
-        imu_init_buf_w_.clear();
+        // NOTE: do NOT clear imu_init_buf_ here.
+        // cb_imu() fills the rolling window continuously; clearing it every
+        // motor_state tick (1000 Hz) prevents the 200 ms buffer from ever
+        // accumulating — it had only 2 samples at init time.
+        // The buffer is bounded by max_buf in cb_imu() and consumed+cleared
+        // inside the ESEKF init block below.
         return;
     }
 
@@ -268,9 +272,14 @@ void LegOdometryNode::process() {
                 x0.q = Eigen::Quaternionf::FromTwoVectors(g_body_unit, g_world_unit).normalized();
 
                 // ── Accelerometer bias ──
-                // ba = a_meas - R^T * g_world  (specific force at rest = -R^T * g_world)
+                // IMU model (at rest): a_m = -R^T * g_world + ba
+                //   => ba = a_mean + R0^T * g_world
+                // g_world = [0,0,-9.81], so for a flat unbiased IMU:
+                //   ba_z = 9.81 + (-9.81) = 0  ✓
+                // The previous formula (a_mean - R0^T*g_world) had the wrong sign,
+                // giving ba_z ≈ +19.62 → a_hat + g_body ≈ 2*g_body → ~20 m/s² drift.
                 const Eigen::Matrix3f R0 = x0.q.toRotationMatrix();
-                x0.ba = a_mean - R0.transpose() * g_world;
+                x0.ba = a_mean + R0.transpose() * g_world;
 
                 // ── Gyroscope bias ──
                 x0.bw = w_mean;
@@ -342,6 +351,22 @@ void LegOdometryNode::process() {
 
         // --- 4. Update (sequential per-leg velocity constraint) ---
         esekf_.update_all_legs(observations, w_m, exclude_flags);
+
+        // --- 4b. ZUPT: zero-velocity update when all legs are off the ground ---
+        // All exclude_flags=true means no contact measurement was available.
+        // Apply a zero-velocity pseudo-observation to prevent IMU bias from
+        // accumulating unchecked during suspended / static-airborne states.
+        // Guard: skip if gyro norm exceeds threshold (robot is actually rotating).
+        if (params_.zupt_enabled) {
+            const bool all_off_ground = (exclude_flags[0] && exclude_flags[1] &&
+                                         exclude_flags[2] && exclude_flags[3]);
+            if (all_off_ground) {
+                const Eigen::Vector3f w_corr = w_m - esekf_.nominal().bw;
+                if (w_corr.norm() < params_.zupt_gyro_thresh) {
+                    esekf_.update_zupt(params_.zupt_sigma_vec);
+                }
+            }
+        }
 
         // --- 5. Inject error state into nominal + reset ---
         esekf_.inject_and_reset();

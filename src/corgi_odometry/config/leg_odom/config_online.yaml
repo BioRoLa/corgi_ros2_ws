@@ -38,3 +38,11 @@ use_bv_feedback: true
 static_init:
   window_ms:          200    # Collect this many ms of IMU before trigger
   motion_gyro_thresh: 0.02   # Warn if |w_mean| > this [rad/s]
+
+# Zero Velocity Update: applied when all 4 legs are off the ground
+# sigma_vec: velocity measurement noise std dev [m/s] (tighter = stronger constraint)
+# gyro_thresh: skip ZUPT if bias-corrected gyro norm exceeds this [rad/s]
+zupt:
+  enabled:      true
+  sigma_vec:    [0.01, 0.01, 0.01]
+  gyro_thresh:  0.3
