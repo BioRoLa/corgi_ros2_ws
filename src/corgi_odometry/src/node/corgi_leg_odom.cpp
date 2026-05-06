@@ -74,10 +74,16 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
-    use_esekf_state_             = params_.use_esekf_state;
-    if (use_esekf_state_) {
-        RCLCPP_INFO(rclcpp::get_logger("leg_odometry"),
-                    "use_esekf_state=true: GMO inputs overridden by ESEKF state");
+    // use_esekf_state is hard-coded true for the online real-robot node.
+    // On real hardware there is no ground-truth position/velocity, so the ESEKF
+    // state must always be used to feed the GMO pipeline.  This parameter is
+    // intentionally NOT read from config_online.yaml to prevent accidental
+    // misconfiguration.  (Sim / offline nodes set it via their own config.)
+    use_esekf_state_ = true;
+    if (params_.use_esekf_state == false) {
+        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
+                    "config has use_esekf_state=false but it is ignored in the "
+                    "online node — always running with ESEKF state");
     }
     if (params_.simulate_imu_noise) {
         RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
@@ -166,7 +172,22 @@ void LegOdometryNode::process() {
     // ==========================================================
     // GMO pipeline (runs every tick @ 1000 Hz)
     // ==========================================================
-    auto processed = processor_.process_realtime_data(position_, velocity_, imu_, motor_state_);
+    // When use_esekf_state is active and the filter has started, substitute
+    // the ESEKF-estimated orientation into the IMU message before passing it
+    // to DataProcessor.  This replaces the identity orientation published by
+    // imu_raw_node (real robot) with the filter's own roll/pitch estimate so
+    // that the GMO receives correct base orientation without requiring a
+    // hardware orientation source.  On sim/offline the ESEKF is also active
+    // after the first tick, so the same path is taken there as well.
+    corgi_msgs::msg::ImuStamped imu_for_gmo = imu_;
+    if (use_esekf_state_ && esekf_initialized_) {
+        const auto& q = esekf_.nominal().q;
+        imu_for_gmo.orientation.w = static_cast<double>(q.w());
+        imu_for_gmo.orientation.x = static_cast<double>(q.x());
+        imu_for_gmo.orientation.y = static_cast<double>(q.y());
+        imu_for_gmo.orientation.z = static_cast<double>(q.z());
+    }
+    auto processed = processor_.process_realtime_data(position_, velocity_, imu_for_gmo, motor_state_);
 
     // Override GMO inputs with ESEKF estimated state (uses state from previous tick)
     if (use_esekf_state_ && esekf_initialized_) {

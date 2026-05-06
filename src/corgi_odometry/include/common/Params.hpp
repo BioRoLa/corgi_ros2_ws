@@ -34,8 +34,11 @@ struct Params {
     double contact_beta_threshold_low  =  1.0;
 
     // ── Logic switches ──────────────────────────────────────────
-    // simulate_imu_noise is used only by offline_test.
-    // use_esekf_state is used by offline_test and leg_odom_sim.
+    // simulate_imu_noise: offline_test only — adds synthetic noise to IMU.
+    // use_esekf_state: sim / offline nodes only — feeds ESEKF-estimated
+    //   position/velocity/orientation back into the GMO pipeline instead of
+    //   external ground-truth topics.  The online real-robot node (corgi_leg_odom)
+    //   hard-codes this to true and does NOT read it from config_online.yaml.
     bool simulate_imu_noise = false;
     bool use_esekf_state    = false;
     bool use_bv_feedback    = false;   // Phase 3: feed outer-EKF bv back to inner ESEKF
