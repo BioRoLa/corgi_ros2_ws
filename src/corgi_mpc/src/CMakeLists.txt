@@ -52,22 +52,6 @@ endmacro()
 add_walk_executable(walk_h20_v10_open   walk_h20_v10_open.cpp)
 add_walk_executable(walk_h20_v10_closed walk_h20_v10_closed.cpp)
 
-# Walk h20 v15
-add_walk_executable(walk_h20_v15_open   walk_h20_v15_open.cpp)
-add_walk_executable(walk_h20_v15_closed walk_h20_v15_closed.cpp)
-
-# Walk h25 v10
-add_walk_executable(walk_h25_v10_open   walk_h25_v10_open.cpp)
-add_walk_executable(walk_h25_v10_closed walk_h25_v10_closed.cpp)
-
-# Walk h25 v15
-add_walk_executable(walk_h25_v15_open   walk_h25_v15_open.cpp)
-add_walk_executable(walk_h25_v15_closed walk_h25_v15_closed.cpp)
-
-# Walk obstacle variants
-add_walk_executable(walk_obs_closed walk_obs_closed.cpp)
-add_walk_executable(walk_obs_open   walk_obs_open.cpp)
-
 # Walk probing
 add_walk_executable(walk_probing walk_probing.cpp)
 
@@ -75,14 +59,6 @@ add_walk_executable(walk_probing walk_probing.cpp)
 install(TARGETS
   walk_h20_v10_open
   walk_h20_v10_closed
-  walk_h20_v15_open
-  walk_h20_v15_closed
-  walk_h25_v10_open
-  walk_h25_v10_closed
-  walk_h25_v15_open
-  walk_h25_v15_closed
-  walk_obs_closed
-  walk_obs_open
   walk_probing
   DESTINATION lib/${PROJECT_NAME}
 )
