@@ -1,6 +1,7 @@
 #include "walk_utils.hpp"
 #include "mpc.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 
 bool trigger = false;
 corgi_msgs::msg::ForceStateStamped force_state;
@@ -46,6 +47,7 @@ int main(int argc, char **argv) {
     mpc.load_config(config_profile);
 
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     
@@ -53,6 +55,8 @@ int main(int argc, char **argv) {
     rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
+    std_msgs::msg::Int32MultiArray swing_phase_msg;
+    swing_phase_msg.data.resize(4, 0);
 
     std::vector<corgi_msgs::msg::MotorCmd*> motor_cmd_modules = {
         &motor_cmd.module_a,
@@ -180,6 +184,10 @@ int main(int argc, char **argv) {
 
                 // get next eta
                 mpc.eta_list = walk_gait.step();
+                const auto swing_phase = walk_gait.get_swing_phase();
+                for (int i = 0; i < 4; i++) {
+                    swing_phase_msg.data[i] = swing_phase[i];
+                }
 
                 for (int i=0; i<4; i++) {
                     if (mpc.eta_list[0][i] > M_PI*160.0/180.0) {
@@ -194,6 +202,7 @@ int main(int argc, char **argv) {
 
                 motor_cmd.header.stamp = node->now();
                 motor_cmd_pub->publish(motor_cmd);
+                swing_phase_pub->publish(swing_phase_msg);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;
