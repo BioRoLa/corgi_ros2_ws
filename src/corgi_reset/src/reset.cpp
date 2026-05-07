@@ -66,9 +66,9 @@ int main(int argc, char **argv) {
         beta_err[i] = (0 - motor_state_modules[i]->beta);
     }
 
-    for (int i=0; i<2000; i++){
+    for (int i=0; i<3000; i++){
         for (int j=0; j<4; j++){
-            motor_cmd_modules[j]->theta += theta_err[j]/2000.0;
+            motor_cmd_modules[j]->theta += theta_err[j]/3000.0;
         }
 
         motor_cmd.header.seq = -1;
