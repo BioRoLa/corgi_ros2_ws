@@ -640,10 +640,6 @@ int main(int argc, char **argv) {
                 mpc.robot_ang_vel[2] = imu.angular_velocity.z;
 
                 quaternion_to_euler(mpc.robot_ang, mpc.roll, mpc.pitch, mpc.yaw);
-                if (!sim) {
-                    mpc.pitch *= -1;
-                    mpc.yaw   *= -1;
-                }
 
                 // ────────────────────────────────
                 // MPC solve
