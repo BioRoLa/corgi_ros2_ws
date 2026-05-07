@@ -18,14 +18,6 @@ geometry_msgs::msg::Vector3 sim_body_pos{};
 bool has_sim_body_vel = false;
 bool has_sim_body_pos = false;
 
-// corgi_msgs::msg::ContactStateStamped odom_contact{};
-// bool has_odom_contact = false;
-
-// void odom_contact_cb(const corgi_msgs::msg::ContactStateStamped::SharedPtr msg){
-//     odom_contact = *msg;
-//     has_odom_contact = true;
-// }
-
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
 }
@@ -120,8 +112,17 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_mpc");
 
+    node->declare_parameter<std::string>("config_profile", "sim");
     node->declare_parameter<std::string>("state_source", "odom_legacy");
+    std::string config_profile = node->get_parameter("config_profile").as_string();
     std::string state_source = node->get_parameter("state_source").as_string();
+    if (config_profile != "sim" && config_profile != "real") {
+        RCLCPP_WARN(
+            node->get_logger(),
+            "Invalid config_profile='%s', fallback to 'sim'",
+            config_profile.c_str());
+        config_profile = "sim";
+    }
     if (state_source != "odom_legacy" && state_source != "sim_driver") {
         RCLCPP_WARN(
             node->get_logger(),
@@ -129,9 +130,11 @@ int main(int argc, char **argv) {
             state_source.c_str());
         state_source = "odom_legacy";
     }
+    sim = (config_profile == "sim");
     const bool use_sim_driver_state = (state_source == "sim_driver");
     
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
+    RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
     
     // Wait for clock synchronization
@@ -146,11 +149,10 @@ int main(int argc, char **argv) {
     }
 
     ModelPredictiveController mpc;
-    mpc.load_config();
+    mpc.load_config(config_profile);
     mpc.target_loop = 2200;
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
     auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
@@ -161,13 +163,11 @@ int main(int argc, char **argv) {
     auto sim_body_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("sim/body/velocity", 10, sim_body_vel_cb);
     auto tf_sub = node->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, tf_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 10, imu_cb);
-    // auto odom_contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10, odom_contact_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq); // Convert Hz to nanoseconds
     rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd;
-    corgi_msgs::msg::ContactStateStamped contact_state;
     std_msgs::msg::Int32MultiArray swing_phase_msg;
     swing_phase_msg.data.resize(4, 0);
 
@@ -176,13 +176,6 @@ int main(int argc, char **argv) {
         &imp_cmd.module_b,
         &imp_cmd.module_c,
         &imp_cmd.module_d
-    };
-
-    std::vector<corgi_msgs::msg::ContactState*> contact_state_modules = {
-        &contact_state.module_a,
-        &contact_state.module_b,
-        &contact_state.module_c,
-        &contact_state.module_d
     };
 
     std::vector<corgi_msgs::msg::ForceState*> force_state_modules = {
@@ -271,7 +264,6 @@ int main(int argc, char **argv) {
         next_time += period;
         node->get_clock()->sleep_until(next_time);
     }
-    
 
     while (rclcpp::ok()) {
         rclcpp::spin_some(node);
@@ -279,26 +271,15 @@ int main(int argc, char **argv) {
             RCLCPP_INFO(node->get_logger(), "Wait For Odometry Node Initializing ...");
 
             if (!sim) {
-                for (int i=0; i<int(3*mpc.freq); i++) {
-                    for (auto& state: contact_state_modules) {
-                        state->contact = true;
-                    }
-                    contact_pub->publish(contact_state);
+                for (int i = 0; i < int(3 * mpc.freq); i++) {
+                    rclcpp::spin_some(node);
+                    imp_cmd.header.stamp = node->now();
+                    imp_cmd_pub->publish(imp_cmd);
                     next_time += period;
                     node->get_clock()->sleep_until(next_time);
                 }
             }
-            else {
-                for (int i=0; i<int(1*mpc.freq); i++) {
-                    for (auto& state: contact_state_modules) {
-                        state->contact = true;
-                    }
-                    contact_pub->publish(contact_state);
-                    next_time += period;
-                    node->get_clock()->sleep_until(next_time);
-                }
-            }
-            
+
             for (auto& cmd : imp_cmd_modules){
                 cmd->bx = mpc.Bx_stance;
                 cmd->by = mpc.By_stance;
@@ -321,9 +302,6 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x -= velocity/(1*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-
-                // mpc.target_vel_x = velocity;
-                // walk_gait.set_velocity(mpc.target_vel_x);
 
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt;
 
@@ -348,13 +326,6 @@ int main(int argc, char **argv) {
                     }
 
                     swing_phase_msg.data[i] = swing_phase[i];
-
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
-                        contact_state_modules[i]->contact = true;
-                    }
-                    else {
-                        contact_state_modules[i]->contact = false;
-                    }
                 }
 
                 // update state (odom_legacy / sim_driver)
