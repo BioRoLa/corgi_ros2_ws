@@ -1,10 +1,15 @@
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    package_share_dir = get_package_share_directory('corgi_mpc')
+    bag_script = os.path.join(package_share_dir, 'script', 'mpc_bag.sh')
+    
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
@@ -68,6 +73,16 @@ def generate_launch_description():
         output='screen',
         parameters=real_params,
     )
+    
+    bag_record_process = TimerAction(
+        period=3.0,
+        actions=[
+            ExecuteProcess(
+                cmd=['bash', bag_script],
+                output='screen',
+            )
+        ],
+    )
 
     return LaunchDescription([
         use_sim_time_arg,
@@ -78,4 +93,5 @@ def generate_launch_description():
         odometry_node,
         z_position_node,
         mpc_node,
+        bag_record_process,
     ])
