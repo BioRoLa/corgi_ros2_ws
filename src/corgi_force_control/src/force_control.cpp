@@ -300,27 +300,25 @@ void ForceControlNode::timer_cb() {
     }
 
     // dynamic friction compensation
-    if (!kinematics_->is_sim()){
-        for (int i=0; i<4; i++) {
-            double phi_l = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
-            double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
+    for (int i=0; i<4; i++) {
+        double phi_l = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
+        double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
 
-            if (phi_r > phi_prev_modules_[i](0, 0)){
-                motor_cmd_modules[i]->torque_r -= friction_[2*i];
-            }
-            else {
-                motor_cmd_modules[i]->torque_r += friction_[2*i];
-            }
-
-            if (phi_l > phi_prev_modules_[i](1, 0)){
-                motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
-            }
-            else {
-                motor_cmd_modules[i]->torque_l += friction_[2*i+1];
-            }
-
-            phi_prev_modules_[i] << phi_l, phi_r;
+        if (phi_r > phi_prev_modules_[i](1, 0)){
+            motor_cmd_modules[i]->torque_r -= friction_[2*i];
         }
+        else {
+            motor_cmd_modules[i]->torque_r += friction_[2*i];
+        }
+
+        if (phi_l > phi_prev_modules_[i](0, 0)){
+            motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
+        }
+        else {
+            motor_cmd_modules[i]->torque_l += friction_[2*i+1];
+        }
+
+        phi_prev_modules_[i] << phi_l, phi_r;
     }
 
     // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;
