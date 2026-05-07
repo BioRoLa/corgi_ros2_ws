@@ -8,8 +8,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     package_share_dir = get_package_share_directory('corgi_mpc')
-    bag_script = os.path.join(package_share_dir, 'script', 'mpc_closed_bag.sh')
-    
+    bag_script = os.path.join(package_share_dir, 'script', 'mpc_open_bag.sh')
+
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
@@ -30,30 +30,29 @@ def generate_launch_description():
 
     mpc_node = Node(
         package='corgi_mpc',
-        executable='walk_h20_v10_closed',
+        executable='walk_h20_v10_open',
         name='corgi_mpc',
         output='screen',
         parameters=[{
             'use_sim_time': LaunchConfiguration('use_sim_time'),
             'config_profile': LaunchConfiguration('config_profile'),
-            'state_source': LaunchConfiguration('state_source'),
         }],
     )
 
     real_params = [{'use_sim_time': LaunchConfiguration('use_sim_time')}]
 
-    force_estimation_node = Node(
-        package='corgi_force_estimation',
-        executable='force_estimation_node',
-        name='force_estimation_node',
+    imu_node = Node(
+        package='corgi_imu',
+        executable='imu_node',
+        name='imu_node',
         output='screen',
         parameters=real_params,
     )
 
-    force_control_node = Node(
-        package='corgi_force_control',
-        executable='force_control_node',
-        name='force_control_node',
+    force_estimation_node = Node(
+        package='corgi_force_estimation',
+        executable='force_estimation_node',
+        name='force_estimation_node',
         output='screen',
         parameters=real_params,
     )
@@ -74,14 +73,6 @@ def generate_launch_description():
         parameters=real_params,
     )
 
-    imu_node = Node(
-        package='corgi_imu',
-        executable='imu_node',
-        name='imu_node',
-        output='screen',
-        parameters=real_params,
-    )
-    
     bag_record_process = TimerAction(
         period=3.0,
         actions=[
@@ -96,11 +87,10 @@ def generate_launch_description():
         use_sim_time_arg,
         config_profile_arg,
         state_source_arg,
+        imu_node,
         force_estimation_node,
-        force_control_node,
         odometry_node,
         z_position_node,
-        imu_node,
         mpc_node,
         bag_record_process,
     ])

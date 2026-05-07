@@ -10,14 +10,13 @@ else
   BASE_DIR="$PARENT_DIR"
 fi
 
-OUTPUT=${1:-"$BASE_DIR/bag/mpc_$(date +%Y%m%d_%H%M%S)"}
+OUTPUT=${1:-"$BASE_DIR/bag/mpc_open_$(date +%Y%m%d_%H%M%S)"}
 
 mkdir -p "$(dirname "$OUTPUT")"
 
 ros2 bag record \
   /trigger \
   /imu \
-  /impedance/command \
   /motor/command \
   /motor/state \
   /force/state \
