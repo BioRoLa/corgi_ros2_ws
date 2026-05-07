@@ -15,7 +15,7 @@ OUTPUT=${1:-"$BASE_DIR/bag/mpc_$(date +%Y%m%d_%H%M%S)"}
 mkdir -p "$(dirname "$OUTPUT")"
 
 ros2 bag record \
-  /trigger \  
+  /trigger \
   /imu \
   /impedance/command \
   /motor/command \
