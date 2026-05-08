@@ -18,6 +18,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
@@ -45,6 +46,12 @@ add_subdirectory(src)
 # Install launch files
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install helper scripts used by launch files
+install(DIRECTORY script
+  DESTINATION share/${PROJECT_NAME}/
+  USE_SOURCE_PERMISSIONS
 )
 
 # Install config files (YAML)

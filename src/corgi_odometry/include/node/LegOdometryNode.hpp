@@ -2,12 +2,15 @@
 #define LEG_ODOMETRY_NODE_HPP
 
 #include <array>
+#include <deque>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
 #include "rclcpp/rclcpp.hpp"
 #include <geometry_msgs/msg/vector3.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <corgi_msgs/msg/imu_stamped.hpp>
 #include <corgi_msgs/msg/motor_state_stamped.hpp>
 #include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
@@ -49,6 +52,7 @@ private:
     void cb_position(const geometry_msgs::msg::Vector3::SharedPtr msg);
     void cb_velocity(const geometry_msgs::msg::Vector3::SharedPtr msg);
     void cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg);
+    void cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg);
 
     // ============================================================
     // Contact estimation
@@ -99,13 +103,13 @@ private:
     //       and disturbance observer is decoupled or fed from ESEKF state.
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          position_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr          velocity_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3Stamped>::SharedPtr   bv_outer_sub_;
 
     rclcpp::Publisher<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr    contact_state_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_position_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_velocity_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Quaternion>::SharedPtr          ekf_orientation_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_ba_pub_;
     rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr             ekf_bw_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 ekf_odom_pub_;
 
     // ============================================================
     // Latest message storage
@@ -126,9 +130,11 @@ private:
 
     // ============================================================
     // IMU timestamp tracking (for dynamic ESEKF dt)
+    // Stored as raw sec/nsec to match offline pipeline arithmetic exactly.
     // ============================================================
-    rclcpp::Time last_esekf_imu_time_{0, 0, RCL_ROS_TIME};
-    bool last_esekf_imu_time_valid_ = false;
+    int32_t  last_esekf_imu_sec_  = 0;
+    uint32_t last_esekf_imu_nsec_ = 0;
+    bool     last_esekf_imu_time_valid_ = false;
 
     // ESEKF decimation counter (runs at ESEKF_RATE = 500Hz in a 1000Hz loop)
     size_t esekf_tick_ = 0;
@@ -177,6 +183,16 @@ private:
 
     /// Whether the ESEKF has been initialized (on first triggered tick)
     bool esekf_initialized_ = false;
+
+    // ============================================================
+    // Static IMU initialization buffer
+    // Filled continuously by cb_imu(); consumed once on first init.
+    // ============================================================
+    std::deque<Eigen::Vector3f> imu_init_buf_a_;   ///< accel samples
+    std::deque<Eigen::Vector3f> imu_init_buf_w_;   ///< gyro  samples
+
+    /// Low-pass filtered velocity bias from Outer Fusion EKF (world frame, m/s)
+    Eigen::Vector3f bv_outer_filtered_{0.f, 0.f, 0.f};
 
     // ============================================================
     // Misc

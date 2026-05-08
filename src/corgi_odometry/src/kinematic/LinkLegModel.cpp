@@ -119,10 +119,10 @@ void LinkLegModel::symmetry()
 }
 
 float LinkLegModel::inverse(float r, RIM rim) {
-    if (!flag_) {
-        flag_ = true;
+    if (!this->max_r_G_initialized_) {
         this->calculate(this->max_theta, 0, 0);
         this->max_r_G = -this->G.real();
+        this->max_r_G_initialized_ = true;
     }
     float theta_optimal = to_radians(17.0); 
     switch (rim)

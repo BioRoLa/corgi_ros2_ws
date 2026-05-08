@@ -5,6 +5,7 @@ Refactored version with modular architecture (MVC pattern)
 """
 import os
 import sys
+import time
 import logging
 import numpy as np
 from datetime import datetime
@@ -304,11 +305,18 @@ class CorgiControlPanel(QWidget):
         grp_fsm.setLayout(grp_fsm_layout)
         sidebar.addWidget(grp_fsm)
         
-        # Set Zero button
+        # Set Zero / Reset buttons
+        set_zero_reset_layout = QHBoxLayout()
         self.btn_set_zero = QPushButton('Set Zero')
         self.btn_set_zero.clicked.connect(self._on_set_zero_clicked)
         self.btn_set_zero.setEnabled(False)
-        sidebar.addWidget(self.btn_set_zero)
+        set_zero_reset_layout.addWidget(self.btn_set_zero)
+
+        self.btn_reset = QPushButton('Reset')
+        self.btn_reset.clicked.connect(self._on_reset_clicked)
+        self.btn_reset.setEnabled(False)
+        set_zero_reset_layout.addWidget(self.btn_reset)
+        sidebar.addLayout(set_zero_reset_layout)
         
         sidebar.addStretch(1)
         return sidebar
@@ -634,6 +642,26 @@ class CorgiControlPanel(QWidget):
             self.log_widget.add_log('Failed to start set_zero', LOGLEVEL.ERROR, 'system')
             self.btn_set_zero.setEnabled(True)
             self.btn_set_zero.setText('Set Zero')
+
+    def _on_reset_clicked(self):
+        """Handle Reset button click (beta=0, theta=150 deg)"""
+        self.btn_reset.setEnabled(False)
+        self.btn_reset.setText('Resetting...')
+        self._reset_start_time = time.time()
+
+        success = self.process_manager.start_process(
+            'reset',
+            ['ros2', 'run', 'corgi_reset', 'reset'],
+            capture_output=False
+        )
+
+        if success:
+            self.log_widget.add_log('Reset Started', LOGLEVEL.INFO, 'system')
+        else:
+            self.log_widget.add_log('Failed to start reset', LOGLEVEL.ERROR, 'system')
+            self.btn_reset.setEnabled(True)
+            self.btn_reset.setText('Reset')
+            self._reset_start_time = None
     
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
@@ -864,7 +892,7 @@ class CorgiControlPanel(QWidget):
         # Display in log widget
         self.log_widget.add_log(message, LOGLEVEL(level), node_name)
         
-        # Handle special messages - check for set_zero completion
+        # Handle special messages - check for set_zero / reset completion
         if 'set_zero' in node_name.lower():
             if 'completed' in message.lower() or 'complete' in message.lower():
                 self.log_widget.add_log(
@@ -872,6 +900,14 @@ class CorgiControlPanel(QWidget):
                     LOGLEVEL.INFO, 'system'
                 )
                 self._on_set_zero_completed()
+
+        if 'corgi_reset' in node_name.lower() or 'reset' in node_name.lower():
+            if 'completed' in message.lower() or 'complete' in message.lower():
+                self.log_widget.add_log(
+                    'Reset operation completed successfully',
+                    LOGLEVEL.INFO, 'system'
+                )
+                self._on_reset_completed()
         
         # Handle error recovery
         if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
@@ -921,6 +957,7 @@ class CorgiControlPanel(QWidget):
             current = -1
         
         self.btn_set_zero.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
+        self.btn_reset.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
         
         # FSM buttons - disable in simulation mode or when bridge is off
         if not bridge_on or self.use_sim_time:
@@ -961,6 +998,15 @@ class CorgiControlPanel(QWidget):
         self.btn_set_zero.setEnabled(True)
         self.btn_set_zero.setText('Set Zero')
         self.log_widget.add_log('Motor zero points set successfully', LOGLEVEL.INFO, 'system')
+
+    def _on_reset_completed(self):
+        """Handle reset completion"""
+        if self.process_manager.is_running('reset'):
+            self.process_manager.stop_process('reset', timeout=1.0)
+
+        self.btn_reset.setEnabled(True)
+        self.btn_reset.setText('Reset')
+        self.log_widget.add_log('Reset completed successfully', LOGLEVEL.INFO, 'system')
     
     def _launch_config_panel(self):
         """Launch configuration panel"""
@@ -997,6 +1043,17 @@ class CorgiControlPanel(QWidget):
             if not self.process_manager.is_running('set_zero'):
                 # Process finished but callback wasn't triggered
                 self._on_set_zero_completed()
+
+        # Check if reset process has completed (by process exit OR elapsed time)
+        if self.btn_reset.text() == 'Resetting...':
+            process_done = not self.process_manager.is_running('reset')
+            time_done = (
+                hasattr(self, '_reset_start_time')
+                and self._reset_start_time is not None
+                and time.time() - self._reset_start_time > 11.0
+            )
+            if process_done or time_done:
+                self._on_reset_completed()
 
         # Detect sim-time clock jump (Webots reset) and restart data recorder
         if self.use_sim_time and self.ros_worker.is_running:

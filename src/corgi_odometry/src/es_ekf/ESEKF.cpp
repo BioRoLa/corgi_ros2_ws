@@ -283,6 +283,33 @@ void ESEKF::update_all_legs(std::vector<LegObservation>& obs,
 }
 
 // ============================================================
+// ZUPT — Zero Velocity Update
+// ============================================================
+
+void ESEKF::update_zupt(const Eigen::Vector3f& sigma_zupt) {
+    // H selects the velocity block of the error state
+    Eigen::MatrixXf H = Eigen::MatrixXf::Zero(3, ERR_STATE_DIM);
+    H.block<3,3>(0, V_IDX) = Eigen::Matrix3f::Identity();
+
+    // Innovation: observed velocity = 0; predicted = v_nom + accumulated δv
+    Eigen::Vector3f v_pred = x_nom_.v + dx_.segment<3>(V_IDX);
+    Eigen::Vector3f innovation = -v_pred;   // 0 - v_pred
+
+    // Measurement noise (diagonal, per-axis)
+    Eigen::Matrix3f R_zupt = sigma_zupt.array().square().matrix().asDiagonal();
+
+    // Standard EKF update (no Mahalanobis rejection — ZUPT is structural)
+    Eigen::Matrix3f S    = H * P_ * H.transpose() + R_zupt;
+    Eigen::MatrixXf K    = P_ * H.transpose() * S.inverse();   // 15×3
+
+    dx_ += K * innovation;
+
+    // Joseph-form covariance update for numerical stability
+    Eigen::MatrixXf I_KH = Eigen::MatrixXf::Identity(ERR_STATE_DIM, ERR_STATE_DIM) - K * H;
+    P_ = I_KH * P_ * I_KH.transpose() + K * R_zupt * K.transpose();
+}
+
+// ============================================================
 // Inject error state into nominal + reset
 // ============================================================
 

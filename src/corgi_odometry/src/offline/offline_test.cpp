@@ -12,14 +12,14 @@ int main(int argc, char** argv) {
         // Default YAML path: <package>/config/config_test.yaml
         std::string yaml_path =
             (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
-             / "config" / "tuned_offline_example.yaml").string();
+             / "config" / "leg_odom" / "tuned_offline_example.yaml").string();
 
         // Check for --config <path> argument
         for (int i = 1; i < argc - 1; ++i) {
             if (std::string(argv[i]) == "--config") {
                 yaml_path =             
                 (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
-                / "config/").string() + argv[i + 1] + ".yaml";
+                / "config" / "leg_odom").string() + "/" + argv[i + 1] + ".yaml";
                 break;
             }
         }

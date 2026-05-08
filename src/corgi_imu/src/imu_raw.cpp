@@ -1,5 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
-#include "corgi_msgs/msg/imu_raw_stamped.hpp"
+#include "corgi_msgs/msg/imu_stamped.hpp"
 #include "corgi_msgs/msg/headers.hpp"
 #include "corgi_imu/cx5_raw.hpp"
 #include <thread>
@@ -14,7 +14,12 @@ int main(int argc, char **argv)
 
     auto imu = std::make_shared<CX5_RAW>("/dev/ttyTHS1", 921600, 1000);
 
-    auto pub = node->create_publisher<corgi_msgs::msg::ImuRawStamped>("imu_raw", 5);
+    // Publishes ImuStamped (same type as the simulation IMU) so that
+    // corgi_leg_odom can subscribe to a single type regardless of environment.
+    // The orientation field is set to identity (w=1, x=y=z=0) because the
+    // CX5 raw driver only provides gyro/accel; the ESEKF inside corgi_leg_odom
+    // estimates orientation from scratch and overrides this field before use.
+    auto pub = node->create_publisher<corgi_msgs::msg::ImuStamped>("imu_raw", 5);
 
     // Capture steady_clock ↔ ROS time pair for timestamp conversion
     auto steady_epoch = std::chrono::steady_clock::now();
@@ -33,9 +38,16 @@ int main(int argc, char **argv)
         executor.spin();
     });
 
-    corgi_msgs::msg::ImuRawStamped msg;
+    corgi_msgs::msg::ImuStamped msg;
     corgi_msgs::msg::Headers hdr;
     hdr.frame_id = "imu_base";
+
+    // Orientation is not available from raw hardware; set to identity.
+    // corgi_leg_odom will replace this with its own ESEKF estimate when running.
+    msg.orientation.w = 1.0;
+    msg.orientation.x = 0.0;
+    msg.orientation.y = 0.0;
+    msg.orientation.z = 0.0;
 
     Eigen::Vector3f accel, gyro;
     int seq = 0;

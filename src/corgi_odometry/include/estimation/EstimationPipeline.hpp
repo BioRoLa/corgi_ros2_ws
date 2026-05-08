@@ -59,6 +59,9 @@ public:
     const estimation_model::NominalState& nominal() const { return esekf_.nominal(); }
     const Eigen::MatrixXf& covariance() const { return esekf_.covariance(); }
 
+    /// Forward external velocity bias from Outer Fusion EKF to inner ESEKF.
+    void set_bv_outer(const Eigen::Vector3f& bv) { esekf_.set_bv_outer(bv); }
+
     /// Override base position/velocity in ProcessedData with ESEKF estimate.
     void override_processed_with_esekf(DataProcessor::ProcessedData& processed) const;
 

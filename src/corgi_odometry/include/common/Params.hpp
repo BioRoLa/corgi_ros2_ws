@@ -33,11 +33,30 @@ struct Params {
     double contact_beta_threshold_high = 10.0;
     double contact_beta_threshold_low  =  1.0;
 
+    // ── ZUPT (Zero Velocity Update) ────────────────────────────
+    // Applied when all 4 legs are off the ground and gyro norm < zupt_gyro_thresh.
+    bool            zupt_enabled    = true;
+    Eigen::Vector3f zupt_sigma_vec  = {0.01f, 0.01f, 0.01f};  // velocity noise std [m/s]
+    float           zupt_gyro_thresh = 0.3f;   // skip ZUPT if |w_corr| > this [rad/s]
+
+    // ── Static IMU initialization ──────────────────────────────
+    // Window length (ms) to average IMU before first ESEKF tick.
+    // Accumulates in cb_imu(); used to estimate ba, bw, and gravity direction.
+    // If fewer samples are available, degrades gracefully to ba=bw=0.
+    int   static_init_window_ms      = 200;
+    // Gyro norm threshold for motion detection during init window [rad/s].
+    // If |w_mean| > this, log a warning (but still proceed).
+    float static_motion_gyro_thresh  = 0.02f;
+
     // ── Logic switches ──────────────────────────────────────────
-    // simulate_imu_noise is used only by offline_test.
-    // use_esekf_state is used by offline_test and leg_odom_sim.
+    // simulate_imu_noise: offline_test only — adds synthetic noise to IMU.
+    // use_esekf_state: sim / offline nodes only — feeds ESEKF-estimated
+    //   position/velocity/orientation back into the GMO pipeline instead of
+    //   external ground-truth topics.  The online real-robot node (corgi_leg_odom)
+    //   hard-codes this to true and does NOT read it from config_online.yaml.
     bool simulate_imu_noise = false;
     bool use_esekf_state    = false;
+    bool use_bv_feedback    = false;   // Phase 3: feed outer-EKF bv back to inner ESEKF
     bool quiet              = false;
 
     // ── Offline ─────────────────────────────────────────────────
@@ -52,6 +71,12 @@ struct Params {
 
     // ── GT velocity filter ──────────────────────────────────────
     double gt_velocity_lpf_cutoff = 10.0;  // [Hz]
+
+    // ── Fake LiDAR (simulation/offline) ────────────────────────
+    float  fake_lidar_sigma_p    = 0.02f;   // position noise std dev [m]
+    float  fake_lidar_sigma_q    = 0.005f;  // orientation noise std dev [rad]
+    double fake_lidar_latency_ms = 80.0;    // publish latency [ms]
+    double fake_lidar_rate_hz    = 10.0;    // publish rate [Hz]
 };
 
 }  // namespace corgi

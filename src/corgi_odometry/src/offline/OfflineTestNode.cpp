@@ -1,5 +1,8 @@
 #include "offline/OfflineTestNode.hpp"
 #include "common/Config.hpp"
+#include "fusion/OuterEKF.hpp"
+#include "fusion/FusionParamsIO.hpp"
+#include "sim/FakeLidarSimulator.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -7,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <random>
 
 namespace corgi {
 
@@ -86,7 +90,8 @@ int OfflineTestNode::run() {
     // ── Output CSV ──────────────────────────────────────────────
     const auto output_dir = std::filesystem::current_path() / "output_data";
     std::filesystem::create_directories(output_dir);
-    const auto esekf_out_path = output_dir / (params_.csv_filename + "_esekf.csv");
+    const std::string bv_suffix = params_.use_bv_feedback ? "_feedback" : "_no_feedback";
+    const auto esekf_out_path = output_dir / (params_.csv_filename + bv_suffix + "_esekf.csv");
     std::ofstream esekf_out(esekf_out_path);
     esekf_out << "Index,sim_pos_x,sim_pos_y,sim_pos_z,"
               << "est_pos_x,est_pos_y,est_pos_z,"
@@ -110,13 +115,41 @@ int OfflineTestNode::run() {
               << "pred_vel_x,pred_vel_y,pred_vel_z,"
               << "imu_gyro_pos_x,imu_gyro_pos_y,imu_gyro_pos_z,"
               << "imu_gyro_vel_bx,imu_gyro_vel_by,imu_gyro_vel_bz,"
-              << "imu_gyro_qw,imu_gyro_qx,imu_gyro_qy,imu_gyro_qz\n";
+              << "imu_gyro_qw,imu_gyro_qx,imu_gyro_qy,imu_gyro_qz,"
+              << "odom_map_x,odom_map_y,odom_map_z,"
+              << "bv_x,bv_y,bv_z,"
+              << "odom_mapping_x,odom_mapping_y,odom_mapping_z\n";
     esekf_out << std::fixed << std::setprecision(8);
 
     // ── GT offset (ESEKF starts at origin) ──────────────────────
     const double gt_offset_x = data[start_index].sim_pos_x;
     const double gt_offset_y = data[start_index].sim_pos_y;
     const double gt_offset_z = data[start_index].sim_pos_z;
+
+    // ── Outer Fusion EKF (Phase 2) ──────────────────────────────
+    fusion::OuterEKF outer_ekf;
+    {
+        // Load noise params from the same YAML used by the online FusionNode
+        fusion::FusionConfig fcfg;
+        try {
+            const std::string yaml_path =
+                (std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
+                 / "config" / "fusion" / "config_fusion.yaml").string();
+            fcfg = fusion::load_fusion_config(yaml_path);
+        } catch (const std::exception& e) {
+            if (!quiet) std::cerr << "[OfflineTestNode] Fusion YAML load failed ("
+                                  << e.what() << "), using defaults\n";
+        }
+        outer_ekf.set_noise(fcfg.noise);
+    }
+    // Fake-LiDAR parameters (derived from Params; mirroring fake_lidar_odom.cpp defaults)
+    const size_t N_LIDAR_PERIOD = static_cast<size_t>(
+        corgi::Config::SAMPLE_RATE / params_.fake_lidar_rate_hz + 0.5); // steps between LiDAR updates
+    const size_t LATENCY_STEPS = static_cast<size_t>(
+        params_.fake_lidar_latency_ms * corgi::Config::SAMPLE_RATE / 1000.0 + 0.5);
+    sim::FakeLidarSimulator lidar_sim(sim::FakeLidarSimulator::Params{
+        params_.fake_lidar_sigma_p, params_.fake_lidar_sigma_q, 12345u});
+    size_t lidar_update_count = 0;
 
     // ── RMSE accumulators ───────────────────────────────────────
     RmseAccumulator pos_rmse, vel_rmse;
@@ -136,11 +169,6 @@ int OfflineTestNode::run() {
     auto start_time = std::chrono::high_resolution_clock::now();
     size_t processed_count = 0;
 
-    // ── IMU timestamp tracking for dynamic ESEKF dt ─────────────
-    int32_t prev_imu_sec = 0;
-    int32_t prev_imu_nsec = 0;
-    bool prev_imu_time_valid = false;
-
     for (size_t i = start_index; i < data.size() && processed_count < max_processed; ++i) {
         if (!quiet && i % 100 == 0) {
             std::cout << "Processing index: " << i << " / " << data.size() << "\r" << std::flush;
@@ -148,26 +176,6 @@ int OfflineTestNode::run() {
 
         const auto& d = data[i];
         RawRecord raw = to_raw(d);
-
-        // ── Compute dynamic dt from IMU timestamps ──────────────
-        float esekf_dt = static_cast<float>(Config::DT);   // fallback / fixed-dt mode
-        if (params_.use_dynamic_dt) {
-            if (prev_imu_time_valid && (raw.imu_sec != 0 || raw.imu_nsec != 0)) {
-                double cur_t  = raw.imu_sec  + raw.imu_nsec  * 1e-9;
-                double prev_t = prev_imu_sec + prev_imu_nsec * 1e-9;
-                double dt_imu = cur_t - prev_t;
-                // Sanity clamp: [0.5×, 2×] nominal DT
-                constexpr double lo = Config::DT * 0.5;
-                constexpr double hi = Config::DT * 2.0;
-                if (dt_imu >= lo && dt_imu <= hi)
-                    esekf_dt = static_cast<float>(dt_imu);
-            }
-            if (raw.imu_sec != 0 || raw.imu_nsec != 0) {
-                prev_imu_sec  = raw.imu_sec;
-                prev_imu_nsec = raw.imu_nsec;
-                prev_imu_time_valid = true;
-            }
-        }
 
         // Process raw data → generalized coordinates
         auto processed = processor.process_record(raw);
@@ -228,6 +236,54 @@ int OfflineTestNode::run() {
 
         // ── Pipeline step ───────────────────────────────────────
         auto result = pipeline.step(processed, a_m, w_m, raw, i);
+
+        // ── Outer EKF predict ────────────────────────────────────
+        if (outer_ekf.initialized()) {
+            outer_ekf.predict(static_cast<float>(dt));
+        }
+
+        // ── Fake LiDAR update (every N_LIDAR_PERIOD steps) ───────
+        if (processed_count % N_LIDAR_PERIOD == 0) {
+            // Use delayed data index to simulate latency
+            size_t lidar_src = (i >= LATENCY_STEPS) ? (i - LATENCY_STEPS) : start_index;
+            const auto& ld = data[lidar_src];
+
+            Eigen::Vector3f p_gt(
+                static_cast<float>(ld.sim_pos_x - gt_offset_x),
+                static_cast<float>(ld.sim_pos_y - gt_offset_y),
+                static_cast<float>(ld.sim_pos_z - gt_offset_z));
+            Eigen::Quaternionf q_gt(
+                static_cast<float>(ld.sim_orien_w),
+                static_cast<float>(ld.sim_orien_x),
+                static_cast<float>(ld.sim_orien_y),
+                static_cast<float>(ld.sim_orien_z));
+            q_gt.normalize();
+
+            // Apply shared noise model
+            Eigen::Vector3f p_noisy;
+            Eigen::Quaternionf q_noisy;
+            lidar_sim.apply_noise(p_gt, q_gt, p_noisy, q_noisy);
+
+            // Use inner-ESEKF state at current step as approximation for ring-buffer
+            const auto& st = result.state;
+
+            if (!outer_ekf.initialized()) {
+                // Initialise: T_map^odom = p_lidar - R_lidar * p_odom
+                Eigen::Vector3f p_mo = p_noisy - q_noisy.toRotationMatrix() * st.p;
+                Eigen::Quaternionf q_mo = (q_noisy * st.q.inverse()).normalized();
+                outer_ekf.init(p_mo, q_mo);
+            } else {
+                float dt_lidar_val = static_cast<float>(N_LIDAR_PERIOD) *
+                                     static_cast<float>(dt);
+                outer_ekf.update_lidar(p_noisy, q_noisy, st.p, st.q, dt_lidar_val);
+                ++lidar_update_count;
+            }
+        }
+
+        // ── Phase 3: feed outer-EKF bv back to inner ESEKF ──────
+        if (params_.use_bv_feedback && outer_ekf.initialized()) {
+            pipeline.set_bv_outer(outer_ekf.bv());
+        }
 
         // ── Accumulate RMSE ─────────────────────────────────────
         {
@@ -298,7 +354,18 @@ int OfflineTestNode::run() {
                 Eigen::Vector3f imu_gyro_vel_b_log = imu_gyro_q.toRotationMatrix().transpose() * imu_gyro_vel_w;
                 esekf_out << imu_gyro_pos_w.x() << "," << imu_gyro_pos_w.y() << "," << imu_gyro_pos_w.z() << ","
                           << imu_gyro_vel_b_log.x() << "," << imu_gyro_vel_b_log.y() << "," << imu_gyro_vel_b_log.z() << ","
-                          << imu_gyro_q.w() << "," << imu_gyro_q.x() << "," << imu_gyro_q.y() << "," << imu_gyro_q.z() << "\n";
+                          << imu_gyro_q.w() << "," << imu_gyro_q.x() << "," << imu_gyro_q.y() << "," << imu_gyro_q.z() << ",";
+            }
+            // Outer EKF columns
+            {
+                const Eigen::Vector3f& p_mo = outer_ekf.initialized() ? outer_ekf.p_mo() : Eigen::Vector3f::Zero();
+                const Eigen::Vector3f& bv   = outer_ekf.initialized() ? outer_ekf.bv()   : Eigen::Vector3f::Zero();
+                Eigen::Vector3f p_mapping = outer_ekf.initialized()
+                    ? outer_ekf.map_position(result.state.p)
+                    : Eigen::Vector3f::Zero();
+                esekf_out << p_mo.x()      << "," << p_mo.y()      << "," << p_mo.z()      << ","
+                          << bv.x()        << "," << bv.y()        << "," << bv.z()        << ","
+                          << p_mapping.x() << "," << p_mapping.y() << "," << p_mapping.z() << "\n";
             }
         }
 
@@ -362,6 +429,25 @@ int OfflineTestNode::run() {
         std::cout << "IMU Pos RMSE total:  " << imu_pos_rmse.total_rmse() << " m\n";
         std::cout << "IMU Vel RMSE total:  " << imu_vel_rmse.total_rmse() << " m/s\n";
         std::cout << "====================================\n";
+    }
+
+    // Outer EKF summary
+    if (outer_ekf.initialized()) {
+        std::cout << "\n========== Outer EKF Summary ==========\n";
+        std::cout << "LiDAR updates processed: " << lidar_update_count << "\n";
+        std::cout << "Final p_mo: ["
+                  << outer_ekf.p_mo().x() << ", "
+                  << outer_ekf.p_mo().y() << ", "
+                  << outer_ekf.p_mo().z() << "]\n";
+        std::cout << "Final bv:   ["
+                  << outer_ekf.bv().x() << ", "
+                  << outer_ekf.bv().y() << ", "
+                  << outer_ekf.bv().z() << "] m/s\n";
+        std::cout << "odom_mapping (final): ["
+                  << outer_ekf.map_position(pipeline.nominal().p).x() << ", "
+                  << outer_ekf.map_position(pipeline.nominal().p).y() << ", "
+                  << outer_ekf.map_position(pipeline.nominal().p).z() << "]\n";
+        std::cout << "========================================\n";
     }
 
     return 0;

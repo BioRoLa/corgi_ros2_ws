@@ -9,7 +9,7 @@
 #include "offline/RmseAccumulator.hpp"
 #include "estimation/EstimationPipeline.hpp"
 #include "general_momentum_observer/DataProcessor.hpp"
-#include "offline/ImuNoiseSimulator.hpp"
+#include "sim/ImuNoiseSimulator.hpp"
 
 namespace corgi {
 
