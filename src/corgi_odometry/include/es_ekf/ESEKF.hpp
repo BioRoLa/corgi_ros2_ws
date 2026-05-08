@@ -129,6 +129,13 @@ public:
                          const Eigen::Vector3f& w_m,
                          const std::array<bool, 4>& exclude);
 
+    /// @brief Zero Velocity Update (ZUPT) — inject z=0 velocity observation.
+    ///   Applied when all legs are off the ground (no contact measurement).
+    ///   Observation model:  z_zupt = [0,0,0] = v + noise
+    ///   H = [0 I 0 0 0]  (velocity block only)
+    /// @param sigma_zupt  per-axis velocity noise std dev [m/s]
+    void update_zupt(const Eigen::Vector3f& sigma_zupt);
+
     /// @brief Inject error state into nominal state, then reset δx = 0
     void inject_and_reset();
 

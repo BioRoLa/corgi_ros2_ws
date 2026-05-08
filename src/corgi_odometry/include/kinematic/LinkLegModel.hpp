@@ -121,7 +121,7 @@ class LinkLegModel
     const float min_theta = to_radians(17.0);
     const float max_theta = to_radians(140.0);
     float max_r_G = 1.;
-    bool flag_ = false;
+    bool max_r_G_initialized_ = false;
     const float to1 = to_radians(39.5);
     const float to2 = - to_radians(65.0);
     const float tf = to_radians(6.0);

@@ -26,7 +26,23 @@ contact:
   beta_threshold_low:   1.0
 
 # Logic switches
+# NOTE: use_esekf_state is intentionally absent here.  The online node
+# (corgi_leg_odom) hard-codes this to true because real hardware has no
+# ground-truth position/velocity.  This parameter is only meaningful for
+# sim and offline nodes, which load their own config files.
 use_dynamic_dt:  true
-use_esekf_state: true
 quiet:           true
 use_bv_feedback: true
+
+# Static IMU initialization (bias calibration before first ESEKF tick)
+static_init:
+  window_ms:          200    # Collect this many ms of IMU before trigger
+  motion_gyro_thresh: 0.02   # Warn if |w_mean| > this [rad/s]
+
+# Zero Velocity Update: applied when all 4 legs are off the ground
+# sigma_vec: velocity measurement noise std dev [m/s] (tighter = stronger constraint)
+# gyro_thresh: skip ZUPT if bias-corrected gyro norm exceeds this [rad/s]
+zupt:
+  enabled:      true
+  sigma_vec:    [0.01, 0.01, 0.01]
+  gyro_thresh:  0.3

@@ -74,10 +74,16 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
-    use_esekf_state_             = params_.use_esekf_state;
-    if (use_esekf_state_) {
-        RCLCPP_INFO(rclcpp::get_logger("leg_odometry"),
-                    "use_esekf_state=true: GMO inputs overridden by ESEKF state");
+    // use_esekf_state is hard-coded true for the online real-robot node.
+    // On real hardware there is no ground-truth position/velocity, so the ESEKF
+    // state must always be used to feed the GMO pipeline.  This parameter is
+    // intentionally NOT read from config_online.yaml to prevent accidental
+    // misconfiguration.  (Sim / offline nodes set it via their own config.)
+    use_esekf_state_ = true;
+    if (params_.use_esekf_state == false) {
+        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
+                    "config has use_esekf_state=false but it is ignored in the "
+                    "online node — always running with ESEKF state");
     }
     if (params_.simulate_imu_noise) {
         RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
@@ -160,13 +166,34 @@ void LegOdometryNode::process() {
         last_esekf_imu_time_valid_ = false;
         prev_imu_valid_ = false;
         esekf_tick_ = 0;
+        // NOTE: do NOT clear imu_init_buf_ here.
+        // cb_imu() fills the rolling window continuously; clearing it every
+        // motor_state tick (1000 Hz) prevents the 200 ms buffer from ever
+        // accumulating — it had only 2 samples at init time.
+        // The buffer is bounded by max_buf in cb_imu() and consumed+cleared
+        // inside the ESEKF init block below.
         return;
     }
 
     // ==========================================================
     // GMO pipeline (runs every tick @ 1000 Hz)
     // ==========================================================
-    auto processed = processor_.process_realtime_data(position_, velocity_, imu_, motor_state_);
+    // When use_esekf_state is active and the filter has started, substitute
+    // the ESEKF-estimated orientation into the IMU message before passing it
+    // to DataProcessor.  This replaces the identity orientation published by
+    // imu_raw_node (real robot) with the filter's own roll/pitch estimate so
+    // that the GMO receives correct base orientation without requiring a
+    // hardware orientation source.  On sim/offline the ESEKF is also active
+    // after the first tick, so the same path is taken there as well.
+    corgi_msgs::msg::ImuStamped imu_for_gmo = imu_;
+    if (use_esekf_state_ && esekf_initialized_) {
+        const auto& q = esekf_.nominal().q;
+        imu_for_gmo.orientation.w = static_cast<double>(q.w());
+        imu_for_gmo.orientation.x = static_cast<double>(q.x());
+        imu_for_gmo.orientation.y = static_cast<double>(q.y());
+        imu_for_gmo.orientation.z = static_cast<double>(q.z());
+    }
+    auto processed = processor_.process_realtime_data(position_, velocity_, imu_for_gmo, motor_state_);
 
     // Override GMO inputs with ESEKF estimated state (uses state from previous tick)
     if (use_esekf_state_ && esekf_initialized_) {
@@ -213,11 +240,72 @@ void LegOdometryNode::process() {
         // --- Initialize ESEKF on first triggered tick ---
         if (!esekf_initialized_) {
             estimation_model::NominalState x0;
-            x0.q = Eigen::Quaternionf(
-                static_cast<float>(imu_.orientation.w),
-                static_cast<float>(imu_.orientation.x),
-                static_cast<float>(imu_.orientation.y),
-                static_cast<float>(imu_.orientation.z)).normalized();
+
+            // ── Use static IMU buffer to estimate ba, bw, and q0 ──
+            const size_t N = imu_init_buf_a_.size();
+            if (N >= 10) {
+                // Compute mean accel and gyro over the buffer
+                Eigen::Vector3f a_sum = Eigen::Vector3f::Zero();
+                Eigen::Vector3f w_sum = Eigen::Vector3f::Zero();
+                for (size_t i = 0; i < N; ++i) {
+                    a_sum += imu_init_buf_a_[i];
+                    w_sum += imu_init_buf_w_[i];
+                }
+                const Eigen::Vector3f a_mean = a_sum / static_cast<float>(N);
+                const Eigen::Vector3f w_mean = w_sum / static_cast<float>(N);
+
+                // Warn if robot appears to be moving during init window
+                if (w_mean.norm() > params_.static_motion_gyro_thresh) {
+                    RCLCPP_WARN(this->get_logger(),
+                        "Static init: gyro mean norm=%.4f rad/s exceeds threshold=%.4f — "
+                        "robot may not have been static; bias estimate may be noisy.",
+                        w_mean.norm(), params_.static_motion_gyro_thresh);
+                }
+
+                // ── Initial attitude from gravity alignment ──
+                // Align body Z-down (gravity direction in body frame) with
+                // world -Z.  Yaw is set to 0 (unobservable from accelerometer).
+                static const Eigen::Vector3f g_world(0.f, 0.f, -9.81f);
+                const Eigen::Vector3f g_body_meas = -a_mean;  // gravity = -specific force
+                const Eigen::Vector3f g_body_unit = g_body_meas.normalized();
+                const Eigen::Vector3f g_world_unit = -Eigen::Vector3f::UnitZ(); // [0,0,-1]
+                x0.q = Eigen::Quaternionf::FromTwoVectors(g_body_unit, g_world_unit).normalized();
+
+                // ── Accelerometer bias ──
+                // IMU model (at rest): a_m = -R^T * g_world + ba
+                //   => ba = a_mean + R0^T * g_world
+                // g_world = [0,0,-9.81], so for a flat unbiased IMU:
+                //   ba_z = 9.81 + (-9.81) = 0  ✓
+                // The previous formula (a_mean - R0^T*g_world) had the wrong sign,
+                // giving ba_z ≈ +19.62 → a_hat + g_body ≈ 2*g_body → ~20 m/s² drift.
+                const Eigen::Matrix3f R0 = x0.q.toRotationMatrix();
+                x0.ba = a_mean + R0.transpose() * g_world;
+
+                // ── Gyroscope bias ──
+                x0.bw = w_mean;
+
+                RCLCPP_INFO(this->get_logger(),
+                    "ES-EKF static init: N=%zu samples (%.0f ms), "
+                    "ba=[%.4f, %.4f, %.4f] m/s², bw=[%.5f, %.5f, %.5f] rad/s",
+                    N, static_cast<float>(N),
+                    x0.ba.x(), x0.ba.y(), x0.ba.z(),
+                    x0.bw.x(), x0.bw.y(), x0.bw.z());
+            } else {
+                // Fallback: not enough buffer samples — use IMU orientation header, ba=bw=0
+                x0.q = Eigen::Quaternionf(
+                    static_cast<float>(imu_.orientation.w),
+                    static_cast<float>(imu_.orientation.x),
+                    static_cast<float>(imu_.orientation.y),
+                    static_cast<float>(imu_.orientation.z)).normalized();
+                RCLCPP_WARN(this->get_logger(),
+                    "ES-EKF static init: only %zu IMU samples available (need ≥10); "
+                    "falling back to ba=bw=0.", N);
+            }
+
+            // Clear buffer to free memory
+            imu_init_buf_a_.clear();
+            imu_init_buf_w_.clear();
+
             esekf_.init(x0);
             esekf_initialized_ = true;
             RCLCPP_INFO(this->get_logger(), "ES-EKF initialized (%.0f Hz, nominal dt=%.4f s)",
@@ -263,6 +351,22 @@ void LegOdometryNode::process() {
 
         // --- 4. Update (sequential per-leg velocity constraint) ---
         esekf_.update_all_legs(observations, w_m, exclude_flags);
+
+        // --- 4b. ZUPT: zero-velocity update when all legs are off the ground ---
+        // All exclude_flags=true means no contact measurement was available.
+        // Apply a zero-velocity pseudo-observation to prevent IMU bias from
+        // accumulating unchecked during suspended / static-airborne states.
+        // Guard: skip if gyro norm exceeds threshold (robot is actually rotating).
+        if (params_.zupt_enabled) {
+            const bool all_off_ground = (exclude_flags[0] && exclude_flags[1] &&
+                                         exclude_flags[2] && exclude_flags[3]);
+            if (all_off_ground) {
+                const Eigen::Vector3f w_corr = w_m - esekf_.nominal().bw;
+                if (w_corr.norm() < params_.zupt_gyro_thresh) {
+                    esekf_.update_zupt(params_.zupt_sigma_vec);
+                }
+            }
+        }
 
         // --- 5. Inject error state into nominal + reset ---
         esekf_.inject_and_reset();
@@ -344,6 +448,31 @@ void LegOdometryNode::cb_motor_state(const corgi_msgs::msg::MotorStateStamped::S
 void LegOdometryNode::cb_imu(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
     imu_ = *msg;
     imu_received_ = true;
+
+    // Maintain a rolling window of the most recent IMU samples for static
+    // bias estimation.  The buffer is consumed once on the first ESEKF init.
+    if (!esekf_initialized_) {
+        const Eigen::Vector3f a(
+            static_cast<float>(msg->linear_acceleration.x),
+            static_cast<float>(msg->linear_acceleration.y),
+            static_cast<float>(msg->linear_acceleration.z));
+        const Eigen::Vector3f w(
+            static_cast<float>(msg->angular_velocity.x),
+            static_cast<float>(msg->angular_velocity.y),
+            static_cast<float>(msg->angular_velocity.z));
+
+        imu_init_buf_a_.push_back(a);
+        imu_init_buf_w_.push_back(w);
+
+        // Keep only the most recent window
+        // IMU rate ≈ 1000 Hz; window_ms * 1 sample/ms
+        const size_t max_buf =
+            static_cast<size_t>(std::max(1, params_.static_init_window_ms));
+        while (imu_init_buf_a_.size() > max_buf) {
+            imu_init_buf_a_.pop_front();
+            imu_init_buf_w_.pop_front();
+        }
+    }
 }
 
 void LegOdometryNode::cb_position(const geometry_msgs::msg::Vector3::SharedPtr msg) {

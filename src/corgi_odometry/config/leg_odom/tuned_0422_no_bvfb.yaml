@@ -43,4 +43,9 @@ offline:
 
 # Ground-truth velocity low-pass filter
 gt_velocity_lpf_cutoff: 10.0
+
+# Static IMU initialization
+static_init:
+  window_ms:          200
+  motion_gyro_thresh: 0.02
 use_bv_feedback: false
