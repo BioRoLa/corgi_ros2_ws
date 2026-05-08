@@ -184,8 +184,8 @@ void grpc_motor_state_cb(const motor_msg::MotorStateStamped state) {
     for (int i = 0; i < 4; i++) {
         ros_motor_modules[i]->theta = grpc_motor_modules[i]->theta();
         ros_motor_modules[i]->beta = grpc_motor_modules[i]->beta();
-        ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r();
-        ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l();
+        ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r() / 2.0; // FIXME: This is a firmware issue. Should be fixed in firmware and reverted here.
+        ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l() / 2.0; // FIXME: This is a firmware issue. Should be fixed in firmware and reverted here.
         ros_motor_modules[i]->torque_r = grpc_motor_modules[i]->torque_r();
         ros_motor_modules[i]->torque_l = grpc_motor_modules[i]->torque_l();
     }
