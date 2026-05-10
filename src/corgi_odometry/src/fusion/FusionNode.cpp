@@ -106,6 +106,13 @@ void FusionNode::cb_ekf(const nav_msgs::msg::Odometry::SharedPtr msg) {
 
 // ----------------------------------------------------------------
 // cb_lidar: LiDAR odometry → EKF update → publish
+//
+// Coordinate-frame fix (2026-05-10):
+//   /lidar_odom arrives in camera_init frame which has a different initial
+//   orientation than the odom frame used by /ekf.
+//   We compute a one-time static transform T_{odom←camera_init} from the
+//   first matching EKF state and apply it to every lidar measurement so that
+//   both /ekf and /odom_mapping share the same initial coordinate system.
 // ----------------------------------------------------------------
 void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     const rclcpp::Time stamp(msg->header.stamp);
@@ -120,28 +127,39 @@ void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
         static_cast<float>(msg->pose.pose.orientation.y),
         static_cast<float>(msg->pose.pose.orientation.z));
 
-    // Find the buffered inner-ESEKF state nearest to this LiDAR stamp
+    // Find the buffered inner-ESEKF state nearest to this LiDAR stamp.
+    // We always need a matching EKF state: to compute T_co on first call,
+    // and for the EKF update on subsequent calls.
     BufferedState bs;
     if (!find_buffered_state(stamp, bs)) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-            "FusionNode: no buffered ESEKF state near t=%.3f", stamp.seconds());
-        // Initialise EKF with LiDAR pose directly (odom=origin)
-        if (!ekf_.initialized()) {
-            ekf_.init(p_lidar, q_lidar);
-            RCLCPP_INFO(this->get_logger(), "OuterEKF initialised from first LiDAR.");
-        }
-        return;
+            "FusionNode: no buffered ESEKF state near t=%.3f — waiting", stamp.seconds());
+        return;  // Wait until EKF data is available; do NOT init without it.
     }
 
-    // Initialise on first valid LiDAR+buffer match
-    if (!ekf_.initialized()) {
-        // T_map^odom = p_lidar - R_lidar * p_odom  (approx for small rotation)
-        Eigen::Vector3f p_mo = p_lidar - q_lidar.toRotationMatrix() * bs.p_odom;
-        Eigen::Quaternionf q_mo = (q_lidar * bs.q_odom.inverse()).normalized();
-        ekf_.init(p_mo, q_mo);
+    // ── On the very first match, compute T_{odom←camera_init} ──────────────
+    // T_co rotates / translates lidar measurements into the odom frame so that
+    // map is initialised at the odom origin (map = odom at t=0).
+    if (!lidar_frame_init_) {
+        q_co_ = (bs.q_odom * q_lidar.inverse()).normalized();
+        t_co_ = bs.p_odom - q_co_.toRotationMatrix() * p_lidar;
+        lidar_frame_init_ = true;
         RCLCPP_INFO(this->get_logger(),
-            "OuterEKF initialised: p_mo=[%.3f %.3f %.3f]",
-            p_mo.x(), p_mo.y(), p_mo.z());
+            "FusionNode: T_{odom←camera_init} set: t=[%.3f %.3f %.3f] q=[%.4f %.4f %.4f %.4f]",
+            t_co_.x(), t_co_.y(), t_co_.z(),
+            q_co_.w(), q_co_.x(), q_co_.y(), q_co_.z());
+    }
+
+    // ── Transform lidar measurement into odom frame ─────────────────────────
+    const Eigen::Matrix3f R_co = q_co_.toRotationMatrix();
+    const Eigen::Vector3f    p_lidar_odom = R_co * p_lidar + t_co_;
+    const Eigen::Quaternionf q_lidar_odom = (q_co_ * q_lidar).normalized();
+
+    // ── Initialise outer EKF with map = odom (p_mo=0, q_mo=identity) ────────
+    if (!ekf_.initialized()) {
+        ekf_.init(Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity());
+        RCLCPP_INFO(this->get_logger(),
+            "OuterEKF initialised: map frame aligned with odom frame (p_mo=0, q_mo=I)");
         last_lidar_stamp_       = stamp;
         last_lidar_stamp_valid_ = true;
         return;
@@ -156,7 +174,7 @@ void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     }
 
     OuterEKF::UpdateDiag diag;
-    ekf_.update_lidar(p_lidar, q_lidar, bs.p_odom, bs.q_odom, dt_lidar, &diag);
+    ekf_.update_lidar(p_lidar_odom, q_lidar_odom, bs.p_odom, bs.q_odom, dt_lidar, &diag);
 
     last_lidar_stamp_       = stamp;
     last_lidar_stamp_valid_ = true;
@@ -178,7 +196,7 @@ void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     // ── Publish /fusion/bv ─────────────────────────────────────
     geometry_msgs::msg::Vector3Stamped bv_msg;
     bv_msg.header.stamp    = now_stamp;
-    bv_msg.header.frame_id = map_frame_;
+    bv_msg.header.frame_id = odom_frame_;
     bv_msg.vector.x = static_cast<double>(ekf_.bv().x());
     bv_msg.vector.y = static_cast<double>(ekf_.bv().y());
     bv_msg.vector.z = static_cast<double>(ekf_.bv().z());
@@ -230,7 +248,9 @@ void FusionNode::publish_odom_mapping(const rclcpp::Time& stamp,
                                        const Eigen::Quaternionf& q_map) {
     nav_msgs::msg::Odometry msg;
     msg.header.stamp    = stamp;
-    msg.header.frame_id = map_frame_;
+    // Use odom_frame_ so /odom_mapping shares the same initial coordinate
+    // system as /ekf (map is initialised at odom origin after the frame fix).
+    msg.header.frame_id = odom_frame_;
     msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
     msg.pose.pose.position.x    = static_cast<double>(p_map.x());
     msg.pose.pose.position.y    = static_cast<double>(p_map.y());

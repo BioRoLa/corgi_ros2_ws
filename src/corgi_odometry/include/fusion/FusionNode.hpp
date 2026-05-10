@@ -60,6 +60,13 @@ private:
     static constexpr double DT_LIDAR_MAX_S      = 5.0;   // sanity cap for dt_lidar [s]
     static constexpr double ACCEPT_WINDOW_S     = 0.5;   // max age for buffered state match [s]
 
+    // Camera-init → odom frame transform (computed at first lidar+EKF match)
+    // Converts /lidar_odom (camera_init frame) → odom frame so that
+    // /odom_mapping uses the same initial coordinate system as /ekf.
+    bool lidar_frame_init_         = false;
+    Eigen::Vector3f    t_co_;          // translation: camera_init origin expressed in odom
+    Eigen::Quaternionf q_co_;          // rotation:    camera_init → odom
+
     // Timing
     rclcpp::Time last_ekf_stamp_{0, 0, RCL_ROS_TIME};
     rclcpp::Time last_lidar_stamp_{0, 0, RCL_ROS_TIME};
