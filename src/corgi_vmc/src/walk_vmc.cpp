@@ -357,10 +357,10 @@ int main(int argc, char **argv) {
                 vmc.robot_ang_vel[2] = imu.angular_velocity.z;
 
                 quaternion_to_euler(vmc.robot_ang, vmc.roll, vmc.pitch, vmc.yaw);
-                if (!sim) {
-                    vmc.pitch *= -1;
-                    vmc.yaw *= -1;
-                }
+                // if (!sim) {
+                //     vmc.pitch *= -1;
+                //     vmc.yaw *= -1;
+                // }
 
                 // Build state vector (same 13D layout as MPC for consistency)
                 Eigen::VectorXd x(13);
