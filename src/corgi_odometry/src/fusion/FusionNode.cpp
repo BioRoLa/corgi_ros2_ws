@@ -51,6 +51,10 @@ FusionNode::FusionNode(const rclcpp::NodeOptions& opts)
         corgi::Config::TOPIC_LIDAR_ODOM, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
         std::bind(&FusionNode::cb_lidar, this, std::placeholders::_1));
 
+    trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
+        corgi::Config::TOPIC_TRIGGER, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB),
+        std::bind(&FusionNode::cb_trigger, this, std::placeholders::_1));
+
     // ── Publishers ─────────────────────────────────────────────
     odom_mapping_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
         corgi::Config::TOPIC_ODOM_MAPPING, rclcpp::QoS(corgi::Config::QUEUE_SIZE_PUB));
@@ -69,6 +73,8 @@ FusionNode::FusionNode(const rclcpp::NodeOptions& opts)
 // cb_ekf: inner ESEKF at 500 Hz → ring buffer + EKF predict
 // ----------------------------------------------------------------
 void FusionNode::cb_ekf(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    if (!is_triggered_) return;
+
     const rclcpp::Time stamp(msg->header.stamp);
 
     // Buffer this state
@@ -115,6 +121,8 @@ void FusionNode::cb_ekf(const nav_msgs::msg::Odometry::SharedPtr msg) {
 //   both /ekf and /odom_mapping share the same initial coordinate system.
 // ----------------------------------------------------------------
 void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    if (!is_triggered_) return;
+
     const rclcpp::Time stamp(msg->header.stamp);
 
     const Eigen::Vector3f p_lidar(
@@ -215,6 +223,27 @@ void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     tf_msg.transform.rotation.y = static_cast<double>(ekf_.q_mo().y());
     tf_msg.transform.rotation.z = static_cast<double>(ekf_.q_mo().z());
     tf_broadcaster_->sendTransform(tf_msg);
+}
+
+// ----------------------------------------------------------------
+// cb_trigger: enable/disable fusion processing (same gate as leg_odom)
+// ----------------------------------------------------------------
+void FusionNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
+    const bool was_triggered = is_triggered_;
+    is_triggered_ = msg->enable;
+    if (!was_triggered && is_triggered_) {
+        RCLCPP_INFO(this->get_logger(), "FusionNode: trigger enabled — starting fusion");
+    } else if (was_triggered && !is_triggered_) {
+        RCLCPP_INFO(this->get_logger(), "FusionNode: trigger disabled — pausing fusion");
+        // Reset state so next enable starts fresh
+        ekf_ = OuterEKF{};
+        ekf_.set_noise(noise_params_);
+        lidar_frame_init_       = false;
+        last_ekf_stamp_valid_   = false;
+        last_lidar_stamp_valid_ = false;
+        std::lock_guard<std::mutex> lk(buffer_mutex_);
+        state_buffer_.clear();
+    }
 }
 
 // ----------------------------------------------------------------

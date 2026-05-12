@@ -25,5 +25,6 @@ ros2 bag record \
   /ekf/bw \
   /lidar_odom \
   /odom_mapping \
+  /odometry \
   /fusion/bv \
   -o "$OUTPUT"
