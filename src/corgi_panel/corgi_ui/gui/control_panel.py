@@ -385,10 +385,10 @@ class CorgiControlPanel(QWidget):
 
         # Define legs: (name, row, col, motors)
         legs = [
-            ('LF', 0, 0, ['M1', 'M2']),
-            ('RF', 0, 1, ['M3', 'M4']),
-            ('LH', 1, 0, ['M5', 'M6']),
-            ('RH', 1, 1, ['M7', 'M8'])
+            ('LF', 0, 0, ['M1_R', 'M2_L', 'M3_H']),
+            ('RF', 0, 1, ['M4_R', 'M5_L', 'M6_H']),
+            ('LH', 1, 0, ['M7_R', 'M8_L', 'M9_H']),
+            ('RH', 1, 1, ['M10_R', 'M11_L', 'M12_H'])
         ]
 
         for leg_name, r, c, motors in legs:
@@ -945,16 +945,24 @@ class CorgiControlPanel(QWidget):
         if not hasattr(state, 'module_a'):
             return
         
-        modules = [state.module_a, state.module_b, state.module_c, state.module_d]
+        modules = [
+            ('LF', state.module_a),
+            ('RF', state.module_b),
+            ('LH', state.module_d),
+            ('RH', state.module_c),
+        ]
+        motor_keys = {
+            'LF': ['M1_R', 'M2_L', 'M3_H'],
+            'RF': ['M4_R', 'M5_L', 'M6_H'],
+            'LH': ['M7_R', 'M8_L', 'M9_H'],
+            'RH': ['M10_R', 'M11_L', 'M12_H'],
+        }
         
-        for module_idx, module in enumerate(modules):
-            if not hasattr(module, 'motor_mode'):
+        for leg_name, module in modules:
+            if module is None:
                 continue
             
-            for motor_idx in range(2):  # L and R motors
-                motor_num = module_idx * 2 + motor_idx + 1
-                key = f'M{motor_num}'
-                
+            for motor_idx, key in enumerate(motor_keys[leg_name]):
                 if key not in self.motor_labels:
                     continue
                 
