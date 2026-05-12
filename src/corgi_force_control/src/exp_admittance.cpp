@@ -38,10 +38,10 @@ public:
           sim_(false),
           trigger_(false),
           admittance_active_(false),
-          mg_(19.68 * 9.81),   // robot weight [N] — adjust to actual mass
+          mg_(23.66 * 9.81),   // robot weight [N] — adjust to actual mass
           mass_leg_(0.68),     // leg module mass [kg] — must match force_estimation.cpp mass_
           gmo_force_sign_(1.0), // sign: force/state.fy = gmo_force_sign_ * rm_force
-          rm_force_max_(300.0)   // clamp: ignore rm_force above this value [N]
+          rm_force_max_(200.0)   // clamp: ignore rm_force above this value [N]
     {
         RCLCPP_INFO(this->get_logger(), "Admittance Experiment Node Starts");
 
@@ -220,7 +220,7 @@ private:
         double current_h = -legmodel.contact_p[1]; // contact_p[1] is negative (downward)
         double delta_h = h - current_h;
         if (delta_h < 0.0) delta_h = 0.0; // already at or above target
-        int steps = static_cast<int>(delta_h / 0.00006) + 1; // ~0.06mm per step
+        int steps = static_cast<int>(delta_h / 0.0003) + 1; // ~0.3mm per step (5x faster)
         RCLCPP_INFO(this->get_logger(), "Current height=%.4f m, target=%.4f m, steps=%d",
             current_h, h, steps);
 
@@ -263,7 +263,7 @@ private:
     void execute_admittance_phase() {
         // Target fy matches force_estimation equilibrium output (POSITIVE).
         // mass_leg_ must match mass_ in force_estimation.cpp (default 0.68 kg).
-        const double fy_target = mg_ / 4.0 + mass_leg_ * 9.81;
+        const double fy_target = mg_ / 4.0; // + mass_leg_ * 9.81;
         RCLCPP_INFO(this->get_logger(),
             "Admittance phase: fy_target = %.2f N  (mg/4=%.2f + grav_comp=%.2f)",
             fy_target, mg_ / 4.0, mass_leg_ * 9.81);
@@ -278,15 +278,24 @@ private:
                 cmd->bx = 200.0;
                 cmd->by = 200.0;
             } else {
-                cmd->bx = 50.0;
-                cmd->by = 50.0;
+                cmd->bx = 30.0;   // real hardware: lower gains to avoid oscillation
+                cmd->by = 30.0;
             }
-            cmd->kx = 100.0;
-            cmd->ky = 200.0;
+            cmd->kx = 50.0;
+            cmd->ky = 100.0;
         }
 
         // Now enable live GMO force feedback
         admittance_active_ = true;
+
+        // Wait 200 ms for force_state to reach steady-state before the filter starts.
+        // Without this, force_err starts large (~fy_target) and drives an initial
+        // transient leg extension before the filter sees real contact forces.
+        RCLCPP_INFO(this->get_logger(), "Waiting 200ms for force_state to stabilise...");
+        for (int w = 0; w < 200 && rclcpp::ok(); w++) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            rclcpp::sleep_for(std::chrono::milliseconds(1));
+        }
 
         rclcpp::Duration period(0, 1000000); // 1ms
         rclcpp::Time next_time = this->now();
@@ -333,7 +342,7 @@ private:
     std::unique_ptr<KinematicsHelper> kinematics_;
 
     // Messages
-    corgi_msgs::msg::ImpedanceCmdStamped          imp_cmd_;
+    corgi_msgs::msg::ImpedanceCmdStamped           imp_cmd_;
     corgi_msgs::msg::ForceStateStamped             force_state_;
     corgi_msgs::msg::GMOContactStateStamped        contact_state_;
     corgi_msgs::msg::MotorStateStamped             motor_state_;

@@ -4,7 +4,7 @@ namespace {
 constexpr double kDt = 0.001;
 constexpr double kForceErrLimit = 250.0;
 constexpr double kPosErrXLimit = 0.05;
-constexpr double kPosErrYLimit = 0.06;
+constexpr double kPosErrYLimit = 0.15;
 constexpr double kThetaMin = 17.0 / 180.0 * M_PI;
 constexpr double kThetaMax = 160.0 / 180.0 * M_PI;
 constexpr double kBetaMin = -1.5;
@@ -96,17 +96,6 @@ public:
                 eta_cmd = admittance_control(imp_cmd_modules[i], motor_state_modules[i], force_state_modules[i],
                                              pos_err_hist_modules_[i], force_err_hist_modules_[i]);
 
-                // bool no_cmd = (imp_cmd_modules[i]->bx == 0.0 && imp_cmd_modules[i]->by == 0.0 &&
-                //                imp_cmd_modules[i]->kx == 0.0 && imp_cmd_modules[i]->ky == 0.0 &&
-                //                imp_cmd_modules[i]->mx == 0.0 && imp_cmd_modules[i]->my == 0.0);
-                // if (no_cmd) {
-                //     motor_cmd_modules[i]->kp_r = 0.0;
-                //     motor_cmd_modules[i]->kp_l = 0.0;
-                //     motor_cmd_modules[i]->kd_r = 0.0;
-                //     motor_cmd_modules[i]->kd_l = 0.0;
-                // } else {
-                    
-                // }
                 motor_cmd_modules[i]->kp_r = 90.0;
                 motor_cmd_modules[i]->kp_l = 90.0;
                 motor_cmd_modules[i]->kd_r = 1.75;
@@ -114,10 +103,16 @@ public:
 
                 motor_cmd_modules[i]->theta = eta_cmd(0, 0);
                 motor_cmd_modules[i]->beta  = eta_cmd(1, 0);
-
             }
 
-            std::cout << "= = = = =" << std::endl << std::endl;
+            // Periodic debug log (every 500ms) — rate-limited to avoid blocking sleep_until
+            if (debug_count_++ % 500 == 0) {
+                RCLCPP_INFO(this->get_logger(),
+                    "[adm] force_cmd=(%.1f,%.1f) force_state=(%.1f,%.1f) eta_cmd=(%.1f°,%.2f°)",
+                    imp_cmd_.module_b.fy, imp_cmd_.module_b.fx,
+                    force_state_.module_b.fy, force_state_.module_b.fx,
+                    eta_cmd(0,0)/M_PI*180.0, eta_cmd(1,0)/M_PI*180.0);
+            }
 
             motor_cmd_.header.stamp = this->now();
             motor_cmd_pub_->publish(motor_cmd_);
@@ -183,17 +178,6 @@ private:
         Eigen::MatrixXd b1 = Eigen::MatrixXd::Identity(2, 2) * 2 * T * T;
         Eigen::MatrixXd b2 = Eigen::MatrixXd::Identity(2, 2) * T * T;
 
-        std::cout << "a1: " << a1(0, 0) << ", " << a1(1, 1) << std::endl;
-        std::cout << "pos_err_hist_1: " << pos_err_hist(0, 0) << ", " << pos_err_hist(1, 0) << std::endl << std::endl;
-
-        std::cout << "a2: " << a2(0, 0) << ", " << a2(1, 1) << std::endl;
-        std::cout << "pos_err_hist_2: " << pos_err_hist(0, 1) << ", " << pos_err_hist(1, 1) << std::endl << std::endl;
-
-        std::cout << "force_cmd: " << imp_cmd_->fx << ", " << imp_cmd_->fy << std::endl;
-        std::cout << "force_state: " << force_state_->fx << ", " << force_state_->fy << std::endl << std::endl;
-        std::cout << "force_err: " << force_err(0, 0) << ", " << force_err(1, 0) << std::endl;
-        std::cout << "force_err_2: " << force_err_hist(0, 0) << ", " << force_err_hist(1, 0) << std::endl;
-        std::cout << "force_err_3: " << force_err_hist(0, 1) << ", " << force_err_hist(1, 1) << std::endl << std::endl;
 
         if (!a0.allFinite() || std::abs(a0.determinant()) < 1e-9) {
             return eta_cmd;
@@ -211,10 +195,6 @@ private:
         pos_cmd = pos_des - pos_err;
 
         if (pos_cmd.array().isNaN().any()) { return eta_cmd; }
-
-        std::cout << "pos_des: " << pos_des(0, 0) << ", " << pos_des(1, 0) << std::endl;
-        std::cout << "pos_err: " << pos_err(0, 0) << ", " << pos_err(1, 0) << std::endl;
-        std::cout << "pos_cmd: " << pos_cmd(0, 0) << ", " << pos_cmd(1, 0) << std::endl << std::endl;
 
         legmodel.contact_map(motor_state_->theta, motor_state_->beta);
         pos_err_hist.col(1) = pos_err_hist.col(0);
@@ -266,9 +246,6 @@ private:
         eta_cmd(1, 0) = std::clamp(eta_cmd(1, 0), kBetaMin, kBetaMax);
         eta_cmd(0, 0) = std::clamp(eta_cmd(0, 0), motor_state_->theta - kMaxJointStep, motor_state_->theta + kMaxJointStep);
         eta_cmd(1, 0) = std::clamp(eta_cmd(1, 0), motor_state_->beta - kMaxJointStep, motor_state_->beta + kMaxJointStep);
-        std::cout << "target_rim: " << target_rim << std::endl;
-        std::cout << "contact_center: " << contact_center[0] << ", " << contact_center[1] << std::endl;
-        std::cout << "eta_cmd: " << eta_cmd(0, 0)/M_PI*180 << ", " << eta_cmd(1, 0)/M_PI*180 << std::endl << std::endl;
 
         return eta_cmd;
     }
@@ -290,6 +267,7 @@ private:
 
     // State variables
     bool sim_;
+    int debug_count_ = 0; // rate-limits periodic RCLCPP_INFO in run()
     std::vector<Eigen::MatrixXd> pos_err_hist_modules_;
     std::vector<Eigen::MatrixXd> force_err_hist_modules_;
 };
