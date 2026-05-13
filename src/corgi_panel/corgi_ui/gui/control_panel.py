@@ -34,7 +34,6 @@ try:
 except ImportError:
     GPIO_defined = False
 
-
 class CorgiControlPanel(QWidget):
     """
     Main Control Panel for Corgi Robot
@@ -190,20 +189,65 @@ class CorgiControlPanel(QWidget):
         # Power summary badges
         power_box = QHBoxLayout()
         power_box.setSpacing(8)
+
+        pb1_container = QVBoxLayout()
+        pb1_container.setSpacing(3)
+        pb1_title = QLabel("PB1")
+        pb1_title.setObjectName("PowerBoardTitle")
+        pb1_title.setAlignment(Qt.AlignCenter)
+        pb1_frame = QFrame()
+        pb1_frame.setObjectName("PowerBoardFrame")
+        pb1_frame_layout = QHBoxLayout()
+        pb1_frame_layout.setSpacing(10)
+        pb1_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        pb2_container = QVBoxLayout()
+        pb2_container.setSpacing(3)
+        pb2_title = QLabel("PB2")
+        pb2_title.setObjectName("PowerBoardTitle")
+        pb2_title.setAlignment(Qt.AlignCenter)
+        pb2_frame = QFrame()
+        pb2_frame.setObjectName("PowerBoardFrame")
+        pb2_frame_layout = QHBoxLayout()
+        pb2_frame_layout.setSpacing(10)
+        pb2_frame_layout.setContentsMargins(8, 8, 8, 8)
         
-        self.lbl_voltage = QLabel('--.- V')
-        self.lbl_voltage.setObjectName('PowerBadge')
-        self.lbl_soc = QLabel('-- %')
-        self.lbl_soc.setObjectName('PowerBadge')
-        self.lbl_current = QLabel('-.-- A')
-        self.lbl_current.setObjectName('PowerBadge')
-        self.lbl_power = QLabel('--.- W')
-        self.lbl_power.setObjectName('PowerBadge')
+        self.lbl_pb1_voltage = QLabel('--.- V')
+        self.lbl_pb1_voltage.setObjectName('PowerBadge')
+        self.lbl_pb1_soc = QLabel('-- %')
+        self.lbl_pb1_soc.setObjectName('PowerBadge')
+        self.lbl_pb1_current = QLabel('-.-- A')
+        self.lbl_pb1_current.setObjectName('PowerBadge')
+        self.lbl_pb1_power = QLabel('--.- W')
+        self.lbl_pb1_power.setObjectName('PowerBadge')
+
+        self.lbl_pb2_voltage = QLabel('--.- V')
+        self.lbl_pb2_voltage.setObjectName('PowerBadge')
+        self.lbl_pb2_soc = QLabel('-- %')
+        self.lbl_pb2_soc.setObjectName('PowerBadge')
+        self.lbl_pb2_current = QLabel('-.-- A')
+        self.lbl_pb2_current.setObjectName('PowerBadge')
+        self.lbl_pb2_power = QLabel('--.- W')
+        self.lbl_pb2_power.setObjectName('PowerBadge')
         
-        power_box.addWidget(self.lbl_voltage)
-        power_box.addWidget(self.lbl_soc)
-        power_box.addWidget(self.lbl_current)
-        power_box.addWidget(self.lbl_power)
+        pb1_frame_layout.addWidget(self.lbl_pb1_voltage)
+        pb1_frame_layout.addWidget(self.lbl_pb1_soc)
+        pb1_frame_layout.addWidget(self.lbl_pb1_current)
+        pb1_frame_layout.addWidget(self.lbl_pb1_power)
+        pb1_frame.setLayout(pb1_frame_layout)
+        pb1_container.addWidget(pb1_title)
+        pb1_container.addWidget(pb1_frame)
+
+        pb2_frame_layout.addWidget(self.lbl_pb2_voltage)
+        pb2_frame_layout.addWidget(self.lbl_pb2_soc)
+        pb2_frame_layout.addWidget(self.lbl_pb2_current)
+        pb2_frame_layout.addWidget(self.lbl_pb2_power)
+        pb2_frame.setLayout(pb2_frame_layout)
+        pb2_container.addWidget(pb2_title)
+        pb2_container.addWidget(pb2_frame)
+
+        power_box.addLayout(pb1_container)
+        power_box.addLayout(pb2_container)
         top_bar.addLayout(power_box)
         
         # E-Stop Button
@@ -868,23 +912,27 @@ class CorgiControlPanel(QWidget):
         """Handle power state update from ROS"""
         self.power_state = state
         
-        try:
-            v_total = float(getattr(state, 'v_0', 0.0))
-        except Exception:
-            v_total = 0.0
-        
-        try:
-            i_total = float(getattr(state, 'i_1', 0.0))
-        except Exception:
-            i_total = 0.0
-        
-        soc = self._calculate_soc(v_total)
-        power = v_total * i_total
-        
-        self.lbl_voltage.setText(f"{v_total:.1f} V")
-        self.lbl_soc.setText(f"{soc:.0f} %")
-        self.lbl_current.setText(f"{i_total:.2f} A")
-        self.lbl_power.setText(f"{power:.1f} W")
+        pb1_voltage = self._get_float_field(state, 'pb1_v_0')
+        pb1_current = self._get_float_field(state, 'pb1_i_1')
+        pb2_voltage = self._get_float_field(state, 'pb2_v_0')
+        pb2_current = self._get_float_field(state, 'pb2_i_1')
+
+        self._update_power_badges(
+            pb1_voltage,
+            pb1_current,
+            self.lbl_pb1_voltage,
+            self.lbl_pb1_soc,
+            self.lbl_pb1_current,
+            self.lbl_pb1_power,
+        )
+        self._update_power_badges(
+            pb2_voltage,
+            pb2_current,
+            self.lbl_pb2_voltage,
+            self.lbl_pb2_soc,
+            self.lbl_pb2_current,
+            self.lbl_pb2_power,
+        )
         
         self._update_button_states()
     
@@ -1023,6 +1071,31 @@ class CorgiControlPanel(QWidget):
     # ========================================================================
     # Helper Methods
     # ========================================================================
+
+    def _get_float_field(self, state, field_name: str) -> float:
+        """Read a numeric field from a ROS message without breaking UI updates."""
+        try:
+            return float(getattr(state, field_name, 0.0))
+        except Exception:
+            return 0.0
+
+    def _update_power_badges(
+        self,
+        voltage: float,
+        current: float,
+        voltage_label: QLabel,
+        soc_label: QLabel,
+        current_label: QLabel,
+        power_label: QLabel,
+    ):
+        """Update one powerboard summary row using v_0 and i_1."""
+        soc = self._calculate_soc(voltage)
+        power = voltage * current
+
+        voltage_label.setText(f"{voltage:.1f} V")
+        soc_label.setText(f"{soc:.0f} %")
+        current_label.setText(f"{current:.2f} A")
+        power_label.setText(f"{power:.1f} W")
     
     def _calculate_soc(self, v_total: float) -> float:
         """Calculate state of charge from voltage"""
