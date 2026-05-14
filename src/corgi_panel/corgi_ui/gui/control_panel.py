@@ -31,8 +31,11 @@ from corgi_ui.gui.widgets.log_widget import LogWidget
 GPIO_defined = True
 try:
     import Jetson.GPIO as GPIO
-except ImportError:
+except (ImportError, RuntimeError) as e:
     GPIO_defined = False
+    print(f"GPIO disabled: {e}")
+#except ImportError:
+#    GPIO_defined = False
 
 class CorgiControlPanel(QWidget):
     """
@@ -427,23 +430,24 @@ class CorgiControlPanel(QWidget):
         grid_motors = QGridLayout()
         self.motor_labels = {}
 
-        # Define legs: (name, row, col, motors)
+        # Define legs: (name, row, col, module state fields)
         legs = [
-            ('LF', 0, 0, ['M1_R', 'M2_L', 'M3_H']),
-            ('RF', 0, 1, ['M4_R', 'M5_L', 'M6_H']),
-            ('LH', 1, 0, ['M7_R', 'M8_L', 'M9_H']),
-            ('RH', 1, 1, ['M10_R', 'M11_L', 'M12_H'])
+            ('LF', 0, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('RF', 0, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('LH', 1, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('RH', 1, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')])
         ]
 
-        for leg_name, r, c, motors in legs:
+        for leg_name, r, c, fields in legs:
             leg_group = QGroupBox(leg_name)
             leg_layout = QVBoxLayout()
 
-            for motor_key in motors:
-                lbl = QLabel(f"{motor_key}: --")
+            for field_name, display_name in fields:
+                label_key = f"{leg_name}_{field_name}"
+                lbl = QLabel(f"{display_name}: --")
                 lbl.setObjectName("MotorLabel")
                 leg_layout.addWidget(lbl)
-                self.motor_labels[motor_key] = lbl
+                self.motor_labels[label_key] = lbl
 
             leg_group.setLayout(leg_layout)
             grid_motors.addWidget(leg_group, r, c)
@@ -913,9 +917,9 @@ class CorgiControlPanel(QWidget):
         self.power_state = state
         
         pb1_voltage = self._get_float_field(state, 'pb1_v_0')
-        pb1_current = self._get_float_field(state, 'pb1_i_1')
+        pb1_current = self._sum_powerboard_current(state, 'pb1')
         pb2_voltage = self._get_float_field(state, 'pb2_v_0')
-        pb2_current = self._get_float_field(state, 'pb2_i_1')
+        pb2_current = self._sum_powerboard_current(state, 'pb2')
 
         self._update_power_badges(
             pb1_voltage,
@@ -999,41 +1003,24 @@ class CorgiControlPanel(QWidget):
             ('LH', state.module_d),
             ('RH', state.module_c),
         ]
-        motor_keys = {
-            'LF': ['M1_R', 'M2_L', 'M3_H'],
-            'RF': ['M4_R', 'M5_L', 'M6_H'],
-            'LH': ['M7_R', 'M8_L', 'M9_H'],
-            'RH': ['M10_R', 'M11_L', 'M12_H'],
-        }
+        state_fields = [
+            ('theta', 'θ'),
+            ('beta', 'β'),
+            ('gamma', 'γ'),
+        ]
         
         for leg_name, module in modules:
             if module is None:
                 continue
             
-            for motor_idx, key in enumerate(motor_keys[leg_name]):
+            for field_name, display_name in state_fields:
+                key = f"{leg_name}_{field_name}"
                 if key not in self.motor_labels:
                     continue
                 
-                # Get position
-                pos = 0.0
-                if hasattr(module, 'position') and len(module.position) > motor_idx:
-                    pos = np.degrees(module.position[motor_idx])
-                
-                # Get temperature
-                temp = 0
-                if hasattr(module, 'temperature') and len(module.temperature) > motor_idx:
-                    temp = module.temperature[motor_idx]
-                
-                # Update label
-                self.motor_labels[key].setText(f"{key}: {pos:.1f}° | {temp}°C")
-                
-                # Color code by temperature
-                if temp > 60:
-                    self.motor_labels[key].setStyleSheet(
-                        f"color: {COLORS.STATUS_ERROR}; font-weight: bold;"
-                    )
-                else:
-                    self.motor_labels[key].setStyleSheet("color: #aaa;")
+                value = np.degrees(self._get_float_field(module, field_name))
+                self.motor_labels[key].setText(f"{display_name}: {value:.1f}°")
+                self.motor_labels[key].setStyleSheet("color: #aaa;")
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
@@ -1079,6 +1066,13 @@ class CorgiControlPanel(QWidget):
         except Exception:
             return 0.0
 
+    def _sum_powerboard_current(self, state, board_prefix: str) -> float:
+        """Sum i_0 through i_7 for a powerboard."""
+        return sum(
+            self._get_float_field(state, f'{board_prefix}_i_{index}')
+            for index in range(8)
+        )
+
     def _update_power_badges(
         self,
         voltage: float,
@@ -1088,7 +1082,7 @@ class CorgiControlPanel(QWidget):
         current_label: QLabel,
         power_label: QLabel,
     ):
-        """Update one powerboard summary row using v_0 and i_1."""
+        """Update one powerboard summary row using v_0 and summed current."""
         soc = self._calculate_soc(voltage)
         power = voltage * current
 
