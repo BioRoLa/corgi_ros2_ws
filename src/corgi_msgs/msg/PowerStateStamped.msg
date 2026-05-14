@@ -1,9 +1,11 @@
 Headers header
-bool digital
-bool signal
-bool power
+bool pb1_digital
+bool pb1_signal
+bool pb1_power
+bool pb2_digital
+bool pb2_signal
+bool pb2_power
 bool clean
-int32 robot_mode
 float64 pb1_v_0
 float64 pb1_i_0
 float64 pb1_v_1
