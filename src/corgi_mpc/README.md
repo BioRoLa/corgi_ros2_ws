@@ -98,7 +98,6 @@ Launched nodes:
 | `/odometry/legacy/z_position_hip` | `std_msgs/Float64` | Hip height from legacy odometry |
 | `/sim/body/velocity` | `geometry_msgs/Vector3` | Body velocity from simulator (`state_source:=sim_driver` only) |
 | `/tf` | `tf2_msgs/TFMessage` | `odom → base_link` transform for body position (`state_source:=sim_driver` only) |
-| `/force/state` | `corgi_msgs/ForceStateStamped` | Measured foot forces (unused in code) |
 ---
 
 ### `walk_h20_v10_open` (Open-loop)
@@ -115,7 +114,6 @@ Launched nodes:
 | Topic | Type | Description |
 |---|---|---|
 | `/trigger` | `corgi_msgs/TriggerStamped` | Enable/disable walking |
-| `/force/state` | `corgi_msgs/ForceStateStamped` | Measured foot forces (unused in code) |
 
 ---
 
