@@ -31,11 +31,8 @@ from corgi_ui.gui.widgets.log_widget import LogWidget
 GPIO_defined = True
 try:
     import Jetson.GPIO as GPIO
-except (ImportError, RuntimeError) as e:
+except ImportError:
     GPIO_defined = False
-    print(f"GPIO disabled: {e}")
-#except ImportError:
-#    GPIO_defined = False
 
 class CorgiControlPanel(QWidget):
     """
