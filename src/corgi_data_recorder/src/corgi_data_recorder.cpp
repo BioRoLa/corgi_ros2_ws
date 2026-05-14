@@ -142,7 +142,8 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
-                        << "power_digital" << "," << "power_signal" << "," << "power_power" << "," << "power_clean" << "," << "power_robot_mode" << ","
+                        << "pb1_digital" << "," << "pb1_signal" << "," << "pb1_power" << ","
+                        << "pb2_digital" << "," << "pb2_signal" << "," << "pb2_power" << "," << "power_clean" << ","
                         << "pb1_v_0" << "," << "pb1_i_0" << ","
                         << "pb1_v_1" << "," << "pb1_i_1" << ","
                         << "pb1_v_2" << "," << "pb1_i_2" << ","
@@ -300,7 +301,8 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << sim_leg_contact_state.module_d.contact << ","
 
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
-                << power_state.digital << "," << power_state.signal << "," << power_state.power << "," << power_state.clean << "," << power_state.robot_mode << ","
+                << power_state.pb1_digital << "," << power_state.pb1_signal << "," << power_state.pb1_power << ","
+                << power_state.pb2_digital << "," << power_state.pb2_signal << "," << power_state.pb2_power << "," << power_state.clean << ","
                 << power_state.pb1_v_0 << "," << power_state.pb1_i_0 << ","
                 << power_state.pb1_v_1 << "," << power_state.pb1_i_1 << ","
                 << power_state.pb1_v_2 << "," << power_state.pb1_i_2 << ","

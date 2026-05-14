@@ -76,6 +76,58 @@ void steer_cmd_cb(const steering_msg::SteeringCmdStamped cmd) {
     steer_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
 }
 
+void update_power_state() {
+    static int seq = 0;
+
+    power_state.mutable_header()->set_seq(seq++);
+    timeval currentTime;
+    gettimeofday(&currentTime, nullptr);
+    power_state.mutable_header()->mutable_stamp()->set_sec(currentTime.tv_sec);
+    power_state.mutable_header()->mutable_stamp()->set_usec(currentTime.tv_usec);
+
+    power_state.set_pb1_digital(true);
+    power_state.set_pb1_signal(false);
+    power_state.set_pb1_power(true);
+    power_state.set_pb2_digital(false);
+    power_state.set_pb2_signal(true);
+    power_state.set_pb2_power(false);
+    power_state.set_clean(true);
+
+    power_state.set_pb1_v_0(11.1);
+    power_state.set_pb1_i_0(1.1);
+    power_state.set_pb1_v_1(11.2);
+    power_state.set_pb1_i_1(1.2);
+    power_state.set_pb1_v_2(11.3);
+    power_state.set_pb1_i_2(1.3);
+    power_state.set_pb1_v_3(11.4);
+    power_state.set_pb1_i_3(1.4);
+    power_state.set_pb1_v_4(11.5);
+    power_state.set_pb1_i_4(1.5);
+    power_state.set_pb1_v_5(11.6);
+    power_state.set_pb1_i_5(1.6);
+    power_state.set_pb1_v_6(11.7);
+    power_state.set_pb1_i_6(1.7);
+    power_state.set_pb1_v_7(11.8);
+    power_state.set_pb1_i_7(1.8);
+
+    power_state.set_pb2_v_0(22.1);
+    power_state.set_pb2_i_0(2.1);
+    power_state.set_pb2_v_1(22.2);
+    power_state.set_pb2_i_1(2.2);
+    power_state.set_pb2_v_2(22.3);
+    power_state.set_pb2_i_2(2.3);
+    power_state.set_pb2_v_3(22.4);
+    power_state.set_pb2_i_3(2.4);
+    power_state.set_pb2_v_4(22.5);
+    power_state.set_pb2_i_4(2.5);
+    power_state.set_pb2_v_5(22.6);
+    power_state.set_pb2_i_5(2.6);
+    power_state.set_pb2_v_6(22.7);
+    power_state.set_pb2_i_6(2.7);
+    power_state.set_pb2_v_7(22.8);
+    power_state.set_pb2_i_7(2.8);
+}
+
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_virtual_agent");
@@ -99,6 +151,7 @@ int main(int argc, char **argv) {
 
         {
             std::lock_guard<std::mutex> lock(mutex_power_state);
+            update_power_state();
             power_state_pub.publish(power_state);
         }
 
