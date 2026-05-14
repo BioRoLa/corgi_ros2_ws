@@ -5,10 +5,12 @@
 #include <chrono>
 #include <array>
 #include <string>
+#include <algorithm>
 
 #include <rclcpp/rclcpp.hpp>
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "corgi_walk/walk_gait.hpp"
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
@@ -28,9 +30,12 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("walk_test");
     auto motor_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
+    auto phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
         "trigger", 10, trigger_cb);
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
+    std_msgs::msg::Int32MultiArray phase_msg;
+    phase_msg.data.resize(4, 0);
     std::array<corgi_msgs::msg::MotorCmd *, 4> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
@@ -59,15 +64,14 @@ int main(int argc, char **argv)
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 5 * sampling_rate; // 5s
-    // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25, step length 0.3, swing time 0.2
-    // const double init_eta[8] = {1.8264141254935087, 0.45320412446525266, 1.6024917635870688, 0.12115692429841468, 1.6024917635870688, -0.12115692429841468, 1.8264141254935087, -0.45320412446525266};  // stand height 0.25, step length 0.3, swing time 0.25
-    // const double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3, swing time 0.15
+    // const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25
+    // const double init_eta[8] = {1.8571554834938668,0.4790144528333341,2.0636290799909855,0.10633741753260191,2.0636290799909855,-0.10633741753260191,1.8571554834938668,-0.4790144528333341}; // left stand height 0.25, right stand 0.3
+    const double init_eta[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};  // stand height 0.2
     double velocity = 0.1;
-    double stand_height = 0.25;
-    double step_length = 0.3;
-    double step_height = 0.04;
+    double stand_height = 0.2;
+    double step_length = 0.2;
+    double step_height = 0.08;
+    std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0}; // LF, RF, RH, LH
     double curvature = 0.0;
     int count = 0;
     std::array<int, 4> step_count;
@@ -83,6 +87,26 @@ int main(int argc, char **argv)
     double transform_ratio;
     bool trigger;
     int command_count;
+
+    // Runtime-tunable leg ground offsets (LF, RF, RH, LH), useful for different leg-length tests.
+    node->declare_parameter<std::vector<double>>("ground_offset", {ground_offset[0], ground_offset[1], ground_offset[2], ground_offset[3]});
+    std::array<double, 4> applied_ground_offset = ground_offset;
+    auto to_array4 = [](const std::vector<double> & values) {
+        std::array<double, 4> out = {0.0, 0.0, 0.0, 0.0};
+        std::copy_n(values.begin(), 4, out.begin());
+        return out;
+    };
+    auto offsets_changed = [](const std::array<double, 4> & a, const std::array<double, 4> & b) {
+        const double eps = 1e-9;
+        for (int i = 0; i < 4; i++)
+        {
+            if (std::abs(a[i] - b[i]) > eps)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
 
     /* Behavior loop */
     // --- Synchronization Setup ---
@@ -112,10 +136,54 @@ int main(int argc, char **argv)
     walk_gait.set_stand_height(stand_height);
     walk_gait.set_step_length(step_length);
     walk_gait.set_step_height(step_height);
+    walk_gait.set_ground_offset(ground_offset);
     while (rclcpp::ok())
     {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
         rclcpp::spin_some(node);
+
+        std::vector<double> ground_offset_param;
+        if (node->get_parameter("ground_offset", ground_offset_param))
+        {
+            if (ground_offset_param.size() == 4)
+            {
+                std::array<double, 4> requested_ground_offset = to_array4(ground_offset_param);
+                if (offsets_changed(requested_ground_offset, applied_ground_offset))
+                {
+                    try
+                    {
+                        walk_gait.set_ground_offset(requested_ground_offset);
+                        applied_ground_offset = requested_ground_offset;
+                        RCLCPP_INFO(node->get_logger(),
+                                    "Updated ground_offset [LF, RF, RH, LH] = [%.4f, %.4f, %.4f, %.4f]",
+                                    applied_ground_offset[0],
+                                    applied_ground_offset[1],
+                                    applied_ground_offset[2],
+                                    applied_ground_offset[3]);
+                    }
+                    catch (const std::exception & e)
+                    {
+                        RCLCPP_WARN(node->get_logger(),
+                                    "Reject ground_offset update: %s",
+                                    e.what());
+                        node->set_parameter(rclcpp::Parameter(
+                            "ground_offset",
+                            std::vector<double>{applied_ground_offset[0],
+                                                applied_ground_offset[1],
+                                                applied_ground_offset[2],
+                                                applied_ground_offset[3]}));
+                    }
+                }
+            }
+            else
+            {
+                RCLCPP_WARN_THROTTLE(node->get_logger(),
+                                     *node->get_clock(),
+                                     2000,
+                                     "Parameter ground_offset must have exactly 4 values: [LF, RF, RH, LH]");
+            }
+        }
+
         if (state == END)
         {
             break;
@@ -199,6 +267,9 @@ int main(int argc, char **argv)
             motor_cmd_modules[i]->beta = (i == 1 || i == 2) ? (eta_list[1][i]) : -(eta_list[1][i]);
         } // end for
         motor_pub->publish(motor_cmd);
+        auto swing_phase = walk_gait.get_swing_phase();
+        for (int i = 0; i < 4; i++) { phase_msg.data[i] = swing_phase[i]; }
+        phase_pub->publish(phase_msg);
         auto one_loop_end = std::chrono::high_resolution_clock::now();
         auto one_loop_duration = std::chrono::duration_cast<std::chrono::microseconds>(one_loop_end - one_loop_start);
         if (one_loop_duration.count() > max_cal_time)

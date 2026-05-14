@@ -231,8 +231,11 @@ int main(int argc, char **argv) {
         "trigger", 10, trigger_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         "motor/state", 10, motor_state_cb);
+    const bool use_sim_time = node->get_parameter("use_sim_time").as_bool();
+    const std::string imu_topic = use_sim_time ? "imu/gravity_compensated" : "imu";
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
-        "imu", 10, imu_cb);
+        imu_topic, 10, imu_cb);
+    RCLCPP_INFO(node->get_logger(), "Subscribing IMU topic: %s (use_sim_time=%s)", imu_topic.c_str(), use_sim_time ? "true" : "false");
     auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>(
         "odometry/legacy/contact", 10, contact_cb);
 

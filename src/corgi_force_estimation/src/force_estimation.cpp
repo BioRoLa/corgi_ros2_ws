@@ -100,10 +100,10 @@ Eigen::MatrixXd KinematicsHelper::calculate_jacobian(const Eigen::MatrixXd& P_th
     double dPx_dbeta  = P_theta(0, 0)*(-sin_beta) - P_theta(1, 0)*cos_beta;
     double dPy_dbeta  = P_theta(0, 0)*cos_beta + P_theta(1, 0)*(-sin_beta);
 
-    double J11 = dPx_dtheta * dtheta_dphiR + dPx_dbeta * dbeta_dphiR;
-    double J12 = dPx_dtheta * dtheta_dphiL + dPx_dbeta * dbeta_dphiL;
-    double J21 = dPy_dtheta * dtheta_dphiR + dPy_dbeta * dbeta_dphiR;
-    double J22 = dPy_dtheta * dtheta_dphiL + dPy_dbeta * dbeta_dphiL;
+    double J12 = dPx_dtheta * dtheta_dphiR + dPx_dbeta * dbeta_dphiR;
+    double J11 = dPx_dtheta * dtheta_dphiL + dPx_dbeta * dbeta_dphiL;
+    double J22 = dPy_dtheta * dtheta_dphiR + dPy_dbeta * dbeta_dphiR;
+    double J21 = dPy_dtheta * dtheta_dphiL + dPy_dbeta * dbeta_dphiL;
 
     Eigen::MatrixXd jacobian(2, 2);
     jacobian << J11, J12, J21, J22;
@@ -120,7 +120,7 @@ ForceEstimator::ForceEstimator(bool sim)
 {
 }
 
-Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torque_r, double torque_l) {
+Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torque_l, double torque_r) {
     LegModel& leg_model = kinematics_.get_leg_model();
     leg_model.contact_map(theta, beta);
 
@@ -144,7 +144,7 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double torqu
         force_est.setZero();
     } else {
         Eigen::MatrixXd torque(2, 1);
-        torque << torque_r, torque_l;
+        torque << torque_l, torque_r;
         force_est = jacobian.inverse().transpose() * torque;
     }
 
@@ -164,7 +164,7 @@ ForceEstimationNode::ForceEstimationNode()
     RCLCPP_INFO(this->get_logger(), "Force Estimation Starts");
 
     this->get_parameter_or("use_sim_time", sim_, false);
-    mass_ = sim_ ? 0.9 : 0.68;
+    mass_ = 0.68;
     estimator_ = std::make_unique<ForceEstimator>(sim_);
 
     if (sim_) {
@@ -271,14 +271,14 @@ void ForceEstimationNode::timer_cb() {
         if (i == 1 || i == 2) {
             force_est = estimator_->estimate(motor_state_modules[i]->theta, 
                                             motor_state_modules[i]->beta - pitch,
-                                            motor_state_modules[i]->torque_r, 
-                                            motor_state_modules[i]->torque_l);
+                                            motor_state_modules[i]->torque_l, 
+                                            motor_state_modules[i]->torque_r);
         }
         else {
             force_est = estimator_->estimate(motor_state_modules[i]->theta, 
                                             motor_state_modules[i]->beta + pitch,
-                                            motor_state_modules[i]->torque_r, 
-                                            motor_state_modules[i]->torque_l);
+                                            motor_state_modules[i]->torque_l, 
+                                            motor_state_modules[i]->torque_r);
         }
 
         if (i == 1 || i == 2) { 

@@ -1,23 +1,54 @@
-Q_diagonal: [
-  100,  100,  0,     # roll, pitch, yaw  
-  0,    0,    50,    # x, y, z           
-  0.1, 0.1, 0,     # ω_x, ω_y, ω_z
-  0,    0,    2,     # v_x, v_y, v_z
-  0                  # additional state
-]
+# ──────────────────────────────────────────────────────────────
+# Common: parameters shared between sim and real (physical constants)
+# ──────────────────────────────────────────────────────────────
+common:
+  m: 23.66
+  fx_upper_bound: 10
+  fx_lower_bound: -10
+  fz_upper_bound: 100
 
-# Q_diagonal: [
-#   40,   40,   0,     # roll, pitch, yaw
-#   0,    0,    100,   # x, y, z
-#   0.01, 0.01, 0,     # ω_x, ω_y, ω_z
-#   3,    0,    1,     # v_x, v_y, v_z
-#   0                  # additional state
-# ]
+# ──────────────────────────────────────────────────────────────
+# Simulation profile  (ros2 launch ... config_profile:=sim)
+# ──────────────────────────────────────────────────────────────
+sim:
+  Q_diagonal: [
+    40,   40,   0,   # roll, pitch, yaw
+    0,    0,    100, # x, y, z
+    0.01, 0.01, 0,   # ω_x, ω_y, ω_z
+    3,    0,    1,   # v_x, v_y, v_z
+    0                # additional state
+  ]
 
-# Q_diagonal: [
-#   40,  40,  0,   # roll, pitch, yaw
-#   0,   0,   100,  # x, y, z
-#   0.1, 0.1, 0,   # ω_x, ω_y, ω_z
-#   0,   0,   2,   # v_x, v_y, v_z
-#   0              # additional state
-# ]
+  Bx_swing: 300
+  By_swing: 300
+  Bx_stance: 300
+  By_stance: 100
+  Kx_swing: 3000
+  Ky_swing: 3000
+  Kx_stance: 3000
+  Ky_stance: 1000
+
+  fz_lower_bound: -50
+
+# ──────────────────────────────────────────────────────────────
+# Real-robot profile  (ros2 launch ... config_profile:=real)
+# ──────────────────────────────────────────────────────────────
+real:
+  Q_diagonal: [
+    40,   40,   0,   # roll, pitch, yaw
+    0,    0,    100, # x, y, z
+    0.1,  0.1,  0,   # ω_x, ω_y, ω_z
+    0,    0,    2,   # v_x, v_y, v_z
+    0                # additional state
+  ]
+
+  Bx_swing: 80
+  By_swing: 80
+  Bx_stance: 80
+  By_stance: 10
+  Kx_swing: 2000
+  Ky_swing: 2000
+  Kx_stance: 2000
+  Ky_stance: 200
+
+  fz_lower_bound: -50

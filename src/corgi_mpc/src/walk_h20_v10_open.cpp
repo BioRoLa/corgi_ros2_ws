@@ -1,6 +1,7 @@
 #include "walk_utils.hpp"
 #include "mpc.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 
 bool trigger = false;
 corgi_msgs::msg::ForceStateStamped force_state;
@@ -17,8 +18,19 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_walk");
-    
+
+    node->declare_parameter<std::string>("config_profile", "sim");
+    std::string config_profile = node->get_parameter("config_profile").as_string();
+    if (config_profile != "sim" && config_profile != "real") {
+        RCLCPP_WARN(node->get_logger(),
+                    "Invalid config_profile='%s', fallback to 'sim'",
+                    config_profile.c_str());
+        config_profile = "sim";
+    }
+    sim = (config_profile == "sim");
+
     RCLCPP_INFO(node->get_logger(), "Corgi Walk Starts");
+    RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -32,10 +44,10 @@ int main(int argc, char **argv) {
     }
 
     ModelPredictiveController mpc;
-    mpc.load_config();
+    mpc.load_config(config_profile);
 
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
-    auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
+    auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     
@@ -43,20 +55,14 @@ int main(int argc, char **argv) {
     rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
-    corgi_msgs::msg::ContactStateStamped contact_state;
+    std_msgs::msg::Int32MultiArray swing_phase_msg;
+    swing_phase_msg.data.resize(4, 0);
 
     std::vector<corgi_msgs::msg::MotorCmd*> motor_cmd_modules = {
         &motor_cmd.module_a,
         &motor_cmd.module_b,
         &motor_cmd.module_c,
         &motor_cmd.module_d
-    };
-
-    std::vector<corgi_msgs::msg::ContactState*> contact_state_modules = {
-        &contact_state.module_a,
-        &contact_state.module_b,
-        &contact_state.module_c,
-        &contact_state.module_d
     };
 
     std::vector<corgi_msgs::msg::ForceState*> force_state_modules = {
@@ -81,7 +87,7 @@ int main(int argc, char **argv) {
     walk_gait.stand_height = 0.2;
     walk_gait.velocity = velocity;
     walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
+    walk_gait.step_height = 0.08;
 
 
     walk_gait.initialize(init_eta);
@@ -145,24 +151,11 @@ int main(int argc, char **argv) {
         if (trigger){
             RCLCPP_INFO(node->get_logger(), "Wait For Odometry Node Initializing ...");
 
-            // wait for odometry node
             if (!sim) {
-                for (int i=0; i<3000; i++) {
+                for (int i = 0; i < 3000; i++) {
                     rclcpp::spin_some(node);
-                    for (auto& state: contact_state_modules) {
-                        state->contact = true;
-                    }
-                    contact_pub->publish(contact_state);
-                    next_time += period;
-                    node->get_clock()->sleep_until(next_time);
-                }
-            }
-            else {
-                for (int i=0; i<1000; i++) {
-                    for (auto& state: contact_state_modules) {
-                        state->contact = true;
-                    }
-                    contact_pub->publish(contact_state);
+                    motor_cmd.header.stamp = node->now();
+                    motor_cmd_pub->publish(motor_cmd);
                     next_time += period;
                     node->get_clock()->sleep_until(next_time);
                 }
@@ -173,18 +166,6 @@ int main(int argc, char **argv) {
             int loop_count = 0;
             while (rclcpp::ok()) {
                 rclcpp::spin_some(node);
-
-                for (int i=0; i<4; i++) {
-                    // if (walk_gait.get_swing_phase()[i] == 1) {
-                    //     check_contact_state(i, contact_state_modules);
-                    // }
-                    if (walk_gait.get_duty()[i] < 0.75 && walk_gait.get_duty()[i] > 0.05) {
-                        contact_state_modules[i]->contact = true;
-                    }
-                    else {
-                        contact_state_modules[i]->contact = false;
-                    }
-                }
 
                 // update target vel and pos
                 if (loop_count < 1000) {
@@ -203,6 +184,10 @@ int main(int argc, char **argv) {
 
                 // get next eta
                 mpc.eta_list = walk_gait.step();
+                const auto swing_phase = walk_gait.get_swing_phase();
+                for (int i = 0; i < 4; i++) {
+                    swing_phase_msg.data[i] = swing_phase[i];
+                }
 
                 for (int i=0; i<4; i++) {
                     if (mpc.eta_list[0][i] > M_PI*160.0/180.0) {
@@ -217,9 +202,7 @@ int main(int argc, char **argv) {
 
                 motor_cmd.header.stamp = node->now();
                 motor_cmd_pub->publish(motor_cmd);
-
-                contact_state.header.stamp = node->now();
-                // contact_pub->publish(contact_state);
+                swing_phase_pub->publish(swing_phase_msg);
 
                 std::cout << std::fixed << std::setprecision(3);
                 std::cout << "Target Position X: " << mpc.target_pos_x << std::endl << std::endl;

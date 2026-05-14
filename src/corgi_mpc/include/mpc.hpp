@@ -26,6 +26,7 @@
 #include "corgi_hybrid/hybrid_gen.hpp"
 
 #include <array>
+#include <string>
 #include <vector>
 
 class ModelPredictiveController {
@@ -34,21 +35,20 @@ class ModelPredictiveController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 200;
-        double By_swing = 200;
-        double Bx_stance = 200;
-        // double Bx_stance = 50;
-        double By_stance = 200;
+        double Bx_swing = 80;
+        double By_swing = 80;
+        double Bx_stance = 80;
+        double By_stance = 10;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 2000;
+        double Ky_stance = 200;
 
 
         const int freq = 100;
         const double dt = 1.0 / freq;
 
-        const double m = 19.5;
+        double m = 23.66;
         const double gravity = 9.81;
 
         const int N = 10;
@@ -71,7 +71,7 @@ class ModelPredictiveController {
 
         std::array<std::array<double, 4>, 2> eta_list = {{{0, 0, 0, 0}, {0, 0, 0, 0}}};
 
-        void load_config();
+        void load_config(const std::string& profile);
         void init_matrices(const double *ra, const double *rb, const double *rc, const double *rd);
         Eigen::VectorXd step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref, const bool *selection_matrix, std::vector<corgi_msgs::msg::ForceState*> force_state_modules);
 
@@ -83,11 +83,10 @@ class ModelPredictiveController {
         Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(n_x, n_x);
         Eigen::MatrixXd R = Eigen::MatrixXd::Identity(n_u, n_u);
 
-        int fx_upper_bound = 10;
-        int fx_lower_bound = -10;
-        int fz_upper_bound = 200;
-        // int fz_lower_bound = -50;
-        int fz_lower_bound = 0;
+        double fx_upper_bound = 10;
+        double fx_lower_bound = -10;
+        double fz_upper_bound = 100;
+        double fz_lower_bound = -10;
 
         double friction_coef = 1;
 
@@ -95,7 +94,5 @@ class ModelPredictiveController {
         double w = 0.33;
         double h = 0.17;
 };
-
-void check_contact_state(int swing_leg, std::vector<corgi_msgs::msg::ContactState*> contact_state_modules);
 
 #endif
