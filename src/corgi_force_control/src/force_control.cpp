@@ -149,7 +149,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     //           << J_fb(1, 0) << ", " << J_fb(1, 1) << std::endl << std::endl;
 
     Eigen::MatrixXd phi_vel(2, 1);
-    phi_vel << motor_state_->velocity_r, motor_state_->velocity_l;
+    phi_vel << motor_state_->velocity_l, motor_state_->velocity_r;
 
     Eigen::MatrixXd vel_fb = J_fb.transpose() * phi_vel;
     Eigen::MatrixXd acc_fb = (vel_fb - J_fb.transpose() * phi_vel_prev_) * 1000;
@@ -176,13 +176,13 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     // calculate phi command
     Eigen::MatrixXd phi_des(2, 1);
-    phi_des << eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI,
-               eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI;
+    phi_des << eta_cmd(1, 0) + eta_cmd(0, 0) - 17/180.0*M_PI, 
+               eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI;
 
     Eigen::MatrixXd phi_fb(2, 1);
-    phi_fb << motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
-              motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI;
-
+    phi_fb << motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI,
+              motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI;
+              
     Eigen::MatrixXd phi_err = phi_des-phi_fb;
 
     // kp compensate
@@ -224,12 +224,12 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
     motor_cmd_->beta = eta_cmd(1, 0);
-    motor_cmd_->kp_r = kp_cmd(0, 0); //std::min(200.0, std::max(10.0, kp_cmd(0, 0)));
-    motor_cmd_->kp_l = kp_cmd(1, 0); //std::min(200.0, std::max(10.0, kp_cmd(1, 0)));
-    motor_cmd_->kd_r = kd_cmd(0, 0); //std::min(5.0,   std::max(0.05, kd_cmd(0, 0)));
-    motor_cmd_->kd_l = kd_cmd(1, 0); //std::min(5.0,   std::max(0.05, kd_cmd(1, 0)));
-    motor_cmd_->torque_r = trq_cmd(0, 0);
-    motor_cmd_->torque_l = trq_cmd(1, 0);
+    motor_cmd_->kp_l = kp_cmd(0, 0); //std::min(200.0, std::max(10.0, kp_cmd(0, 0)));
+    motor_cmd_->kp_r = kp_cmd(1, 0); //std::min(200.0, std::max(10.0, kp_cmd(1, 0)));
+    motor_cmd_->kd_l = kd_cmd(0, 0); //std::min(5.0,   std::max(0.05, kd_cmd(0, 0)));
+    motor_cmd_->kd_r = kd_cmd(1, 0); //std::min(5.0,   std::max(0.05, kd_cmd(1, 0)));
+    motor_cmd_->torque_l = trq_cmd(0, 0);
+    motor_cmd_->torque_r = trq_cmd(1, 0);
 }
 
 void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
@@ -296,31 +296,29 @@ void ForceControlNode::timer_cb() {
             }
             
         }
-        phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_l;
+        phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r;
     }
 
     // dynamic friction compensation
-    if (!kinematics_->is_sim()){
-        for (int i=0; i<4; i++) {
-            double phi_r = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
-            double phi_l = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
+    for (int i=0; i<4; i++) {
+        double phi_l = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
+        double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
 
-            if (phi_r > phi_prev_modules_[i](0, 0)){
-                motor_cmd_modules[i]->torque_r -= friction_[2*i];
-            }
-            else {
-                motor_cmd_modules[i]->torque_r += friction_[2*i];
-            }
-
-            if (phi_l > phi_prev_modules_[i](1, 0)){
-                motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
-            }
-            else {
-                motor_cmd_modules[i]->torque_l += friction_[2*i+1];
-            }
-
-            phi_prev_modules_[i] << phi_r, phi_l;
+        if (phi_r > phi_prev_modules_[i](1, 0)){
+            motor_cmd_modules[i]->torque_r -= friction_[2*i];
         }
+        else {
+            motor_cmd_modules[i]->torque_r += friction_[2*i];
+        }
+
+        if (phi_l > phi_prev_modules_[i](0, 0)){
+            motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
+        }
+        else {
+            motor_cmd_modules[i]->torque_l += friction_[2*i+1];
+        }
+
+        phi_prev_modules_[i] << phi_l, phi_r;
     }
 
     // std::cout << "= = = = = = = = = = =" << std::endl << std::endl;

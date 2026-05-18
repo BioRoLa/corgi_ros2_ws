@@ -5,17 +5,31 @@
 bool sim = true;
 LegModel legmodel;
 
-void ModelPredictiveController::load_config() {
-    YAML::Node config;
-
+void ModelPredictiveController::load_config(const std::string& profile) {
     const char* home_path = std::getenv("HOME");
     if (!home_path) {
         throw std::runtime_error("HOME environment variable not set");
     }
     std::string config_file_path = std::string(home_path) + "/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml";
-    config = YAML::LoadFile(config_file_path);
+    YAML::Node config = YAML::LoadFile(config_file_path);
+    YAML::Node common_config = config["common"];
+    YAML::Node profile_config = config[profile];
 
-    std::vector<double> diag = config["Q_diagonal"].as<std::vector<double>>();
+    if (!profile_config) {
+        throw std::runtime_error("Missing required profile: " + profile);
+    }
+
+    auto read_required_node = [&](const std::string& key) -> YAML::Node {
+        if (profile_config[key]) {
+            return profile_config[key];
+        }
+        if (common_config && common_config[key]) {
+            return common_config[key];
+        }
+        throw std::runtime_error("Missing required key: " + key + " for profile: " + profile);
+    };
+
+    std::vector<double> diag = read_required_node("Q_diagonal").as<std::vector<double>>();
     if (diag.size() != n_x) {
         throw std::runtime_error("Q_diagonal size mismatch with n_x");
     }
@@ -23,6 +37,34 @@ void ModelPredictiveController::load_config() {
     Q = Eigen::MatrixXd::Zero(n_x, n_x);
     for (int i = 0; i < n_x; ++i) {
         Q(i, i) = diag[i];
+    }
+
+    auto read_required_double = [&](const std::string& key) -> double {
+        return read_required_node(key).as<double>();
+    };
+
+    Bx_swing = read_required_double("Bx_swing");
+    By_swing = read_required_double("By_swing");
+    Bx_stance = read_required_double("Bx_stance");
+    By_stance = read_required_double("By_stance");
+    Kx_swing = read_required_double("Kx_swing");
+    Ky_swing = read_required_double("Ky_swing");
+    Kx_stance = read_required_double("Kx_stance");
+    Ky_stance = read_required_double("Ky_stance");
+    m = read_required_double("m");
+    fx_upper_bound = read_required_double("fx_upper_bound");
+    fx_lower_bound = read_required_double("fx_lower_bound");
+    fz_upper_bound = read_required_double("fz_upper_bound");
+    fz_lower_bound = read_required_double("fz_lower_bound");
+
+    if (m <= 0.0) {
+        throw std::runtime_error("Invalid value: m must be > 0");
+    }
+    if (fx_lower_bound > fx_upper_bound) {
+        throw std::runtime_error("Invalid bounds: fx_lower_bound > fx_upper_bound");
+    }
+    if (fz_lower_bound > fz_upper_bound) {
+        throw std::runtime_error("Invalid bounds: fz_lower_bound > fz_upper_bound");
     }
 }
 
@@ -191,40 +233,4 @@ Eigen::VectorXd ModelPredictiveController::step(const Eigen::VectorXd &x, const 
 
     const Eigen::VectorXd& u_opt = solver.getSolution();
     return u_opt.head(n_u);
-}
-
-void check_contact_state(int swing_leg, std::vector<corgi_msgs::msg::ContactState*> contact_state_modules){
-    switch (swing_leg) {
-        case 0:
-            contact_state_modules[0]->contact = false;
-            contact_state_modules[1]->contact = true;
-            contact_state_modules[2]->contact = false;
-            contact_state_modules[3]->contact = true;
-            break;
-        case 1:
-            contact_state_modules[0]->contact = true;
-            contact_state_modules[1]->contact = false;
-            contact_state_modules[2]->contact = true;
-            contact_state_modules[3]->contact = false;
-            break;
-        case 2:
-            contact_state_modules[0]->contact = false;
-            contact_state_modules[1]->contact = true;
-            contact_state_modules[2]->contact = false;
-            contact_state_modules[3]->contact = true;
-            break;
-        case 3:
-            contact_state_modules[0]->contact = true;
-            contact_state_modules[1]->contact = false;
-            contact_state_modules[2]->contact = true;
-            contact_state_modules[3]->contact = false;
-            break;
-        default:
-            contact_state_modules[0]->contact = false;
-            contact_state_modules[1]->contact = false;
-            contact_state_modules[2]->contact = false;
-            contact_state_modules[3]->contact = false;
-            break;
-    }
-        
 }

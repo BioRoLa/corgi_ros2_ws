@@ -22,6 +22,10 @@
 #include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
+#include "geometry_msgs/msg/vector3.hpp"
+#include "std_msgs/msg/float64.hpp"
+#include "corgi_msgs/msg/contact_state_stamped.hpp"
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 
@@ -49,6 +53,12 @@ std::string output_file_name = "";
 std::string output_file_path = "";
 
 std_msgs::msg::Float32MultiArray camera;
+std_msgs::msg::Int32MultiArray swing_phase;
+geometry_msgs::msg::Vector3 odom_velocity;
+geometry_msgs::msg::Vector3 odom_position;
+corgi_msgs::msg::ContactStateStamped odom_contact;
+std_msgs::msg::Float64 odom_z_position;
+geometry_msgs::msg::Vector3 sim_body_velocity;
 
 // Check if file exists
 bool file_exists(const std::string &filename) {
@@ -141,6 +151,8 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "sim_pos_x" << "," << "sim_pos_y" << "," << "sim_pos_z" << ","
                         << "sim_orien_x" << "," << "sim_orien_y" << "," << "sim_orien_z" << "," << "sim_orien_w" << ","
                         << "sim_contact_state_a" << "," << "sim_contact_state_b" << "," << "sim_contact_state_c" << "," << "sim_contact_state_d" << ","
+                        << "swing_phase_a" << "," << "swing_phase_b" << "," << "swing_phase_c" << "," << "swing_phase_d" << ","
+                        << "sim_body_vel_x" << "," << "sim_body_vel_y" << "," << "sim_body_vel_z" << ","
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
@@ -158,7 +170,11 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "v_11" << "," << "i_11"<< ","
 
                         << "dst_lf" << "," << "dst_rf" << "," << "dst_rr" << "," << "dst_lr" << ","
-                        << "camera_dist" << "," << "camera_yaw" 
+                        << "camera_dist" << "," << "camera_yaw" << ","
+                        << "odom_vel_x" << "," << "odom_vel_y" << "," << "odom_vel_z" << ","
+                        << "odom_pos_x" << "," << "odom_pos_y" << "," << "odom_pos_z" << ","
+                        << "odom_contact_a" << "," << "odom_contact_b" << "," << "odom_contact_c" << "," << "odom_contact_d" << ","
+                        << "odom_z_hip"
                         << "\n";
 
             RCLCPP_INFO(rclcpp::get_logger("corgi_data_recorder"), "Recording data to %s", output_file_name.c_str());
@@ -218,6 +234,10 @@ void stair_info_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg){
     // float yaw  = msg->data[1];
 }
 
+void swing_phase_cb(const std_msgs::msg::Int32MultiArray::SharedPtr msg){
+    swing_phase.data = msg->data;
+}
+
 void range_1_cb(const sensor_msgs::msg::Range::SharedPtr msg){
     range_1 = *msg;
 }
@@ -232,6 +252,26 @@ void range_3_cb(const sensor_msgs::msg::Range::SharedPtr msg){
 
 void range_4_cb(const sensor_msgs::msg::Range::SharedPtr msg){
     range_4 = *msg;
+}
+
+void odom_velocity_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
+    odom_velocity = *msg;
+}
+
+void odom_position_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
+    odom_position = *msg;
+}
+
+void odom_contact_cb(const corgi_msgs::msg::ContactStateStamped::SharedPtr msg){
+    odom_contact = *msg;
+}
+
+void odom_z_position_cb(const std_msgs::msg::Float64::SharedPtr msg){
+    odom_z_position = *msg;
+}
+
+void sim_body_velocity_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
+    sim_body_velocity = *msg;
 }
 
 // write data to CSV file
@@ -306,6 +346,13 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << sim_leg_contact_state.module_c.contact << ","
                 << sim_leg_contact_state.module_d.contact << ","
 
+                << (swing_phase.data.size() > 0 ? swing_phase.data[0] : -1) << ","
+                << (swing_phase.data.size() > 1 ? swing_phase.data[1] : -1) << ","
+                << (swing_phase.data.size() > 2 ? swing_phase.data[2] : -1) << ","
+                << (swing_phase.data.size() > 3 ? swing_phase.data[3] : -1) << ","
+
+                << sim_body_velocity.x << "," << sim_body_velocity.y << "," << sim_body_velocity.z << ","
+
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
                 << power_state.v_0 << "," << power_state.i_0 << ","
                 << power_state.v_1 << "," << power_state.i_1 << ","
@@ -328,6 +375,13 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 } else {
                     output_file << ",NaN,NaN";
                 }
+
+                // odometry legacy 資訊
+                output_file << "," << odom_velocity.x << "," << odom_velocity.y << "," << odom_velocity.z << ","
+                            << odom_position.x << "," << odom_position.y << "," << odom_position.z << ","
+                            << odom_contact.module_a.contact << "," << odom_contact.module_b.contact << ","
+                            << odom_contact.module_c.contact << "," << odom_contact.module_d.contact << ","
+                            << odom_z_position.data;
 
                 // 換行 & flush
                 output_file << "\n";
@@ -377,10 +431,16 @@ int main(int argc, char **argv) {
     tf2_ros::TransformListener tfListener(tfBuffer);
 
     auto stair_info_sub = node->create_subscription<std_msgs::msg::Float32MultiArray>("stair_plane_info", 100, stair_info_cb);
+    auto swing_phase_sub = node->create_subscription<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 100, swing_phase_cb);
     auto range_sub_1 = node->create_subscription<sensor_msgs::msg::Range>("range_1", 100, range_1_cb);
     auto range_sub_2 = node->create_subscription<sensor_msgs::msg::Range>("range_2", 100, range_2_cb);
     auto range_sub_3 = node->create_subscription<sensor_msgs::msg::Range>("range_3", 100, range_3_cb);
     auto range_sub_4 = node->create_subscription<sensor_msgs::msg::Range>("range_4", 100, range_4_cb);
+    auto odom_velocity_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 100, odom_velocity_cb);
+    auto odom_position_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/position", 100, odom_position_cb);
+    auto odom_contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 100, odom_contact_cb);
+    auto odom_z_position_sub = node->create_subscription<std_msgs::msg::Float64>("odometry/legacy/z_position_hip", 100, odom_z_position_cb);
+    auto sim_body_velocity_sub = node->create_subscription<geometry_msgs::msg::Vector3>("sim/body/velocity", 100, sim_body_velocity_cb);
 
     // rclcpp::Rate rate(1000);
     rclcpp::Duration period(0, 1000000); // 1ms
