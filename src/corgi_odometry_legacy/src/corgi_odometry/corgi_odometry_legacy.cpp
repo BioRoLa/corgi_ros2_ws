@@ -325,7 +325,8 @@ int main(int argc, char **argv) {
                 filter.push_pkld(&lh_pkld);
 
                 //
-                p << 0, 0, 0;
+                // TODO: initial z should be set to the actual standing height instead of hardcoded 0.2 m
+                p << 0, 0, 0.2f;
                 //quaternion
                 q_init = Eigen::Quaternionf(imu.orientation.w,imu.orientation.x, imu.orientation.y, imu.orientation.z);
                 R_init = q_init.toRotationMatrix();
