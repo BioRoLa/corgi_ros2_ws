@@ -38,6 +38,7 @@ use_bv_feedback: true
 static_init:
   window_ms:          200    # Collect this many ms of IMU before trigger
   motion_gyro_thresh: 0.02   # Warn if |w_mean| > this [rad/s]
+  initial_z:          0.2    # Initial ESEKF z [m]; matches legacy hip height TODO: initial z should be set to the actual standing height instead of hardcoded 0.2 m
 
 # Zero Velocity Update: applied when all 4 legs are off the ground
 # sigma_vec: velocity measurement noise std dev [m/s] (tighter = stronger constraint)

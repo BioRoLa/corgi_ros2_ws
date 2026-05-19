@@ -65,6 +65,29 @@ Launched nodes:
 IMU remapping in this launch:
 - `/imu` -> `/imu_raw`
 
+### E. Full comparison experiment (Real robot)
+
+```bash
+ros2 launch corgi_odometry compare_odom_real.launch.py
+```
+
+Launches both the new ESEKF pipeline and the legacy estimators simultaneously, and automatically starts bag recording after a 5-second delay.
+
+Launched nodes:
+
+| # | Node | Description |
+|---|------|-------------|
+| 1 | `imu_raw_node` (corgi_imu) | IMU driver, publishes `/imu_raw` |
+| 2 | `corgi_leg_odom` (corgi_odometry) | Inner ESEKF, `/imu` remapped to `/imu_raw` |
+| 3 | `livox_ros_driver2_node` | LiDAR driver |
+| 4 | `fastlio_mapping` (fast_lio) | LiDAR-inertial odometry, publishes `/lidar_odom` |
+| 5 | `odom_tf_relay` (corgi_odometry) | Transforms fast_lio body frame to base_link |
+| 6 | `corgi_fusion_node` (corgi_odometry) | Outer EKF, provides `/fusion/bv` velocity feedback |
+| 7 | `static_transform_publisher` | Static TF: base_link → mid360_optical |
+| 8 | `corgi_odometry_legacy` (corgi_odometry_legacy) | Legacy estimator, `/imu` remapped to `/imu_raw` |
+| 9 | `corgi_z_position_legacy` (corgi_odometry_legacy) | Legacy z estimator |
+| 10 | `ros2 bag record` | Records all comparison topics |
+
 ---
 
 ## 3) Online mode (without launch files)

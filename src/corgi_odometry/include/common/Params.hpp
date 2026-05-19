@@ -47,6 +47,9 @@ struct Params {
     // Gyro norm threshold for motion detection during init window [rad/s].
     // If |w_mean| > this, log a warning (but still proceed).
     float static_motion_gyro_thresh  = 0.02f;
+    // Initial z position for ESEKF [m].
+    // Set to nominal hip height (~0.2 m) for consistency with legacy estimator.
+    float initial_z                  = 0.2f;
 
     // ── Logic switches ──────────────────────────────────────────
     // simulate_imu_noise: offline_test only — adds synthetic noise to IMU.
