@@ -98,6 +98,7 @@ Launched nodes:
 | `/odometry/legacy/z_position_hip` | `std_msgs/Float64` | Hip height from legacy odometry |
 | `/sim/body/velocity` | `geometry_msgs/Vector3` | Body velocity from simulator (`state_source:=sim_driver` only) |
 | `/tf` | `tf2_msgs/TFMessage` | `odom → base_link` transform for body position (`state_source:=sim_driver` only) |
+| `/ekf` | `nav_msgs/Odometry` | Inner ESEKF pose + twist from `corgi_leg_odom` (`state_source:=esekf` only) |
 ---
 
 ### `walk_h20_v10_open` (Open-loop)
@@ -122,13 +123,31 @@ Launched nodes:
 | Parameter | Values | Default | Applicable Executable |
 |---|---|---|---|
 | `config_profile` | `sim` / `real` | `sim` | both |
-| `state_source` | `odom_legacy` / `sim_driver` | `odom_legacy` | closed-loop only |
+| `state_source` | `odom_legacy` / `sim_driver` / `esekf` | `odom_legacy` | closed-loop only |
 | `use_sim_time` | `true` / `false` | `true` (sim) / `false` (real) | both |
 
 ### `state_source` behaviour (closed-loop only)
 
-- `odom_legacy`: uses `/odometry/legacy/position`, `/odometry/legacy/velocity`, `/odometry/legacy/z_position_hip`
-- `sim_driver`: uses `/tf` (`odom → base_link`) and `/sim/body/velocity`; falls back to `odom_legacy` with a warning if those topics are not available
+| Value | pos / vel source | ang / ang_vel source | when not ready |
+|---|---|---|---|
+| `odom_legacy` | `/odometry/legacy/position`, `/odometry/legacy/velocity` | `/imu` (CX5 AHRS) | — (MPC pauses until data arrives) |
+| `sim_driver` | `/tf` (`odom→base_link`) + `/sim/body/velocity` | `/imu` | fallback to `odom_legacy` |
+| `esekf` | `/ekf` (nav_msgs/Odometry) | `/ekf` (bias-corrected) | fallback to `odom_legacy` + `/imu_raw` gyro |
+
+**Switching usage:**
+
+```bash
+# Legacy odometry (existing experiment baseline)
+ros2 run corgi_mpc walk_h20_v10_closed --ros-args -p state_source:=odom_legacy
+
+# ESEKF odometry (requires corgi_leg_odom to be running)
+ros2 run corgi_mpc walk_h20_v10_closed --ros-args -p state_source:=esekf
+```
+
+Or add `parameters=[{'state_source': 'esekf'}]` to the `Node()` in a launch file.
+
+> **Note**: `esekf` requires `corgi_leg_odom` (inner ESEKF node) to be running first.  
+> For `odom_legacy` or any fallback path, if `/odometry/legacy/position` and `/odometry/legacy/velocity` have not been received yet, MPC computation is automatically skipped with a warning until data is available.
 
 ---
 

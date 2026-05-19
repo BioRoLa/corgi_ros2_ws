@@ -3,6 +3,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
+#include <nav_msgs/msg/odometry.hpp>
 
 bool trigger = false;
 corgi_msgs::msg::ForceStateStamped force_state;
@@ -17,6 +18,12 @@ geometry_msgs::msg::Vector3 sim_body_vel{};
 geometry_msgs::msg::Vector3 sim_body_pos{};
 bool has_sim_body_vel = false;
 bool has_sim_body_pos = false;
+
+nav_msgs::msg::Odometry ekf_odom{};
+bool has_ekf_odom = false;
+
+corgi_msgs::msg::ImuStamped imu_raw{};
+bool has_imu_raw = false;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
@@ -46,6 +53,16 @@ void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
     imu = *msg;
 }
 
+void ekf_odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg){
+    ekf_odom = *msg;
+    has_ekf_odom = true;
+}
+
+void imu_raw_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
+    imu_raw = *msg;
+    has_imu_raw = true;
+}
+
 void sim_body_vel_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
     sim_body_vel = *msg;
     has_sim_body_vel = true;
@@ -65,38 +82,64 @@ void tf_cb(const tf2_msgs::msg::TFMessage::SharedPtr msg) {
 
 void update_robot_state(
     ModelPredictiveController& mpc,
-    bool use_sim_driver_state,
+    const std::string& state_source,
     const rclcpp::Logger& logger,
     const rclcpp::Clock::SharedPtr& clock) {
     static rclcpp::Time last_warn_time(0, 0, RCL_ROS_TIME);
 
-    if (use_sim_driver_state) {
+    // ── ESEKF: all state from /ekf (pose + twist, bias-corrected) ──────────
+    if (state_source == "esekf") {
+        if (has_ekf_odom) {
+            mpc.robot_pos[0] = ekf_odom.pose.pose.position.x;
+            mpc.robot_pos[1] = ekf_odom.pose.pose.position.y;
+            mpc.robot_pos[2] = ekf_odom.pose.pose.position.z;
+            mpc.robot_vel[0] = ekf_odom.twist.twist.linear.x;
+            mpc.robot_vel[1] = ekf_odom.twist.twist.linear.y;
+            mpc.robot_vel[2] = ekf_odom.twist.twist.linear.z;
+            mpc.robot_ang = Eigen::Quaterniond(
+                ekf_odom.pose.pose.orientation.w,
+                ekf_odom.pose.pose.orientation.x,
+                ekf_odom.pose.pose.orientation.y,
+                ekf_odom.pose.pose.orientation.z);
+            mpc.robot_ang_vel[0] = ekf_odom.twist.twist.angular.x;
+            mpc.robot_ang_vel[1] = ekf_odom.twist.twist.angular.y;
+            mpc.robot_ang_vel[2] = ekf_odom.twist.twist.angular.z;
+            return;
+        }
+        const auto now = clock->now();
+        if ((now - last_warn_time).seconds() > 2.0) {
+            RCLCPP_WARN(logger,
+                        "state_source=esekf but /ekf not ready, fallback to odom_legacy");
+            last_warn_time = now;
+        }
+    }
+
+    // ── sim_driver: position+velocity from TF and sim/body/velocity ────────
+    if (state_source == "sim_driver") {
         if (has_sim_body_pos && has_sim_body_vel) {
             mpc.robot_vel[0] = sim_body_vel.x;
             mpc.robot_vel[1] = sim_body_vel.y;
             mpc.robot_vel[2] = sim_body_vel.z;
-
             mpc.robot_pos[0] = sim_body_pos.x;
             mpc.robot_pos[1] = sim_body_pos.y;
             mpc.robot_pos[2] = sim_body_pos.z;
             return;
         }
-
         const auto now = clock->now();
         if ((now - last_warn_time).seconds() > 2.0) {
             RCLCPP_WARN(logger,
-                        "state_source=sim_driver but /tf(odom->base_link) or /sim/body/velocity is not ready, fallback to odom_legacy");
+                        "state_source=sim_driver but /tf(odom->base_link) or /sim/body/velocity not ready, fallback to odom_legacy");
             last_warn_time = now;
         }
     }
 
+    // ── odom_legacy (default / fallback) ────────────────────────────────────
     mpc.robot_vel[0] = odom_vel.x;
     mpc.robot_vel[1] = odom_vel.y;
     mpc.robot_vel[2] = odom_vel.z;
-
     mpc.robot_pos[0] = odom_pos.x;
     mpc.robot_pos[1] = odom_pos.y;
-    mpc.robot_pos[2] = odom_z;
+    mpc.robot_pos[2] = odom_pos.z;
 }
 
 void convert_force_to_local(double *f_global, const Eigen::Matrix3d& R_T) {
@@ -123,15 +166,14 @@ int main(int argc, char **argv) {
             config_profile.c_str());
         config_profile = "sim";
     }
-    if (state_source != "odom_legacy" && state_source != "sim_driver") {
+    if (state_source != "odom_legacy" && state_source != "sim_driver" && state_source != "esekf") {
         RCLCPP_WARN(
             node->get_logger(),
-            "Invalid state_source='%s', fallback to 'odom_legacy'",
+            "Invalid state_source='%s' (valid: odom_legacy|sim_driver|esekf), fallback to 'odom_legacy'",
             state_source.c_str());
         state_source = "odom_legacy";
     }
     sim = (config_profile == "sim");
-    const bool use_sim_driver_state = (state_source == "sim_driver");
     
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
@@ -162,6 +204,8 @@ int main(int argc, char **argv) {
     auto sim_body_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("sim/body/velocity", 10, sim_body_vel_cb);
     auto tf_sub = node->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, tf_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 10, imu_cb);
+    auto ekf_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>("/ekf", 10, ekf_odom_cb);
+    auto imu_raw_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("/imu_raw", 10, imu_raw_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq); // Convert Hz to nanoseconds
     rclcpp::Time next_time = node->now();
@@ -327,17 +371,39 @@ int main(int argc, char **argv) {
                     swing_phase_msg.data[i] = swing_phase[i];
                 }
 
-                // update state (odom_legacy / sim_driver)
-                update_robot_state(mpc, use_sim_driver_state, node->get_logger(), node->get_clock());
+                // update state (odom_legacy / sim_driver / esekf)
+                update_robot_state(mpc, state_source, node->get_logger(), node->get_clock());
 
-                mpc.robot_ang.x() = imu.orientation.x;
-                mpc.robot_ang.y() = imu.orientation.y;
-                mpc.robot_ang.z() = imu.orientation.z;
-                mpc.robot_ang.w() = imu.orientation.w;
-                
-                mpc.robot_ang_vel[0] = imu.angular_velocity.x;
-                mpc.robot_ang_vel[1] = imu.angular_velocity.y;
-                mpc.robot_ang_vel[2] = imu.angular_velocity.z;
+                // Orientation and angular velocity:
+                //   esekf (valid):      already set inside update_robot_state() from /ekf
+                //   esekf (not ready):  /imu_raw gyro for ang_vel; orientation stays at
+                //                       identity until /ekf provides the first estimate.
+                //                       imu_raw_node does NOT run an AHRS filter so its
+                //                       orientation field is always identity — do not use it.
+                //   odom_legacy / sim:  imu_node (CX5_AHRS) is running; use its gravity-
+                //                       compensated acceleration + AHRS orientation directly.
+                if (state_source == "esekf" && !has_ekf_odom) {
+                    // Use raw gyro from /imu_raw (no gravity subtraction needed for angular
+                    // velocity). Orientation stays at its default (identity Quaterniond) until
+                    // /ekf comes up — the ESEKF internally uses orientation to subtract gravity
+                    // from the accelerometer, so its output is already gravity-free.
+                    if (has_imu_raw) {
+                        mpc.robot_ang_vel[0] = imu_raw.angular_velocity.x;
+                        mpc.robot_ang_vel[1] = imu_raw.angular_velocity.y;
+                        mpc.robot_ang_vel[2] = imu_raw.angular_velocity.z;
+                    }
+                } else if (state_source != "esekf") {
+                    // odom_legacy / sim_driver: imu_node provides gravity-compensated data
+                    // and proper AHRS orientation — use directly.
+                    mpc.robot_ang.x() = imu.orientation.x;
+                    mpc.robot_ang.y() = imu.orientation.y;
+                    mpc.robot_ang.z() = imu.orientation.z;
+                    mpc.robot_ang.w() = imu.orientation.w;
+
+                    mpc.robot_ang_vel[0] = imu.angular_velocity.x;
+                    mpc.robot_ang_vel[1] = imu.angular_velocity.y;
+                    mpc.robot_ang_vel[2] = imu.angular_velocity.z;
+                }
 
                 quaternion_to_euler(mpc.robot_ang, mpc.roll, mpc.pitch, mpc.yaw);
 
