@@ -4,6 +4,7 @@
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
 #include <nav_msgs/msg/odometry.hpp>
+#include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
 
 bool trigger = false;
 corgi_msgs::msg::ForceStateStamped force_state;
@@ -61,6 +62,14 @@ void ekf_odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg){
 void imu_raw_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
     imu_raw = *msg;
     has_imu_raw = true;
+}
+
+corgi_msgs::msg::GMOContactStateStamped gmo_contact{};
+bool has_gmo_contact = false;
+
+void gmo_contact_cb(const corgi_msgs::msg::GMOContactStateStamped::SharedPtr msg) {
+    gmo_contact = *msg;
+    has_gmo_contact = true;
 }
 
 void sim_body_vel_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
@@ -178,6 +187,16 @@ int main(int argc, char **argv) {
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
+
+    node->declare_parameter<std::string>("contact_source", "gait");
+    std::string contact_source = node->get_parameter("contact_source").as_string();
+    if (contact_source != "gait" && contact_source != "gmo") {
+        RCLCPP_WARN(node->get_logger(),
+            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
+            contact_source.c_str());
+        contact_source = "gait";
+    }
+    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -206,6 +225,8 @@ int main(int argc, char **argv) {
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 10, imu_cb);
     auto ekf_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>("/ekf", 10, ekf_odom_cb);
     auto imu_raw_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("/imu_raw", 10, imu_raw_cb);
+    auto gmo_contact_sub = node->create_subscription<corgi_msgs::msg::GMOContactStateStamped>(
+        "gmo/contact_state", 10, gmo_contact_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq); // Convert Hz to nanoseconds
     rclcpp::Time next_time = node->now();
@@ -352,23 +373,50 @@ int main(int argc, char **argv) {
                 mpc.eta_list = walk_gait.step();
                 const auto swing_phase = walk_gait.get_swing_phase();
 
-                for (int i=0; i<4; i++) {
+                for (int i = 0; i < 4; i++) {
                     imp_cmd_modules[i]->theta = mpc.eta_list[0][i];
                     imp_cmd_modules[i]->beta = (i == 1 || i == 2) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
-                    if (swing_phase[i] == 1 && touched[i]) {
-                        selection_matrix[i] = false;
-                        touched[i] = false;
-                        imp_cmd_modules[i]->by = mpc.By_swing;
-                        imp_cmd_modules[i]->ky = mpc.Ky_swing;
-                    }
-                    else if (swing_phase[i] == 0 && !touched[i]) {
-                        selection_matrix[i] = true;
-                        touched[i] = true;
-                        imp_cmd_modules[i]->by = mpc.By_stance;
-                        imp_cmd_modules[i]->ky = mpc.Ky_stance;
-                    }
+                }
 
-                    swing_phase_msg.data[i] = swing_phase[i];
+                // contact state: gait (time-based scheduler) or gmo (sensor-based, requires state_source:=esekf)
+                // gmo convention: contact=true → stance (swing_phase=0), contact=false → swing (swing_phase=1)
+                if (contact_source == "gmo" && has_gmo_contact) {
+                    const std::array<bool, 4> in_contact = {
+                        gmo_contact.module_a.contact,
+                        gmo_contact.module_b.contact,
+                        gmo_contact.module_c.contact,
+                        gmo_contact.module_d.contact
+                    };
+                    for (int i = 0; i < 4; i++) {
+                        if (!in_contact[i] && touched[i]) {
+                            selection_matrix[i] = false;
+                            touched[i] = false;
+                            imp_cmd_modules[i]->by = mpc.By_swing;
+                            imp_cmd_modules[i]->ky = mpc.Ky_swing;
+                        } else if (in_contact[i] && !touched[i]) {
+                            selection_matrix[i] = true;
+                            touched[i] = true;
+                            imp_cmd_modules[i]->by = mpc.By_stance;
+                            imp_cmd_modules[i]->ky = mpc.Ky_stance;
+                        }
+                        swing_phase_msg.data[i] = in_contact[i] ? 0 : 1;
+                    }
+                } else {
+                    for (int i = 0; i < 4; i++) {
+                        if (swing_phase[i] == 1 && touched[i]) {
+                            selection_matrix[i] = false;
+                            touched[i] = false;
+                            imp_cmd_modules[i]->by = mpc.By_swing;
+                            imp_cmd_modules[i]->ky = mpc.Ky_swing;
+                        }
+                        else if (swing_phase[i] == 0 && !touched[i]) {
+                            selection_matrix[i] = true;
+                            touched[i] = true;
+                            imp_cmd_modules[i]->by = mpc.By_stance;
+                            imp_cmd_modules[i]->ky = mpc.Ky_stance;
+                        }
+                        swing_phase_msg.data[i] = swing_phase[i];
+                    }
                 }
 
                 // update state (odom_legacy / sim_driver / esekf)
