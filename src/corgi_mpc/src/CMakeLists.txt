@@ -2,6 +2,7 @@ set(dependencies
   rclcpp
   std_msgs
   geometry_msgs
+  nav_msgs
   sensor_msgs
   corgi_msgs
   tf2_msgs

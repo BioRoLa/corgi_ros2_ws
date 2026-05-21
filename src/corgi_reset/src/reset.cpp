@@ -62,13 +62,14 @@ int main(int argc, char **argv) {
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
 
-        theta_err[i] = (150/180.0*M_PI - motor_state_modules[i]->theta);
+        theta_err[i] = (17.0/180.0*M_PI - motor_state_modules[i]->theta);
         beta_err[i] = (0 - motor_state_modules[i]->beta);
     }
 
-    for (int i=0; i<3000; i++){
+    // Step 1: theta -> 17 deg (1.5 sec)
+    for (int i=0; i<1500; i++){
         for (int j=0; j<4; j++){
-            motor_cmd_modules[j]->theta += theta_err[j]/3000.0;
+            motor_cmd_modules[j]->theta += theta_err[j]/1500.0;
         }
 
         motor_cmd.header.seq = -1;
@@ -79,9 +80,29 @@ int main(int argc, char **argv) {
         rate.sleep();
     }
 
-    for (int i=0; i<5000; i++){
+    // Step 2: beta -> 0 (3 sec)
+    for (int i=0; i<3000; i++){
         for (int j=0; j<4; j++){
-            motor_cmd_modules[j]->beta += beta_err[j]/5000.0;
+            motor_cmd_modules[j]->beta += beta_err[j]/3000.0;
+        }
+
+        motor_cmd.header.seq = -1;
+
+        motor_cmd_pub->publish(motor_cmd);
+
+        rclcpp::spin_some(node);
+        rate.sleep();
+    }
+
+    // Step 3: theta -> 120 deg (3 sec)
+    double theta_err2[4];
+    for (int i=0; i<4; i++) {
+        theta_err2[i] = (120.0/180.0*M_PI - motor_cmd_modules[i]->theta);
+    }
+
+    for (int i=0; i<1500; i++){
+        for (int j=0; j<4; j++){
+            motor_cmd_modules[j]->theta += theta_err2[j]/1500.0;
         }
 
         motor_cmd.header.seq = -1;

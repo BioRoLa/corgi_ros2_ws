@@ -11,6 +11,12 @@ common:
 # Simulation profile  (ros2 launch ... config_profile:=sim)
 # ──────────────────────────────────────────────────────────────
 sim:
+  # contact_source: gait | gmo
+  # NOTE: "gmo" only takes effect when state_source:=esekf is set at launch.
+  #        With any other state_source, gmo contact is still read but selection_matrix
+  #        behaviour is identical — only meaningful when ESEKF is running.
+  contact_source: gait
+
   Q_diagonal: [
     40,   40,   0,   # roll, pitch, yaw
     0,    0,    100, # x, y, z
@@ -34,11 +40,17 @@ sim:
 # Real-robot profile  (ros2 launch ... config_profile:=real)
 # ──────────────────────────────────────────────────────────────
 real:
+  # contact_source: gait | gmo
+  # NOTE: "gmo" only takes effect when state_source:=esekf is set at launch.
+  #        With any other state_source, gmo contact is still read but selection_matrix
+  #        behaviour is identical — only meaningful when ESEKF is running.
+  contact_source: gmo
+
   Q_diagonal: [
     40,   40,   0,   # roll, pitch, yaw
-    0,    0,    100, # x, y, z
+    20,    0,    100, # x, y, z
     0.1,  0.1,  0,   # ω_x, ω_y, ω_z
-    0,    0,    2,   # v_x, v_y, v_z
+    2,    0,    2,   # v_x, v_y, v_z
     0                # additional state
   ]
 

@@ -79,6 +79,7 @@ inline Params load_params(const std::string& yaml_path) {
     if (auto n = root["static_init"]) {
         p.static_init_window_ms     = detail::val(n, "window_ms",          p.static_init_window_ms);
         p.static_motion_gyro_thresh = detail::val(n, "motion_gyro_thresh", p.static_motion_gyro_thresh);
+        p.initial_z                 = detail::val(n, "initial_z",          p.initial_z);
     }
 
     // ── Logic switches ──────────────────────────────────────────

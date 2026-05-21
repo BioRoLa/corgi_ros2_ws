@@ -159,6 +159,7 @@ ament_target_dependencies(corgi_fusion_node
   geometry_msgs
   tf2_ros
   ament_index_cpp
+  corgi_msgs
 )
 target_link_libraries(corgi_fusion_node
   fusion_ekf

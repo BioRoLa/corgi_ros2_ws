@@ -42,4 +42,10 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/
 )
 
+# Install helper scripts used by launch files
+install(DIRECTORY script
+  DESTINATION share/${PROJECT_NAME}/
+  USE_SOURCE_PERMISSIONS
+)
+
 ament_package()
