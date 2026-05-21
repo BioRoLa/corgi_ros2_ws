@@ -491,10 +491,6 @@ int main(int argc, char **argv) {
                 double force_D[3] = {force(9), force(10), force(11)};
 
                 Eigen::Matrix3d R_T = mpc.robot_ang.toRotationMatrix().transpose();
-                if (!sim) {
-                    R_T(1, 2) *= -1;
-                    R_T(2, 1) *= -1;
-                }
                 
                 convert_force_to_local(force_A, R_T);
                 convert_force_to_local(force_B, R_T);
