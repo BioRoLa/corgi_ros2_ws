@@ -90,7 +90,8 @@ public:
         if(commands_3dm::writeImuMessageFormat(*device, descriptors.size(), descriptors.data()) != CmdResult::ACK_OK)
             throw std::runtime_error("ERROR: Could not set sensor message format!");
 
-        // Sensor-to-vehicle rotation (X-axis flip for upside-down mount)
+        // Physical mounting: the sensor is installed rotated pi around X relative to
+        // the robot body, so configure sensor->vehicle rotation as [pi, 0, 0].
         float euler[3] = { static_cast<float>(M_PI), 0.0f, 0.0f };
         if(commands_filter::writeSensorToVehicleRotationEuler(*device, euler[0], euler[1], euler[2]) != CmdResult::ACK_OK)
             throw std::runtime_error("ERROR: Could not set sensor-to-vehicle transformation!");
@@ -143,7 +144,8 @@ private:
     std::chrono::steady_clock::time_point last_data_time_;
     DispatchHandler handlers_[2];
 
-    // Sensor-to-vehicle rotation matrix for [π, 0, 0] Euler (X-flip)
+    // Frame conversion for published vectors: NED -> NWU.
+    // This is equivalent to a pi rotation around X, i.e. diag(1, -1, -1).
     static Eigen::Matrix3f rot() {
         Eigen::Matrix3f r;
         r << 1, 0, 0,
