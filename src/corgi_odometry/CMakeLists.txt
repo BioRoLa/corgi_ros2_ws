@@ -54,6 +54,13 @@ install(DIRECTORY script
   USE_SOURCE_PERMISSIONS
 )
 
+# Install Python nodes so they are runnable via `ros2 run corgi_odometry <script>`
+install(PROGRAMS
+  script/odom_tf_relay.py
+  script/auto_trigger.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Install config files (YAML)
 install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}/

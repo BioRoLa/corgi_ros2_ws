@@ -3,6 +3,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
+#include <nav_msgs/msg/odometry.hpp>
+#include <corgi_msgs/msg/gmo_contact_state_stamped.hpp>
 
 bool trigger = false;
 corgi_msgs::msg::ForceStateStamped force_state;
@@ -17,6 +19,12 @@ geometry_msgs::msg::Vector3 sim_body_vel{};
 geometry_msgs::msg::Vector3 sim_body_pos{};
 bool has_sim_body_vel = false;
 bool has_sim_body_pos = false;
+
+nav_msgs::msg::Odometry ekf_odom{};
+bool has_ekf_odom = false;
+
+corgi_msgs::msg::ImuStamped imu_raw{};
+bool has_imu_raw = false;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
@@ -46,6 +54,24 @@ void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
     imu = *msg;
 }
 
+void ekf_odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg){
+    ekf_odom = *msg;
+    has_ekf_odom = true;
+}
+
+void imu_raw_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
+    imu_raw = *msg;
+    has_imu_raw = true;
+}
+
+corgi_msgs::msg::GMOContactStateStamped gmo_contact{};
+bool has_gmo_contact = false;
+
+void gmo_contact_cb(const corgi_msgs::msg::GMOContactStateStamped::SharedPtr msg) {
+    gmo_contact = *msg;
+    has_gmo_contact = true;
+}
+
 void sim_body_vel_cb(const geometry_msgs::msg::Vector3::SharedPtr msg){
     sim_body_vel = *msg;
     has_sim_body_vel = true;
@@ -65,38 +91,64 @@ void tf_cb(const tf2_msgs::msg::TFMessage::SharedPtr msg) {
 
 void update_robot_state(
     ModelPredictiveController& mpc,
-    bool use_sim_driver_state,
+    const std::string& state_source,
     const rclcpp::Logger& logger,
     const rclcpp::Clock::SharedPtr& clock) {
     static rclcpp::Time last_warn_time(0, 0, RCL_ROS_TIME);
 
-    if (use_sim_driver_state) {
+    // ── ESEKF: all state from /ekf (pose + twist, bias-corrected) ──────────
+    if (state_source == "esekf") {
+        if (has_ekf_odom) {
+            mpc.robot_pos[0] = ekf_odom.pose.pose.position.x;
+            mpc.robot_pos[1] = ekf_odom.pose.pose.position.y;
+            mpc.robot_pos[2] = ekf_odom.pose.pose.position.z;
+            mpc.robot_vel[0] = ekf_odom.twist.twist.linear.x;
+            mpc.robot_vel[1] = ekf_odom.twist.twist.linear.y;
+            mpc.robot_vel[2] = ekf_odom.twist.twist.linear.z;
+            mpc.robot_ang = Eigen::Quaterniond(
+                ekf_odom.pose.pose.orientation.w,
+                ekf_odom.pose.pose.orientation.x,
+                ekf_odom.pose.pose.orientation.y,
+                ekf_odom.pose.pose.orientation.z);
+            mpc.robot_ang_vel[0] = ekf_odom.twist.twist.angular.x;
+            mpc.robot_ang_vel[1] = ekf_odom.twist.twist.angular.y;
+            mpc.robot_ang_vel[2] = ekf_odom.twist.twist.angular.z;
+            return;
+        }
+        const auto now = clock->now();
+        if ((now - last_warn_time).seconds() > 2.0) {
+            RCLCPP_WARN(logger,
+                        "state_source=esekf but /ekf not ready, fallback to odom_legacy");
+            last_warn_time = now;
+        }
+    }
+
+    // ── sim_driver: position+velocity from TF and sim/body/velocity ────────
+    if (state_source == "sim_driver") {
         if (has_sim_body_pos && has_sim_body_vel) {
             mpc.robot_vel[0] = sim_body_vel.x;
             mpc.robot_vel[1] = sim_body_vel.y;
             mpc.robot_vel[2] = sim_body_vel.z;
-
             mpc.robot_pos[0] = sim_body_pos.x;
             mpc.robot_pos[1] = sim_body_pos.y;
             mpc.robot_pos[2] = sim_body_pos.z;
             return;
         }
-
         const auto now = clock->now();
         if ((now - last_warn_time).seconds() > 2.0) {
             RCLCPP_WARN(logger,
-                        "state_source=sim_driver but /tf(odom->base_link) or /sim/body/velocity is not ready, fallback to odom_legacy");
+                        "state_source=sim_driver but /tf(odom->base_link) or /sim/body/velocity not ready, fallback to odom_legacy");
             last_warn_time = now;
         }
     }
 
+    // ── odom_legacy (default / fallback) ────────────────────────────────────
     mpc.robot_vel[0] = odom_vel.x;
     mpc.robot_vel[1] = odom_vel.y;
     mpc.robot_vel[2] = odom_vel.z;
-
     mpc.robot_pos[0] = odom_pos.x;
     mpc.robot_pos[1] = odom_pos.y;
-    mpc.robot_pos[2] = odom_z;
+    mpc.robot_pos[2] = odom_pos.z;
 }
 
 void convert_force_to_local(double *f_global, const Eigen::Matrix3d& R_T) {
@@ -123,19 +175,28 @@ int main(int argc, char **argv) {
             config_profile.c_str());
         config_profile = "sim";
     }
-    if (state_source != "odom_legacy" && state_source != "sim_driver") {
+    if (state_source != "odom_legacy" && state_source != "sim_driver" && state_source != "esekf") {
         RCLCPP_WARN(
             node->get_logger(),
-            "Invalid state_source='%s', fallback to 'odom_legacy'",
+            "Invalid state_source='%s' (valid: odom_legacy|sim_driver|esekf), fallback to 'odom_legacy'",
             state_source.c_str());
         state_source = "odom_legacy";
     }
     sim = (config_profile == "sim");
-    const bool use_sim_driver_state = (state_source == "sim_driver");
     
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
+
+    node->declare_parameter<std::string>("contact_source", "gait");
+    std::string contact_source = node->get_parameter("contact_source").as_string();
+    if (contact_source != "gait" && contact_source != "gmo") {
+        RCLCPP_WARN(node->get_logger(),
+            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
+            contact_source.c_str());
+        contact_source = "gait";
+    }
+    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -155,7 +216,6 @@ int main(int argc, char **argv) {
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
     auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
-    auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 10, force_state_cb);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 10, motor_state_cb);
     auto odom_pos_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/position", 10, odom_pos_cb);
     auto odom_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 10, odom_vel_cb);
@@ -163,6 +223,10 @@ int main(int argc, char **argv) {
     auto sim_body_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>("sim/body/velocity", 10, sim_body_vel_cb);
     auto tf_sub = node->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, tf_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 10, imu_cb);
+    auto ekf_odom_sub = node->create_subscription<nav_msgs::msg::Odometry>("/ekf", 10, ekf_odom_cb);
+    auto imu_raw_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("/imu_raw", 10, imu_raw_cb);
+    auto gmo_contact_sub = node->create_subscription<corgi_msgs::msg::GMOContactStateStamped>(
+        "gmo/contact_state", 10, gmo_contact_cb);
 
     rclcpp::Duration period(0, 1000000000.0 / mpc.freq); // Convert Hz to nanoseconds
     rclcpp::Time next_time = node->now();
@@ -309,36 +373,85 @@ int main(int argc, char **argv) {
                 mpc.eta_list = walk_gait.step();
                 const auto swing_phase = walk_gait.get_swing_phase();
 
-                for (int i=0; i<4; i++) {
+                for (int i = 0; i < 4; i++) {
                     imp_cmd_modules[i]->theta = mpc.eta_list[0][i];
                     imp_cmd_modules[i]->beta = (i == 1 || i == 2) ? mpc.eta_list[1][i] : -mpc.eta_list[1][i];
-                    if (swing_phase[i] == 1 && touched[i]) {
-                        selection_matrix[i] = false;
-                        touched[i] = false;
-                        imp_cmd_modules[i]->by = mpc.By_swing;
-                        imp_cmd_modules[i]->ky = mpc.Ky_swing;
-                    }
-                    else if (swing_phase[i] == 0 && !touched[i]) {
-                        selection_matrix[i] = true;
-                        touched[i] = true;
-                        imp_cmd_modules[i]->by = mpc.By_stance;
-                        imp_cmd_modules[i]->ky = mpc.Ky_stance;
-                    }
-
-                    swing_phase_msg.data[i] = swing_phase[i];
                 }
 
-                // update state (odom_legacy / sim_driver)
-                update_robot_state(mpc, use_sim_driver_state, node->get_logger(), node->get_clock());
+                // contact state: gait (time-based scheduler) or gmo (sensor-based, requires state_source:=esekf)
+                // gmo convention: contact=true → stance (swing_phase=0), contact=false → swing (swing_phase=1)
+                if (contact_source == "gmo" && has_gmo_contact) {
+                    const std::array<bool, 4> in_contact = {
+                        gmo_contact.module_a.contact,
+                        gmo_contact.module_b.contact,
+                        gmo_contact.module_c.contact,
+                        gmo_contact.module_d.contact
+                    };
+                    for (int i = 0; i < 4; i++) {
+                        if (!in_contact[i] && touched[i]) {
+                            selection_matrix[i] = false;
+                            touched[i] = false;
+                            imp_cmd_modules[i]->by = mpc.By_swing;
+                            imp_cmd_modules[i]->ky = mpc.Ky_swing;
+                        } else if (in_contact[i] && !touched[i]) {
+                            selection_matrix[i] = true;
+                            touched[i] = true;
+                            imp_cmd_modules[i]->by = mpc.By_stance;
+                            imp_cmd_modules[i]->ky = mpc.Ky_stance;
+                        }
+                        swing_phase_msg.data[i] = in_contact[i] ? 0 : 1;
+                    }
+                } else {
+                    for (int i = 0; i < 4; i++) {
+                        if (swing_phase[i] == 1 && touched[i]) {
+                            selection_matrix[i] = false;
+                            touched[i] = false;
+                            imp_cmd_modules[i]->by = mpc.By_swing;
+                            imp_cmd_modules[i]->ky = mpc.Ky_swing;
+                        }
+                        else if (swing_phase[i] == 0 && !touched[i]) {
+                            selection_matrix[i] = true;
+                            touched[i] = true;
+                            imp_cmd_modules[i]->by = mpc.By_stance;
+                            imp_cmd_modules[i]->ky = mpc.Ky_stance;
+                        }
+                        swing_phase_msg.data[i] = swing_phase[i];
+                    }
+                }
 
-                mpc.robot_ang.x() = imu.orientation.x;
-                mpc.robot_ang.y() = imu.orientation.y;
-                mpc.robot_ang.z() = imu.orientation.z;
-                mpc.robot_ang.w() = imu.orientation.w;
-                
-                mpc.robot_ang_vel[0] = imu.angular_velocity.x;
-                mpc.robot_ang_vel[1] = imu.angular_velocity.y;
-                mpc.robot_ang_vel[2] = imu.angular_velocity.z;
+                // update state (odom_legacy / sim_driver / esekf)
+                update_robot_state(mpc, state_source, node->get_logger(), node->get_clock());
+
+                // Orientation and angular velocity:
+                //   esekf (valid):      already set inside update_robot_state() from /ekf
+                //   esekf (not ready):  /imu_raw gyro for ang_vel; orientation stays at
+                //                       identity until /ekf provides the first estimate.
+                //                       imu_raw_node does NOT run an AHRS filter so its
+                //                       orientation field is always identity — do not use it.
+                //   odom_legacy / sim:  imu_node (CX5_AHRS) is running; use its gravity-
+                //                       compensated acceleration + AHRS orientation directly.
+                if (state_source == "esekf" && !has_ekf_odom) {
+                    // Use raw gyro from /imu_raw (no gravity subtraction needed for angular
+                    // velocity). Orientation stays at its default (identity Quaterniond) until
+                    // /ekf comes up — the ESEKF internally uses orientation to subtract gravity
+                    // from the accelerometer, so its output is already gravity-free.
+                    if (has_imu_raw) {
+                        mpc.robot_ang_vel[0] = imu_raw.angular_velocity.x;
+                        mpc.robot_ang_vel[1] = imu_raw.angular_velocity.y;
+                        mpc.robot_ang_vel[2] = imu_raw.angular_velocity.z;
+                    }
+                } else if (state_source != "esekf") {
+                    // odom_legacy / sim_driver: imu_node provides gravity-compensated data
+                    // and proper AHRS orientation — use directly.
+                    mpc.robot_ang.x() = imu.orientation.x;
+                    mpc.robot_ang.y() = imu.orientation.y;
+                    mpc.robot_ang.z() = imu.orientation.z;
+                    mpc.robot_ang.w() = imu.orientation.w;
+
+                    mpc.robot_ang_vel[0] = imu.angular_velocity.x;
+                    mpc.robot_ang_vel[1] = imu.angular_velocity.y;
+                    mpc.robot_ang_vel[2] = imu.angular_velocity.z;
+                }
 
                 quaternion_to_euler(mpc.robot_ang, mpc.roll, mpc.pitch, mpc.yaw);
 
@@ -378,10 +491,6 @@ int main(int argc, char **argv) {
                 double force_D[3] = {force(9), force(10), force(11)};
 
                 Eigen::Matrix3d R_T = mpc.robot_ang.toRotationMatrix().transpose();
-                if (!sim) {
-                    R_T(1, 2) *= -1;
-                    R_T(2, 1) *= -1;
-                }
                 
                 convert_force_to_local(force_A, R_T);
                 convert_force_to_local(force_B, R_T);

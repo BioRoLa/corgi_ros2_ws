@@ -306,10 +306,16 @@ void LegOdometryNode::process() {
             imu_init_buf_a_.clear();
             imu_init_buf_w_.clear();
 
+            // Set initial z to nominal hip height so ESEKF z is comparable
+            // with legacy estimator's z_position_hip (both ~0.2 m at start).
+            x0.p.z() = params_.initial_z;
+
             esekf_.init(x0);
             esekf_initialized_ = true;
-            RCLCPP_INFO(this->get_logger(), "ES-EKF initialized (%.0f Hz, nominal dt=%.4f s)",
-                        corgi::Config::ESEKF_RATE, corgi::Config::ESEKF_DT);
+            RCLCPP_INFO(this->get_logger(),
+                        "ES-EKF initialized (%.0f Hz, nominal dt=%.4f s, initial_z=%.3f m)",
+                        corgi::Config::ESEKF_RATE, corgi::Config::ESEKF_DT,
+                        params_.initial_z);
         }
 
         // --- 1. Extract IMU measurements (raw, in sensor frame) ---

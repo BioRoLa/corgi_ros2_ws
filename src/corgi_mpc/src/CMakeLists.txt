@@ -2,6 +2,7 @@ set(dependencies
   rclcpp
   std_msgs
   geometry_msgs
+  nav_msgs
   sensor_msgs
   corgi_msgs
   tf2_msgs
@@ -52,13 +53,9 @@ endmacro()
 add_walk_executable(walk_h20_v10_open   walk_h20_v10_open.cpp)
 add_walk_executable(walk_h20_v10_closed walk_h20_v10_closed.cpp)
 
-# Walk probing
-add_walk_executable(walk_probing walk_probing.cpp)
-
 # Install all executables
 install(TARGETS
   walk_h20_v10_open
   walk_h20_v10_closed
-  walk_probing
   DESTINATION lib/${PROJECT_NAME}
 )
