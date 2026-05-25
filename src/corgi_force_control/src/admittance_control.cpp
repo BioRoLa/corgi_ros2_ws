@@ -2,14 +2,6 @@
 
 namespace {
 constexpr double kDt = 0.001;
-constexpr double kForceErrLimit = 250.0;
-constexpr double kPosErrXLimit = 0.05;
-constexpr double kPosErrYLimit = 0.15;
-constexpr double kThetaMin = 17.0 / 180.0 * M_PI;
-constexpr double kThetaMax = 160.0 / 180.0 * M_PI;
-constexpr double kBetaMin = -1.5;
-constexpr double kBetaMax = 1.5;
-constexpr double kMaxJointStep = 0.1;
 }
 
 class AdmittanceControlNode : public rclcpp::Node {
@@ -96,22 +88,13 @@ public:
                 eta_cmd = admittance_control(imp_cmd_modules[i], motor_state_modules[i], force_state_modules[i],
                                              pos_err_hist_modules_[i], force_err_hist_modules_[i]);
 
-                motor_cmd_modules[i]->kp_r = 90.0;
-                motor_cmd_modules[i]->kp_l = 90.0;
-                motor_cmd_modules[i]->kd_r = 1.75;
-                motor_cmd_modules[i]->kd_l = 1.75;
+                motor_cmd_modules[i]->kp_r = 105.0;
+                motor_cmd_modules[i]->kp_l = 105.0;
+                motor_cmd_modules[i]->kd_r = 1.5;
+                motor_cmd_modules[i]->kd_l = 1.5;
 
                 motor_cmd_modules[i]->theta = eta_cmd(0, 0);
                 motor_cmd_modules[i]->beta  = eta_cmd(1, 0);
-            }
-
-            // Periodic debug log (every 500ms) — rate-limited to avoid blocking sleep_until
-            if (debug_count_++ % 500 == 0) {
-                RCLCPP_INFO(this->get_logger(),
-                    "[adm] force_cmd=(%.1f,%.1f) force_state=(%.1f,%.1f) eta_cmd=(%.1f°,%.2f°)",
-                    imp_cmd_.module_b.fy, imp_cmd_.module_b.fx,
-                    force_state_.module_b.fy, force_state_.module_b.fx,
-                    eta_cmd(0,0)/M_PI*180.0, eta_cmd(1,0)/M_PI*180.0);
             }
 
             motor_cmd_.header.stamp = this->now();
@@ -158,8 +141,6 @@ private:
         target_rim = legmodel.rim;
 
         force_err << imp_cmd_->fx - force_state_->fx, imp_cmd_->fy - force_state_->fy;
-        force_err(0, 0) = std::clamp(force_err(0, 0), -kForceErrLimit, kForceErrLimit);
-        force_err(1, 0) = std::clamp(force_err(1, 0), -kForceErrLimit, kForceErrLimit);
 
         double T = kDt;
 
@@ -178,7 +159,6 @@ private:
         Eigen::MatrixXd b1 = Eigen::MatrixXd::Identity(2, 2) * 2 * T * T;
         Eigen::MatrixXd b2 = Eigen::MatrixXd::Identity(2, 2) * T * T;
 
-
         if (!a0.allFinite() || std::abs(a0.determinant()) < 1e-9) {
             return eta_cmd;
         }
@@ -190,8 +170,6 @@ private:
             return eta_cmd;
         }
 
-        pos_err(0, 0) = std::clamp(pos_err(0, 0), -kPosErrXLimit, kPosErrXLimit);
-        pos_err(1, 0) = std::clamp(pos_err(1, 0), -kPosErrYLimit, kPosErrYLimit);
         pos_cmd = pos_des - pos_err;
 
         if (pos_cmd.array().isNaN().any()) { return eta_cmd; }
@@ -242,11 +220,6 @@ private:
             return eta_cmd;
         }
 
-        eta_cmd(0, 0) = std::clamp(eta_cmd(0, 0), kThetaMin, kThetaMax);
-        eta_cmd(1, 0) = std::clamp(eta_cmd(1, 0), kBetaMin, kBetaMax);
-        eta_cmd(0, 0) = std::clamp(eta_cmd(0, 0), motor_state_->theta - kMaxJointStep, motor_state_->theta + kMaxJointStep);
-        eta_cmd(1, 0) = std::clamp(eta_cmd(1, 0), motor_state_->beta - kMaxJointStep, motor_state_->beta + kMaxJointStep);
-
         return eta_cmd;
     }
 
@@ -267,7 +240,6 @@ private:
 
     // State variables
     bool sim_;
-    int debug_count_ = 0; // rate-limits periodic RCLCPP_INFO in run()
     std::vector<Eigen::MatrixXd> pos_err_hist_modules_;
     std::vector<Eigen::MatrixXd> force_err_hist_modules_;
 };
