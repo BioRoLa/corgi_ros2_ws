@@ -50,12 +50,16 @@ macro(add_walk_executable target_name source_file)
 endmacro()
 
 # Walk h20 v10
-add_walk_executable(walk_h20_v10_open   walk_h20_v10_open.cpp)
-add_walk_executable(walk_h20_v10_closed walk_h20_v10_closed.cpp)
+add_walk_executable(walk_h20_v10_open  walk_h20_v10_open.cpp)
+
+# Closed-loop walk controllers (time-driven and distance-driven)
+add_walk_executable(walk_closed_time   walk_closed_time.cpp)
+add_walk_executable(walk_closed_dist   walk_closed_dist.cpp)
 
 # Install all executables
 install(TARGETS
   walk_h20_v10_open
-  walk_h20_v10_closed
+  walk_closed_time
+  walk_closed_dist
   DESTINATION lib/${PROJECT_NAME}
 )

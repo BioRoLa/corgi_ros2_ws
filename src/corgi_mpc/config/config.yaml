@@ -7,6 +7,27 @@ common:
   fx_lower_bound: -10
   fz_upper_bound: 100
 
+  # ── Gait parameters (shared by walk_closed_time and walk_closed_dist) ─────
+  stand_height:     0.2     # target body CoM height above ground (m)
+  cruise_velocity:  0.1     # maximum forward walking speed (m/s)
+  step_length:      0.2     # foot step length (m)
+  step_height:      0.08    # foot swing clearance height (m)
+  # ramp_loops: velocity ramp-up/down duration in control cycles.
+  # At freq=100 Hz, ramp_loops=100 → 1 second ramp time.
+  ramp_loops: 100
+
+  # ── Time-driven walk only (walk_closed_time) ──────────────────────────────
+  # target_loop: total MPC control cycles before the robot stops.
+  # Walk duration = target_loop × dt seconds, regardless of distance traveled.
+  target_loop: 2200
+
+  # ── Distance-driven walk only (walk_closed_dist) ──────────────────────────
+  # stop_x:      target stop position on the X axis in the odom/world frame (m).
+  # decel_margin: safety multiplier on the computed decel distance;
+  #               values > 1.0 start braking earlier than the theoretical minimum.
+  stop_x:       2.0
+  decel_margin: 1.2
+
 # ──────────────────────────────────────────────────────────────
 # Simulation profile  (ros2 launch ... config_profile:=sim)
 # ──────────────────────────────────────────────────────────────
@@ -36,6 +57,13 @@ sim:
 
   fz_lower_bound: -50
 
+  # init_eta: initial joint angles for simulation robot.
+  # Order: [theta_A, beta_A, theta_B, beta_B, theta_C, beta_C, theta_D, beta_D] (rad)
+  init_eta: [1.3313651941315507,  0.4032814817188362,
+             1.1847611807810603,  0.10626486289107877,
+             1.1847611807810603, -0.10626486289107877,
+             1.3313651941315507, -0.4032814817188362]
+
 # ──────────────────────────────────────────────────────────────
 # Real-robot profile  (ros2 launch ... config_profile:=real)
 # ──────────────────────────────────────────────────────────────
@@ -48,7 +76,7 @@ real:
 
   Q_diagonal: [
     40,   40,   0,   # roll, pitch, yaw
-    20,    0,    100, # x, y, z
+    0,    0,    100, # x, y, z
     0.1,  0.1,  0,   # ω_x, ω_y, ω_z
     2,    0,    2,   # v_x, v_y, v_z
     0                # additional state
@@ -64,3 +92,10 @@ real:
   Ky_stance: 200
 
   fz_lower_bound: -50
+
+  # init_eta: initial joint angles for real robot.
+  # Order: [theta_A, beta_A, theta_B, beta_B, theta_C, beta_C, theta_D, beta_D] (rad)
+  init_eta: [1.2744470401482761,  0.4161719979302237,
+             1.1222141023936798,  0.11005079310996896,
+             1.1222141023936798, -0.11005079310996896,
+             1.2744470401482761, -0.4161719979302237]

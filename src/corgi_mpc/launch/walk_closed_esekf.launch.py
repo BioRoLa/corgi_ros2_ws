@@ -17,7 +17,7 @@ Node wiring
                               broadcast TF map→odom
   corgi_force_estimation      sub /motor/state  →  pub /force/state
   corgi_force_control         sub /force/state, /impedance/command  →  pub /motor/command
-  corgi_mpc (walk_h20_v10_closed)
+  corgi_mpc (walk_closed_time or walk_closed_dist)
                               state_source = esekf
                               sub /motor/state, /imu_raw, /trigger, /ekf
                               pub /impedance/command, /walk/swing_phase
@@ -161,7 +161,7 @@ def generate_launch_description():
     # ── 9. MPC controller ────────────────────────────────────────────────────
     mpc_node = Node(
         package='corgi_mpc',
-        executable='walk_h20_v10_closed',
+        executable='walk_closed_dist',
         name='corgi_mpc',
         output='screen',
         parameters=[{

@@ -30,7 +30,7 @@ def generate_launch_description():
 
     mpc_node = Node(
         package='corgi_mpc',
-        executable='walk_h20_v10_closed',
+        executable='walk_closed_time',
         name='corgi_mpc',
         output='screen',
         parameters=[{
