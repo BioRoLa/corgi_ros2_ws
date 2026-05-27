@@ -7,26 +7,37 @@ common:
   fx_lower_bound: -10
   fz_upper_bound: 100
 
-  # ── Gait parameters (shared by walk_closed_time and walk_closed_dist) ─────
-  stand_height:     0.2     # target body CoM height above ground (m)
-  cruise_velocity:  0.1     # maximum forward walking speed (m/s)
-  step_length:      0.2     # foot step length (m)
-  step_height:      0.08    # foot swing clearance height (m)
-  # ramp_loops: velocity ramp-up/down duration in control cycles.
-  # At freq=100 Hz, ramp_loops=100 → 1 second ramp time.
-  ramp_loops: 100
+  # ── Walk-only parameters (walk_closed_time / walk_closed_dist) ───────────
+  walk:
+    stand_height:     0.2     # target body CoM height above ground (m)
+    cruise_velocity:  0.1     # maximum forward walking speed (m/s)
+    step_length:      0.2     # foot step length (m)
+    step_height:      0.08    # foot swing clearance height (m)
+    # ramp_loops: velocity ramp-up/down duration in control cycles.
+    # At freq=100 Hz, ramp_loops=100 → 1 second ramp time.
+    ramp_loops: 100
 
-  # ── Time-driven walk only (walk_closed_time) ──────────────────────────────
-  # target_loop: total MPC control cycles before the robot stops.
-  # Walk duration = target_loop × dt seconds, regardless of distance traveled.
-  target_loop: 2200
+    # ── Time-driven walk only (walk_closed_time) ────────────────────────────
+    # target_loop: total MPC control cycles before the robot stops.
+    # Walk duration = target_loop × dt seconds, regardless of distance traveled.
+    target_loop: 2200
 
-  # ── Distance-driven walk only (walk_closed_dist) ──────────────────────────
-  # stop_x:      target stop position on the X axis in the odom/world frame (m).
-  # decel_margin: safety multiplier on the computed decel distance;
-  #               values > 1.0 start braking earlier than the theoretical minimum.
-  stop_x:       2.0
-  decel_margin: 1.2
+    # ── Distance-driven walk only (walk_closed_dist) ────────────────────────
+    # stop_x:      target stop position on the X axis in the odom/world frame (m).
+    # decel_margin: safety multiplier on the computed decel distance;
+    #               values > 1.0 start braking earlier than the theoretical minimum.
+    stop_x:       2.0
+    decel_margin: 1.2
+
+  # ── WLW-only parameters (wlw_open) ────────────────────────────────────────
+  # Parameters for the open-loop WLW node that drives Hybrid gait directly.
+  wlw:
+    velocity:      0.1    # walking velocity (m/s)
+    stand_height:  0.16   # body CoM height above ground (m)
+    step_length:   0.3    # foot step length (m)
+    swing_index:   1      # leg that swings first (0=RF 1=LF 2=LH 3=RH; 1 → diagonal gait)
+    target_loop:   2000   # total walk duration in 1 kHz cycles / 10
+    ramp_loops:    1000   # velocity ramp-up/down duration in 1 kHz cycles
 
 # ──────────────────────────────────────────────────────────────
 # Simulation profile  (ros2 launch ... config_profile:=sim)

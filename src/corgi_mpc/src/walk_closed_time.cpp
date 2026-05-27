@@ -214,22 +214,23 @@ int main(int argc, char **argv) {
         "/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml";
     YAML::Node cfg         = YAML::LoadFile(config_path);
     YAML::Node common_cfg  = cfg["common"];
+    YAML::Node walk_cfg    = common_cfg ? common_cfg["walk"] : YAML::Node{};
     YAML::Node profile_cfg = cfg[config_profile];
 
-    // Lookup order: profile-specific section first, then common section.
+    // Lookup order: profile-specific section first, then common.walk section.
     auto gait_read_double = [&](const std::string& key) -> double {
         if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<double>();
-        if (common_cfg   && common_cfg[key])  return common_cfg[key].as<double>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<double>();
         throw std::runtime_error("walk_closed_time: missing required config key: " + key);
     };
     auto gait_read_int = [&](const std::string& key) -> int {
         if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<int>();
-        if (common_cfg   && common_cfg[key])  return common_cfg[key].as<int>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<int>();
         throw std::runtime_error("walk_closed_time: missing required config key: " + key);
     };
     auto gait_read_vec = [&](const std::string& key) -> std::vector<double> {
         if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<std::vector<double>>();
-        if (common_cfg   && common_cfg[key])  return common_cfg[key].as<std::vector<double>>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<std::vector<double>>();
         throw std::runtime_error("walk_closed_time: missing required config key: " + key);
     };
 
