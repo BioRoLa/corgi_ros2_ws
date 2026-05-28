@@ -10,29 +10,22 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     # Resolve bag output directory: prefer source tree, fall back to install share.
-    share_dir = get_package_share_directory('corgi_force_control')
-    ws_dir = os.path.normpath(os.path.join(share_dir, '..', '..', '..', '..'))
-    src_dir = os.path.join(ws_dir, 'src', 'corgi_force_control')
-    base_dir = src_dir if os.path.isdir(src_dir) else os.path.dirname(share_dir)
-    bag_output = os.path.join(
-        base_dir, 'bag',
-        'exp_admittance_' + datetime.now().strftime('%Y%m%d_%H%M%S')
-    )
+    # share_dir = get_package_share_directory('corgi_force_control')
+    # ws_dir = os.path.normpath(os.path.join(share_dir, '..', '..', '..', '..'))
+    # src_dir = os.path.join(ws_dir, 'src', 'corgi_force_control')
+    # base_dir = src_dir if os.path.isdir(src_dir) else os.path.dirname(share_dir)
+    # bag_output = os.path.join(
+    #     base_dir, 'bag',
+    #     'exp_admittance_' + datetime.now().strftime('%Y%m%d_%H%M%S')
+    # )
 
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='true',
         description='Use simulation clock if true',
     )
-    
-    use_ff_arg = DeclareLaunchArgument(
-        'use_feedforward',
-        default_value='false',
-        description='Enable feedforward term in admittance control',
-    )
 
     sim_params = [{'use_sim_time': LaunchConfiguration('use_sim_time')}]
-    ff_params = [{'use_feedforward': LaunchConfiguration('use_feedforward')}]
 
     # Webots simulator + robot driver + control panel
     corgi_sim_launch = IncludeLaunchDescription(
@@ -58,7 +51,7 @@ def generate_launch_description():
         executable='admittance_control_node',
         name='admittance_control_node',
         output='screen',
-        parameters=sim_params + ff_params,
+        parameters=sim_params,
     )
 
     exp_admittance_node = Node(
@@ -69,30 +62,29 @@ def generate_launch_description():
         parameters=sim_params,
     )
 
-    # Record all topics relevant to admittance force-tracking debug.
-    bag_record = ExecuteProcess(
-        cmd=[
-            'ros2', 'bag', 'record',
-            '/trigger',
-            '/impedance/command',
-            '/motor/command',
-            '/motor/state',
-            '/force/state',
-            '/sensor/force_plate_1',
-            '/sensor/force_plate_2',
-            '/sensor/force_plate_3',
-            '/sensor/force_plate_4',
-            '-o', bag_output,
-        ],
-        output='screen',
-    )
+    # # Record all topics relevant to admittance force-tracking debug.
+    # bag_record = ExecuteProcess(
+    #     cmd=[
+    #         'ros2', 'bag', 'record',
+    #         '/trigger',
+    #         '/impedance/command',
+    #         '/motor/command',
+    #         '/motor/state',
+    #         '/force/state',
+    #         '/sensor/force_plate_1',
+    #         '/sensor/force_plate_2',
+    #         '/sensor/force_plate_3',
+    #         '/sensor/force_plate_4',
+    #         '-o', bag_output,
+    #     ],
+    #     output='screen',
+    # )
 
     return LaunchDescription([
         use_sim_time_arg,
-        use_ff_arg,
         corgi_sim_launch,
         force_estimation_node,
         admittance_control_node,
         exp_admittance_node,
-        bag_record,
+        # bag_record,
     ])
