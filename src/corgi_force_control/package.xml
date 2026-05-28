@@ -14,6 +14,7 @@
   <depend>corgi_force_estimation</depend>
   <depend>corgi_utils</depend>
   <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>eigen3_cmake_module</depend>
 
   <test_depend>ament_lint_auto</test_depend>

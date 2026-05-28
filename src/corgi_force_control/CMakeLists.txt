@@ -12,6 +12,7 @@ find_package(corgi_msgs REQUIRED)
 find_package(corgi_force_estimation REQUIRED)
 find_package(corgi_utils REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # Include directories

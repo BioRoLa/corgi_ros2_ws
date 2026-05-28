@@ -42,6 +42,17 @@ target_link_libraries(exp_height_node
   corgi_force_estimation::corgi_force_estimation
 )
 
+add_executable(exp_height_track_node exp_height_track.cpp)
+ament_target_dependencies(exp_height_track_node
+  rclcpp
+  corgi_msgs
+  nav_msgs
+  Eigen3
+)
+target_link_libraries(exp_height_track_node
+  corgi_force_estimation::corgi_force_estimation
+)
+
 # Admittance control experiment node
 add_executable(exp_admittance_node exp_admittance.cpp)
 ament_target_dependencies(exp_admittance_node
@@ -59,6 +70,7 @@ install(TARGETS
   force_control_node
   exp_h24_node
   exp_height_node
+  exp_height_track_node
   exp_admittance_node
   DESTINATION lib/${PROJECT_NAME}
 )
