@@ -88,10 +88,10 @@ public:
                 eta_cmd = admittance_control(imp_cmd_modules[i], motor_state_modules[i], force_state_modules[i],
                                              pos_err_hist_modules_[i], force_err_hist_modules_[i]);
 
-                motor_cmd_modules[i]->kp_r = 105.0;
-                motor_cmd_modules[i]->kp_l = 105.0;
-                motor_cmd_modules[i]->kd_r = 1.5;
-                motor_cmd_modules[i]->kd_l = 1.5;
+                motor_cmd_modules[i]->kp_r = 90.0;
+                motor_cmd_modules[i]->kp_l = 90.0;
+                motor_cmd_modules[i]->kd_r = 1.75;
+                motor_cmd_modules[i]->kd_l = 1.75;
 
                 motor_cmd_modules[i]->theta = eta_cmd(0, 0);
                 motor_cmd_modules[i]->beta  = eta_cmd(1, 0);
