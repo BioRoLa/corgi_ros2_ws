@@ -156,9 +156,9 @@ void HeightTrackNode::initialize_impedance_command() {
             cmd->ky = 500;
         } else {
             cmd->bx = 80;
-            cmd->by = 10;
+            cmd->by = 5;
             cmd->kx = 2000;
-            cmd->ky = 100;
+            cmd->ky = 50;
         }
     }
 }
