@@ -26,7 +26,7 @@ common:
     # stop_x:      target stop position on the X axis in the odom/world frame (m).
     # decel_margin: safety multiplier on the computed decel distance;
     #               values > 1.0 start braking earlier than the theoretical minimum.
-    stop_x:       2.0
+    stop_x:       3.0
     decel_margin: 1.2
 
   # ── WLW-only parameters (wlw_open) ────────────────────────────────────────
@@ -36,7 +36,7 @@ common:
     stand_height:  0.16   # body CoM height above ground (m)
     step_length:   0.3    # foot step length (m)
     swing_index:   1      # leg that swings first (0=RF 1=LF 2=LH 3=RH; 1 → diagonal gait)
-    target_loop:   2000   # total walk duration in 1 kHz cycles / 10
+    target_loop:   3000   # total walk duration in 1 kHz cycles / 10
     ramp_loops:    1000   # velocity ramp-up/down duration in 1 kHz cycles
 
 # ──────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ real:
   # NOTE: "gmo" only takes effect when state_source:=esekf is set at launch.
   #        With any other state_source, gmo contact is still read but selection_matrix
   #        behaviour is identical — only meaningful when ESEKF is running.
-  contact_source: gmo
+  contact_source: gait
 
   Q_diagonal: [
     40,   40,   0,   # roll, pitch, yaw
