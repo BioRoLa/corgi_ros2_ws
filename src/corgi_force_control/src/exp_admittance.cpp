@@ -137,15 +137,15 @@ private:
     void execute_admittance_phase() {
         // ── Admittance parameters ─────────────────────────────────────────────
         const double my_val = 0.5, by_val = 100.0, ky_val = 500.0;
-        const double mx_val = 0.5, bx_val = 100.0, kx_val = 500.0;
+        const double mx_val = 0.5, bx_val = 100.0, kx_val = 2500.0;
 
         // ── fy step sequence ──────────────────────────────────────────────────
         struct FyStep { int time_ms; double fy_N; const char* label; };
         const std::vector<FyStep> fy_sequence = {
             {    0,  50.0, "baseline"},
-            { 3000,  25.0, "step-down"},
+            { 3000,  50.0, "step-down"},
             { 6000,  50.0, "return baseline"},
-            { 9000,  25.0, "step-down"},
+            { 9000,  50.0, "step-down"},
         };
         const int max_count  = 12000;  // 12 s total
         const int fy_ramp_ms = 300;    // initial 0 -> baseline ramp
