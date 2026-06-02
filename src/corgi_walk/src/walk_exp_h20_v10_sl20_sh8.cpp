@@ -10,6 +10,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
+#include "corgi_msgs/msg/gmo_contact_state_stamped.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
 #include "corgi_walk/walk_gait.hpp"
 #include "corgi_utils/leg_model.hpp"
@@ -19,11 +20,21 @@
 #define INIT_BETA (0.0)
 
 corgi_msgs::msg::TriggerStamped trigger_msg;
+// 預設為站立 (true)，確保 WAIT-to-WALK 轉換時，支撐腳不會誤觸發探測
+std::array<bool, 4> leg_contacts = {true, true, true, true}; 
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg)
 {
     trigger_msg = *msg;
 } // end trigger_cb
+
+void contact_cb(const corgi_msgs::msg::GMOContactStateStamped::SharedPtr msg)
+{
+    leg_contacts[0] = msg->module_a.contact;
+    leg_contacts[1] = msg->module_b.contact;
+    leg_contacts[2] = msg->module_c.contact;
+    leg_contacts[3] = msg->module_d.contact;
+}
 
 int main(int argc, char **argv)
 {
@@ -33,6 +44,10 @@ int main(int argc, char **argv)
     auto phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
         "trigger", 10, trigger_cb);
+        
+    auto contact_sub = node->create_subscription<corgi_msgs::msg::GMOContactStateStamped>(
+        "/gmo/contact_state", 10, contact_cb);
+
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
     std_msgs::msg::Int32MultiArray phase_msg;
     phase_msg.data.resize(4, 0);
@@ -70,7 +85,7 @@ int main(int argc, char **argv)
     double velocity = 0.1;
     double stand_height = 0.2;
     double step_length = 0.2;
-    double step_height = 0.08;
+    double step_height = 0.06;
     std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0}; // LF, RF, RH, LH
     double curvature = 0.0;
     int count = 0;
@@ -213,6 +228,8 @@ int main(int argc, char **argv)
             } // end if
             break;
         case WALK:
+            // 每週期的計算前，將最新的觸地狀態寫入步態生成器
+            walk_gait.set_contact_state(leg_contacts);
             eta_list = walk_gait.step();
             command_count++;
             break;

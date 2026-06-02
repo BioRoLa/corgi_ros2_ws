@@ -30,11 +30,15 @@ class WalkGait {
         std::array<double, 4> get_duty();
         bool if_touchdown();
 
+        void set_probe_speed(double new_value);
+        void set_contact_state(const std::array<bool, 4>& contact);
+
         double velocity     = 0.1;
         double stand_height = 0.2;
         double step_length  = 0.2;
         double step_height  = 0.08;
         std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0};
+        double probe_speed  = 0.5; // Late contact probing speed (m/s)
 
     private:
         LegModel leg_model;
@@ -67,6 +71,10 @@ class WalkGait {
         double new_step_length = step_length;
         int direction = 1;
         bool touchdown;
+
+        std::array<bool, 4> contact_state = {true, true, true, true};
+        std::array<bool, 4> early_contact = {false, false, false, false};
+        std::array<bool, 4> late_probing  = {false, false, false, false};
 
         // Intermediate variables
         int current_rim;
