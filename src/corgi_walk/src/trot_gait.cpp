@@ -13,11 +13,11 @@
 
 TrotGait::TrotGait(bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : /* Initializer List */
                                                                                            leg_model(sim),
-                                                                                           CoM_bias(CoM_bias),
-                                                                                           rate(rate),
                                                                                            BL(BL),
                                                                                            BW(BW),
-                                                                                           BH(BH)
+                                                                                           BH(BH),
+                                                                                           CoM_bias(CoM_bias),
+                                                                                           rate(rate)
 {
     // Initial dS & incre_duty
     dS = velocity / rate;
