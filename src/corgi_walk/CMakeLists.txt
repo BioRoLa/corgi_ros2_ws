@@ -21,6 +21,7 @@ find_package(corgi_utils REQUIRED)
 add_library(${PROJECT_NAME}
   src/walk_gait.cpp
   src/trot_gait.cpp
+  src/walk_gait_with_contact.cpp
 )
 
 target_include_directories(${PROJECT_NAME}

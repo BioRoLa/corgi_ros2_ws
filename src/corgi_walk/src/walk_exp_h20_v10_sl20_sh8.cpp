@@ -12,7 +12,7 @@
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/gmo_contact_state_stamped.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
-#include "corgi_walk/walk_gait.hpp"
+#include "corgi_walk/walk_gait_with_contact.hpp"
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
 
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
     double max_cal_time = 0.0;
 
     /* Initial variable */
-    WalkGait walk_gait(false, CoM_bias[0], sampling_rate);
+    WalkGaitWithContact walk_gait(false, CoM_bias[0], sampling_rate);
     std::array<std::array<double, 4>, 2> eta_list = {{{INIT_THETA, INIT_THETA, INIT_THETA, INIT_THETA},
                                                       {INIT_BETA, INIT_BETA, INIT_BETA, INIT_BETA}}}; // init eta (wheel mode)
 
