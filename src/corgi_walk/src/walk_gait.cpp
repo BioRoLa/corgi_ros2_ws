@@ -13,11 +13,11 @@
 
 WalkGait::WalkGait(bool sim, double CoM_bias, int rate, double BL, double BW, double BH) : /* Initializer List */
                                                                                            leg_model(sim),
+                                                                                           CoM_bias(CoM_bias),
+                                                                                           rate(rate),
                                                                                            BL(BL),
                                                                                            BW(BW),
-                                                                                           BH(BH),
-                                                                                           CoM_bias(CoM_bias),
-                                                                                           rate(rate)
+                                                                                           BH(BH)
 {
     // Initial dS & incre_duty
     dS = velocity / rate;
@@ -116,22 +116,11 @@ void WalkGait::initialize(double init_eta[8], double step_length_)
 
 std::array<std::array<double, 4>, 2> WalkGait::step()
 {
-    // 檢查是否有任何腳正在探測，如果有，則凍結時間 (duty) 與水平位移
-    bool any_probing = false;
-    for (int i = 0; i < 4; i++) {
-        if (late_probing[i]) {
-            any_probing = true;
-            break;
-        }
-    }
-
     touchdown = false;
     for (int i = 0; i < 4; i++)
     {
-        if (!any_probing) { // 只有在沒有腳處於探測狀態時，才推進時間與水平位置
-            next_hip[i][0] += dS + sign_diff[i] * diff_dS;
-            duty[i] += incre_duty;
-        }
+        next_hip[i][0] += dS + sign_diff[i] * diff_dS;
+        duty[i] += incre_duty;
     } // end for
     for (int i = 0; i < 4; i++)
     {
@@ -154,7 +143,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
                 double rest_time = (1.0 - 4 * swing_time) / 2; // time during swing of front leg and next hind leg
                 total_step_length = step_length + sign_diff[i] * diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * (new_step_length + sign_diff[i] * new_diff_step_length) + swing_hip_move_d + direction * (rest_time * (step_length - new_step_length)) + CoM_bias, 0.0}; 
+                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * (new_step_length + sign_diff[i] * new_diff_step_length) + swing_hip_move_d + direction * (rest_time * (step_length - new_step_length)) + CoM_bias, ground_offset[i]}; // half distance between leave and touch-down position (in hip coordinate) + distance hip traveled during swing phase + hip travel difference during rest time because different incre_duty caused by change of step length + CoM_bias.
                 diff_step_length = new_diff_step_length;
             }
             else
@@ -164,18 +153,16 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
                 next_step_length[i] = step_length; // apply hind step length corresponding to the front leg's.
                 total_step_length = step_length + sign_diff[i] * diff_step_length;
                 swing_hip_move_d = direction * swing_time * total_step_length;
-                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * total_step_length + swing_hip_move_d + CoM_bias, 0.0};
+                foothold[i] = {next_hip[i][0] + direction * ((1 - swing_time) / 2) * total_step_length + swing_hip_move_d + CoM_bias, ground_offset[i]};
                 incre_duty = dS / step_length; // change incre_duty corresponding to new step length when hind leg start to swing.
             } // end if else
             /* Bezier curve setup */
             leg_model.forward(theta[i], beta[i]);
             p_lo = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};
-            
             // calculate contact rim when touch ground
             for (int j = 0; j < 5; j++)
             { // G, L_l, U_l
                 double contact_height = j == 0 ? leg_model.r : leg_model.radius;
-                // 恢復使用預設水平基準高度，確保 bezier 能正常規劃，並防止平地越走越低
                 double stand_height_eff = stand_height - ground_offset[i];
                 std::array<double, 2> contact_point = {foothold[i][0] - (next_hip[i][0] + swing_hip_move_d), -stand_height_eff + contact_height};
                 result_eta = leg_model.inverse(contact_point, touch_rim_list[j]);
@@ -214,10 +201,6 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
         { // entering stance phase when velocirty > 0
             touchdown = true;
             swing_phase[i] = 0;
-            if (!contact_state[i]) {
-                late_probing[i] = true;
-            }
-            early_contact[i] = false;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
             if (sp[i].getDirection() == direction)
             { // if the leg swing a whole swing phase, instead of swing back.
@@ -229,10 +212,6 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
         { // entering stance phase when velocirty < 0
             touchdown = true;
             swing_phase[i] = 0;
-            if (!contact_state[i]) {
-                late_probing[i] = true;
-            }
-            early_contact[i] = false;
             if (sp[i].getDirection() == direction)
             { // if the leg swing a whole swing phase, instead of swing back.
                 step_count[i] -= 1;
@@ -242,17 +221,7 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
         /* Calculate next theta, beta */
         if (swing_phase[i] == 0)
         { // Stance phase
-            if (late_probing[i]) {
-                if (contact_state[i]) {
-                    late_probing[i] = false; // 觸地，結束下探
-                    result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], next_hip[i][1] - hip[i][1]});
-                } else {
-                    double probe_dz = probe_speed / rate; // 強迫足端繼續等速下降
-                    result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], (next_hip[i][1] - hip[i][1]) + probe_dz});
-                }
-            } else {
-                result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], next_hip[i][1] - hip[i][1]});
-            }
+            result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], next_hip[i][1] - hip[i][1]});
         }
         else
         { // Swing phase
@@ -264,19 +233,9 @@ std::array<std::array<double, 4>, 2> WalkGait::step()
             { // direction == -1
                 swing_phase_ratio = (1.0 - duty[i]) / swing_time;
             } // end if else
-            // 如果在擺動下半段偵測到觸地，觸發提早觸地反射
-            if (swing_phase_ratio > 0.5 && contact_state[i]) {
-                early_contact[i] = true;
-            }
-            
-            if (early_contact[i]) {
-                // 放棄 Bezier 軌跡，瞬間鎖定當前高度（相當於直接執行 Stance 動作）
-                result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], next_hip[i][1] - hip[i][1]});
-            } else {
-                curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
-                std::array<double, 2> curve_point = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
-                result_eta = leg_model.inverse(curve_point, "G");
-            }
+            curve_point_temp = sp[i].getFootendPoint(swing_phase_ratio);
+            std::array<double, 2> curve_point = {curve_point_temp[0] - next_hip[i][0], curve_point_temp[1] - next_hip[i][1]};
+            result_eta = leg_model.inverse(curve_point, "G");
         } // end if else
         theta[i] = result_eta[0];
         beta[i] = result_eta[1];
@@ -419,20 +378,6 @@ void WalkGait::set_duty(std::array<double, 4> duty_)
     } // end for
     this->duty = duty_;
 } // end set_duty
-
-void WalkGait::set_probe_speed(double new_value)
-{
-    if (new_value < 0.0)
-    {
-        throw std::runtime_error("Probe speed should be a non-negative value.");
-    } // end if
-    this->probe_speed = new_value;
-} // end set_probe_speed
-
-void WalkGait::set_contact_state(const std::array<bool, 4>& contact)
-{
-    this->contact_state = contact;
-} // end set_contact_state
 
 std::array<int, 4> WalkGait::get_step_count()
 {
