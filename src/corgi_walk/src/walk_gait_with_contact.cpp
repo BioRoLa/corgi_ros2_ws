@@ -103,6 +103,7 @@ void WalkGaitWithContact::initialize(double init_eta[8], double step_length_)
     for (int i = 0; i < 4; i++)
     {
         foothold[i] = {next_hip[i][0] + relative_foothold[i][0], next_hip[i][1] + relative_foothold[i][1]};
+        touchdown_point[i] = foothold[i];
         current_step_length[i] = step_length;
         next_step_length[i] = step_length;
     } // end for
@@ -111,6 +112,9 @@ void WalkGaitWithContact::initialize(double init_eta[8], double step_length_)
     {
         theta[i] = init_theta[i];
         beta[i] = init_beta[i];
+        leg_model.forward(theta[i], beta[i]);
+        foot_point[i] = {hip[i][0] + leg_model.G[0], hip[i][1] + leg_model.G[1]};
+        touchdown_point[i] = foot_point[i];
     } // end for
 } // end initialize
 
@@ -126,6 +130,7 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
     }
 
     touchdown = false;
+    touchdown_leg = {false, false, false, false};
     for (int i = 0; i < 4; i++)
     {
         if (!any_probing) { // 只有在沒有腳處於探測狀態時，才推進時間與水平位置
@@ -208,11 +213,13 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
             { // U_r
                 p_td = {foothold[i][0] + leg_model.G[0] - leg_model.U_r[0], foothold[i][1] + leg_model.G[1] - leg_model.U_r[1] + leg_model.radius};
             } // end if else
+            touchdown_point[i] = p_td;
             sp[i] = SwingProfile(p_lo, p_td, step_height, direction);
         }
         else if ((direction == 1) && (duty[i] > 1.0))
         { // entering stance phase when velocirty > 0
             touchdown = true;
+            touchdown_leg[i] = true;
             swing_phase[i] = 0;
             if (!contact_state[i]) {
                 late_probing[i] = true;
@@ -228,6 +235,7 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
         else if ((direction == -1) && (duty[i] < (1.0 - swing_time)))
         { // entering stance phase when velocirty < 0
             touchdown = true;
+            touchdown_leg[i] = true;
             swing_phase[i] = 0;
             if (!contact_state[i]) {
                 late_probing[i] = true;
@@ -280,6 +288,8 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
         } // end if else
         theta[i] = result_eta[0];
         beta[i] = result_eta[1];
+        leg_model.forward(theta[i], beta[i]);
+        foot_point[i] = {next_hip[i][0] + leg_model.G[0], next_hip[i][1] + leg_model.G[1]};
         hip[i] = next_hip[i];
     } // end for
     return {theta, beta};
@@ -453,3 +463,18 @@ bool WalkGaitWithContact::if_touchdown()
 {
     return this->touchdown;
 } // end if_touchdown
+
+WalkGaitWithContact::DebugState WalkGaitWithContact::get_debug_state() const
+{
+    return DebugState{
+        foothold,
+        touchdown_point,
+        foot_point,
+        hip,
+        next_hip,
+        swing_phase,
+        touchdown_leg,
+        contact_state,
+        early_contact,
+        late_probing};
+} // end get_debug_state

@@ -13,6 +13,19 @@
 
 class WalkGaitWithContact {
     public:
+        struct DebugState {
+            std::array<std::array<double, 2>, 4> foothold;
+            std::array<std::array<double, 2>, 4> touchdown_point;
+            std::array<std::array<double, 2>, 4> foot_point;
+            std::array<std::array<double, 2>, 4> hip;
+            std::array<std::array<double, 2>, 4> next_hip;
+            std::array<int, 4> swing_phase;
+            std::array<bool, 4> touchdown_leg;
+            std::array<bool, 4> contact_state;
+            std::array<bool, 4> early_contact;
+            std::array<bool, 4> late_probing;
+        };
+
         WalkGaitWithContact(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
 
         void initialize(double init_eta[8], double step_length_=0.3);
@@ -29,6 +42,7 @@ class WalkGaitWithContact {
         std::array<int, 4> get_swing_phase();
         std::array<double, 4> get_duty();
         bool if_touchdown();
+        DebugState get_debug_state() const;
 
         void set_probe_speed(double new_value);
         void set_contact_state(const std::array<bool, 4>& contact);
@@ -71,6 +85,7 @@ class WalkGaitWithContact {
         double new_step_length = step_length;
         int direction = 1;
         bool touchdown;
+        std::array<bool, 4> touchdown_leg = {false, false, false, false};
 
         std::array<bool, 4> contact_state = {true, true, true, true};
         std::array<bool, 4> early_contact = {false, false, false, false};
@@ -85,6 +100,8 @@ class WalkGaitWithContact {
         std::array<double, 2> result_eta;
         std::array<double, 2> p_lo;
         std::array<double, 2> p_td;
+        std::array<std::array<double, 2>, 4> touchdown_point;
+        std::array<std::array<double, 2>, 4> foot_point;
         std::array<SwingProfile, 4> sp;
 
         // For turning 
