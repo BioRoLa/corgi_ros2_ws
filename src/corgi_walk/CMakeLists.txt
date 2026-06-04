@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(corgi_utils REQUIRED)
 
@@ -34,6 +35,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   std_msgs
   geometry_msgs
+  visualization_msgs
   corgi_msgs
   corgi_utils
 )
@@ -50,12 +52,18 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+install(PROGRAMS
+  script/walk_xz_plot.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Export
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
   rclcpp
   std_msgs
   geometry_msgs
+  visualization_msgs
   corgi_msgs
   corgi_utils
 )
