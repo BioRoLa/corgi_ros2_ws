@@ -1,5 +1,5 @@
-#ifndef WALKGAIT_HPP
-#define WALKGAIT_HPP
+#ifndef WALKGAIT_WITH_CONTACT_HPP
+#define WALKGAIT_WITH_CONTACT_HPP
 
 #include <iostream>
 #include <cmath>
@@ -111,6 +111,6 @@ class WalkGaitWithContact {
         double new_diff_step_length = 0.0;  // New differential step length
         double diff_dS = 0.0;   // Differential dS
         int sign_diff[4] = {0, 0, 0, 0};   // Differential sign
-};//end class WalkGait
+};//end class WalkGaitWithContact
 
-#endif // WALKGAIT_HPP
+#endif // WALKGAIT_WITH_CONTACT_HPP
