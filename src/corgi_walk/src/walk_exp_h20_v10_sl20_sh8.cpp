@@ -301,10 +301,10 @@ int main(int argc, char **argv)
         &motor_cmd.module_d};
     for (int i = 0; i < 4; i++)
     {
-        motor_cmd_modules[i]->kp_r = 150;
+        motor_cmd_modules[i]->kp_r = 90;
         motor_cmd_modules[i]->ki_r = 0;
         motor_cmd_modules[i]->kd_r = 1.75;
-        motor_cmd_modules[i]->kp_l = 150;
+        motor_cmd_modules[i]->kp_l = 90;
         motor_cmd_modules[i]->ki_l = 0;
         motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
@@ -408,8 +408,8 @@ int main(int argc, char **argv)
     walk_gait.set_step_height(step_height);
     walk_gait.set_ground_offset(ground_offset);
     bool enable_contact_filter = false;
-    double contact_filter_swing_accept_ratio = 0.5;
-    int contact_filter_on_count = 15;
+    double contact_filter_swing_accept_ratio = 1.0;
+    int contact_filter_on_count = 20;
     int contact_filter_off_count = 3;
     node->get_parameter("enable_contact_filter", enable_contact_filter);
     node->get_parameter("contact_filter_swing_accept_ratio", contact_filter_swing_accept_ratio);
