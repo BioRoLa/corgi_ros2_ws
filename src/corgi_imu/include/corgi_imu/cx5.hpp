@@ -147,6 +147,10 @@ class CX5_AHRS {
             if(commands_3dm::writeImuMessageFormat(*device, sensor_descriptors.size(), sensor_descriptors.data()) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set sensor message format!");
 
+            // Physical mounting: the sensor is installed rotated π around its X-axis relative to the robot body.
+            // This tells the filter that vehicle_frame = sensor_frame rotated by [π, 0, 0], so all
+            // filter (0x82) outputs (CompAccel, CompAngularRate, GravityVector) are expressed in the
+            // vehicle/body frame automatically.
             float sensor_to_vehicle_transformation_euler[3] = {M_PI, 0, 0};
             if(commands_filter::writeSensorToVehicleRotationEuler(*device, sensor_to_vehicle_transformation_euler[0], sensor_to_vehicle_transformation_euler[1], sensor_to_vehicle_transformation_euler[2]) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set sensor-to-vehicle transformation!");
@@ -187,6 +191,11 @@ class CX5_AHRS {
                 throw std::runtime_error("ERROR: Could not resume the device!");
 
             // bool filter_state_ahrs = false;
+
+            // rot converts vectors from the filter vehicle frame (NED-aligned after sensor-to-vehicle
+            // rotation) to the robot body frame (NWU: X-forward, Y-left, Z-up).
+            // NED -> NWU is equivalent to rotating π around X: Y_nwu = -Y_ned, Z_nwu = -Z_ned.
+            // Matrix form: diag(1, -1, -1)
             Eigen::Matrix3f rot;
             rot << 1, 0, 0, 0, -1, 0, 0, 0, -1;
             
@@ -197,9 +206,14 @@ class CX5_AHRS {
                 //     else continue;
                 // }
                 _imu_mutex.lock();
-                acceleration = rot * (Eigen::Vector3f(raw_accel.accel) - attitude.toRotationMatrix().transpose() * Eigen::Vector3f(g.gravity));
+                // q_raw: sensor frame -> NED (0x80, not affected by sensor-to-vehicle rotation)
+                // gravity subtraction uses q_raw (sensor≈NED when level) so g.gravity (vehicle frame) cancels correctly
+                // attitude output uses sandwich Rx(π)*q_raw*Rx(π) → body(NWU) frame → identity when level
+                static const Eigen::Quaternionf q_rx_pi(0.0f, 1.0f, 0.0f, 0.0f);
+                Eigen::Quaternionf q_raw(raw_attitude.q[0], raw_attitude.q[1], raw_attitude.q[2], raw_attitude.q[3]);
+                acceleration = rot * (Eigen::Vector3f(raw_accel.accel) - q_raw.toRotationMatrix().transpose() * Eigen::Vector3f(g.gravity));
                 twist = rot * (Eigen::Vector3f(raw_gyro.gyro)) - twist_bias;
-                attitude = Eigen::Quaternionf(raw_attitude.q[0], raw_attitude.q[1], raw_attitude.q[2], raw_attitude.q[3]);
+                attitude = q_rx_pi * q_raw * q_rx_pi;
                 _imu_mutex.unlock();
             }
         }
