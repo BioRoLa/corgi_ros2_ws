@@ -44,7 +44,7 @@ class VirtualModelController {
         const int freq = 500;
         const double dt = 1.0 / freq;
 
-        const double m = 19.68;
+        const double m = 20.98;
         const double gravity = 9.81;
 
         const int n_u = 12;  // 3D force x 4 legs
