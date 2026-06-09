@@ -140,6 +140,7 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
     } // end for
     for (int i = 0; i < 4; i++)
     {
+        bool entered_stance = false;
         /* Keep duty in the range [0, 1] */
         if (duty[i] < 0)
         {
@@ -221,9 +222,7 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
             touchdown = true;
             touchdown_leg[i] = true;
             swing_phase[i] = 0;
-            if (!contact_state[i]) {
-                late_probing[i] = true;
-            }
+            entered_stance = true;
             early_contact[i] = false;
             duty[i] -= 1.0; // Keep duty in the range [0, 1]
             if (sp[i].getDirection() == direction)
@@ -237,9 +236,7 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
             touchdown = true;
             touchdown_leg[i] = true;
             swing_phase[i] = 0;
-            if (!contact_state[i]) {
-                late_probing[i] = true;
-            }
+            entered_stance = true;
             early_contact[i] = false;
             if (sp[i].getDirection() == direction)
             { // if the leg swing a whole swing phase, instead of swing back.
@@ -247,11 +244,30 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
                 current_step_length[i] = next_step_length[i];
             } // end if
         } // end if else
+
+        double current_swing_phase_ratio = 0.0;
+        if (swing_phase[i] != 0)
+        {
+            if (sp[i].getDirection() == 1)
+            {
+                current_swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
+            }
+            else
+            {
+                current_swing_phase_ratio = (1.0 - duty[i]) / swing_time;
+            } // end if else
+        }
+        const bool leg_contact = update_contact_filter(i, current_swing_phase_ratio);
+        if (entered_stance && !leg_contact)
+        {
+            late_probing[i] = true;
+        }
+
         /* Calculate next theta, beta */
         if (swing_phase[i] == 0)
         { // Stance phase
             if (late_probing[i]) {
-                if (contact_state[i]) {
+                if (leg_contact) {
                     late_probing[i] = false; // 觸地，結束下探
                     result_eta = leg_model.move(theta[i], beta[i], {next_hip[i][0] - hip[i][0], next_hip[i][1] - hip[i][1]});
                 } else {
@@ -264,16 +280,9 @@ std::array<std::array<double, 4>, 2> WalkGaitWithContact::step()
         }
         else
         { // Swing phase
-            if (sp[i].getDirection() == 1)
-            { // direction == 1
-                swing_phase_ratio = (duty[i] - (1 - swing_time)) / swing_time;
-            }
-            else
-            { // direction == -1
-                swing_phase_ratio = (1.0 - duty[i]) / swing_time;
-            } // end if else
+            swing_phase_ratio = current_swing_phase_ratio;
             // 如果在擺動下半段偵測到觸地，觸發提早觸地反射
-            if (swing_phase_ratio > 0.5 && contact_state[i]) {
+            if (swing_phase_ratio > 0.5 && leg_contact) {
                 early_contact[i] = true;
             }
             
@@ -441,8 +450,73 @@ void WalkGaitWithContact::set_probe_speed(double new_value)
 
 void WalkGaitWithContact::set_contact_state(const std::array<bool, 4>& contact)
 {
-    this->contact_state = contact;
+    this->raw_contact_state = contact;
+    if (!contact_filter_enabled)
+    {
+        this->contact_state = contact;
+    }
 } // end set_contact_state
+
+void WalkGaitWithContact::set_contact_filter(bool enabled, double swing_accept_ratio, int on_count, int off_count)
+{
+    if (swing_accept_ratio < 0.0 || swing_accept_ratio > 1.0)
+    {
+        throw std::runtime_error("Contact filter swing_accept_ratio should be in the range [0, 1].");
+    }
+    if (on_count <= 0 || off_count <= 0)
+    {
+        throw std::runtime_error("Contact filter debounce counts should be positive.");
+    }
+    contact_filter_enabled = enabled;
+    contact_swing_accept_ratio = swing_accept_ratio;
+    contact_on_count_threshold = on_count;
+    contact_off_count_threshold = off_count;
+    contact_on_count = {0, 0, 0, 0};
+    contact_off_count = {0, 0, 0, 0};
+    contact_state = raw_contact_state;
+} // end set_contact_filter
+
+bool WalkGaitWithContact::update_contact_filter(int leg_idx, double current_swing_phase_ratio)
+{
+    if (!contact_filter_enabled)
+    {
+        contact_state[leg_idx] = raw_contact_state[leg_idx];
+        return contact_state[leg_idx];
+    }
+
+    if (swing_phase[leg_idx] != 0 && current_swing_phase_ratio < contact_swing_accept_ratio)
+    {
+        contact_state[leg_idx] = false;
+        contact_on_count[leg_idx] = 0;
+        contact_off_count[leg_idx] = 0;
+        return false;
+    }
+
+    if (raw_contact_state[leg_idx])
+    {
+        contact_on_count[leg_idx]++;
+        contact_off_count[leg_idx] = 0;
+    }
+    else
+    {
+        contact_on_count[leg_idx] = 0;
+        contact_off_count[leg_idx]++;
+    }
+
+    if (contact_state[leg_idx])
+    {
+        if (contact_off_count[leg_idx] >= contact_off_count_threshold)
+        {
+            contact_state[leg_idx] = false;
+        }
+    }
+    else if (contact_on_count[leg_idx] >= contact_on_count_threshold)
+    {
+        contact_state[leg_idx] = true;
+    }
+
+    return contact_state[leg_idx];
+} // end update_contact_filter
 
 std::array<int, 4> WalkGaitWithContact::get_step_count()
 {

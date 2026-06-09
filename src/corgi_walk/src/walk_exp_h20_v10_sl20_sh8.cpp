@@ -356,6 +356,10 @@ int main(int argc, char **argv)
     node->declare_parameter<bool>("enable_visualization", true);
     node->declare_parameter<int>("visualization_decimation", 20);
     node->declare_parameter<std::string>("visualization_frame", "walk_debug");
+    node->declare_parameter<bool>("enable_contact_filter", false);
+    node->declare_parameter<double>("contact_filter_swing_accept_ratio", 0.5);
+    node->declare_parameter<int>("contact_filter_on_count", 15);
+    node->declare_parameter<int>("contact_filter_off_count", 3);
     std::array<double, 4> applied_ground_offset = ground_offset;
     auto to_array4 = [](const std::vector<double> & values) {
         std::array<double, 4> out = {0.0, 0.0, 0.0, 0.0};
@@ -403,6 +407,33 @@ int main(int argc, char **argv)
     walk_gait.set_step_length(step_length);
     walk_gait.set_step_height(step_height);
     walk_gait.set_ground_offset(ground_offset);
+    bool enable_contact_filter = false;
+    double contact_filter_swing_accept_ratio = 0.5;
+    int contact_filter_on_count = 15;
+    int contact_filter_off_count = 3;
+    node->get_parameter("enable_contact_filter", enable_contact_filter);
+    node->get_parameter("contact_filter_swing_accept_ratio", contact_filter_swing_accept_ratio);
+    node->get_parameter("contact_filter_on_count", contact_filter_on_count);
+    node->get_parameter("contact_filter_off_count", contact_filter_off_count);
+    try
+    {
+        walk_gait.set_contact_filter(
+            enable_contact_filter,
+            contact_filter_swing_accept_ratio,
+            contact_filter_on_count,
+            contact_filter_off_count);
+        RCLCPP_INFO(node->get_logger(),
+                    "Contact filter %s: swing_accept_ratio=%.2f, on_count=%d, off_count=%d",
+                    enable_contact_filter ? "enabled" : "disabled",
+                    contact_filter_swing_accept_ratio,
+                    contact_filter_on_count,
+                    contact_filter_off_count);
+    }
+    catch (const std::exception & e)
+    {
+        RCLCPP_WARN(node->get_logger(), "Disable contact filter: %s", e.what());
+        walk_gait.set_contact_filter(false, 0.5, 15, 3);
+    }
     while (rclcpp::ok())
     {
         auto one_loop_start = std::chrono::high_resolution_clock::now();

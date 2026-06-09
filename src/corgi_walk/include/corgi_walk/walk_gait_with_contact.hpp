@@ -46,6 +46,7 @@ class WalkGaitWithContact {
 
         void set_probe_speed(double new_value);
         void set_contact_state(const std::array<bool, 4>& contact);
+        void set_contact_filter(bool enabled, double swing_accept_ratio, int on_count, int off_count);
 
         double velocity     = 0.1;
         double stand_height = 0.2;
@@ -87,9 +88,16 @@ class WalkGaitWithContact {
         bool touchdown;
         std::array<bool, 4> touchdown_leg = {false, false, false, false};
 
+        std::array<bool, 4> raw_contact_state = {true, true, true, true};
         std::array<bool, 4> contact_state = {true, true, true, true};
         std::array<bool, 4> early_contact = {false, false, false, false};
         std::array<bool, 4> late_probing  = {false, false, false, false};
+        bool contact_filter_enabled = false;
+        double contact_swing_accept_ratio = 0.5;
+        int contact_on_count_threshold = 15;
+        int contact_off_count_threshold = 3;
+        std::array<int, 4> contact_on_count = {0, 0, 0, 0};
+        std::array<int, 4> contact_off_count = {0, 0, 0, 0};
 
         // Intermediate variables
         int current_rim;
@@ -103,6 +111,8 @@ class WalkGaitWithContact {
         std::array<std::array<double, 2>, 4> touchdown_point;
         std::array<std::array<double, 2>, 4> foot_point;
         std::array<SwingProfile, 4> sp;
+
+        bool update_contact_filter(int leg_idx, double current_swing_phase_ratio);
 
         // For turning 
         double outer_radius;
