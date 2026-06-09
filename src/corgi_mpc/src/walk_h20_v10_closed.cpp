@@ -187,16 +187,6 @@ int main(int argc, char **argv) {
     RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
-
-    node->declare_parameter<std::string>("contact_source", "gait");
-    std::string contact_source = node->get_parameter("contact_source").as_string();
-    if (contact_source != "gait" && contact_source != "gmo") {
-        RCLCPP_WARN(node->get_logger(),
-            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
-            contact_source.c_str());
-        contact_source = "gait";
-    }
-    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -212,6 +202,8 @@ int main(int argc, char **argv) {
     ModelPredictiveController mpc;
     mpc.load_config(config_profile);
     mpc.target_loop = 2200;
+    std::string contact_source = mpc.contact_source;
+    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
     auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
