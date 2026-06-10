@@ -21,6 +21,9 @@ set(dependencies
 add_executable(walk_vmc walk_vmc.cpp vmc.cpp)
 ament_target_dependencies(walk_vmc ${dependencies})
 target_link_libraries(walk_vmc ${CMAKE_DL_LIBS} ${CORGI_UTILS} ${CORGI_WALK} ${CORGI_FORCE_EST} ${CORGI_HYBRID} ${CORGI_GAIT_SELECTOR} osqp::osqp OsqpEigen::OsqpEigen yaml-cpp::yaml-cpp)
+set_target_properties(walk_vmc PROPERTIES
+  INSTALL_RPATH "/usr/local/lib"
+)
 
 install(TARGETS
   walk_vmc
