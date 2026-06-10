@@ -32,14 +32,14 @@ class VirtualModelController {
 
         double Mx = 0;
         double My = 0;
-        double Bx_swing = 200;
-        double By_swing = 200;
-        double Bx_stance = 200;
-        double By_stance = 100;
+        double Bx_swing = 80;
+        double By_swing = 80;
+        double Bx_stance = 80;
+        double By_stance = 10;
         double Kx_swing = 2000;
         double Ky_swing = 2000;
         double Kx_stance = 2000;
-        double Ky_stance = 1000;
+        double Ky_stance = 100;
 
         const int freq = 500;
         const double dt = 1.0 / freq;
@@ -80,8 +80,8 @@ class VirtualModelController {
 
         int fx_upper_bound = 30;
         int fx_lower_bound = -30;
-        int fz_upper_bound = 200;
-        int fz_lower_bound = -50;
+        int fz_upper_bound = 150;
+        int fz_lower_bound = -10;
 
         double friction_coef = 1;
 
