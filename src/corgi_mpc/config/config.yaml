@@ -111,6 +111,15 @@ real:
     0                # additional state
   ]
 
+  # # The parameters for odom legacy
+  # Q_diagonal: [
+  #   40,   40,   0,   # roll, pitch, yaw
+  #   0,    0,    100, # x, y, z
+  #   0.1,  0.1,  0,   # ω_x, ω_y, ω_z
+  #   0,    0,    2,   # v_x, v_y, v_z
+  #   0                # additional state
+  # ]
+
   Bx_swing: 80
   By_swing: 80
   Bx_stance: 80
