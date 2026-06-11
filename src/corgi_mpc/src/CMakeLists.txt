@@ -46,6 +46,9 @@ macro(add_walk_executable target_name source_file)
   add_executable(${target_name} ${source_file})
   ament_target_dependencies(${target_name} ${dependencies})
   target_link_libraries(${target_name} corgi_mpc_lib)
+  set_target_properties(${target_name} PROPERTIES
+    INSTALL_RPATH "/usr/local/lib"
+  )
   target_precompile_headers(${target_name} REUSE_FROM corgi_mpc_lib)
 endmacro()
 
