@@ -9,7 +9,7 @@ input_csv/*
 !input_csv/demo_transform_sim.csv
 !input_csv/demo_transform_real.csv
 !input_csv/demo_walk_sim.csv
-!input_csv/demo_walk_real.
+!input_csv/demo_walk_real.csv
 /*.md
 output_data/*
 !output_data/README.md
@@ -19,7 +19,7 @@ output_data/*
 /build
 /log_file
 bag/
-
+analysis/
 **/install
 **/build
 **/log
