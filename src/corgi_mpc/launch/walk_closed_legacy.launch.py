@@ -56,13 +56,13 @@ def generate_launch_description():
         parameters=real_params,
     )
 
-    # z_position_node = Node(
-    #     package='corgi_odometry_legacy',
-    #     executable='corgi_z_position_legacy',
-    #     name='corgi_z_position_legacy',
-    #     output='screen',
-    #     parameters=real_params,
-    # )
+    z_position_node = Node(
+        package='corgi_odometry_legacy',
+        executable='corgi_z_position_legacy',
+        name='corgi_z_position_legacy',
+        output='screen',
+        parameters=real_params,
+    )
 
     # ── Force estimation and control ─────────────────────────────────────────
     force_estimation_node = Node(
@@ -108,7 +108,7 @@ def generate_launch_description():
     return LaunchDescription([
         imu_node,
         odometry_node,
-        # z_position_node,
+        z_position_node,
         force_estimation_node,
         force_control_node,
         mpc_node,
