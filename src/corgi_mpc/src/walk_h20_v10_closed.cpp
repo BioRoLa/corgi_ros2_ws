@@ -201,7 +201,10 @@ int main(int argc, char **argv) {
 
     ModelPredictiveController mpc;
     mpc.load_config(config_profile);
-    mpc.target_loop = 2200;
+    constexpr double target_distance = 2.0;
+    constexpr double velocity = 0.05;
+    constexpr double ramp_time = 1.0;
+    mpc.target_loop = static_cast<int>((target_distance / velocity + ramp_time) * mpc.freq);
     std::string contact_source = mpc.contact_source;
     RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
 
@@ -261,7 +264,6 @@ int main(int argc, char **argv) {
     mpc.target_pos_z = 0.2;
     
     WalkGait walk_gait(sim, 0, mpc.freq);
-    double velocity = 0.1;
 
     walk_gait.stand_height = mpc.target_pos_z;
     walk_gait.velocity = velocity;
@@ -354,7 +356,7 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x += velocity/(1*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                else if (loop_count > mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
+                else if (loop_count >= mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
                     mpc.target_vel_x -= velocity/(1*mpc.freq);
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
