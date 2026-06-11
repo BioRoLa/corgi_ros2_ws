@@ -81,7 +81,7 @@ class VirtualModelController {
         int fx_upper_bound = 30;
         int fx_lower_bound = -30;
         int fz_upper_bound = 150;
-        int fz_lower_bound = -10;
+        int fz_lower_bound = -50;
 
         double friction_coef = 1;
 
