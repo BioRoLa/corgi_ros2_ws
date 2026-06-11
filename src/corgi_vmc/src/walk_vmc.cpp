@@ -138,7 +138,10 @@ int main(int argc, char **argv) {
 
     VirtualModelController vmc;
     vmc.load_config();
-    vmc.target_loop = 11250;
+    constexpr double target_distance = 2.0;
+    constexpr double velocity = 0.05;
+    constexpr double ramp_time = 1.0;
+    vmc.target_loop = static_cast<int>((target_distance / velocity + ramp_time) * vmc.freq);
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
     auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
@@ -202,12 +205,10 @@ int main(int argc, char **argv) {
     vmc.target_pos_z = 0.2;
     
     WalkGait walk_gait(sim, 0, vmc.freq);
-    double velocity = 0.1;
-
     walk_gait.stand_height = vmc.target_pos_z;
     walk_gait.velocity = velocity;
     walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.06;
+    walk_gait.step_height = 0.08;
 
     walk_gait.initialize(init_eta, walk_gait.step_length);
     walk_gait.set_velocity(vmc.target_vel_x);
@@ -307,7 +308,7 @@ int main(int argc, char **argv) {
                     vmc.target_vel_x += velocity/(1*vmc.freq);
                     walk_gait.set_velocity(vmc.target_vel_x);
                 }
-                else if (loop_count > vmc.target_loop-int(1*vmc.freq) && loop_count < vmc.target_loop) {
+                else if (loop_count >= vmc.target_loop-int(1*vmc.freq) && loop_count < vmc.target_loop) {
                     vmc.target_vel_x -= velocity/(1*vmc.freq);
                     walk_gait.set_velocity(vmc.target_vel_x);
                 }
@@ -436,7 +437,10 @@ int main(int argc, char **argv) {
                 std::cout << "= = = = = = = = = =" << std::endl << std::endl;
 
                 loop_count++;
-                if (loop_count >= vmc.target_loop) std::cout << "Finished" << std::endl;
+                if (loop_count >= vmc.target_loop) {
+                    std::cout << "Finished" << std::endl;
+                    break;
+                }
 
                 next_time += period;
                 if(!node->get_clock()->sleep_until(next_time)){
