@@ -163,7 +163,7 @@ void update_robot_state(
     mpc.robot_vel[2] = odom_vel.z;
     mpc.robot_pos[0] = odom_pos.x;
     mpc.robot_pos[1] = odom_pos.y;
-    mpc.robot_pos[2] = odom_pos.z;
+    mpc.robot_pos[2] = odom_z;
 }
 
 void convert_force_to_local(double *f_global, const Eigen::Matrix3d& R_T) {
