@@ -61,6 +61,6 @@ real:
   Kx_swing: 2000
   Ky_swing: 2000
   Kx_stance: 2000
-  Ky_stance: 100
+  Ky_stance: 200
 
   fz_lower_bound: -50
