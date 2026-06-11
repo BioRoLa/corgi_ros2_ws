@@ -29,6 +29,15 @@ common:
     stop_x:       3.0
     decel_margin: 1.2
 
+  # ── Trot-only parameters (trot_open) ───────────────────────────────────────
+  trot:
+    target_pos_z:  0.25   # target body CoM height above ground (m)
+    velocity:      0.4    # forward trotting speed (m/s)
+    stand_height:  0.25   # body CoM height above ground (m)
+    step_length:   0.2    # foot step length (m)
+    step_height:   0.06   # foot swing clearance height (m)
+    target_loop:   600    # total MPC control cycles before the robot stops
+
   # ── WLW-only parameters (wlw_open) ────────────────────────────────────────
   # Parameters for the open-loop WLW node that drives Hybrid gait directly.
   wlw:
@@ -72,10 +81,17 @@ sim:
   # Order: [theta_A, beta_A, theta_B, beta_B, theta_C, beta_C, theta_D, beta_D] (rad)
   # TODO: robot's initial pose is dependent on Gait parameters (stand_height, step_length, step_height). 
   #       Could automatically compute from kinematics instead of hardcoding.
-  init_eta: [1.3313651941315507,  0.4032814817188362,
-             1.1847611807810603,  0.10626486289107877,
-             1.1847611807810603, -0.10626486289107877,
-             1.3313651941315507, -0.4032814817188362]
+  # walk init_eta:
+  # init_eta: [1.3313651941315507,  0.4032814817188362,
+  #            1.1847611807810603,  0.10626486289107877,
+  #            1.1847611807810603, -0.10626486289107877,
+  #            1.3313651941315507, -0.4032814817188362]
+  # trot init_eta:
+  init_eta: [1.6951516460296583,  0.20749622643520274,
+             1.6951516460296583,  0.20749622643520274,
+             1.6951516460296583, -0.20749622643520274,
+             1.6951516460296583, -0.20749622643520274]
+  # wlw init_eta: (not yet defined)
 
 # ──────────────────────────────────────────────────────────────
 # Real-robot profile  (ros2 launch ... config_profile:=real)
@@ -110,7 +126,14 @@ real:
   # Order: [theta_A, beta_A, theta_B, beta_B, theta_C, beta_C, theta_D, beta_D] (rad)
   # TODO: robot's initial pose is dependent on Gait parameters (stand_height, step_length, step_height). 
   #       Could automatically compute from kinematics instead of hardcoding.
-  init_eta: [1.2744470401482761,  0.4161719979302237,
-             1.1222141023936798,  0.11005079310996896,
-             1.1222141023936798, -0.11005079310996896,
-             1.2744470401482761, -0.4161719979302237]
+  # walk init_eta:
+  # init_eta: [1.2744470401482761,  0.4161719979302237,
+  #            1.1222141023936798,  0.11005079310996896,
+  #            1.1222141023936798, -0.11005079310996896,
+  #            1.2744470401482761, -0.4161719979302237]
+  # trot init_eta:
+  init_eta: [1.6951516460296583,  0.20749622643520274,
+             1.6951516460296583,  0.20749622643520274,
+             1.6951516460296583, -0.20749622643520274,
+             1.6951516460296583, -0.20749622643520274]
+  # wlw init_eta: (not yet defined)

@@ -55,6 +55,9 @@ endmacro()
 # Walk h20 v10
 add_walk_executable(walk_h20_v10_open  walk_h20_v10_open.cpp)
 
+# Trot open-loop
+add_walk_executable(trot_open          trot_open.cpp)
+
 # WLW open-loop (Hybrid gait, params from config/config.yaml common.wlw_open)
 add_walk_executable(wlw_open           wlw_open.cpp)
 
@@ -65,6 +68,7 @@ add_walk_executable(walk_closed_dist   walk_closed_dist.cpp)
 # Install all executables
 install(TARGETS
   walk_h20_v10_open
+  trot_open
   wlw_open
   walk_closed_time
   walk_closed_dist
