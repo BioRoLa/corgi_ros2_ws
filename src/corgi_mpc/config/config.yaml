@@ -2,7 +2,7 @@
 # Common: parameters shared between sim and real (physical constants)
 # ──────────────────────────────────────────────────────────────
 common:
-  m: 23.66
+  m: 20.98
   fx_upper_bound: 10
   fx_lower_bound: -10
   fz_upper_bound: 150
@@ -63,4 +63,4 @@ real:
   Kx_stance: 2000
   Ky_stance: 100
 
-  fz_lower_bound: -10
+  fz_lower_bound: -50
