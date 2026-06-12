@@ -9,6 +9,7 @@
 #include <Eigen/Geometry>
 #include "rclcpp/rclcpp.hpp"
 #include <yaml-cpp/yaml.h>
+#include <string>
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/force_state_stamped.hpp"
@@ -44,7 +45,7 @@ class VirtualModelController {
         const int freq = 500;
         const double dt = 1.0 / freq;
 
-        const double m = 20.98;
+        double m = 20.98;
         const double gravity = 9.81;
 
         const int n_u = 12;  // 3D force x 4 legs
@@ -65,7 +66,7 @@ class VirtualModelController {
 
         std::array<std::array<double, 4>, 2> eta_list = {{{0, 0, 0, 0}, {0, 0, 0, 0}}};
 
-        void load_config();
+        void load_config(const std::string& profile);
         Eigen::VectorXd step(const Eigen::VectorXd &x, const Eigen::VectorXd &x_ref,
                              const bool *selection_matrix,
                              const double *ra, const double *rb, const double *rc, const double *rd);
@@ -78,10 +79,10 @@ class VirtualModelController {
         Eigen::VectorXd wrench_weight = (Eigen::VectorXd(6) << 1e3, 1e3, 0, 0, 0, 1e3).finished();
         double force_weight = 1e-4;
 
-        int fx_upper_bound = 30;
-        int fx_lower_bound = -30;
-        int fz_upper_bound = 150;
-        int fz_lower_bound = -50;
+        double fx_upper_bound = 30;
+        double fx_lower_bound = -30;
+        double fz_upper_bound = 150;
+        double fz_lower_bound = -50;
 
         double friction_coef = 1;
 

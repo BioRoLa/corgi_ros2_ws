@@ -5,29 +5,73 @@
 bool sim = true;
 LegModel legmodel;
 
-void VirtualModelController::load_config() {
+void VirtualModelController::load_config(const std::string& profile) {
     const char* home_path = std::getenv("HOME");
     if (!home_path) {
         throw std::runtime_error("HOME environment variable not set");
     }
     std::string config_file_path = std::string(home_path) + "/corgi_ws/corgi_ros2_ws/src/corgi_vmc/config/config.yaml";
     YAML::Node config = YAML::LoadFile(config_file_path);
+    YAML::Node common_config = config["common"];
+    YAML::Node profile_config = config[profile];
 
-    std::vector<double> kp_vec = config["Kp"].as<std::vector<double>>();
-    std::vector<double> kd_vec = config["Kd"].as<std::vector<double>>();
+    if (!profile_config) {
+        throw std::runtime_error("Missing required profile: " + profile);
+    }
+
+    auto read_required_node = [&](const std::string& key) -> YAML::Node {
+        if (profile_config[key]) {
+            return profile_config[key];
+        }
+        if (common_config && common_config[key]) {
+            return common_config[key];
+        }
+        throw std::runtime_error("Missing required key: " + key + " for profile: " + profile);
+    };
+
+    auto read_required_double = [&](const std::string& key) -> double {
+        return read_required_node(key).as<double>();
+    };
+
+    std::vector<double> kp_vec = read_required_node("Kp").as<std::vector<double>>();
+    std::vector<double> kd_vec = read_required_node("Kd").as<std::vector<double>>();
     if (kp_vec.size() != 6 || kd_vec.size() != 6) {
         throw std::runtime_error("Kp and Kd must each have 6 elements");
     }
     Kp = Eigen::Map<Eigen::VectorXd>(kp_vec.data(), 6);
     Kd = Eigen::Map<Eigen::VectorXd>(kd_vec.data(), 6);
 
-    if (config["force_weight"]) {
-        force_weight = config["force_weight"].as<double>();
+    Mx = read_required_double("Mx");
+    My = read_required_double("My");
+    Bx_swing = read_required_double("Bx_swing");
+    By_swing = read_required_double("By_swing");
+    Bx_stance = read_required_double("Bx_stance");
+    By_stance = read_required_double("By_stance");
+    Kx_swing = read_required_double("Kx_swing");
+    Ky_swing = read_required_double("Ky_swing");
+    Kx_stance = read_required_double("Kx_stance");
+    Ky_stance = read_required_double("Ky_stance");
+    m = read_required_double("m");
+    fx_upper_bound = read_required_double("fx_upper_bound");
+    fx_lower_bound = read_required_double("fx_lower_bound");
+    fz_upper_bound = read_required_double("fz_upper_bound");
+    fz_lower_bound = read_required_double("fz_lower_bound");
+    force_weight = read_required_double("force_weight");
+
+    std::vector<double> ww = read_required_node("wrench_weight").as<std::vector<double>>();
+    if (ww.size() != 6) {
+        throw std::runtime_error("wrench_weight must have 6 elements");
     }
-    if (config["wrench_weight"]) {
-        std::vector<double> ww = config["wrench_weight"].as<std::vector<double>>();
-        if (ww.size() != 6) throw std::runtime_error("wrench_weight must have 6 elements");
-        wrench_weight = Eigen::Map<Eigen::VectorXd>(ww.data(), 6);
+    wrench_weight = Eigen::Map<Eigen::VectorXd>(ww.data(), 6);
+
+    if (m <= 0.0) {
+        throw std::runtime_error("Invalid value: m must be > 0");
+    }
+    if (fx_lower_bound > fx_upper_bound) {
+        throw std::runtime_error("Invalid bounds: fx_lower_bound > fx_upper_bound");
+    }
+    if (fz_lower_bound > fz_upper_bound) {
+        throw std::runtime_error("Invalid bounds: fz_lower_bound > fz_upper_bound");
     }
 }
 
