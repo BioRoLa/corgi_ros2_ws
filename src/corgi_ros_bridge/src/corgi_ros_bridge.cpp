@@ -1,6 +1,9 @@
 #include <iostream>
 #include <mutex>
+#include <array>
+#include <cstdlib>
 #include "rclcpp/rclcpp.hpp"
+#include <yaml-cpp/yaml.h>
 
 #include "NodeHandler.h"
 #include "Config.pb.h"
@@ -71,6 +74,58 @@ core::Publisher<robot_msg::RobotCmdStamped>         *grpc_robot_cmd_pub;
 core::Publisher<steering_msg::SteeringCmdStamped>   *grpc_steer_cmd_pub;
 core::Publisher<config_msg::ConfigStamped>          *grpc_config_cmd_pub;
 
+struct LegAxisConfig {
+    double theta = 1.0;
+    double beta = 1.0;
+    double gamma = 1.0;
+    double motor_r = 1.0;
+    double motor_l = 1.0;
+    double motor_h = 1.0;
+};
+
+std::array<LegAxisConfig, 4> real_axis_config;
+
+std::string default_real_motor_config_path()
+{
+    const char* home = std::getenv("HOME");
+    if (home == nullptr) {
+        return "corgi_ros2_ws/src/corgi_ros_bridge/config/real_motor_config.yaml";
+    }
+    return std::string(home) + "/corgi_ws/corgi_ros2_ws/src/corgi_ros_bridge/config/real_motor_config.yaml";
+}
+
+double yaml_direction_or(const YAML::Node& node, const std::string& key, double fallback)
+{
+    if (!node || !node[key]) {
+        return fallback;
+    }
+    return node[key].as<double>();
+}
+
+void load_real_axis_config(const std::string& path, const rclcpp::Logger& logger)
+{
+    static const std::array<std::string, 4> leg_names = {"A", "B", "C", "D"};
+
+    try {
+        YAML::Node root = YAML::LoadFile(path);
+        for (size_t i = 0; i < leg_names.size(); ++i) {
+            YAML::Node leg = root[leg_names[i]];
+            YAML::Node joint_dir = leg["joint_dir"];
+            YAML::Node motor_dir = leg["motor_dir"];
+
+            real_axis_config[i].theta = yaml_direction_or(joint_dir, "theta", 1.0);
+            real_axis_config[i].beta = yaml_direction_or(joint_dir, "beta", 1.0);
+            real_axis_config[i].gamma = yaml_direction_or(joint_dir, "gamma", 1.0);
+            real_axis_config[i].motor_r = yaml_direction_or(motor_dir, "R", 1.0);
+            real_axis_config[i].motor_l = yaml_direction_or(motor_dir, "L", 1.0);
+            real_axis_config[i].motor_h = yaml_direction_or(motor_dir, "H", 1.0);
+        }
+        RCLCPP_INFO(logger, "Loaded real motor axis config: %s", path.c_str());
+    } catch (const std::exception& e) {
+        RCLCPP_WARN(logger, "Failed to load real motor axis config '%s': %s. Using all 1.0 directions.", path.c_str(), e.what());
+    }
+}
+
 void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
     std::lock_guard<std::mutex> lock(mutex_grpc_motor_cmd);
 
@@ -91,9 +146,10 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
     };
 
     for (int i = 0; i < 4; i++) {
-        grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta, 17/180.0*M_PI), 160/180.0*M_PI));
-        grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta);
-        grpc_motor_modules[i]->set_gamma(ros_motor_modules[i].gamma);
+        const auto& axis = real_axis_config[i];
+        grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta * axis.theta, 17/180.0*M_PI), 160/180.0*M_PI));
+        grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta * axis.beta);
+        grpc_motor_modules[i]->set_gamma(ros_motor_modules[i].gamma * axis.gamma);
         grpc_motor_modules[i]->set_kp_r(ros_motor_modules[i].kp_r);
         grpc_motor_modules[i]->set_kp_l(ros_motor_modules[i].kp_l);
         grpc_motor_modules[i]->set_kp_h(ros_motor_modules[i].kp_h);
@@ -103,9 +159,9 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
         grpc_motor_modules[i]->set_kd_r(ros_motor_modules[i].kd_r);
         grpc_motor_modules[i]->set_kd_l(ros_motor_modules[i].kd_l);
         grpc_motor_modules[i]->set_kd_h(ros_motor_modules[i].kd_h);
-        grpc_motor_modules[i]->set_torque_r(ros_motor_modules[i].torque_r);
-        grpc_motor_modules[i]->set_torque_l(ros_motor_modules[i].torque_l);
-        grpc_motor_modules[i]->set_torque_h(ros_motor_modules[i].torque_h);
+        grpc_motor_modules[i]->set_torque_r(ros_motor_modules[i].torque_r * axis.motor_r);
+        grpc_motor_modules[i]->set_torque_l(ros_motor_modules[i].torque_l * axis.motor_l);
+        grpc_motor_modules[i]->set_torque_h(ros_motor_modules[i].torque_h * axis.motor_h);
     }
 
     grpc_motor_cmd.mutable_header()->set_seq(ros_motor_cmd.header.seq);
@@ -187,15 +243,16 @@ void grpc_motor_state_cb(const motor_msg::MotorStateStamped state) {
     };
 
     for (int i = 0; i < 4; i++) {
-        ros_motor_modules[i]->theta = grpc_motor_modules[i]->theta();
-        ros_motor_modules[i]->beta = grpc_motor_modules[i]->beta();
-        ros_motor_modules[i]->gamma = grpc_motor_modules[i]->gamma();
-        ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r();
-        ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l();
-        ros_motor_modules[i]->velocity_h = grpc_motor_modules[i]->velocity_h();
-        ros_motor_modules[i]->torque_r = grpc_motor_modules[i]->torque_r();
-        ros_motor_modules[i]->torque_l = grpc_motor_modules[i]->torque_l();
-        ros_motor_modules[i]->torque_h = grpc_motor_modules[i]->torque_h();
+        const auto& axis = real_axis_config[i];
+        ros_motor_modules[i]->theta = grpc_motor_modules[i]->theta() * axis.theta;
+        ros_motor_modules[i]->beta = grpc_motor_modules[i]->beta() * axis.beta;
+        ros_motor_modules[i]->gamma = grpc_motor_modules[i]->gamma() * axis.gamma;
+        ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r() * axis.motor_r;
+        ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l() * axis.motor_l;
+        ros_motor_modules[i]->velocity_h = grpc_motor_modules[i]->velocity_h() * axis.motor_h;
+        ros_motor_modules[i]->torque_r = grpc_motor_modules[i]->torque_r() * axis.motor_r;
+        ros_motor_modules[i]->torque_l = grpc_motor_modules[i]->torque_l() * axis.motor_l;
+        ros_motor_modules[i]->torque_h = grpc_motor_modules[i]->torque_h() * axis.motor_h;
     }
 
     ros_motor_state.motor_mode = static_cast<int32_t>(grpc_motor_state.motor_mode());
@@ -334,6 +391,8 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_ros_bridge");
     RCLCPP_INFO(node->get_logger(), "Corgi ROS Bridge Starts");
+    node->declare_parameter<std::string>("real_motor_config_path", default_real_motor_config_path());
+    load_real_axis_config(node->get_parameter("real_motor_config_path").as_string(), node->get_logger());
 
     bool debug_mode = false;
     if (argc >= 2 && argv[1] != nullptr) {
