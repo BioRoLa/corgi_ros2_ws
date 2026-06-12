@@ -1,4 +1,51 @@
-Kp: [1000, 2000, 0, 0, 0, 300]  # roll, pitch, yaw, x, y, z
-Kd: [50, 100, 0, 0, 0, 15] # omega_x, omega_y, omega_z, v_x, v_y, v_z
-wrench_weight: [10000, 30000, 0, 0, 0, 6000] # tau_roll, tau_pitch, tau_yaw, f_x, f_y, f_z
-force_weight: 1e-4
+common:
+  m: 20.98
+
+  fx_upper_bound: 30
+  fx_lower_bound: -30
+  fz_upper_bound: 150
+  fz_lower_bound: -50
+
+  Kp: [1000, 2000, 0, 0, 0, 300]      # roll, pitch, yaw, x, y, z
+  Kd: [50, 100, 0, 0, 0, 15]          # wx, wy, wz, vx, vy, vz
+  wrench_weight: [10000, 30000, 0, 0, 0, 6000]
+  force_weight: 1e-4
+
+  Mx: 0
+  My: 0
+  Bx_swing: 80
+  By_swing: 80
+  Bx_stance: 80
+  By_stance: 10
+  Kx_swing: 2000
+  Ky_swing: 2000
+  Kx_stance: 2000
+  Ky_stance: 200
+
+  walk:
+    stand_height: 0.2
+    cruise_velocity: 0.05
+    step_length: 0.2
+    step_height: 0.08
+    ramp_loops: 500
+
+    # Time-driven walk only. At freq=500 Hz, 20500 cycles is 41 s.
+    target_loop: 20500
+
+    # Distance-driven walk only.
+    stop_x: 2.0
+    decel_margin: 1.2
+
+# sim:
+#   contact_source: gait
+#   init_eta: [1.3313651941315507,  0.4032814817188362,
+#              1.1847611807810603,  0.10626486289107877,
+#              1.1847611807810603, -0.10626486289107877,
+#              1.3313651941315507, -0.4032814817188362]
+
+real:
+  contact_source: gait
+  init_eta: [1.2744470401482761,  0.4161719979302237,
+             1.1222141023936798,  0.11005079310996896,
+             1.1222141023936798, -0.11005079310996896,
+             1.2744470401482761, -0.4161719979302237]
