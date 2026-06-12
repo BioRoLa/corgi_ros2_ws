@@ -203,16 +203,6 @@ int main(int argc, char **argv) {
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
 
-    node->declare_parameter<std::string>("contact_source", "gait");
-    std::string contact_source = node->get_parameter("contact_source").as_string();
-    if (contact_source != "gait" && contact_source != "gmo") {
-        RCLCPP_WARN(node->get_logger(),
-            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
-            contact_source.c_str());
-        contact_source = "gait";
-    }
-    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
-
     // ── Load gait & walk parameters from config.yaml ──────────────────────
     const char* home_path = std::getenv("HOME");
     if (!home_path) {
@@ -242,6 +232,20 @@ int main(int argc, char **argv) {
         if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<std::vector<double>>();
         throw std::runtime_error("walk_closed_dist: missing required config key: " + key);
     };
+    auto gait_read_string = [&](const std::string& key) -> std::string {
+        if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<std::string>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<std::string>();
+        throw std::runtime_error("walk_closed_dist: missing required config key: " + key);
+    };
+
+    std::string contact_source = gait_read_string("contact_source");
+    if (contact_source != "gait" && contact_source != "gmo") {
+        RCLCPP_WARN(node->get_logger(),
+            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
+            contact_source.c_str());
+        contact_source = "gait";
+    }
+    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
 
     // ── Shared gait parameters (walk_closed_time and walk_closed_dist) ─────
     const double stand_height    = gait_read_double("stand_height");
