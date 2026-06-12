@@ -12,7 +12,7 @@ Node wiring
                               pub /force/state
   corgi_force_control         sub /force/state, /impedance/command
                               pub /motor/command
-  corgi_mpc (walk_h20_v10_closed)
+  corgi_mpc (walk_closed_time or walk_closed_dist)
                               state_source = odom_legacy
                               sub /motor/state, /imu, /trigger,
                                   /odometry/legacy/position, /odometry/legacy/velocity,
@@ -56,13 +56,13 @@ def generate_launch_description():
         parameters=real_params,
     )
 
-    # z_position_node = Node(
-    #     package='corgi_odometry_legacy',
-    #     executable='corgi_z_position_legacy',
-    #     name='corgi_z_position_legacy',
-    #     output='screen',
-    #     parameters=real_params,
-    # )
+    z_position_node = Node(
+        package='corgi_odometry_legacy',
+        executable='corgi_z_position_legacy',
+        name='corgi_z_position_legacy',
+        output='screen',
+        parameters=real_params,
+    )
 
     # ── Force estimation and control ─────────────────────────────────────────
     force_estimation_node = Node(
@@ -84,7 +84,7 @@ def generate_launch_description():
     # ── MPC controller ────────────────────────────────────────────────────────
     mpc_node = Node(
         package='corgi_mpc',
-        executable='walk_h20_v10_closed',
+        executable='walk_closed_dist',
         name='corgi_mpc',
         output='screen',
         parameters=[{
@@ -108,7 +108,7 @@ def generate_launch_description():
     return LaunchDescription([
         imu_node,
         odometry_node,
-        # z_position_node,
+        z_position_node,
         force_estimation_node,
         force_control_node,
         mpc_node,

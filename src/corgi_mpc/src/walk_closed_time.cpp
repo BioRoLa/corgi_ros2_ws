@@ -1,3 +1,9 @@
+// walk_closed_time.cpp
+// Time-driven closed-loop walk controller.
+// The robot walks for exactly (target_loop × dt) seconds from trigger onset,
+// then stops — regardless of how far it has actually traveled.
+// For position-based stopping, use walk_closed_dist.cpp.
+
 #include "walk_utils.hpp"
 #include "mpc.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -183,11 +189,80 @@ int main(int argc, char **argv) {
         state_source = "odom_legacy";
     }
     sim = (config_profile == "sim");
-    
-    RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts");
+
+    RCLCPP_INFO(node->get_logger(), "Corgi MPC Starts (walk_closed_time)");
     RCLCPP_INFO(node->get_logger(), "Config profile: %s", config_profile.c_str());
     RCLCPP_INFO(node->get_logger(), "State source: %s", state_source.c_str());
-    
+
+    node->declare_parameter<std::string>("contact_source", "gait");
+    std::string contact_source = node->get_parameter("contact_source").as_string();
+    if (contact_source != "gait" && contact_source != "gmo") {
+        RCLCPP_WARN(node->get_logger(),
+            "Invalid contact_source='%s' (valid: gait|gmo), fallback to 'gait'",
+            contact_source.c_str());
+        contact_source = "gait";
+    }
+    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
+
+    // ── Load gait & walk parameters from config.yaml ──────────────────────
+    const char* home_path = std::getenv("HOME");
+    if (!home_path) {
+        RCLCPP_FATAL(node->get_logger(), "HOME environment variable not set");
+        return 1;
+    }
+    const std::string config_path = std::string(home_path) +
+        "/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml";
+    YAML::Node cfg         = YAML::LoadFile(config_path);
+    YAML::Node common_cfg  = cfg["common"];
+    YAML::Node walk_cfg    = common_cfg ? common_cfg["walk"] : YAML::Node{};
+    YAML::Node profile_cfg = cfg[config_profile];
+
+    // Lookup order: profile-specific section first, then common.walk section.
+    auto gait_read_double = [&](const std::string& key) -> double {
+        if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<double>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<double>();
+        throw std::runtime_error("walk_closed_time: missing required config key: " + key);
+    };
+    auto gait_read_int = [&](const std::string& key) -> int {
+        if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<int>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<int>();
+        throw std::runtime_error("walk_closed_time: missing required config key: " + key);
+    };
+    auto gait_read_vec = [&](const std::string& key) -> std::vector<double> {
+        if (profile_cfg && profile_cfg[key]) return profile_cfg[key].as<std::vector<double>>();
+        if (walk_cfg    && walk_cfg[key])    return walk_cfg[key].as<std::vector<double>>();
+        throw std::runtime_error("walk_closed_time: missing required config key: " + key);
+    };
+
+    // ── Shared gait parameters (walk_closed_time and walk_closed_dist) ─────
+    const double stand_height    = gait_read_double("stand_height");
+    const double cruise_velocity = gait_read_double("cruise_velocity");
+    const double step_length     = gait_read_double("step_length");
+    const double step_height_cfg = gait_read_double("step_height");
+    // ramp_loops: velocity ramp-up/down duration in control cycles (= 1 s at 100 Hz).
+    const int    ramp_loops      = gait_read_int("ramp_loops");
+
+    // ── Initial joint angles (profile-specific: different for sim and real) ─
+    const std::vector<double> init_eta_vec = gait_read_vec("init_eta");
+    if (static_cast<int>(init_eta_vec.size()) != 8) {
+        RCLCPP_FATAL(node->get_logger(),
+            "init_eta must have exactly 8 values, got %zu", init_eta_vec.size());
+        return 1;
+    }
+    double init_eta[8];
+    for (int i = 0; i < 8; ++i) init_eta[i] = init_eta_vec[i];
+
+    // ── Time-driven stop parameter ─────────────────────────────────────────
+    // The robot walks for exactly (target_loop × dt) seconds regardless of
+    // how far it has traveled. For position-based stopping use walk_closed_dist.
+    const int target_loop = gait_read_int("target_loop");
+
+    RCLCPP_INFO(node->get_logger(),
+        "Gait: stand_height=%.2f  cruise_vel=%.2f  step_length=%.2f  "
+        "step_height=%.3f  ramp_loops=%d  target_loop=%d",
+        stand_height, cruise_velocity, step_length,
+        step_height_cfg, ramp_loops, target_loop);
+
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
     while (rclcpp::ok()) {
@@ -201,12 +276,7 @@ int main(int argc, char **argv) {
 
     ModelPredictiveController mpc;
     mpc.load_config(config_profile);
-    constexpr double target_distance = 2.0;
-    constexpr double velocity = 0.05;
-    constexpr double ramp_time = 1.0;
-    mpc.target_loop = static_cast<int>((target_distance / velocity + ramp_time) * mpc.freq);
-    std::string contact_source = mpc.contact_source;
-    RCLCPP_INFO(node->get_logger(), "Contact source: %s", contact_source.c_str());
+    mpc.target_loop = target_loop;
 
     auto imp_cmd_pub = node->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 10);
     auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
@@ -251,24 +321,15 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    double init_eta[8];
+    mpc.target_pos_z = stand_height;
 
-    if (sim) {
-        double tmp[8] = {1.3313651941315507, 0.4032814817188362, 1.1847611807810603, 0.10626486289107877, 1.1847611807810603, -0.10626486289107877, 1.3313651941315507, -0.4032814817188362};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
-    } else {
-        double tmp[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};
-        for (int i = 0; i < 8; ++i) init_eta[i] = tmp[i];
-    }
-
-    mpc.target_pos_z = 0.2;
-    
     WalkGait walk_gait(sim, 0, mpc.freq);
+    double velocity = cruise_velocity; // runtime velocity command; ramps 0 → cruise → 0
 
-    walk_gait.stand_height = mpc.target_pos_z;
-    walk_gait.velocity = velocity;
-    walk_gait.step_length = 0.2;
-    walk_gait.step_height = 0.08;
+    walk_gait.stand_height = stand_height;
+    walk_gait.velocity     = velocity;
+    walk_gait.step_length  = step_length;
+    walk_gait.step_height  = step_height_cfg;
 
     walk_gait.initialize(init_eta, walk_gait.step_length);
     walk_gait.set_velocity(mpc.target_vel_x);
@@ -291,7 +352,7 @@ int main(int argc, char **argv) {
     }
 
     RCLCPP_INFO(node->get_logger(), "Wait For Force Control Node ...");
-    
+
     if (!sim) {
         for (int i=0; i<int(3*mpc.freq); i++) {
             next_time += period;
@@ -351,16 +412,21 @@ int main(int argc, char **argv) {
             while (rclcpp::ok()) {
                 rclcpp::spin_some(node);
 
-                // update target vel and pos
-                if (loop_count < int(1*mpc.freq)) {
-                    mpc.target_vel_x += velocity/(1*mpc.freq);
+                // ── Time-driven velocity profile ───────────────────────────
+                // Ramp up over ramp_loops cycles, cruise at velocity, then ramp
+                // down over ramp_loops cycles before target_loop.
+                if (loop_count < ramp_loops) {
+                    mpc.target_vel_x += velocity / ramp_loops;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                else if (loop_count >= mpc.target_loop-int(1*mpc.freq) && loop_count < mpc.target_loop) {
-                    mpc.target_vel_x -= velocity/(1*mpc.freq);
+                else if (loop_count > mpc.target_loop - ramp_loops && loop_count < mpc.target_loop) {
+                    mpc.target_vel_x -= velocity / ramp_loops;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
 
+                // NOTE: X/Y position weights in Q are 0, so target_pos_x does NOT
+                // influence the MPC force solution. It is accumulated here solely for
+                // logging and for the Z-axis / velocity reference channels.
                 mpc.target_pos_x += mpc.target_vel_x * mpc.dt;
 
                 // get next eta
@@ -425,18 +491,12 @@ int main(int argc, char **argv) {
                 //   odom_legacy / sim:  imu_node (CX5_AHRS) is running; use its gravity-
                 //                       compensated acceleration + AHRS orientation directly.
                 if (state_source == "esekf" && !has_ekf_odom) {
-                    // Use raw gyro from /imu_raw (no gravity subtraction needed for angular
-                    // velocity). Orientation stays at its default (identity Quaterniond) until
-                    // /ekf comes up — the ESEKF internally uses orientation to subtract gravity
-                    // from the accelerometer, so its output is already gravity-free.
                     if (has_imu_raw) {
                         mpc.robot_ang_vel[0] = imu_raw.angular_velocity.x;
                         mpc.robot_ang_vel[1] = imu_raw.angular_velocity.y;
                         mpc.robot_ang_vel[2] = imu_raw.angular_velocity.z;
                     }
                 } else if (state_source != "esekf") {
-                    // odom_legacy / sim_driver: imu_node provides gravity-compensated data
-                    // and proper AHRS orientation — use directly.
                     mpc.robot_ang.x() = imu.orientation.x;
                     mpc.robot_ang.y() = imu.orientation.y;
                     mpc.robot_ang.z() = imu.orientation.z;
@@ -485,12 +545,11 @@ int main(int argc, char **argv) {
                 double force_D[3] = {force(9), force(10), force(11)};
 
                 Eigen::Matrix3d R_T = mpc.robot_ang.toRotationMatrix().transpose();
-                
+
                 convert_force_to_local(force_A, R_T);
                 convert_force_to_local(force_B, R_T);
                 convert_force_to_local(force_C, R_T);
                 convert_force_to_local(force_D, R_T);
-
 
                 imp_cmd_modules[0]->fx = -force_A[0];
                 imp_cmd_modules[0]->fy = -force_A[2];

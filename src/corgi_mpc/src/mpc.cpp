@@ -56,7 +56,6 @@ void ModelPredictiveController::load_config(const std::string& profile) {
     fx_lower_bound = read_required_double("fx_lower_bound");
     fz_upper_bound = read_required_double("fz_upper_bound");
     fz_lower_bound = read_required_double("fz_lower_bound");
-    contact_source = read_required_node("contact_source").as<std::string>();
 
     if (m <= 0.0) {
         throw std::runtime_error("Invalid value: m must be > 0");
@@ -66,9 +65,6 @@ void ModelPredictiveController::load_config(const std::string& profile) {
     }
     if (fz_lower_bound > fz_upper_bound) {
         throw std::runtime_error("Invalid bounds: fz_lower_bound > fz_upper_bound");
-    }
-    if (contact_source != "gait" && contact_source != "gmo") {
-        throw std::runtime_error("Invalid contact_source: " + contact_source + " (valid: gait|gmo)");
     }
 }
 

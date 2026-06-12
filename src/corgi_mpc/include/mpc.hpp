@@ -70,7 +70,6 @@ class ModelPredictiveController {
         Eigen::Quaterniond robot_ang = Eigen::Quaterniond::Identity();
 
         std::array<std::array<double, 4>, 2> eta_list = {{{0, 0, 0, 0}, {0, 0, 0, 0}}};
-        std::string contact_source = "gait";
 
         void load_config(const std::string& profile);
         void init_matrices(const double *ra, const double *rb, const double *rc, const double *rd);
