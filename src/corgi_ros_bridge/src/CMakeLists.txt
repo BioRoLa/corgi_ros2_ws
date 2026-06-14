@@ -1,4 +1,6 @@
 # Find required custom libraries
+find_package(yaml-cpp REQUIRED)
+
 find_library(GRPC_PROTO_LIB grpc_proto_lib)
 if (NOT GRPC_PROTO_LIB)
     message(FATAL_ERROR "Not found GRPC_PROTO Library.")
@@ -13,6 +15,7 @@ target_include_directories(corgi_ros_bridge PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(corgi_ros_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_link_libraries(corgi_ros_bridge
+  yaml-cpp::yaml-cpp
   ${CMAKE_DL_LIBS}
   ${GRPC_PROTO_LIB}
   ${_CORE_LIBRARIES}  # Optional: Only include if this variable is defined

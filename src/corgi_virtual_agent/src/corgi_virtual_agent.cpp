@@ -41,6 +41,11 @@ void motor_cmd_cb(const motor_msg::MotorCmdStamped cmd) {
               << "TB_C: (" << motor_cmds[2]->theta() << ", " << motor_cmds[2]->beta() << ", " << motor_cmds[2]->gamma() << "); " << std::endl
               << "TB_D: (" << motor_cmds[3]->theta() << ", " << motor_cmds[3]->beta() << ", " << motor_cmds[3]->gamma() << "); " << std::endl << std::endl;
 
+    std::cout << "Torque_A: (R: " << motor_cmds[0]->torque_r() << ", L: " << motor_cmds[0]->torque_l() << ", H: " << motor_cmds[0]->torque_h() << "); " << std::endl
+              << "Torque_B: (R: " << motor_cmds[1]->torque_r() << ", L: " << motor_cmds[1]->torque_l() << ", H: " << motor_cmds[1]->torque_h() << "); " << std::endl
+              << "Torque_C: (R: " << motor_cmds[2]->torque_r() << ", L: " << motor_cmds[2]->torque_l() << ", H: " << motor_cmds[2]->torque_h() << "); " << std::endl
+              << "Torque_D: (R: " << motor_cmds[3]->torque_r() << ", L: " << motor_cmds[3]->torque_l() << ", H: " << motor_cmds[3]->torque_h() << "); " << std::endl << std::endl;
+
     for (int i = 0; i < 4; i++) {
         motor_states[i]->set_theta(motor_cmds[i]->theta());
         motor_states[i]->set_beta(motor_cmds[i]->beta());

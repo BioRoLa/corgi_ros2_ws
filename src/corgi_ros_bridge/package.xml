@@ -15,12 +15,14 @@
   <build_depend>message_generation</build_depend>
   <build_depend>rclcpp</build_depend>
   <build_depend>rclpy</build_depend>
+  <build_depend>yaml-cpp</build_depend>
   <build_export_depend>corgi_msgs</build_export_depend>
   <build_export_depend>rosgraph_msgs</build_export_depend>
   <build_export_depend>geometry_msgs</build_export_depend>
   <build_export_depend>message_runtime</build_export_depend>
   <build_export_depend>rclcpp</build_export_depend>
   <build_export_depend>rclpy</build_export_depend>
+  <build_export_depend>yaml-cpp</build_export_depend>
 
   <exec_depend>corgi_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
@@ -30,6 +32,7 @@
   <exec_depend>message_generation</exec_depend>
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>yaml-cpp</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
