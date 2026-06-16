@@ -14,6 +14,7 @@
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/contact_state_stamped.hpp"
+#include "corgi_msgs/msg/gmo_contact_state_stamped.hpp"
 #include "corgi_msgs/msg/imu_stamped.hpp"
 
 #include "corgi_event_walk/event_walk_gait.hpp"
@@ -35,6 +36,7 @@
  *   motor/state                   MotorStateStamped
  *   imu                           ImuStamped  (unused; kept for remapping compat)
  *   odometry/legacy/contact       ContactStateStamped
+ *   /gmo/contact_state            GMOContactStateStamped
  *   attitude/stable               Bool
  */
 class EventWalkNode : public rclcpp::Node
@@ -52,6 +54,7 @@ private:
     bool trigger_enable_{false};
     bool attitude_stable_{false};
     std::array<bool, 4> contact_{false, false, false, false};
+    bool contact_valid_{false};
     corgi_msgs::msg::MotorStateStamped motor_state_{};
     bool motor_state_valid_{false};
 
@@ -71,6 +74,7 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr sub_state_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr        sub_imu_;
     rclcpp::Subscription<corgi_msgs::msg::ContactStateStamped>::SharedPtr sub_contact_;
+    rclcpp::Subscription<corgi_msgs::msg::GMOContactStateStamped>::SharedPtr sub_gmo_contact_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr                sub_stable_;
 };
 

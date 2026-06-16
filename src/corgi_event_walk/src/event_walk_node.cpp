@@ -17,18 +17,29 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     // ── declare parameters ────────────────────────────────────────────────
     bool   sim            = this->declare_parameter("sim",               true);
     double velocity       = this->declare_parameter("velocity",          0.1);
-    double stand_height   = this->declare_parameter("stand_height",      0.25);
-    double step_length    = this->declare_parameter("step_length",       0.3);
+    double stand_height   = this->declare_parameter("stand_height",      0.20);
+    double step_length    = this->declare_parameter("step_length",       0.2);
     double step_height    = this->declare_parameter("step_height",       0.06);
     int    sampling_rate  = this->declare_parameter("sampling_rate",     1000);
     int    max_adj_steps  = this->declare_parameter("max_adjust_steps",  3000);
     double BL             = this->declare_parameter("BL",                0.444);
     double BW             = this->declare_parameter("BW",                0.4);
+    std::string contact_source = this->declare_parameter("contact_source", "gmo");
+    double probe_speed    = this->declare_parameter("probe_speed",       0.15);
+    int    max_probe_steps = this->declare_parameter("max_probe_steps",  500);
+    double contact_swing_accept_ratio =
+        this->declare_parameter("contact_swing_accept_ratio", 0.5);
+    int contact_on_count  = this->declare_parameter("contact_on_count",  5);
+    int contact_off_count = this->declare_parameter("contact_off_count", 2);
+    double pre_swing_advance_scale =
+        this->declare_parameter("pre_swing_advance_scale", 1.5);
 
     // ── create gait engine ────────────────────────────────────────────────
     gait_ = std::make_unique<EventWalkGait>(
         sim, velocity, stand_height, step_length, step_height,
-        sampling_rate, max_adj_steps, BL, BW);
+        sampling_rate, max_adj_steps, BL, BW,
+        probe_speed, max_probe_steps, contact_swing_accept_ratio,
+        contact_on_count, contact_off_count, pre_swing_advance_scale);
 
     // ── motor command buffer (gains fixed once) ───────────────────────────
     cmd_mods_ = {&cmd_msg_.module_a, &cmd_msg_.module_b,
@@ -66,14 +77,29 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
             // IMU is used by attitude_node; kept here for topic remapping compat.
         });
 
-    sub_contact_ = this->create_subscription<corgi_msgs::msg::ContactStateStamped>(
-        "odometry/legacy/contact", 5,
-        [this](corgi_msgs::msg::ContactStateStamped::SharedPtr msg) {
-            contact_[0] = msg->module_a.contact;
-            contact_[1] = msg->module_b.contact;
-            contact_[2] = msg->module_c.contact;
-            contact_[3] = msg->module_d.contact;
-        });
+    if (contact_source == "legacy" || contact_source == "both") {
+        sub_contact_ = this->create_subscription<corgi_msgs::msg::ContactStateStamped>(
+            "odometry/legacy/contact", 5,
+            [this](corgi_msgs::msg::ContactStateStamped::SharedPtr msg) {
+                contact_[0] = msg->module_a.contact;
+                contact_[1] = msg->module_b.contact;
+                contact_[2] = msg->module_c.contact;
+                contact_[3] = msg->module_d.contact;
+                contact_valid_ = true;
+            });
+    }
+
+    if (contact_source == "gmo" || contact_source == "both") {
+        sub_gmo_contact_ = this->create_subscription<corgi_msgs::msg::GMOContactStateStamped>(
+            "/gmo/contact_state", 5,
+            [this](corgi_msgs::msg::GMOContactStateStamped::SharedPtr msg) {
+                contact_[0] = msg->module_a.contact;
+                contact_[1] = msg->module_b.contact;
+                contact_[2] = msg->module_c.contact;
+                contact_[3] = msg->module_d.contact;
+                contact_valid_ = true;
+            });
+    }
 
     sub_stable_ = this->create_subscription<std_msgs::msg::Bool>(
         "attitude/stable", 5,
@@ -106,6 +132,7 @@ void EventWalkNode::on_timer()
     // the latch on the very first tick of the next adjustment window.
     input.attitude_stable  = gait_->is_adjusting() && attitude_stable_;
     input.contact          = contact_;
+    input.contact_enabled  = contact_valid_;
     input.motor_state_valid = motor_state_valid_;
 
     if (motor_state_valid_) {
