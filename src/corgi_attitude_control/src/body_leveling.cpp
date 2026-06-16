@@ -46,8 +46,8 @@ BodyLevelingController::compute(
             continue;
         }
 
-        // Δh: how much the hip of leg i drops toward the ground due to tilt.
-        // A hip on the high side of a roll/pitch must extend its leg further.
+        // Δh: vertical hip displacement due to body tilt.  Positive Δh means
+        // that hip is higher than nominal, so the required leg depth is shorter.
         //
         // For roll (rotation about X, +roll = right-side-down):
         //   hip_y > 0 (left side) → goes UP → leg needs to be SHORTER   (Δh > 0)
@@ -100,8 +100,6 @@ BodyLevelingController::compute(
 
         theta_out[i] = current_theta[i] + d_theta;
         beta_out[i]  = current_beta[i]  + d_beta;
-        printf("Roll=%.3f Pitch=%.3f Leg %d: Δh=%.3f depth %.3f→%.3f dG_y=%.4f d_theta=%.4f d_beta=%.4f\n",
-            roll, pitch, i, delta_h, -G0_y, target_depth, dG_y_desired, d_theta, d_beta);
     }
 
     return {theta_out, beta_out};

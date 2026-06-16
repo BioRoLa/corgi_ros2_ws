@@ -33,10 +33,10 @@ public:
     BodyLevelingController(bool   sim          = true,
                            double BL           = 0.444,
                            double BW           = 0.4,
-                           double stand_height = 0.25,
-                           double roll_thresh  = 0.052,
-                           double pitch_thresh = 0.052,
-                           double omega_thresh = 0.05);
+                           double stand_height = 0.20,
+                           double roll_thresh  = 0.0087,
+                           double pitch_thresh = 0.0087,
+                           double omega_thresh = 0.02);
 
     /**
      * Compute corrected joint angles for all four legs.
