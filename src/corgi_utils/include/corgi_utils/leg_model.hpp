@@ -25,6 +25,10 @@ public:
 
     // Move
     std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper = true, bool contact_lower = true, double tol = 1e-14, size_t max_iter = 100);
+    std::array<double, 2> last_move_residual{0.0, 0.0};
+    double last_move_cost{0.0};
+    bool last_move_converged{true};
+    size_t last_move_iterations{0};
 
     // Joint Positions
     std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;

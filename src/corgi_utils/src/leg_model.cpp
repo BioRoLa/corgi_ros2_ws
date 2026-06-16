@@ -274,6 +274,10 @@ std::array<double, 2> LegModel::inverse(const std::array<double, 2>& pos, const 
 std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope, bool contact_upper, bool contact_lower, double tol, size_t max_iter) {
     this->contact_map(theta_in, beta_in, slope=slope, contact_upper=contact_upper, contact_lower=contact_lower);
     int contact_rim = rim;
+    last_move_residual = {0.0, 0.0};
+    last_move_cost = 0.0;
+    last_move_converged = false;
+    last_move_iterations = 0;
     if (slope != 0.0) {
         double x_new = move_vec[0]*cos(-slope) - move_vec[1]*sin(-slope);
         double y_new = move_vec[0]*sin(-slope) + move_vec[1]*cos(-slope);
@@ -300,8 +304,12 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
         Eigen::Vector2d cost_vec(cost[0], cost[1]);
 
         double norm_cost = cost_vec.norm();          // 计算残差范数
+        last_move_residual = cost;
+        last_move_cost = norm_cost;
+        last_move_iterations = iter + 1;
         if (norm_cost < tol) {                // 判断收敛
             //std::cout << "Converged after " << iter << " iterations.\n";
+            last_move_converged = true;
             break;
         }//end if
 
@@ -320,6 +328,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
 
         if (dq.norm() < tol) {             // 判断步长是否足够小
             //std::cout << "Converged after " << iter << " iterations.\n";
+            last_move_converged = true;
             break;
         }//end if
 
@@ -328,8 +337,12 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
         guess_dq[1] += dq[1];
 
         if (iter == max_iter-1) {
+            std::array<double, 2> final_cost = this->objective(guess_dq, {theta, beta}, move_vec, contact_rim);
+            last_move_residual = final_cost;
+            last_move_cost = Eigen::Vector2d(final_cost[0], final_cost[1]).norm();
+            last_move_iterations = max_iter;
             // throw std::runtime_error("Newton solver did not converge.");
-            std::cout << "LegModel::move: Newton solver cost " << norm_cost << std::endl;
+            std::cout << "LegModel::move: Newton solver cost " << last_move_cost << std::endl;
         }//end if
     }//end for
 
