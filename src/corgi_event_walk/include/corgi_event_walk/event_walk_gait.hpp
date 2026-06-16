@@ -38,6 +38,7 @@ public:
         bool trigger{false};
         bool attitude_stable{false};
         std::array<bool, 4>   contact{false, false, false, false};
+        bool contact_enabled{false};
         /// Motor angles in the motor-output convention:
         ///   legs 0 & 3 carry beta with opposite sign on the motor bus.
         std::array<double, 4> motor_theta{};
@@ -78,7 +79,13 @@ public:
                   int    sampling_rate,
                   int    max_adjust_steps = 3000,
                   double BL = 0.444,
-                  double BW = 0.4);
+                  double BW = 0.4,
+                  double probe_speed = 0.15,
+                  int    max_probe_steps = 500,
+                  double contact_swing_accept_ratio = 0.5,
+                  int    contact_on_count = 5,
+                  int    contact_off_count = 2,
+                  double pre_swing_advance_scale = 1.5);
 
     // ── main API ──────────────────────────────────────────────────────────────
 
@@ -94,7 +101,7 @@ public:
 
 private:
     // ── state machine ─────────────────────────────────────────────────────────
-    enum class Phase { INIT, TRANSFORM, READY, PRE_SWING, SWING, ADJUSTING, END };
+    enum class Phase { INIT, TRANSFORM, READY, PRE_SWING, SWING, PROBING, ADJUSTING, END };
     Phase phase_{Phase::INIT};
 
     static constexpr int    LEG_SEQ[4]  = {0, 2, 1, 3};
@@ -102,12 +109,12 @@ private:
     static constexpr double INIT_THETA  = M_PI * 17.0 / 180.0;
     static constexpr double INIT_BETA   = 0.0;
 
-    // Stand configuration: stand_height=0.25, step_length=0.3, swing_time=0.2
+    // Stand configuration: stand_height=0.20
     static constexpr double INIT_ETA[8] = {
-        1.857467698281913,   0.4791102940603915,   // FL (0)
-        1.6046663223045279,  0.12914729012802004,  // FR (1)
-        1.6046663223045279, -0.12914729012802004,  // RR (2)
-        1.857467698281913,  -0.4791102940603915    // RL (3)
+        1.3313651941315507,  0.4032814817188362,
+        1.1847611807810603,  0.10626486289107877,
+        1.1847611807810603, -0.10626486289107877,
+        1.3313651941315507, -0.4032814817188362
     };
 
     // ── parameters ────────────────────────────────────────────────────────────
@@ -119,6 +126,15 @@ private:
     int    sampling_rate_;
     int    max_adjust_steps_;
     double BL_, BW_;
+    double probe_speed_;
+    int    max_probe_steps_;
+    double contact_swing_accept_ratio_;
+    int    contact_on_count_threshold_;
+    int    contact_off_count_threshold_;
+    double pre_swing_advance_scale_;
+    double stance_move_vertical_tol_{5e-4};
+    double stance_move_cost_tol_{1e-4};
+    double stance_move_min_dx_{1e-5};
 
     // ── walk state ────────────────────────────────────────────────────────────
     std::array<double, 4>              theta_{};
@@ -133,7 +149,19 @@ private:
     int  swing_tick_{0};
     int  pre_swing_steps_{0};
     int  pre_swing_tick_{0};
+    double pre_swing_target_dist_{0.0};
+    double pre_swing_advanced_dist_{0.0};
+    double stance_move_carry_{0.0};
     bool needs_motor_sync_{true};
+    bool late_probing_{false};
+    int  probe_tick_{0};
+    std::array<double,2> probe_point_{};
+    int  support_advance_ticks_{0};
+    int  support_advance_target_steps_{0};
+
+    std::array<bool, 4> filtered_contact_{false, false, false, false};
+    std::array<int, 4>  contact_on_count_{0, 0, 0, 0};
+    std::array<int, 4>  contact_off_count_{0, 0, 0, 0};
 
     // attitude_stable latch — reset in start_swing(), set on input.attitude_stable
     bool attitude_stable_latch_{false};
@@ -156,6 +184,14 @@ private:
     void do_pre_swing(const ExternalInput & input, GaitOutput & out);
     void start_swing (int leg, const ExternalInput & input);
     void do_swing    (const ExternalInput & input, GaitOutput & out);
+    void do_probing  (const ExternalInput & input, GaitOutput & out);
+    void do_adjusting(const ExternalInput & input, GaitOutput & out);
+    double advance_stance_body(const ExternalInput & input, bool sync_from_feedback, double dx);
+    double advance_stance_legs(const ExternalInput & input, bool sync_from_feedback,
+                               double dx, int skip_leg);
+    bool update_contact_filter(int leg, const ExternalInput & input, double swing_progress);
+    void enter_probing();
+    void finish_touchdown(bool contact_hit, const char * reason);
     void enter_adjusting();
     void fill_output (GaitOutput & out) const;
     void sync_from_motor(const ExternalInput & input);
