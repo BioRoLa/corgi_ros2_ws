@@ -15,7 +15,7 @@ target_include_directories(corgi_ros_bridge PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(corgi_ros_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_link_libraries(corgi_ros_bridge
-  yaml-cpp::yaml-cpp
+  yaml-cpp
   ${CMAKE_DL_LIBS}
   ${GRPC_PROTO_LIB}
   ${_CORE_LIBRARIES}  # Optional: Only include if this variable is defined
