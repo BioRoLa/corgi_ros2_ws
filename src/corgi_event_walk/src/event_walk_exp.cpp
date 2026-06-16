@@ -18,9 +18,9 @@ public:
     {
         bool   sim            = this->declare_parameter("sim", true);
         double velocity       = this->declare_parameter("velocity", 0.1);
-        double stand_height   = this->declare_parameter("stand_height", 0.25);
-        double step_length    = this->declare_parameter("step_length", 0.3);
-        double step_height    = this->declare_parameter("step_height", 0.04);
+        double stand_height   = this->declare_parameter("stand_height", 0.20);
+        double step_length    = this->declare_parameter("step_length", 0.2);
+        double step_height    = this->declare_parameter("step_height", 0.06);
         int    sampling_rate  = this->declare_parameter("sampling_rate", 1000);
         int    max_adj_steps  = this->declare_parameter("max_adjust_steps", 1);
         double BL             = this->declare_parameter("BL", 0.444);
@@ -54,10 +54,10 @@ public:
         };
 
         for (int i = 0; i < 4; ++i) {
-            cmd_mods_[i]->kp_r = 150;
+            cmd_mods_[i]->kp_r = 90;
             cmd_mods_[i]->ki_r = 0;
             cmd_mods_[i]->kd_r = 1.75;
-            cmd_mods_[i]->kp_l = 150;
+            cmd_mods_[i]->kp_l = 90;
             cmd_mods_[i]->ki_l = 0;
             cmd_mods_[i]->kd_l = 1.75;
             cmd_mods_[i]->torque_r = 0;
