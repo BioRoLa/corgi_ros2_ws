@@ -127,27 +127,48 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     
     // Use contact_map_3d to get alpha and contact point
     legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
-    RCLCPP_INFO(this->get_logger(), "Contact Point: [%.4f, %.4f]", legmodel.contact_p_3d[0], legmodel.contact_p_3d[2]);
-    //RCLCPP_INFO(this->get_logger(), "Alpha: %.2f", legmodel.alpha);
     
     // calculate jacobian
-    P_poly = kinematics_.calculate_P_poly_3d(-legmodel.alpha);
+    P_poly = kinematics_.calculate_P_poly_3d(legmodel.alpha);
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
     for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(motor_state_->theta, i); 
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i);
-    //P_theta(0,0) = legmodel.contact_p_3d[0];
-    //P_theta(1,0) = legmodel.contact_p_3d[2]; 
-    RCLCPP_INFO(this->get_logger(), "P_theta: [%.4f, %.4f]", P_theta(0, 0), P_theta(1, 0));
+
+    double beta_fb = motor_state_->beta + pitch;
+    double gamma_fb = motor_state_->gamma;
+    double cos_beta = std::cos(beta_fb);
+    double sin_beta = std::sin(beta_fb);
+    double cos_gamma = std::cos(gamma_fb);
+    double sin_gamma = std::sin(gamma_fb);
+
+    double p_poly_x = P_theta(0, 0);
+    double p_poly_z = P_theta(1, 0);
+    double p_beta_x = p_poly_x * cos_beta - p_poly_z * sin_beta;
+    double p_beta_z = p_poly_x * sin_beta + p_poly_z * cos_beta;
+    double p_expected_x = p_beta_x;
+    double p_expected_y = legmodel.d_wheel * cos_gamma - p_beta_z * sin_gamma;
+    double p_expected_z = legmodel.d_wheel * sin_gamma + p_beta_z * cos_gamma;
+    double err_x = legmodel.contact_p_3d[0] - p_expected_x;
+    double err_y = legmodel.contact_p_3d[1] - p_expected_y;
+    double err_z = legmodel.contact_p_3d[2] - p_expected_z;
+
+    RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 500,
+        "Contact check alpha=%.2f d=%.4f | P_theta=[%.4f %.4f] beta3d=[%.4f %.4f %.4f] contact=[%.4f %.4f %.4f] err=[%.5f %.5f %.5f]",
+        legmodel.alpha, legmodel.d_wheel,
+        p_poly_x, p_poly_z,
+        p_expected_x, p_expected_y, p_expected_z,
+        legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2],
+        err_x, err_y, err_z);
 
     Eigen::MatrixXd J_fb(3, 3);
-    RCLCPP_INFO(this->get_logger(), "d_wheel: %.4f", legmodel.d_wheel);
     J_fb = kinematics_.calculate_jacobian_3d(P_theta, P_theta_deriv, motor_state_->beta + pitch, motor_state_->gamma, legmodel.d_wheel);
 
     Eigen::MatrixXd phi_vel(3, 1);
     phi_vel << motor_state_->velocity_l, motor_state_->velocity_r, motor_state_->velocity_h;
     //RCLCPP_INFO(this->get_logger(), "Phi Vel: [%.4f, %.4f, %.4f]", phi_vel(0, 0), phi_vel(1, 0), phi_vel(2, 0));
-    Eigen::MatrixXd vel_fb = J_fb.transpose() * phi_vel;
-    Eigen::MatrixXd acc_fb = (vel_fb - J_fb.transpose() * phi_vel_prev_) * 1000;
+    Eigen::MatrixXd vel_fb = J_fb * phi_vel;
+    Eigen::MatrixXd acc_fb = (vel_fb - J_fb * phi_vel_prev_) * 1000;
     
     // impedance control
     Eigen::MatrixXd M = Eigen::MatrixXd::Zero(3, 3);
@@ -279,12 +300,14 @@ void ForceControl3DNode::timer_cb() {
         else {
             if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
 
+            RCLCPP_INFO_THROTTLE(
+                this->get_logger(), *this->get_clock(), 500,
+                "Module number: %d", i);
+
             if (i == 1 || i == 2) {
-                RCLCPP_INFO(this->get_logger(), "Module number: %d", i);
                 force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
             }
             else {
-                RCLCPP_INFO(this->get_logger(), "Module number: %d", i);
                 force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
             }
             

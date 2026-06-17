@@ -60,6 +60,7 @@ public:
     const double tyre_thickness;   // 12.25 mm
     const double foot_radius;      // R + foot_offset + tyre_thickness
     const double wheel_thickness;
+    const double abad_axis_to_wheel_plane;
 
     // Current theta and beta
     double theta;

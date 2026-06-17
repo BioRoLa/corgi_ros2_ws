@@ -149,10 +149,10 @@ Eigen::MatrixXd KinematicsHelper::calculate_jacobian(const Eigen::MatrixXd& P_th
     double dPx_dbeta  = P_theta(0, 0)*(-sin_beta) - P_theta(1, 0)*cos_beta;
     double dPy_dbeta  = P_theta(0, 0)*cos_beta + P_theta(1, 0)*(-sin_beta);
 
-    double J11 = dPx_dtheta * dtheta_dphiR + dPx_dbeta * dbeta_dphiR;
-    double J12 = dPx_dtheta * dtheta_dphiL + dPx_dbeta * dbeta_dphiL;
-    double J21 = dPy_dtheta * dtheta_dphiR + dPy_dbeta * dbeta_dphiR;
-    double J22 = dPy_dtheta * dtheta_dphiL + dPy_dbeta * dbeta_dphiL;
+    double J11 = dPx_dtheta * dtheta_dphiL + dPx_dbeta * dbeta_dphiL;
+    double J12 = dPx_dtheta * dtheta_dphiR + dPx_dbeta * dbeta_dphiR;
+    double J21 = dPy_dtheta * dtheta_dphiL + dPy_dbeta * dbeta_dphiL;
+    double J22 = dPy_dtheta * dtheta_dphiR + dPy_dbeta * dbeta_dphiR;
 
     Eigen::MatrixXd jacobian(2, 2);
     jacobian << J11, J12, J21, J22;
@@ -229,7 +229,7 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double gamma
     } else {
         Eigen::MatrixXd torque(3, 1);
         torque << torque_l, torque_r, torque_h;
-        force_est = jacobian.inverse().transpose() * torque;
+        force_est = -jacobian.inverse().transpose() * torque;
     }
 
     return force_est;

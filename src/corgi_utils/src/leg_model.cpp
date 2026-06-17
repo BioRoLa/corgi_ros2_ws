@@ -24,6 +24,7 @@ LegModel::LegModel(bool sim) :
     tyre_thickness(0.01225),   // 12.25 mm
     foot_radius(R + foot_offset + tyre_thickness),
     wheel_thickness(0.04),
+    abad_axis_to_wheel_plane(0.091675),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
     arc_BC(M_PI * 101.0 / 180.0),
@@ -294,20 +295,20 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
     double sin_g = std::sin(gamma);
     double cos_g = std::cos(gamma);
     
-    // Step 4: Determine wheel thickness based on gamma sign
-    // Select opposite sign to minimize Z height
-    double half_w = tyre_thickness / 2.0;
-    d_wheel = (sin_g > 0) ? -half_w : half_w;
-    
-    // Step 5: Optimization for small gamma
-    if (std::abs(sin_g) < 1e-4) {
-        d_wheel = 0.0;
+    // Step 4: Determine contact lateral distance from the ABAD axis.
+    // The fixed offset is from the ABAD axis to the wheel/leg plane; the
+    // edge offset selects the lower wheel edge when gamma tilts the wheel.
+    double half_wheel_width = wheel_thickness / 2.0;
+    double contact_edge_offset = 0.0;
+    if (std::abs(sin_g) >= 1e-4) {
+        contact_edge_offset = (sin_g > 0) ? -half_wheel_width : half_wheel_width;
     }
+    d_wheel = abad_axis_to_wheel_plane + contact_edge_offset;
     
-    // Step 6: Get 2D contact point from rim_point (Leg Frame)
+    // Step 5: Get 2D contact point from rim_point (Leg Frame)
     auto contact_2d = rim_point(alpha);
     
-    // Step 7: Apply axis rotation matrix
+    // Step 6: Apply axis rotation matrix
     // [X]   [1   0        0    ] [x_2D  ]
     // [Y] = [0  cos(γ) -sin(γ)] [d_wheel ]
     // [Z]   [0  sin(γ)  cos(γ)] [z_2D  ]
