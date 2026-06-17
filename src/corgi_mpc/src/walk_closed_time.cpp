@@ -423,7 +423,7 @@ int main(int argc, char **argv) {
                     mpc.target_vel_x += velocity / ramp_loops;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
-                else if (loop_count > mpc.target_loop - ramp_loops && loop_count < mpc.target_loop) {
+                else if (loop_count >= mpc.target_loop - ramp_loops && loop_count < mpc.target_loop) {
                     mpc.target_vel_x -= velocity / ramp_loops;
                     walk_gait.set_velocity(mpc.target_vel_x);
                 }
