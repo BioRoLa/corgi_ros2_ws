@@ -36,6 +36,5 @@ install(TARGETS
   trot_main
   walk_exp
   walk_exp_with_contact
-  walk_exp_h20_v10_sl20_sh8_impedance
   DESTINATION lib/${PROJECT_NAME}
 )
