@@ -161,7 +161,7 @@ def generate_launch_description():
     # ── 9. MPC controller ────────────────────────────────────────────────────
     mpc_node = Node(
         package='corgi_mpc',
-        executable='walk_closed_dist',
+        executable='walk_closed_time',
         name='corgi_mpc',
         output='screen',
         parameters=[{
