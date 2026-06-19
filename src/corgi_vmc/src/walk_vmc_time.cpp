@@ -20,7 +20,7 @@ struct WalkConfig {
     double step_length = 0.2;
     double step_height = 0.08;
     int ramp_loops = 500;
-    int target_loop = 20500;
+    int target_loop = 11000;
     double stop_x = 2.0;
     double decel_margin = 1.2;
     std::array<double, 8> init_eta{};
@@ -469,7 +469,7 @@ int main(int argc, char **argv) {
         if (trigger) {
             RCLCPP_INFO(node->get_logger(), "Wait For Odometry Node Initializing ...");
 
-            const int contact_wait_loops = int((sim ? 1 : 3) * vmc.freq);
+            const int contact_wait_loops = sim ? 0 : int(3 * vmc.freq);
             for (int i = 0; i < contact_wait_loops; i++) {
                 for (auto& state : contact_state_modules) {
                     state->contact = true;
