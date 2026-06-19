@@ -161,7 +161,7 @@ def generate_launch_description():
     # ── 9. VMC controller ────────────────────────────────────────────────────
     vmc_node = Node(
         package='corgi_vmc',
-        executable='walk_closed_dist',
+        executable='walk_closed_time',
         name='corgi_vmc',
         output='screen',
         parameters=[{
