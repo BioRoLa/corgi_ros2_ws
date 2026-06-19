@@ -63,6 +63,7 @@ add_walk_executable(wlw_open           wlw_open.cpp)
 
 # Closed-loop walk controllers (time-driven and distance-driven)
 add_walk_executable(walk_closed_time   walk_closed_time.cpp)
+add_walk_executable(walk_closed_time_contact walk_closed_time_contact.cpp)
 add_walk_executable(walk_closed_dist   walk_closed_dist.cpp)
 
 # Install all executables
@@ -71,6 +72,7 @@ install(TARGETS
   trot_open
   wlw_open
   walk_closed_time
+  walk_closed_time_contact
   walk_closed_dist
   DESTINATION lib/${PROJECT_NAME}
 )
