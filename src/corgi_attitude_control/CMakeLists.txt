@@ -16,6 +16,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 # --- dependencies ---
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(corgi_utils REQUIRED)
@@ -52,6 +53,7 @@ target_include_directories(attitude_node
 
 ament_target_dependencies(attitude_node
   rclcpp
+  nav_msgs
   std_msgs
   corgi_msgs
   corgi_utils

@@ -8,6 +8,7 @@
  *   walk/phase      (Int32)           — 0=STANCE/SWING passthrough, 2=ADJUSTING
  *   walk/swing_mask (Int32MultiArray) — per-leg swing flag: 1=swinging, 0=stance
  *   imu             (ImuStamped)      — orientation + angular velocity
+ *   /ekf            (Odometry)        — optional orientation + angular velocity
  *   motor/state     (MotorStateStamped) — current joint angles
  *
  * Publishes:
@@ -23,8 +24,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
@@ -62,10 +65,19 @@ public:
         double pitch_thresh = this->declare_parameter("pitch_thresh", 0.0087);
         double omega_thresh = this->declare_parameter("omega_thresh", 0.02);
         double max_joint_rate = this->declare_parameter("max_joint_rate", 2.0);  // rad/s
+        attitude_source_ = this->declare_parameter("attitude_source", std::string("ekf"));
         stable_debounce_count_ = this->declare_parameter("stable_debounce_count", 50);
         adjust_min_ticks_ = this->declare_parameter("adjust_min_ticks", 50);
         nominal_stand_height_ = stand_height;
         max_delta_ = max_joint_rate * 0.001;  // per 1-ms tick
+
+        if (attitude_source_ != "imu" && attitude_source_ != "ekf") {
+            RCLCPP_WARN(
+                this->get_logger(),
+                "Invalid attitude_source='%s' (valid: imu|ekf), fallback to 'imu'",
+                attitude_source_.c_str());
+            attitude_source_ = "imu";
+        }
 
         controller_ = std::make_unique<BodyLevelingController>(
             sim, BL, BW, stand_height, roll_thresh, pitch_thresh, omega_thresh);
@@ -96,6 +108,10 @@ public:
             "imu", 5,
             [this](corgi_msgs::msg::ImuStamped::SharedPtr msg){ imu_ = *msg; });
 
+        sub_ekf_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/ekf", 10,
+            [this](nav_msgs::msg::Odometry::SharedPtr msg){ ekf_odom_ = *msg; });
+
         sub_state_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
             "motor/state", 5,
             [this](corgi_msgs::msg::MotorStateStamped::SharedPtr msg){
@@ -121,6 +137,17 @@ private:
         double qy = imu_.orientation.y;
         double qz = imu_.orientation.z;
         double qw = imu_.orientation.w;
+        double omega_x = imu_.angular_velocity.x;
+        double omega_y = imu_.angular_velocity.y;
+
+        if (attitude_source_ == "ekf") {
+            qx = ekf_odom_.pose.pose.orientation.x;
+            qy = ekf_odom_.pose.pose.orientation.y;
+            qz = ekf_odom_.pose.pose.orientation.z;
+            qw = ekf_odom_.pose.pose.orientation.w;
+            omega_x = ekf_odom_.twist.twist.angular.x;
+            omega_y = ekf_odom_.twist.twist.angular.y;
+        }
 
         double roll = 0.0, pitch = 0.0;
         // Only compute if we have a valid quaternion (norm ≈ 1)
@@ -128,9 +155,6 @@ private:
         if (norm2 > 0.5) {
             quat_to_rp(qx, qy, qz, qw, roll, pitch);
         }
-
-        double omega_x = imu_.angular_velocity.x;
-        double omega_y = imu_.angular_velocity.y;
 
         // ── extract walk_cmd_ theta/beta in internal (LegModel) convention ──
         const std::array<const corgi_msgs::msg::MotorCmd *, 4> walk_mods = {
@@ -361,8 +385,10 @@ private:
     int adjust_min_ticks_ = 50;
     int stable_count_ = 0;
     int adjust_tick_ = 0;
+    std::string attitude_source_ = "imu";
     corgi_msgs::msg::MotorCmdStamped      walk_cmd_;
     corgi_msgs::msg::ImuStamped           imu_;
+    nav_msgs::msg::Odometry               ekf_odom_;
     corgi_msgs::msg::MotorStateStamped    motor_state_;
     bool motor_state_valid_ = false;
 
@@ -373,6 +399,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr               sub_phase_;
     rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr     sub_mask_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr        sub_imu_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr            sub_ekf_;
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr sub_state_;
 
     rclcpp::Publisher<corgi_msgs::msg::MotorCmdStamped>::SharedPtr pub_cmd_;
