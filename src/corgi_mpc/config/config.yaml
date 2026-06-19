@@ -5,12 +5,12 @@ common:
   m: 23.66
   fx_upper_bound: 10
   fx_lower_bound: -10
-  fz_upper_bound: 100
+  fz_upper_bound: 200
 
   # ── Walk-only parameters (walk_closed_time / walk_closed_dist) ───────────
   walk:
     stand_height:     0.2     # target body CoM height above ground (m)
-    cruise_velocity:  0.1     # maximum forward walking speed (m/s)
+    cruise_velocity:  0.05     # maximum forward walking speed (m/s)
     step_length:      0.2     # foot step length (m)
     step_height:      0.08    # foot swing clearance height (m)
     # ramp_loops: velocity ramp-up/down duration in control cycles.
@@ -62,7 +62,7 @@ sim:
     40,   40,   0,   # roll, pitch, yaw
     0,    0,    100, # x, y, z
     0.01, 0.01, 0,   # ω_x, ω_y, ω_z
-    3,    0,    1,   # v_x, v_y, v_z
+    1,    0,    3,   # v_x, v_y, v_z
     0                # additional state
   ]
 
@@ -82,15 +82,15 @@ sim:
   # TODO: robot's initial pose is dependent on Gait parameters (stand_height, step_length, step_height). 
   #       Could automatically compute from kinematics instead of hardcoding.
   # walk init_eta:
-  # init_eta: [1.3313651941315507,  0.4032814817188362,
-  #            1.1847611807810603,  0.10626486289107877,
-  #            1.1847611807810603, -0.10626486289107877,
-  #            1.3313651941315507, -0.4032814817188362]
-  # trot init_eta:
-  init_eta: [1.6951516460296583,  0.20749622643520274,
-             1.6951516460296583,  0.20749622643520274,
-             1.6951516460296583, -0.20749622643520274,
-             1.6951516460296583, -0.20749622643520274]
+  init_eta: [1.3313651941315507,  0.4032814817188362,
+             1.1847611807810603,  0.10626486289107877,
+             1.1847611807810603, -0.10626486289107877,
+             1.3313651941315507, -0.4032814817188362]
+  # # trot init_eta:
+  # init_eta: [1.6951516460296583,  0.20749622643520274,
+  #            1.6951516460296583,  0.20749622643520274,
+  #            1.6951516460296583, -0.20749622643520274,
+  #            1.6951516460296583, -0.20749622643520274]
   # wlw init_eta: (not yet defined)
 
 # ──────────────────────────────────────────────────────────────
@@ -103,22 +103,22 @@ real:
   #        behaviour is identical — only meaningful when ESEKF is running.
   contact_source: gait
 
-  Q_diagonal: [
-    40,   40,   0,   # roll, pitch, yaw
-    0,    0,    100, # x, y, z
-    0.1,  0.1,  0,   # ω_x, ω_y, ω_z
-    2,    0,    2,   # v_x, v_y, v_z
-    0                # additional state
-  ]
-
-  # # The parameters for odom legacy
   # Q_diagonal: [
   #   40,   40,   0,   # roll, pitch, yaw
   #   0,    0,    100, # x, y, z
   #   0.1,  0.1,  0,   # ω_x, ω_y, ω_z
-  #   0,    0,    2,   # v_x, v_y, v_z
+  #   2,    0,    2,   # v_x, v_y, v_z
   #   0                # additional state
   # ]
+
+  # The parameters for odom legacy
+  Q_diagonal: [
+    40,   40,   0,   # roll, pitch, yaw
+    0,    0,    100, # x, y, z
+    0.1,  0.1,  0,   # ω_x, ω_y, ω_z
+    0,    0,    2,   # v_x, v_y, v_z
+    0                # additional state
+  ]
 
   Bx_swing: 80
   By_swing: 80
@@ -136,13 +136,13 @@ real:
   # TODO: robot's initial pose is dependent on Gait parameters (stand_height, step_length, step_height). 
   #       Could automatically compute from kinematics instead of hardcoding.
   # walk init_eta:
-  # init_eta: [1.2744470401482761,  0.4161719979302237,
-  #            1.1222141023936798,  0.11005079310996896,
-  #            1.1222141023936798, -0.11005079310996896,
-  #            1.2744470401482761, -0.4161719979302237]
-  # trot init_eta:
-  init_eta: [1.6951516460296583,  0.20749622643520274,
-             1.6951516460296583,  0.20749622643520274,
-             1.6951516460296583, -0.20749622643520274,
-             1.6951516460296583, -0.20749622643520274]
+  init_eta: [1.2744470401482761,  0.4161719979302237,
+             1.1222141023936798,  0.11005079310996896,
+             1.1222141023936798, -0.11005079310996896,
+             1.2744470401482761, -0.4161719979302237]
+  # # trot init_eta:
+  # init_eta: [1.6951516460296583,  0.20749622643520274,
+  #            1.6951516460296583,  0.20749622643520274,
+  #            1.6951516460296583, -0.20749622643520274,
+  #            1.6951516460296583, -0.20749622643520274]
   # wlw init_eta: (not yet defined)
