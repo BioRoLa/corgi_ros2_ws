@@ -3,7 +3,7 @@ common:
 
   fx_upper_bound: 30
   fx_lower_bound: -30
-  fz_upper_bound: 150
+  fz_upper_bound: 200
   fz_lower_bound: -50
 
   Kp: [1000, 2000, 0, 0, 0, 300]      # roll, pitch, yaw, x, y, z
@@ -29,8 +29,9 @@ common:
     step_height: 0.08
     ramp_loops: 500
 
-    # Time-driven walk only. At freq=500 Hz, 20500 cycles is 41 s.
-    target_loop: 20500
+    # Time-driven walk only. At freq=500 Hz, 11000 cycles is 22 s,
+    # matching walk_closed_time at 100 Hz with target_loop=2200.
+    target_loop: 11000
 
     # Distance-driven walk only.
     stop_x: 2.0
