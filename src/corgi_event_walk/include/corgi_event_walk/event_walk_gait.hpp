@@ -76,6 +76,7 @@ public:
                   double stand_height,
                   double step_length,
                   double step_height,
+                  double con_bias,
                   int    sampling_rate,
                   int    max_adjust_steps = 3000,
                   double BL = 0.444,
@@ -123,6 +124,7 @@ private:
     double stand_height_;
     double step_length_;
     double step_height_;
+    double con_bias_;
     int    sampling_rate_;
     int    max_adjust_steps_;
     double BL_, BW_;

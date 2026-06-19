@@ -21,13 +21,14 @@ public:
         double stand_height   = this->declare_parameter("stand_height", 0.20);
         double step_length    = this->declare_parameter("step_length", 0.2);
         double step_height    = this->declare_parameter("step_height", 0.06);
+        double con_bias       = this->declare_parameter("con_bias", 0.0);
         int    sampling_rate  = this->declare_parameter("sampling_rate", 1000);
         int    max_adj_steps  = this->declare_parameter("max_adjust_steps", 1);
         double BL             = this->declare_parameter("BL", 0.444);
         double BW             = this->declare_parameter("BW", 0.4);
 
         gait_ = std::make_unique<EventWalkGait>(
-            sim, velocity, stand_height, step_length, step_height,
+            sim, velocity, stand_height, step_length, step_height, con_bias,
             sampling_rate, max_adj_steps, BL, BW);
 
         pub_cmd_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>(

@@ -26,6 +26,7 @@ EventWalkGait::EventWalkGait(bool   sim,
                              double stand_height,
                              double step_length,
                              double step_height,
+                             double con_bias,
                              int    sampling_rate,
                              int    max_adjust_steps,
                              double BL,
@@ -41,6 +42,7 @@ EventWalkGait::EventWalkGait(bool   sim,
 , stand_height_(stand_height)
 , step_length_(step_length)
 , step_height_(step_height)
+, con_bias_(con_bias)
 , sampling_rate_(sampling_rate)
 , max_adjust_steps_(max_adjust_steps)
 , BL_(BL)
@@ -259,7 +261,7 @@ void EventWalkGait::start_swing(int leg, const ExternalInput & input)
 
     const double pre_dist      = static_cast<double>(pre_swing_steps_) * dS_;
     const double foot_offset   = eff * (1.0 + SWING_TIME) / 2.0 - pre_dist;
-    double td_x = hip_[leg][0] + foot_offset;
+    double td_x = hip_[leg][0] + foot_offset + con_bias_;
     double td_z = 0.0;
 
     // Contact-rim search
@@ -272,11 +274,11 @@ void EventWalkGait::start_swing(int leg, const ExternalInput & input)
         if (leg_model_->rim == TOUCH_RIM_IDX[j]) {
             int found_rim = leg_model_->rim;
             leg_model_->forward(eta[0], eta[1]);
-            if      (found_rim == 3) { td_x = hip_[leg][0] + foot_offset; td_z = leg_model_->r; }
-            else if (found_rim == 2) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->L_l[0]; td_z = leg_model_->G[1] - leg_model_->L_l[1] + leg_model_->radius; }
-            else if (found_rim == 4) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->L_r[0]; td_z = leg_model_->G[1] - leg_model_->L_r[1] + leg_model_->radius; }
-            else if (found_rim == 1) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->U_l[0]; td_z = leg_model_->G[1] - leg_model_->U_l[1] + leg_model_->radius; }
-            else if (found_rim == 5) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->U_r[0]; td_z = leg_model_->G[1] - leg_model_->U_r[1] + leg_model_->radius; }
+            if      (found_rim == 3) { td_x = hip_[leg][0] + foot_offset + con_bias_; td_z = leg_model_->r; }
+            else if (found_rim == 2) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->L_l[0] + con_bias_; td_z = leg_model_->G[1] - leg_model_->L_l[1] + leg_model_->radius; }
+            else if (found_rim == 4) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->L_r[0] + con_bias_; td_z = leg_model_->G[1] - leg_model_->L_r[1] + leg_model_->radius; }
+            else if (found_rim == 1) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->U_l[0] + con_bias_; td_z = leg_model_->G[1] - leg_model_->U_l[1] + leg_model_->radius; }
+            else if (found_rim == 5) { td_x = hip_[leg][0] + foot_offset + leg_model_->G[0] - leg_model_->U_r[0] + con_bias_; td_z = leg_model_->G[1] - leg_model_->U_r[1] + leg_model_->radius; }
             break;
         }
     }
