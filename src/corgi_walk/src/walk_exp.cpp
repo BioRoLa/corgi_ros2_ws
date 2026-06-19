@@ -61,7 +61,7 @@ int main(int argc, char **argv)
         WALK,
         END
     };
-    const std::array<double, 2> CoM_bias = {0.0, 0.0};
+    const std::array<double, 2> CoM_bias = {-0.02, 0.0}; // real robot com bias
     const int sampling_rate = 1000;
     const int transform_count = 5 * sampling_rate; // 5s
     // const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25
