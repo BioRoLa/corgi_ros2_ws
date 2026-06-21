@@ -541,7 +541,7 @@ int main(int argc, char **argv)
             break;
         case WALK:
             step_count = walk_gait.get_step_count();
-            if (step_count[0] >= 10 && step_count[1] >= 10 && step_count[2] >= 10 && step_count[3] >= 10)
+            if (step_count[0] >= 5 && step_count[1] >= 5 && step_count[2] >= 5 && step_count[3] >= 5)
             { // all legs have stepped at least twice
                 state = END;
             } // end if
