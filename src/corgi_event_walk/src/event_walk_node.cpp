@@ -19,7 +19,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     double velocity       = this->declare_parameter("velocity",          0.05);
     double stand_height   = this->declare_parameter("stand_height",      0.20);
     double step_length    = this->declare_parameter("step_length",       0.2);
-    double step_height    = this->declare_parameter("step_height",       0.06);
+    double step_height    = this->declare_parameter("step_height",       0.08);
     double con_bias       = this->declare_parameter("con_bias",          0.0);
     int    sampling_rate  = this->declare_parameter("sampling_rate",     1000);
     int    max_adj_steps  = this->declare_parameter("max_adjust_steps",  3000);
@@ -33,7 +33,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     int contact_on_count  = this->declare_parameter("contact_on_count",  5);
     int contact_off_count = this->declare_parameter("contact_off_count", 2);
     double pre_swing_advance_scale =
-        this->declare_parameter("pre_swing_advance_scale", 1.0);
+        this->declare_parameter("pre_swing_advance_scale", 1.5);
 
     // ── create gait engine ────────────────────────────────────────────────
     gait_ = std::make_unique<EventWalkGait>(
