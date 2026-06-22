@@ -41,7 +41,7 @@ class CorgiControlPanel(QWidget):
     Features:
     - ROS Bridge control
     - Robot FSM management
-    - Process management (IMU, CSV control, set_zero)
+    - Process management (IMU, CSV control, homing)
     - Data recording trigger
     - Real-time monitoring (power, motor states)
     - Logging system with file output
@@ -349,11 +349,11 @@ class CorgiControlPanel(QWidget):
         grp_fsm.setLayout(grp_fsm_layout)
         sidebar.addWidget(grp_fsm)
         
-        # Set Zero button
-        self.btn_set_zero = QPushButton('Set Zero')
-        self.btn_set_zero.clicked.connect(self._on_set_zero_clicked)
-        self.btn_set_zero.setEnabled(False)
-        sidebar.addWidget(self.btn_set_zero)
+        # Homing button
+        self.btn_home = QPushButton('Homing')
+        self.btn_home.clicked.connect(self._on_home_clicked)
+        self.btn_home.setEnabled(False)
+        sidebar.addWidget(self.btn_home)
         
         sidebar.addStretch(1)
         return sidebar
@@ -790,23 +790,23 @@ class CorgiControlPanel(QWidget):
             if self.process_manager.stop_process('imu', timeout=3.0):
                 self.log_widget.add_log('IMU Stopped', LOGLEVEL.WARN, 'system')
     
-    def _on_set_zero_clicked(self):
-        """Handle Set Zero button click"""
-        self.btn_set_zero.setEnabled(False)
-        self.btn_set_zero.setText('Setting Zero...')
+    def _on_home_clicked(self):
+        """Handle Home button click"""
+        self.btn_home.setEnabled(False)
+        self.btn_home.setText('Homing...')
         
         success = self.process_manager.start_process(
-            'set_zero',
-            ['ros2', 'run', 'corgi_set_zero', 'set_zero'],
+            'homing',
+            ['ros2', 'run', 'corgi_homing', 'homing'],
             capture_output=False
         )
         
         if success:
-            self.log_widget.add_log('Set Zero Started', LOGLEVEL.INFO, 'system')
+            self.log_widget.add_log('Homing Started', LOGLEVEL.INFO, 'system')
         else:
-            self.log_widget.add_log('Failed to start set_zero', LOGLEVEL.ERROR, 'system')
-            self.btn_set_zero.setEnabled(True)
-            self.btn_set_zero.setText('Set Zero')
+            self.log_widget.add_log('Failed to start homing', LOGLEVEL.ERROR, 'system')
+            self.btn_home.setEnabled(True)
+            self.btn_home.setText('Homing')
     
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
@@ -1032,14 +1032,14 @@ class CorgiControlPanel(QWidget):
         # Display in log widget
         self.log_widget.add_log(message, LOGLEVEL(level), node_name)
         
-        # Handle special messages - check for set_zero completion
-        if 'set_zero' in node_name.lower():
+        # Handle special messages - check for homing completion
+        if 'homing' in node_name.lower():
             if 'completed' in message.lower() or 'complete' in message.lower():
                 self.log_widget.add_log(
-                    'Set Zero operation completed successfully',
+                    'Homing operation completed successfully',
                     LOGLEVEL.INFO, 'system'
                 )
-                self._on_set_zero_completed()
+                self._on_homing_completed()
         
         # Handle error recovery
         if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
@@ -1120,7 +1120,7 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        self.btn_set_zero.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
+        self.btn_home.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
         
         # FSM buttons - disable in simulation mode or when bridge is off
         if not bridge_on or self.use_sim_time:
@@ -1153,14 +1153,14 @@ class CorgiControlPanel(QWidget):
                     current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
                 )
     
-    def _on_set_zero_completed(self):
-        """Handle set zero completion"""
-        if self.process_manager.is_running('set_zero'):
-            self.process_manager.stop_process('set_zero', timeout=1.0)
+    def _on_homing_completed(self):
+        """Handle homing completion"""
+        if self.process_manager.is_running('homing'):
+            self.process_manager.stop_process('homing', timeout=1.0)
         
-        self.btn_set_zero.setEnabled(True)
-        self.btn_set_zero.setText('Set Zero')
-        self.log_widget.add_log('Motor zero points set successfully', LOGLEVEL.INFO, 'system')
+        self.btn_home.setEnabled(True)
+        self.btn_home.setText('Homing')
+        self.log_widget.add_log('Motor home position set successfully', LOGLEVEL.INFO, 'system')
     
     def _launch_config_panel(self):
         """Launch configuration panel"""
@@ -1192,11 +1192,11 @@ class CorgiControlPanel(QWidget):
     
     def _timer_update(self):
         """Periodic timer update"""
-        # Check if set_zero process has completed
-        if self.btn_set_zero.text() == 'Setting Zero...':
-            if not self.process_manager.is_running('set_zero'):
+        # Check if homing process has completed
+        if self.btn_home.text() == 'Homing...':
+            if not self.process_manager.is_running('homing'):
                 # Process finished but callback wasn't triggered
-                self._on_set_zero_completed()
+                self._on_homing_completed()
 
         # Detect sim-time clock jump (Webots reset) and restart data recorder
         if self.use_sim_time and self.ros_worker.is_running:
