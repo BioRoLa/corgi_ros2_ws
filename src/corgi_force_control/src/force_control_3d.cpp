@@ -86,40 +86,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd pos_des(3, 1);
 
     LegModel& legmodel = kinematics_.get_leg_model();
-        
-    /* TODO: Check this part functionality
-    legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
-    pos_des << legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2];
-    RCLCPP_INFO(this->get_logger(), "Desired Position: [%.4f, %.4f, %.4f]", pos_des(0, 0), pos_des(1, 0), pos_des(2, 0));
-    
-    Eigen::MatrixXd pos_fb(3, 1);
-    
-    legmodel.forward(motor_state_->theta, motor_state_->beta + pitch);
-    if      (target_rim == 1 && (target_alpha > -M_PI*1/2.0)) { pos_fb << legmodel.U_l[0], legmodel.U_l[1] - legmodel.radius; }
-    else if (target_rim == 2) { pos_fb << legmodel.L_l[0], legmodel.L_l[1] - legmodel.radius; }
-    else if (target_rim == 3) { pos_fb << legmodel.G[0]  , legmodel.G[1]   - legmodel.r;      }
-    else if (target_rim == 4) { pos_fb << legmodel.L_r[0], legmodel.L_r[1] - legmodel.radius; }
-    else if (target_rim == 5 && (target_alpha < M_PI*1/2.0)) { pos_fb << legmodel.U_r[0], legmodel.U_r[1] - legmodel.radius; }
-    else {
-        motor_cmd_->theta = imp_cmd_->theta;
-        motor_cmd_->beta = imp_cmd_->beta;
-        motor_cmd_->gamma = 0.0;
-        motor_cmd_->kp_r = 90;
-        motor_cmd_->kp_l = 90;
-        motor_cmd_->kp_h = 90;
-        motor_cmd_->kd_r = 1.75;
-        motor_cmd_->kd_l = 1.75;
-        motor_cmd_->kd_h = 1.75;
-        motor_cmd_->torque_r = 0;
-        motor_cmd_->torque_l = 0;
-        motor_cmd_->torque_h = 0;
-        return;
-    }
-
-    Eigen::MatrixXd pos_err(3, 1);
-    pos_err = pos_des - pos_fb;
-    */
-    
+            
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
     Eigen::MatrixXd P_poly_deriv = Eigen::MatrixXd::Zero(2, 7);
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
@@ -152,21 +119,11 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     double err_y = legmodel.contact_p_3d[1] - p_expected_y;
     double err_z = legmodel.contact_p_3d[2] - p_expected_z;
 
-    RCLCPP_INFO_THROTTLE(
-        this->get_logger(), *this->get_clock(), 500,
-        "Contact check alpha=%.2f d=%.4f | P_theta=[%.4f %.4f] beta3d=[%.4f %.4f %.4f] contact=[%.4f %.4f %.4f] err=[%.5f %.5f %.5f]",
-        legmodel.alpha, legmodel.d_wheel,
-        p_poly_x, p_poly_z,
-        p_expected_x, p_expected_y, p_expected_z,
-        legmodel.contact_p_3d[0], legmodel.contact_p_3d[1], legmodel.contact_p_3d[2],
-        err_x, err_y, err_z);
-
     Eigen::MatrixXd J_fb(3, 3);
     J_fb = kinematics_.calculate_jacobian_3d(P_theta, P_theta_deriv, motor_state_->beta + pitch, motor_state_->gamma, legmodel.d_wheel);
 
     Eigen::MatrixXd phi_vel(3, 1);
     phi_vel << motor_state_->velocity_l, motor_state_->velocity_r, motor_state_->velocity_h;
-    //RCLCPP_INFO(this->get_logger(), "Phi Vel: [%.4f, %.4f, %.4f]", phi_vel(0, 0), phi_vel(1, 0), phi_vel(2, 0));
     Eigen::MatrixXd vel_fb = J_fb * phi_vel;
     Eigen::MatrixXd acc_fb = (vel_fb - J_fb * phi_vel_prev_) * 1000;
     
@@ -299,10 +256,6 @@ void ForceControl3DNode::timer_cb() {
         }
         else {
             if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
-
-            RCLCPP_INFO_THROTTLE(
-                this->get_logger(), *this->get_clock(), 500,
-                "Module number: %d", i);
 
             if (i == 1 || i == 2) {
                 force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
