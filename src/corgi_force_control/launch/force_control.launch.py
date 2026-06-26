@@ -14,8 +14,8 @@ def generate_launch_description():
         ),
         Node(
             package='corgi_force_control',
-            executable='force_control_3d_node',
-            name='force_control_3d_node',
+            executable='force_control_node',
+            name='force_control_node',
             parameters=common_params
         )
     ])

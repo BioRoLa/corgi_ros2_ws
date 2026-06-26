@@ -1,12 +1,12 @@
-#include "corgi_force_control/force_control_3d.hpp"
+#include "corgi_force_control/force_control.hpp"
 
-ForceControl3DNode::ForceControl3DNode()
-    : Node("force_control_3d"),
+ForceControlNode::ForceControlNode()
+    : Node("force_control"),
       kinematics_(sim_),
       phi_vel_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1)),
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1))
 {
-    RCLCPP_INFO(this->get_logger(), "Force Control 3D Starts");
+    RCLCPP_INFO(this->get_logger(), "Force Control Starts");
     
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
@@ -21,41 +21,41 @@ ForceControl3DNode::ForceControl3DNode()
 
     imp_cmd_sub_ = this->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>(
         "impedance/command", 10, 
-        std::bind(&ForceControl3DNode::imp_cmd_cb, this, std::placeholders::_1));
+        std::bind(&ForceControlNode::imp_cmd_cb, this, std::placeholders::_1));
     
     force_state_sub_ = this->create_subscription<corgi_msgs::msg::ForceStateStamped>(
         "force/state", 10, 
-        std::bind(&ForceControl3DNode::force_state_cb, this, std::placeholders::_1));
+        std::bind(&ForceControlNode::force_state_cb, this, std::placeholders::_1));
     
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         "motor/state", 10, 
-        std::bind(&ForceControl3DNode::motor_state_cb, this, std::placeholders::_1));
+        std::bind(&ForceControlNode::motor_state_cb, this, std::placeholders::_1));
     
     imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 10, 
-        std::bind(&ForceControl3DNode::imu_cb, this, std::placeholders::_1));
+        std::bind(&ForceControlNode::imu_cb, this, std::placeholders::_1));
     
     motor_cmd_pub_ = this->create_publisher<corgi_msgs::msg::MotorCmdStamped>(
         "motor/command", 10);
 }
 
-void ForceControl3DNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
+void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
     imp_cmd_ = *msg;
 }
 
-void ForceControl3DNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg) {
+void ForceControlNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg) {
     force_state_ = *msg;
 }
 
-void ForceControl3DNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
+void ForceControlNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
     motor_state_ = *msg;
 }
 
-void ForceControl3DNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
+void ForceControlNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
     imu_ = *msg;
 }
 
-void ForceControl3DNode::quaternion_to_euler(const Eigen::Quaterniond& q, double& roll, double& pitch, double& yaw) {
+void ForceControlNode::quaternion_to_euler(const Eigen::Quaterniond& q, double& roll, double& pitch, double& yaw) {
     Eigen::Quaterniond q_norm = q.normalized();
 
     roll = std::atan2(2.0 * (q_norm.w() * q_norm.x() + q_norm.y() * q_norm.z()),
@@ -67,7 +67,7 @@ void ForceControl3DNode::quaternion_to_euler(const Eigen::Quaterniond& q, double
                      1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
 }
 
-void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
+void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                                        Eigen::MatrixXd phi_vel_prev_, 
                                        corgi_msgs::msg::MotorState* motor_state_, 
                                        corgi_msgs::msg::ForceState* force_state_, 
@@ -196,7 +196,7 @@ void ForceControl3DNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     motor_cmd_->torque_h = trq_cmd(2, 0);
 }
 
-void ForceControl3DNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
+void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                                         corgi_msgs::msg::MotorCmd* motor_cmd_) {
     motor_cmd_->theta = imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
@@ -212,7 +212,7 @@ void ForceControl3DNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd
     motor_cmd_->torque_h = 0;
 }
 
-void ForceControl3DNode::timer_cb() {
+void ForceControlNode::timer_cb() {
     Eigen::Quaterniond body_angle_quat;
     double roll = 0;
     double pitch = 0;
@@ -303,7 +303,7 @@ void ForceControl3DNode::timer_cb() {
     loop_count_++;
 }
 
-void ForceControl3DNode::run() {
+void ForceControlNode::run() {
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = this->now();
     
@@ -323,7 +323,7 @@ void ForceControl3DNode::run() {
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<ForceControl3DNode>();
+    auto node = std::make_shared<ForceControlNode>();
     node->run();
     rclcpp::shutdown();
     return 0;

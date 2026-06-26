@@ -42,7 +42,7 @@ private:
 };
 
 ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
-    : Node("imp_cmd_pub"),
+    : Node("exp_h24"),
     sim_(false),
     trigger_(false),
     mg_(23.05 * 9.81),
