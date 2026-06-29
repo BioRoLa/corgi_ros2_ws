@@ -117,23 +117,22 @@ void DisturbanceObserver::initialize_logging() {
     if (log_detail_) {
         // Add columns for all state variables with all DOF suffixes
         std::vector<std::string> state_names = {
-            "p_k", "Y_k", "Y_filtered_k", "S_T_tau", 
+            "p_k", "Y_k", "Y_filtered_k", "S_T_tau",
             "C_q_dot", "g", "estimated_disturbance"
         };
-        
+
         for (const auto& state_name : state_names) {
             for (const auto& suffix : dof_suffixes) {
                 column_names_.push_back(state_name + "_" + suffix);
             }
         }
-        
+
         std::cout << "✓ Logging enabled (detailed mode)\n";
     } else {
-        // Only log estimated_disturbance
         for (const auto& suffix : dof_suffixes) {
             column_names_.push_back("estimated_disturbance_" + suffix);
         }
-        
+
         std::cout << "✓ Logging enabled (simple mode - disturbance only)\n";
     }
 }
@@ -156,7 +155,6 @@ Eigen::VectorXd DisturbanceObserver::estimate_disturbance(
     if (I_c.size() != 4) {
         throw std::invalid_argument("I_c 維度必須為 4 (4 legs)");
     }
-    
     // Compute robot dynamics
     simplify_dynamics::compute_dynamics(q, q_dot, I_c, M_, C_, G_, D_);
     
@@ -238,24 +236,23 @@ void DisturbanceObserver::log_details_to_file(
     log_file_ << index;
     
     if (log_detail_) {
-        // Log all detailed information
         std::vector<const Eigen::VectorXd*> arrays = {
             &p_k, &Y_k, &Y_filtered_k, &S_T_tau, &C_q_dot, &g, &estimated_disturbance
         };
-        
+
         for (const auto* arr : arrays) {
             for (int i = 0; i < arr->size(); ++i) {
                 log_file_ << "," << std::setprecision(10) << (*arr)(i);
             }
         }
     } else {
-        // Log only estimated_disturbance
         for (int i = 0; i < estimated_disturbance.size(); ++i) {
             log_file_ << "," << std::setprecision(10) << estimated_disturbance(i);
         }
     }
-    
+
     log_file_ << "\n";
     log_file_.flush();
 }
-} // namespace quadruped
+
+} // namespace corgi
