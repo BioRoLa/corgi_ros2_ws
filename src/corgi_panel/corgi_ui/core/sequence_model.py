@@ -46,10 +46,10 @@ class SequenceNode:
         leg: JointTarget() for leg in LEGS
     })
     gains: dict = field(default_factory=lambda: {
-        'leg_kp': 90.0,
-        'leg_kd': 1.75,
-        'gamma_kp': 10.0,
-        'gamma_kd': 0.5,
+        'leg_kp': 120.0,
+        'leg_kd': 0.25,
+        'gamma_kp': 150.0,
+        'gamma_kd': 1.75,
     })
     notes: str = ""
 
@@ -227,10 +227,10 @@ def _sequence_to_dict(seq: Sequence) -> dict:
                 "duration_sec": node.duration_sec,
                 "notes": node.notes,
                 "gains": {
-                    'leg_kp': float(node.gains.get('leg_kp', 90.0)),
-                    'leg_kd': float(node.gains.get('leg_kd', 1.75)),
-                    'gamma_kp': float(node.gains.get('gamma_kp', 10.0)),
-                    'gamma_kd': float(node.gains.get('gamma_kd', 0.5)),
+                    'leg_kp': float(node.gains.get('leg_kp', 120.0)),
+                    'leg_kd': float(node.gains.get('leg_kd', 0.25)),
+                    'gamma_kp': float(node.gains.get('gamma_kp', 150.0)),
+                    'gamma_kd': float(node.gains.get('gamma_kd', 1.75)),
                 },
                 "targets": {
                     leg: {
@@ -482,19 +482,19 @@ def _sequence_from_dict(d: dict) -> Sequence:
             ):
                 if not node_notes:
                     node_notes = 'Imported from execution record; targets need manual assignment.'
-            leg_kp_default = nd.get('leg_kp', 90.0)
-            leg_kd_default = nd.get('leg_kd', 1.75)
-            gamma_kp_default = nd.get('gamma_kp', 10.0)
-            gamma_kd_default = nd.get('gamma_kd', 0.5)
+            leg_kp_default = nd.get('leg_kp', 120.0)
+            leg_kd_default = nd.get('leg_kd', 0.25)
+            gamma_kp_default = nd.get('gamma_kp', 150.0)
+            gamma_kd_default = nd.get('gamma_kd', 1.75)
         else:
             duration = 1.0
             gains = {}
             node_name = f"node_{i}"
             node_notes = ""
-            leg_kp_default = 90.0
-            leg_kd_default = 1.75
-            gamma_kp_default = 10.0
-            gamma_kd_default = 0.5
+            leg_kp_default = 120.0
+            leg_kd_default = 0.25
+            gamma_kp_default = 150.0
+            gamma_kd_default = 1.75
 
         nodes.append(SequenceNode(
             name=node_name,

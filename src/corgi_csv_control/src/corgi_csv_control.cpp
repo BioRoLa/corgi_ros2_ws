@@ -23,6 +23,12 @@ int main(int argc, char **argv) {
     bool use_sim_time = false;
     node->get_parameter_or("use_sim_time", use_sim_time, false);
 
+    double leg_kp = node->declare_parameter("leg_kp", 120.0);
+    double leg_kd = node->declare_parameter("leg_kd", 0.25);
+    double leg_ki = node->declare_parameter("leg_ki", 0.0);
+    double gamma_kp = node->declare_parameter("gamma_kp", 150.0);
+    double gamma_kd = node->declare_parameter("gamma_kd", 1.75);
+
     if (use_sim_time) {
         RCLCPP_INFO(node->get_logger(), "Waiting for Webots clock...");
         while (rclcpp::ok()) {
@@ -101,15 +107,15 @@ int main(int argc, char **argv) {
             cmd->beta = std::stod(item);
             RCLCPP_DEBUG(node->get_logger(), item.c_str());
 
-            cmd->kp_r = 90;
-            cmd->kp_l = 90;
-            cmd->kp_h = 90;
-            cmd->ki_r = 0;
-            cmd->ki_l = 0;
+            cmd->kp_r = leg_kp;
+            cmd->kp_l = leg_kp;
+            cmd->kp_h = gamma_kp;
+            cmd->ki_r = leg_ki;
+            cmd->ki_l = leg_ki;
             cmd->ki_h = 0;
-            cmd->kd_r = 1.75;
-            cmd->kd_l = 1.75;
-            cmd->kd_h = 1.75;
+            cmd->kd_r = leg_kd;
+            cmd->kd_l = leg_kd;
+            cmd->kd_h = gamma_kd;
         }
         // Read 4 gamma (ABAD) columns: A_γ, B_γ, C_γ, D_γ
         for (auto& cmd : motor_cmds){
@@ -169,15 +175,15 @@ int main(int argc, char **argv) {
                 std::getline(ss, item, ',');
                 cmd->beta = std::stod(item);
 
-                cmd->kp_r = 90;
-                cmd->kp_l = 90;
-                cmd->kp_h = 90;
-                cmd->ki_r = 0;
-                cmd->ki_l = 0;
+                cmd->kp_r = leg_kp;
+                cmd->kp_l = leg_kp;
+                cmd->kp_h = gamma_kp;
+                cmd->ki_r = leg_ki;
+                cmd->ki_l = leg_ki;
                 cmd->ki_h = 0;
-                cmd->kd_r = 1.75;
-                cmd->kd_l = 1.75;
-                cmd->kd_h = 1.75;
+                cmd->kd_r = leg_kd;
+                cmd->kd_l = leg_kd;
+                cmd->kd_h = gamma_kd;
             }
             // Read 4 gamma (ABAD) columns: A_γ, B_γ, C_γ, D_γ
             for (auto& cmd : motor_cmds){

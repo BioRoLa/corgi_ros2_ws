@@ -545,7 +545,7 @@ class CorgiControlPanel(QWidget):
         self.spin_leg_kp.setDecimals(2)
         self.spin_leg_kp.setRange(-1e9, 1e9)
         self.spin_leg_kp.setSingleStep(1.0)
-        self.spin_leg_kp.setValue(90.0)
+        self.spin_leg_kp.setValue(120.0)
         pid_grid.addWidget(self.spin_leg_kp, 0, 1)
 
         pid_grid.addWidget(QLabel('θ/β Kd:'), 0, 2)
@@ -553,7 +553,7 @@ class CorgiControlPanel(QWidget):
         self.spin_leg_kd.setDecimals(2)
         self.spin_leg_kd.setRange(-1e9, 1e9)
         self.spin_leg_kd.setSingleStep(0.1)
-        self.spin_leg_kd.setValue(1.75)
+        self.spin_leg_kd.setValue(0.25)
         pid_grid.addWidget(self.spin_leg_kd, 0, 3)
 
         pid_grid.addWidget(QLabel('γ Kp:'), 1, 0)
@@ -561,7 +561,7 @@ class CorgiControlPanel(QWidget):
         self.spin_gamma_kp.setDecimals(2)
         self.spin_gamma_kp.setRange(-1e9, 1e9)
         self.spin_gamma_kp.setSingleStep(0.5)
-        self.spin_gamma_kp.setValue(10.0)
+        self.spin_gamma_kp.setValue(150.0)
         pid_grid.addWidget(self.spin_gamma_kp, 1, 1)
 
         pid_grid.addWidget(QLabel('γ Kd:'), 1, 2)
@@ -569,7 +569,7 @@ class CorgiControlPanel(QWidget):
         self.spin_gamma_kd.setDecimals(2)
         self.spin_gamma_kd.setRange(-1e9, 1e9)
         self.spin_gamma_kd.setSingleStep(0.1)
-        self.spin_gamma_kd.setValue(0.5)
+        self.spin_gamma_kd.setValue(1.75)
         pid_grid.addWidget(self.spin_gamma_kd, 1, 3)
         grp_joint_layout.addLayout(pid_grid)
 
@@ -1029,10 +1029,21 @@ class CorgiControlPanel(QWidget):
             self._csv_tune_start_ts = time.monotonic()
             self._csv_tune_samples = {'t': [], 'theta': [], 'beta': [], 'gamma': []}
             
-            # Build command with use_sim_time parameter if needed
-            cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg]
+            # Build command with PID and sim_time parameters
+            leg_kp = self.spin_leg_kp.value()
+            leg_kd = self.spin_leg_kd.value()
+            gamma_kp = self.spin_gamma_kp.value()
+            gamma_kd = self.spin_gamma_kd.value()
+            pid_args = [
+                '--ros-args',
+                '-p', f'leg_kp:={leg_kp}',
+                '-p', f'leg_kd:={leg_kd}',
+                '-p', f'gamma_kp:={gamma_kp}',
+                '-p', f'gamma_kd:={gamma_kd}',
+            ]
             if self.use_sim_time:
-                cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg, '--ros-args', '-p', 'use_sim_time:=true']
+                pid_args += ['-p', 'use_sim_time:=true']
+            cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg] + pid_args
             
             success = self.process_manager.start_process(
                 'csv_control',

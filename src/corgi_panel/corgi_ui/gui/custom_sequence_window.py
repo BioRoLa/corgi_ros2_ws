@@ -395,28 +395,28 @@ class CustomSequenceWindow(QWidget):
         self.spin_node_leg_kp = QDoubleSpinBox()
         self.spin_node_leg_kp.setDecimals(2)
         self.spin_node_leg_kp.setRange(0.0, 10000.0)
-        self.spin_node_leg_kp.setValue(90.0)
+        self.spin_node_leg_kp.setValue(120.0)
         pd_grid.addWidget(self.spin_node_leg_kp, 0, 1)
 
         pd_grid.addWidget(QLabel('θ/β Kd'), 0, 2)
         self.spin_node_leg_kd = QDoubleSpinBox()
         self.spin_node_leg_kd.setDecimals(2)
         self.spin_node_leg_kd.setRange(0.0, 1000.0)
-        self.spin_node_leg_kd.setValue(1.75)
+        self.spin_node_leg_kd.setValue(0.25)
         pd_grid.addWidget(self.spin_node_leg_kd, 0, 3)
 
         pd_grid.addWidget(QLabel('γ Kp'), 1, 0)
         self.spin_node_gamma_kp = QDoubleSpinBox()
         self.spin_node_gamma_kp.setDecimals(2)
         self.spin_node_gamma_kp.setRange(0.0, 10000.0)
-        self.spin_node_gamma_kp.setValue(10.0)
+        self.spin_node_gamma_kp.setValue(150.0)
         pd_grid.addWidget(self.spin_node_gamma_kp, 1, 1)
 
         pd_grid.addWidget(QLabel('γ Kd'), 1, 2)
         self.spin_node_gamma_kd = QDoubleSpinBox()
         self.spin_node_gamma_kd.setDecimals(2)
         self.spin_node_gamma_kd.setRange(0.0, 1000.0)
-        self.spin_node_gamma_kd.setValue(0.5)
+        self.spin_node_gamma_kd.setValue(1.75)
         pd_grid.addWidget(self.spin_node_gamma_kd, 1, 3)
         grp_pd.setLayout(pd_grid)
         layout.addWidget(grp_pd)
@@ -528,10 +528,10 @@ class CustomSequenceWindow(QWidget):
         self.edit_node_name.setText(node.name)
         self.spin_duration.setValue(node.duration_sec)
         self.edit_node_notes.setText(node.notes)
-        self.spin_node_leg_kp.setValue(float(node.gains.get('leg_kp', 90.0)))
-        self.spin_node_leg_kd.setValue(float(node.gains.get('leg_kd', 1.75)))
-        self.spin_node_gamma_kp.setValue(float(node.gains.get('gamma_kp', 10.0)))
-        self.spin_node_gamma_kd.setValue(float(node.gains.get('gamma_kd', 0.5)))
+        self.spin_node_leg_kp.setValue(float(node.gains.get('leg_kp', 120.0)))
+        self.spin_node_leg_kd.setValue(float(node.gains.get('leg_kd', 0.25)))
+        self.spin_node_gamma_kp.setValue(float(node.gains.get('gamma_kp', 150.0)))
+        self.spin_node_gamma_kd.setValue(float(node.gains.get('gamma_kd', 1.75)))
         for leg in LEGS:
             for joint in JOINTS:
                 self._joint_spins[(leg, joint)].setValue(
@@ -705,10 +705,10 @@ class CustomSequenceWindow(QWidget):
                         for leg in LEGS
                     },
                     gains={
-                        'leg_kp': float(data.get('gains', {}).get('leg_kp', 90.0)),
-                        'leg_kd': float(data.get('gains', {}).get('leg_kd', 1.75)),
-                        'gamma_kp': float(data.get('gains', {}).get('gamma_kp', 10.0)),
-                        'gamma_kd': float(data.get('gains', {}).get('gamma_kd', 0.5)),
+                        'leg_kp': float(data.get('gains', {}).get('leg_kp', 120.0)),
+                        'leg_kd': float(data.get('gains', {}).get('leg_kd', 0.25)),
+                        'gamma_kp': float(data.get('gains', {}).get('gamma_kp', 150.0)),
+                        'gamma_kd': float(data.get('gains', {}).get('gamma_kd', 1.75)),
                     },
                 )
             except Exception as e:
@@ -724,10 +724,10 @@ class CustomSequenceWindow(QWidget):
                     getattr(tmpl.targets[leg], joint)
                 )
         self.spin_duration.setValue(tmpl.duration_sec)
-        self.spin_node_leg_kp.setValue(float(tmpl.gains.get('leg_kp', 90.0)))
-        self.spin_node_leg_kd.setValue(float(tmpl.gains.get('leg_kd', 1.75)))
-        self.spin_node_gamma_kp.setValue(float(tmpl.gains.get('gamma_kp', 10.0)))
-        self.spin_node_gamma_kd.setValue(float(tmpl.gains.get('gamma_kd', 0.5)))
+        self.spin_node_leg_kp.setValue(float(tmpl.gains.get('leg_kp', 120.0)))
+        self.spin_node_leg_kd.setValue(float(tmpl.gains.get('leg_kd', 0.25)))
+        self.spin_node_gamma_kp.setValue(float(tmpl.gains.get('gamma_kp', 150.0)))
+        self.spin_node_gamma_kd.setValue(float(tmpl.gains.get('gamma_kd', 1.75)))
         self._on_node_apply()
         self._add_log(f"Applied template '{name}' to current node", LOGLEVEL.INFO)
 
