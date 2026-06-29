@@ -402,7 +402,7 @@ class CustomSequenceWindow(QWidget):
         self.spin_node_leg_kd = QDoubleSpinBox()
         self.spin_node_leg_kd.setDecimals(2)
         self.spin_node_leg_kd.setRange(0.0, 1000.0)
-        self.spin_node_leg_kd.setValue(0.25)
+        self.spin_node_leg_kd.setValue(1.75)
         pd_grid.addWidget(self.spin_node_leg_kd, 0, 3)
 
         pd_grid.addWidget(QLabel('γ Kp'), 1, 0)
@@ -529,7 +529,7 @@ class CustomSequenceWindow(QWidget):
         self.spin_duration.setValue(node.duration_sec)
         self.edit_node_notes.setText(node.notes)
         self.spin_node_leg_kp.setValue(float(node.gains.get('leg_kp', 120.0)))
-        self.spin_node_leg_kd.setValue(float(node.gains.get('leg_kd', 0.25)))
+        self.spin_node_leg_kd.setValue(float(node.gains.get('leg_kd', 1.75)))
         self.spin_node_gamma_kp.setValue(float(node.gains.get('gamma_kp', 150.0)))
         self.spin_node_gamma_kd.setValue(float(node.gains.get('gamma_kd', 1.75)))
         for leg in LEGS:
@@ -706,7 +706,7 @@ class CustomSequenceWindow(QWidget):
                     },
                     gains={
                         'leg_kp': float(data.get('gains', {}).get('leg_kp', 120.0)),
-                        'leg_kd': float(data.get('gains', {}).get('leg_kd', 0.25)),
+                        'leg_kd': float(data.get('gains', {}).get('leg_kd', 1.75)),
                         'gamma_kp': float(data.get('gains', {}).get('gamma_kp', 150.0)),
                         'gamma_kd': float(data.get('gains', {}).get('gamma_kd', 1.75)),
                     },
@@ -725,7 +725,7 @@ class CustomSequenceWindow(QWidget):
                 )
         self.spin_duration.setValue(tmpl.duration_sec)
         self.spin_node_leg_kp.setValue(float(tmpl.gains.get('leg_kp', 120.0)))
-        self.spin_node_leg_kd.setValue(float(tmpl.gains.get('leg_kd', 0.25)))
+        self.spin_node_leg_kd.setValue(float(tmpl.gains.get('leg_kd', 1.75)))
         self.spin_node_gamma_kp.setValue(float(tmpl.gains.get('gamma_kp', 150.0)))
         self.spin_node_gamma_kd.setValue(float(tmpl.gains.get('gamma_kd', 1.75)))
         self._on_node_apply()

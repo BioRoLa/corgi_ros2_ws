@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     node->get_parameter_or("use_sim_time", use_sim_time, false);
 
     double leg_kp = node->declare_parameter("leg_kp", 120.0);
-    double leg_kd = node->declare_parameter("leg_kd", 0.25);
+    double leg_kd = node->declare_parameter("leg_kd", 1.75);
     double leg_ki = node->declare_parameter("leg_ki", 0.0);
     double gamma_kp = node->declare_parameter("gamma_kp", 150.0);
     double gamma_kd = node->declare_parameter("gamma_kd", 1.75);

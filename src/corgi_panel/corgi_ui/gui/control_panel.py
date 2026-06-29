@@ -553,7 +553,7 @@ class CorgiControlPanel(QWidget):
         self.spin_leg_kd.setDecimals(2)
         self.spin_leg_kd.setRange(-1e9, 1e9)
         self.spin_leg_kd.setSingleStep(0.1)
-        self.spin_leg_kd.setValue(0.25)
+        self.spin_leg_kd.setValue(1.75)
         pid_grid.addWidget(self.spin_leg_kd, 0, 3)
 
         pid_grid.addWidget(QLabel('γ Kp:'), 1, 0)

@@ -47,7 +47,7 @@ class SequenceNode:
     })
     gains: dict = field(default_factory=lambda: {
         'leg_kp': 120.0,
-        'leg_kd': 0.25,
+        'leg_kd': 1.75,
         'gamma_kp': 150.0,
         'gamma_kd': 1.75,
     })
@@ -228,7 +228,7 @@ def _sequence_to_dict(seq: Sequence) -> dict:
                 "notes": node.notes,
                 "gains": {
                     'leg_kp': float(node.gains.get('leg_kp', 120.0)),
-                    'leg_kd': float(node.gains.get('leg_kd', 0.25)),
+                    'leg_kd': float(node.gains.get('leg_kd', 1.75)),
                     'gamma_kp': float(node.gains.get('gamma_kp', 150.0)),
                     'gamma_kd': float(node.gains.get('gamma_kd', 1.75)),
                 },
@@ -483,7 +483,7 @@ def _sequence_from_dict(d: dict) -> Sequence:
                 if not node_notes:
                     node_notes = 'Imported from execution record; targets need manual assignment.'
             leg_kp_default = nd.get('leg_kp', 120.0)
-            leg_kd_default = nd.get('leg_kd', 0.25)
+            leg_kd_default = nd.get('leg_kd', 1.75)
             gamma_kp_default = nd.get('gamma_kp', 150.0)
             gamma_kd_default = nd.get('gamma_kd', 1.75)
         else:
@@ -492,7 +492,7 @@ def _sequence_from_dict(d: dict) -> Sequence:
             node_name = f"node_{i}"
             node_notes = ""
             leg_kp_default = 120.0
-            leg_kd_default = 0.25
+            leg_kd_default = 1.75
             gamma_kp_default = 150.0
             gamma_kd_default = 1.75
 
