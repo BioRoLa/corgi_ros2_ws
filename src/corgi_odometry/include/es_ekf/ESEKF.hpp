@@ -153,10 +153,10 @@ public:
 
     /// @brief Set external velocity bias from Outer Fusion EKF.
     ///        Applied in update_leg(): z_corrected = z_leg - R_body^T * bv_outer
-    /// @param bv_outer  velocity bias in world frame [m/s]
+    /// @param bv_outer  velocity bias in odom/world frame [m/s]
     void set_bv_outer(const Eigen::Vector3f& bv_outer);
 
-    /// @brief Get current external velocity bias (world frame)
+    /// @brief Get current external velocity bias (odom/world frame)
     const Eigen::Vector3f& bv_outer() const { return bv_outer_; }
 
 private:
@@ -168,7 +168,7 @@ private:
     NominalState x_nom_;                 // nominal state (16-dim)
     Eigen::VectorXf dx_;                 // error state   (15-dim)
     Eigen::MatrixXf P_;                  // error covariance (15×15)
-    Eigen::Vector3f bv_outer_ = Eigen::Vector3f::Zero();  // from Outer EKF (world frame)
+    Eigen::Vector3f bv_outer_ = Eigen::Vector3f::Zero();  // from Outer EKF (odom/world frame)
 
     // --- Parameters ---
     NoiseParams noise_;

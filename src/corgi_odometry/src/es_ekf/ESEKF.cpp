@@ -185,7 +185,7 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     Eigen::Vector3f z_leg = -obs.leg->contact_velocity;
 
     // Apply external velocity bias correction (from Outer Fusion EKF).
-    // bv_outer_ is in world frame; z_leg is in body frame.
+    // bv_outer_ is in odom/world frame; z_leg is in body frame.
     // z_corrected = z_leg - R_body^T * bv_outer
     if (!bv_outer_.isZero()) {
         Eigen::Matrix3f R_body = x_nom_.q.toRotationMatrix();

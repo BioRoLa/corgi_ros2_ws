@@ -6,6 +6,7 @@
 #include "node/LegOdometryNode.hpp"
 #include "common/Config.hpp"
 #include "common/ParamsIO.hpp"
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
 // ============================================================
 // Global node pointer (for signal handler)
@@ -125,6 +126,7 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_EKF_BW, corgi::Config::QUEUE_SIZE_PUB);
     ekf_odom_pub_        = this->create_publisher<nav_msgs::msg::Odometry>(
         corgi::Config::TOPIC_EKF_ODOM, corgi::Config::QUEUE_SIZE_PUB);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
 }
@@ -400,8 +402,8 @@ void LegOdometryNode::process() {
             bw_msg.z = static_cast<double>(st.bw.z());
             ekf_bw_pub_->publish(bw_msg);
 
-            // Body-frame velocity: v_body = R^T * v_world
-            const Eigen::Vector3f v_body = st.q.toRotationMatrix().transpose() * st.v;
+            // Linear velocity is already expressed in the body/base_link frame.
+            const Eigen::Vector3f v_body = st.v;
             // Bias-corrected angular velocity
             const Eigen::Vector3f w_corr = w_m - st.bw;
 
@@ -424,6 +426,16 @@ void LegOdometryNode::process() {
             odom_msg.twist.twist.angular.y   = static_cast<double>(w_corr.y());
             odom_msg.twist.twist.angular.z   = static_cast<double>(w_corr.z());
             ekf_odom_pub_->publish(odom_msg);
+
+            geometry_msgs::msg::TransformStamped tf_msg;
+            tf_msg.header.stamp    = odom_msg.header.stamp;
+            tf_msg.header.frame_id = corgi::Config::FRAME_ODOM;
+            tf_msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
+            tf_msg.transform.translation.x = odom_msg.pose.pose.position.x;
+            tf_msg.transform.translation.y = odom_msg.pose.pose.position.y;
+            tf_msg.transform.translation.z = odom_msg.pose.pose.position.z;
+            tf_msg.transform.rotation = odom_msg.pose.pose.orientation;
+            tf_broadcaster_->sendTransform(tf_msg);
         }
     }
 
@@ -497,7 +509,7 @@ void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPt
 
 void LegOdometryNode::cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
     // Low-pass filter + hard clamp, then forward to ESEKF.
-    // bv is in world frame (as published by FusionNode).
+    // bv is in odom/world frame (as published by FusionNode).
     constexpr float LPF_ALPHA = 0.3f;    // smoothing factor [0=frozen, 1=no filter]
     constexpr float BV_MAX    = 0.15f;   // hard clamp per-axis [m/s]
 

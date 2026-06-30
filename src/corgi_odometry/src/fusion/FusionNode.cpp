@@ -114,11 +114,10 @@ void FusionNode::cb_ekf(const nav_msgs::msg::Odometry::SharedPtr msg) {
 // cb_lidar: LiDAR odometry → EKF update → publish
 //
 // Coordinate-frame fix (2026-05-10):
-//   /lidar_odom arrives in camera_init frame which has a different initial
-//   orientation than the odom frame used by /ekf.
+//   /lidar_odom arrives in camera_init frame, while /ekf is expressed in odom.
 //   We compute a one-time static transform T_{odom←camera_init} from the
-//   first matching EKF state and apply it to every lidar measurement so that
-//   both /ekf and /odom_mapping share the same initial coordinate system.
+//   first matching EKF state and apply it to every lidar measurement before
+//   updating the map←odom outer EKF.
 // ----------------------------------------------------------------
 void FusionNode::cb_lidar(const nav_msgs::msg::Odometry::SharedPtr msg) {
     if (!is_triggered_) return;
@@ -277,9 +276,8 @@ void FusionNode::publish_odom_mapping(const rclcpp::Time& stamp,
                                        const Eigen::Quaternionf& q_map) {
     nav_msgs::msg::Odometry msg;
     msg.header.stamp    = stamp;
-    // Use odom_frame_ so /odom_mapping shares the same initial coordinate
-    // system as /ekf (map is initialised at odom origin after the frame fix).
-    msg.header.frame_id = odom_frame_;
+    // p_map/q_map are already expressed in the map frame.
+    msg.header.frame_id = map_frame_;
     msg.child_frame_id  = corgi::Config::FRAME_BASE_LINK;
     msg.pose.pose.position.x    = static_cast<double>(p_map.x());
     msg.pose.pose.position.y    = static_cast<double>(p_map.y());

@@ -88,6 +88,7 @@ ament_target_dependencies(corgi_leg_odom
   nav_msgs
   corgi_msgs
   ament_index_cpp
+  tf2_ros
 )
 
 target_link_libraries(corgi_leg_odom
