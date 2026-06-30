@@ -66,8 +66,8 @@ int main(int argc, char **argv) {
     std::string csv_file_path;
     std::string input_arg = argv[1];
 
-    // If absolute/relative path is provided, use it directly
-    if (input_arg.find('/') != std::string::npos) {
+    // If absolute path (starts with '/'), use it directly; otherwise prepend input_csv dir
+    if (!input_arg.empty() && input_arg[0] == '/') {
         csv_file_path = input_arg;
         if (csv_file_path.size() < 4 || csv_file_path.substr(csv_file_path.size() - 4) != ".csv") {
             csv_file_path += ".csv";
