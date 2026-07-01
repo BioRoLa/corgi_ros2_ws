@@ -27,4 +27,6 @@ ros2 bag record \
   /lidar_odom \
   /impedance/command \
   /walk/swing_phase \
+  /power/command \
+  /power/state \
   -o "$OUTPUT"
