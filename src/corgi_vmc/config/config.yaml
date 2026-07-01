@@ -7,7 +7,7 @@ common:
   fz_lower_bound: -50
 
   Kp: [1000, 2000, 0, 0, 0, 300]      # roll, pitch, yaw, x, y, z
-  Kd: [50, 100, 0, 0, 0, 15]          # wx, wy, wz, vx, vy, vz
+  Kd: [50, 100, 0, 0, 0, 150]          # wx, wy, wz, vx, vy, vz
   wrench_weight: [10000, 30000, 0, 0, 0, 6000]
   force_weight: 1e-4
 
@@ -20,7 +20,7 @@ common:
   Kx_swing: 2000
   Ky_swing: 2000
   Kx_stance: 2000
-  Ky_stance: 200
+  Ky_stance: 100
 
   walk:
     stand_height: 0.2
