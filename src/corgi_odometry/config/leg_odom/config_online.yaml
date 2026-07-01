@@ -20,8 +20,8 @@ observer:
 
 # Schmitt-trigger contact thresholds
 contact:
-  rm_threshold_high:   40.0  #  sim: 25.0, real: 40.0
-  rm_threshold_low:    25.0  #  sim: 15.0, real: 25.0
+  rm_threshold_high:   35.0  #  sim: 25.0, real: 35.0
+  rm_threshold_low:     5.0  #  sim: 15.0, real: 5.0
   beta_threshold_high: 10.0
   beta_threshold_low:   1.0
 
