@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     // const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25
     // const double init_eta[8] = {1.8571554834938668,0.4790144528333341,2.0636290799909855,0.10633741753260191,2.0636290799909855,-0.10633741753260191,1.8571554834938668,-0.4790144528333341}; // left stand height 0.25, right stand 0.3
     const double init_eta[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};  // stand height 0.2
-    double velocity = 0.1;
+    double velocity = 0.05;
     double stand_height = 0.2;
     double step_length = 0.2;
     double step_height = 0.08;
@@ -209,7 +209,7 @@ int main(int argc, char **argv)
             if (last_state != state)
             {
                 double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                walk_gait.initialize(current_eta);
+                walk_gait.initialize(current_eta, step_length);
             } // end if
             break;
         case WALK:
