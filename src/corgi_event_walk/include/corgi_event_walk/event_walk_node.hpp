@@ -57,6 +57,8 @@ private:
     bool contact_valid_{false};
     corgi_msgs::msg::MotorStateStamped motor_state_{};
     bool motor_state_valid_{false};
+    int max_cycles_{5};
+    bool shutdown_requested_{false};
 
     // ── motor command buffer ─────────────────────────────────────────────────
     corgi_msgs::msg::MotorCmdStamped cmd_msg_;

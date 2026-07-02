@@ -94,6 +94,17 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+)
+
+install(DIRECTORY script
+  DESTINATION share/${PROJECT_NAME}
+  USE_SOURCE_PERMISSIONS
+)
+
 # --- export library for downstream packages (e.g. corgi_mpc) ---
 ament_export_targets(export_event_walk_gait HAS_LIBRARY_TARGET)
 ament_export_dependencies(corgi_utils)

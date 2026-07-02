@@ -99,6 +99,7 @@ void EventWalkGait::set_stand_height(double h)
 }
 
 std::array<int,4> EventWalkGait::get_swing_phase() const { return swing_mask_; }
+int EventWalkGait::completed_cycles() const { return completed_cycles_; }
 bool EventWalkGait::is_adjusting() const { return phase_ == Phase::ADJUSTING; }
 bool EventWalkGait::is_ready()     const { return phase_ == Phase::READY; }
 bool EventWalkGait::is_ended()     const { return phase_ == Phase::END;   }
@@ -386,7 +387,8 @@ void EventWalkGait::do_adjusting(const ExternalInput & input, GaitOutput & out)
         swing_leg_ = LEG_SEQ[seq_idx_];
 
         if (seq_idx_ == 0) {
-            std::printf("[EventWalkGait] Completed one gait cycle.\n");
+            completed_cycles_++;
+            std::printf("[EventWalkGait] Completed gait cycle %d.\n", completed_cycles_);
             if (!input.trigger) {
                 std::printf("[EventWalkGait] Trigger released — stopping.\n");
                 phase_ = Phase::END;

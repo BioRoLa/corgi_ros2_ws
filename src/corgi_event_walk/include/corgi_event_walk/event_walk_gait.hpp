@@ -96,6 +96,7 @@ public:
     void set_stand_height(double h);
 
     std::array<int, 4> get_swing_phase() const;
+    int completed_cycles() const;
     bool is_adjusting() const;
     bool is_ready()     const;
     bool is_ended()     const;
@@ -168,6 +169,7 @@ private:
     // attitude_stable latch — reset in start_swing(), set on input.attitude_stable
     bool attitude_stable_latch_{false};
     int  adjust_tick_{0};
+    int  completed_cycles_{0};
 
     int  transform_count_;
     int  transform_tick_{0};

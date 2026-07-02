@@ -16,10 +16,10 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
 {
     // ── declare parameters ────────────────────────────────────────────────
     bool   sim            = this->declare_parameter("sim",               true);
-    double velocity       = this->declare_parameter("velocity",          0.05);
+    double velocity       = this->declare_parameter("velocity",          0.1);
     double stand_height   = this->declare_parameter("stand_height",      0.20);
-    double step_length    = this->declare_parameter("step_length",       0.2);
-    double step_height    = this->declare_parameter("step_height",       0.08);
+    double step_length    = this->declare_parameter("step_length",       0.25);
+    double step_height    = this->declare_parameter("step_height",       0.06);
     double con_bias       = this->declare_parameter("con_bias",          0.0);
     int    sampling_rate  = this->declare_parameter("sampling_rate",     1000);
     int    max_adj_steps  = this->declare_parameter("max_adjust_steps",  3000);
@@ -34,6 +34,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     int contact_off_count = this->declare_parameter("contact_off_count", 2);
     double pre_swing_advance_scale =
         this->declare_parameter("pre_swing_advance_scale", 1.5);
+    max_cycles_ = this->declare_parameter("max_cycles", 5);
 
     // ── create gait engine ────────────────────────────────────────────────
     gait_ = std::make_unique<EventWalkGait>(
@@ -170,4 +171,15 @@ void EventWalkNode::on_timer()
         mask_msg.data[i] = out.in_walk ? out.swing_mask[i] : -1;
     pub_swing_mask_->publish(mask_msg);
     pub_swing_phase_->publish(mask_msg);   // legacy compat topic
+
+    if (!shutdown_requested_ &&
+        max_cycles_ > 0 &&
+        gait_->completed_cycles() >= max_cycles_) {
+        shutdown_requested_ = true;
+        timer_->cancel();
+        RCLCPP_INFO(this->get_logger(),
+            "Completed %d gait cycles; shutting down event_walk_node.",
+            gait_->completed_cycles());
+        rclcpp::shutdown();
+    }
 }
