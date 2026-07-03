@@ -188,8 +188,11 @@ class CX5_AHRS {
             device->registerExtractor(sensor_data_handlers[2], &raw_accel);
             device->registerExtractor(sensor_data_handlers[3], &g);
 
-            if(commands_base::resume(*device) != CmdResult::ACK_OK)
-                throw std::runtime_error("ERROR: Could not resume the device!");
+            if(commands_3dm::writeDatastreamControl(*device, data_sensor::DESCRIPTOR_SET, true) != CmdResult::ACK_OK)
+                throw std::runtime_error("ERROR: Could not enable sensor data stream!");
+
+            if(commands_3dm::writeDatastreamControl(*device, data_filter::DESCRIPTOR_SET, true) != CmdResult::ACK_OK)
+                throw std::runtime_error("ERROR: Could not enable filter data stream!");
 
             // bool filter_state_ahrs = false;
             Eigen::Matrix3f rot;
