@@ -179,12 +179,6 @@ class CX5_AHRS {
             if(commands_3dm::writeComplementaryFilter(*device, true, false, 10., 1.) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set north complement off!");
 
-            if(commands_filter::writeAidingMeasurementEnable(
-                    *device,
-                    commands_filter::AidingMeasurementEnable::AidingSource::MAGNETOMETER,
-                    false) != CmdResult::ACK_OK)
-                throw std::runtime_error("ERROR: Could not set filter heading update control!");
-
             // CV7 initializes automatically after a filter reset using its saved
             // Initialization Configuration (0x0D, 0x52).
             if(commands_filter::reset(*device) != CmdResult::ACK_OK)
