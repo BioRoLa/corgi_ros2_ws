@@ -68,14 +68,16 @@ void disconnect_utils(std::unique_ptr<Utils>& utils){
 class CX5_AHRS {
     public:
         CX5_AHRS(std::string port, uint32_t baud, uint16_t _sensor_sample_rate, uint16_t _filter_sample_rate) {
-            uint32_t default_baud_rate = 921600;
-            utils = assign_serial(port, default_baud_rate);
+            utils = assign_serial(port, baud);
             
             if(commands_base::ping(*utils->device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not ping the device!");
 
             sensor_sample_rate = _sensor_sample_rate;
             filter_sample_rate = _filter_sample_rate;
+
+            if (sensor_sample_rate == 0 || filter_sample_rate == 0)
+                throw std::runtime_error("ERROR: IMU sample rates must be greater than zero!");
             
             // if(commands_3dm::writeUartBaudrate(*utils->device, baud) != CmdResult::ACK_OK) {
             //     throw std::runtime_error("ERROR: Could not set the device baudrate!");
@@ -109,7 +111,10 @@ class CX5_AHRS {
             //     utils = assign_serial(port, baud);
             // }
 
-            twist_bias = Eigen::Vector3f(0,0,0);
+            acceleration = Eigen::Vector3f::Zero();
+            twist = Eigen::Vector3f::Zero();
+            attitude = Eigen::Quaternionf::Identity();
+            twist_bias = Eigen::Vector3f::Zero();
             running = false;
         }
 
@@ -136,24 +141,30 @@ class CX5_AHRS {
             // }
 
             uint16_t sensor_base_rate;
-            if(commands_3dm::imuGetBaseRate(*device, &sensor_base_rate) != CmdResult::ACK_OK)
+            if(commands_3dm::getBaseRate(*device, data_sensor::DESCRIPTOR_SET, &sensor_base_rate) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not get sensor base rate format!");
+
+            if(sensor_sample_rate > sensor_base_rate)
+                throw std::runtime_error("ERROR: Sensor sample rate exceeds the CV7 base rate!");
 
             const uint16_t sensor_decimation = sensor_base_rate / sensor_sample_rate;
             std::array<DescriptorRate, 1> sensor_descriptors = {{
                 { data_sensor::DATA_COMP_QUATERNION, sensor_decimation },
             }};
 
-            if(commands_3dm::writeImuMessageFormat(*device, sensor_descriptors.size(), sensor_descriptors.data()) != CmdResult::ACK_OK)
+            if(commands_3dm::writeMessageFormat(*device, data_sensor::DESCRIPTOR_SET, sensor_descriptors.size(), sensor_descriptors.data()) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set sensor message format!");
 
             float sensor_to_vehicle_transformation_euler[3] = {M_PI, 0, 0};
-            if(commands_filter::writeSensorToVehicleRotationEuler(*device, sensor_to_vehicle_transformation_euler[0], sensor_to_vehicle_transformation_euler[1], sensor_to_vehicle_transformation_euler[2]) != CmdResult::ACK_OK)
+            if(commands_3dm::writeSensor2VehicleTransformEuler(*device, sensor_to_vehicle_transformation_euler[0], sensor_to_vehicle_transformation_euler[1], sensor_to_vehicle_transformation_euler[2]) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set sensor-to-vehicle transformation!");
             
             uint16_t filter_base_rate;
-            if(commands_3dm::filterGetBaseRate(*device, &filter_base_rate) != CmdResult::ACK_OK)
+            if(commands_3dm::getBaseRate(*device, data_filter::DESCRIPTOR_SET, &filter_base_rate) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not get filter base rate format!");
+
+            if(filter_sample_rate > filter_base_rate)
+                throw std::runtime_error("ERROR: Filter sample rate exceeds the CV7 base rate!");
 
             const uint16_t filter_decimation = filter_base_rate / filter_sample_rate;
             std::array<DescriptorRate, 3> filter_descriptors = {{
@@ -162,18 +173,20 @@ class CX5_AHRS {
                 { data_filter::DATA_GRAVITY_VECTOR,           filter_decimation },
             }};
 
-            if(commands_3dm::writeFilterMessageFormat(*device, filter_descriptors.size(), filter_descriptors.data()) != CmdResult::ACK_OK)
+            if(commands_3dm::writeMessageFormat(*device, data_filter::DESCRIPTOR_SET, filter_descriptors.size(), filter_descriptors.data()) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set filter message format!");
 
             if(commands_3dm::writeComplementaryFilter(*device, true, false, 10., 1.) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set north complement off!");
 
-            if(commands_filter::writeHeadingSource(*device, commands_filter::HeadingSource::Source::NONE) != CmdResult::ACK_OK)
+            if(commands_filter::writeAidingMeasurementEnable(
+                    *device,
+                    commands_filter::AidingMeasurementEnable::AidingSource::MAGNETOMETER,
+                    false) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set filter heading update control!");
 
-            if(commands_filter::writeAutoInitControl(*device, 1) != CmdResult::ACK_OK)
-                throw std::runtime_error("ERROR: Could not set filter autoinit control!");
-
+            // CV7 initializes automatically after a filter reset using its saved
+            // Initialization Configuration (0x0D, 0x52).
             if(commands_filter::reset(*device) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not reset the filter!");
 
@@ -196,11 +209,10 @@ class CX5_AHRS {
                 //     if (filter_status.filter_state == data_filter::FilterMode::AHRS) filter_state_ahrs = true;
                 //     else continue;
                 // }
-                _imu_mutex.lock();
+                std::lock_guard<std::mutex> lock(_imu_mutex);
+                attitude = Eigen::Quaternionf(raw_attitude.q[0], raw_attitude.q[1], raw_attitude.q[2], raw_attitude.q[3]);
                 acceleration = rot * (Eigen::Vector3f(raw_accel.accel) - attitude.toRotationMatrix().transpose() * Eigen::Vector3f(g.gravity));
                 twist = rot * (Eigen::Vector3f(raw_gyro.gyro)) - twist_bias;
-                attitude = Eigen::Quaternionf(raw_attitude.q[0], raw_attitude.q[1], raw_attitude.q[2], raw_attitude.q[3]);
-                _imu_mutex.unlock();
             }
         }
 
@@ -218,11 +230,10 @@ class CX5_AHRS {
         }
 
         void get(Eigen::Vector3f &acceleration_, Eigen::Vector3f &twist_, Eigen::Quaternionf &attitude_){
-            _imu_mutex.lock();
+            std::lock_guard<std::mutex> lock(_imu_mutex);
             acceleration_ = acceleration;
             twist_ = twist;
             attitude_ = attitude;
-            _imu_mutex.unlock();
         }
 
         void stop() {
