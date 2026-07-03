@@ -179,10 +179,8 @@ class CX5_AHRS {
             if(commands_3dm::writeComplementaryFilter(*device, true, false, 10., 1.) != CmdResult::ACK_OK)
                 throw std::runtime_error("ERROR: Could not set north complement off!");
 
-            // CV7 initializes automatically after a filter reset using its saved
-            // Initialization Configuration (0x0D, 0x52).
-            if(commands_filter::reset(*device) != CmdResult::ACK_OK)
-                throw std::runtime_error("ERROR: Could not reset the filter!");
+            // CV7 initializes from its saved configuration at power-up. A filter
+            // reset is not required before starting the configured data streams.
 
             DispatchHandler sensor_data_handlers[4];
             device->registerExtractor(sensor_data_handlers[0], &raw_attitude);
