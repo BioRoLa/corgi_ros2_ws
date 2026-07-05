@@ -1,5 +1,5 @@
-#ifndef IMU_HPP
-#define IMU_HPP
+#ifndef IMU_CV7_HPP
+#define IMU_CV7_HPP
 
 #ifndef SIMULATION
 #ifndef DEBUG
@@ -65,9 +65,9 @@ void disconnect_utils(std::unique_ptr<Utils>& utils){
 //     exit(0);
 // }
 
-class CX5_AHRS {
+class CV7_AHRS {
     public:
-        CX5_AHRS(std::string port, uint32_t baud, uint16_t _sensor_sample_rate, uint16_t _filter_sample_rate) {
+        CV7_AHRS(std::string port, uint32_t baud, uint16_t _sensor_sample_rate, uint16_t _filter_sample_rate) {
             utils = assign_serial(port, baud);
             
             if(commands_base::ping(*utils->device) != CmdResult::ACK_OK)
