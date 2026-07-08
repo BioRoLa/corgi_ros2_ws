@@ -11,7 +11,8 @@ Node wiring
   fastlio_mapping             sub /livox/lidar, /livox/imu
                               pub /Odometry (camera_init→body)
                               broadcast TF camera_init→body
-  odom_tf_relay               sub /Odometry  →  pub /lidar_odom (camera_init→base_link)
+  odom_tf_relay               sub /Odometry, apply hardcoded T_body←base_link
+                              pub /lidar_odom (camera_init→base_link)
   corgi_fusion_node           sub /ekf, /lidar_odom
                               pub /odom_mapping, /fusion/bv
                               broadcast TF map→odom
@@ -25,6 +26,10 @@ Node wiring
 TF tree
 -------
   map ──(fusion)──► odom ──(leg_odom)──► base_link ──(static)──► mid360_optical
+
+FAST-LIO also broadcasts camera_init→body as a separate TF chain.  The relay
+converts that pose at the message level only; it does not broadcast
+camera_init→base_link.
 
 Prerequisites
 -------------

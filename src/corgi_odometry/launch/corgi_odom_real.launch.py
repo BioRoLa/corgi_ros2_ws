@@ -17,7 +17,7 @@ Topic wiring
                           broadcast TF  camera_init → body
 
   odom_tf_relay           sub /Odometry  (camera_init→body)
-                          TF lookup body→base_link (from static TFs)
+                          apply hardcoded T_body←base_link
                           pub /lidar_odom (nav_msgs/Odometry, camera_init→base_link)
 
   corgi_fusion_node       sub /ekf, /lidar_odom  (both in base_link child frame)
@@ -28,10 +28,10 @@ TF tree (at steady-state)
 --------------------------
   map ──(fusion)──► odom ──(leg_odom)──► base_link
                                          └──(static)──► mid360_optical
-                                                        └──(static)──► body
 
-NOTE  fast_lio also broadcasts camera_init→body independently.
-      camera_init ≈ map (both originate at the robot start pose).
+NOTE  fast_lio broadcasts camera_init→body independently; this is a separate
+      TF chain.  odom_tf_relay converts that pose at the message level only and
+      does not broadcast camera_init→base_link.
 
 Known limitations
 -----------------
@@ -195,23 +195,12 @@ def generate_launch_description():
     # causing TF2 to report disconnected trees.  The relay node uses a
     # hardcoded transform instead (see Node 4b above).
 
-    # ── Auto-trigger: send enable=true to /trigger after a short delay ──────
-    # corgi_leg_odom waits for a TriggerStamped on /trigger before processing.
-    # This node sends it once automatically so no manual command is needed.
-    auto_trigger_node = Node(
-        package='corgi_odometry',
-        executable='auto_trigger.py',
-        name='auto_trigger',
-        output='screen',
-        parameters=[{'delay_sec': 8.0}],
-    )
-
     # ── Bag recorder: record fusion+EKF inputs/outputs (no point clouds) ─────
-    # Starts 15 s after launch (after auto_trigger has fired and EKF is up).
+    # Starts 6 s after launch (after auto_trigger has fired and EKF is up).
     bag_script = os.path.join(
         get_package_share_directory('corgi_odometry'), 'script', 'odom_fusion_bag.sh')
     bag_recorder = TimerAction(
-        period=15.0,
+        period=6.0,
         actions=[
             ExecuteProcess(
                 cmd=['bash', bag_script],
@@ -228,6 +217,5 @@ def generate_launch_description():
         odom_tf_relay_node,
         corgi_fusion_node,
         static_tf_base_to_lidar,
-        # auto_trigger_node,
         bag_recorder,
     ])

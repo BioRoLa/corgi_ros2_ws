@@ -7,7 +7,7 @@
 #include <string>
 #include <iomanip>
 #include <cmath>
-#include "simplify_dynamics.hpp"
+#include "general_momentum_observer/simplify_dynamics.hpp"
 
 namespace corgi {
 

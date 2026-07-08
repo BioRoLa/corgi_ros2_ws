@@ -15,7 +15,7 @@ namespace fusion {
 // Nominal state (9-dim concept, stored separately):
 //   p_mo  [3]  – origin of odom frame expressed in map frame
 //   q_mo  [4]  – orientation odom→map (unit quaternion)
-//   bv    [3]  – systematic velocity bias in world/map frame [m/s]
+//   bv    [3]  – systematic inner-odometry velocity bias in odom frame [m/s]
 //
 // Error state (9-dim):
 //   δp_mo [0-2]

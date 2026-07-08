@@ -17,7 +17,7 @@ Topic wiring
                           broadcast TF  camera_init → body
 
   odom_tf_relay           sub /Odometry  (camera_init→body)
-                          TF lookup body→base_link (from static TFs)
+                          apply hardcoded T_body←base_link
                           pub /lidar_odom (nav_msgs/Odometry, camera_init→base_link)
 
   corgi_fusion_node       sub /ekf, /lidar_odom  (both in base_link child frame)
@@ -28,10 +28,10 @@ TF tree (at steady-state)
 --------------------------
   map ──(fusion)──► odom ──(leg_odom)──► base_link
                                          └──(static)──► mid360_optical
-                                                        └──(static)──► body
 
-NOTE  fast_lio also broadcasts camera_init→body independently.
-      camera_init ≈ map (both originate at the robot start pose).
+NOTE  fast_lio broadcasts camera_init→body independently; this is a separate
+      TF chain.  odom_tf_relay converts that pose at the message level only and
+      does not broadcast camera_init→base_link.
 
 Known limitations
 -----------------

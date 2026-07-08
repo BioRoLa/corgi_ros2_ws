@@ -13,6 +13,9 @@ tree conflict: fast_lio broadcasts camera_init→body dynamically, and a second
 static publisher for mid360_optical→body would give 'body' two parents, which
 TF2 rejects.
 
+This node publishes only the converted Odometry message; it does not broadcast
+camera_init→base_link as a TF.
+
 Math applied on every incoming message:
 
     T_{world ← target} = T_{world ← source}  ⊗  T_{source ← target}
