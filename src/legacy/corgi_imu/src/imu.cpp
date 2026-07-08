@@ -2,13 +2,13 @@
 #include "corgi_msgs/msg/imu_stamped.hpp"
 #include "corgi_msgs/msg/headers.hpp"
 #include "corgi_msgs/srv/imu.hpp"
-#include "corgi_imu/cx5.hpp"
+#include "corgi_imu/cv7.hpp"
 #include <sys/time.h>
 #include <mutex>
 #include <thread>
 #include <memory>
 
-std::shared_ptr<CX5_AHRS> imu;
+std::shared_ptr<CV7_AHRS> imu;
 std::mutex cb_lock;
 
 enum SensorMode {
@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
     printf("Starting IMU node\n");
 
-    imu = std::make_shared<CX5_AHRS>("/dev/ttyTHS1", 921600, 1000, 500);
+    imu = std::make_shared<CV7_AHRS>("/dev/ttyTHS1", 921600, 1000, 500);
 
     auto pub = node->create_publisher<corgi_msgs::msg::ImuStamped>("imu", 1);
 
