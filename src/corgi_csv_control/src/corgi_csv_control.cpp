@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include "corgi_msgs/msg/motor_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
@@ -11,6 +12,20 @@ bool trigger = false;
 
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
+}
+
+// Publishes each phase transition on /experiment/phase so external tooling
+// (e.g. experiment_entrypoint.sh) can wait on a real ROS signal instead of
+// grepping this node's human-readable log output. transient_local durability
+// means a late-joining subscriber still gets the most recent phase value
+// immediately, even if it started subscribing after the message was sent.
+void publish_phase(
+    const rclcpp::Publisher<std_msgs::msg::String>::SharedPtr &pub,
+    const std::string &phase)
+{
+    std_msgs::msg::String msg;
+    msg.data = phase;
+    pub->publish(msg);
 }
 
 int main(int argc, char **argv) {
@@ -44,6 +59,8 @@ int main(int argc, char **argv) {
     }
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 10);
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
+    auto phase_pub = node->create_publisher<std_msgs::msg::String>(
+        "experiment/phase", rclcpp::QoS(1).transient_local());
     // rclcpp::Rate rate(1000);
     // use_sim_time setting
     rclcpp::Duration period(0, 1000000); // 1ms
@@ -92,6 +109,7 @@ int main(int argc, char **argv) {
     
 
     RCLCPP_INFO(node->get_logger(), "Leg Transform Starts\n");
+    publish_phase(phase_pub, "leg_transform_start");
     
     for (int i=0; i<5000; i++){
         std::getline(csv_file, line);
@@ -137,6 +155,7 @@ int main(int argc, char **argv) {
     
 
     RCLCPP_INFO(node->get_logger(), "Leg Transform Finished\n");
+    publish_phase(phase_pub, "leg_transform_done");
 
     
     while (rclcpp::ok() && !trigger) {
@@ -146,6 +165,7 @@ int main(int argc, char **argv) {
 
     if (rclcpp::ok()) {
         RCLCPP_INFO(node->get_logger(), "CSV Trajectory Starts\n");
+        publish_phase(phase_pub, "trajectory_start");
 
         int seq = 0;
         next_time = node->now();
@@ -208,6 +228,8 @@ int main(int argc, char **argv) {
     }
 
     RCLCPP_INFO(node->get_logger(), "CSV Trajectory Finished\n");
+    publish_phase(phase_pub, "trajectory_done");
+    rclcpp::spin_some(node);  // give the transient_local publish a chance to go out before shutdown
 
     rclcpp::shutdown();
     
