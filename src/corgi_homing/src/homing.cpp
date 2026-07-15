@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
 
     auto node = rclcpp::Node::make_shared("corgi_homing");
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 5);
-    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 5, motor_state_cb);
+    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1, motor_state_cb);
     rclcpp::Rate rate(1000);
     rclcpp::spin_some(node);
 
