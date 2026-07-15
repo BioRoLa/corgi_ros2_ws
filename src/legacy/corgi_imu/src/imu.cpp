@@ -99,18 +99,27 @@ int main(int argc, char **argv)
         
         imu_msg.header = headers_msg;
 
-        imu_msg.linear_acceleration.x = acceleration.x();
+        // Physical mounting correction:
+        // The IMU is mounted with +X pointing backward and +Z pointing downward
+        // relative to the robot body frame. This is a 180-degree rotation about
+        // the Y axis, so vectors transform as (x, y, z) -> (-x, y, -z).
+        imu_msg.linear_acceleration.x = -acceleration.x();
         imu_msg.linear_acceleration.y = acceleration.y();
-        imu_msg.linear_acceleration.z = acceleration.z();
+        imu_msg.linear_acceleration.z = -acceleration.z();
 
-        imu_msg.angular_velocity.x = twist.x();
+        imu_msg.angular_velocity.x = -twist.x();
         imu_msg.angular_velocity.y = twist.y();
-        imu_msg.angular_velocity.z = twist.z();
+        imu_msg.angular_velocity.z = -twist.z();
 
-        imu_msg.orientation.x = orientation.x();
-        imu_msg.orientation.y = orientation.y();
-        imu_msg.orientation.z = orientation.z();
-        imu_msg.orientation.w = orientation.w();
+        // Apply the fixed mounting offset to the attitude quaternion.
+        // The IMU quaternion describes the sensor frame pose, so the body frame
+        // pose is q_body = q_imu * q_mount, where q_mount = Ry(pi).
+        const Eigen::Quaternionf q_mount(0.0f, 0.0f, 1.0f, 0.0f);
+        const Eigen::Quaternionf body_orientation = (orientation * q_mount).normalized();
+        imu_msg.orientation.x = body_orientation.x();
+        imu_msg.orientation.y = body_orientation.y();
+        imu_msg.orientation.z = body_orientation.z();
+        imu_msg.orientation.w = body_orientation.w();
 
         pub->publish(imu_msg);
 
