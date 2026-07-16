@@ -20,10 +20,32 @@ observer:
 
 # Schmitt-trigger contact thresholds
 contact:
-  rm_threshold_high:   25.0  # change to 40.0 for real robot
+
+  ###### real walk/trot ######
+  # rm_threshold_high:   35.0
+  # rm_threshold_low:    25.0
+  # beta_threshold_high:  4.0
+  # beta_threshold_low:   0.5
+
+  ###### real wlw ######
+  # rm_threshold_high:   50.0
+  # rm_threshold_low:    25.0
+  # beta_threshold_high:  3.0
+  # beta_threshold_low:   1.5
+
+  ###### sim walk/trot ######
+  rm_threshold_high:   25.0
   rm_threshold_low:    15.0
-  beta_threshold_high: 10.0
+  beta_threshold_high:  2.0
   beta_threshold_low:   1.0
+
+  ###### sim wlw ######
+  # rm_threshold_high:   25.0
+  # rm_threshold_low:    15.0
+  # beta_threshold_high:  1.5
+  # beta_threshold_low:   1.0
+
+
 
 # Logic switches
 # NOTE: use_esekf_state is intentionally absent here.  The online node

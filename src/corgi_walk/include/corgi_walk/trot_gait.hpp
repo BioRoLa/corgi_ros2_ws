@@ -83,7 +83,8 @@ class TrotGait {
         double diff_step_length = 0.0;  // Differential step length 
         double new_diff_step_length = 0.0;  // New differential step length
         double diff_dS = 0.0;   // Differential dS
-        int sign_diff[4];   // Differential sign
+        // Zero while walking straight; set to +/-1 by set_curvature().
+        int sign_diff[4] = {0, 0, 0, 0};
 };//end class TrotGait
 
 #endif // TrotGait_HPP

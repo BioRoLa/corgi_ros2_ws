@@ -68,6 +68,23 @@ int main(int argc, char **argv) {
     const double step_length   = trot_read_double("step_length");
     const double step_height   = trot_read_double("step_height");
     const int    target_loop   = trot_read_int("target_loop");
+    const int    ramp_up_loops = trot_read_int("ramp_up_loops");
+    const int    ramp_down_loops = trot_read_int("ramp_down_loops");
+
+    // This node publishes motor commands and advances TrotGait at 1 kHz.
+    // TrotGait must use the same rate because it computes dS = velocity / rate.
+    constexpr int control_rate_hz = 1000;
+    constexpr int64_t period_ns = 1000000000LL / control_rate_hz;
+    const double control_dt = 1.0 / static_cast<double>(control_rate_hz);
+    const int total_control_loops = target_loop * 10;  // legacy config scale
+
+    if (total_control_loops <= 0 || ramp_up_loops <= 0 || ramp_down_loops <= 0 ||
+        ramp_up_loops + ramp_down_loops > total_control_loops) {
+        RCLCPP_FATAL(node->get_logger(),
+            "Invalid timing: total=%d, ramp_up=%d, ramp_down=%d",
+            total_control_loops, ramp_up_loops, ramp_down_loops);
+        return 1;
+    }
 
     // ── Initial joint angles (profile-specific: different for sim and real) ─
     const std::vector<double> init_eta_vec = trot_read_vec("init_eta");
@@ -81,8 +98,11 @@ int main(int argc, char **argv) {
 
     RCLCPP_INFO(node->get_logger(),
         "Trot: target_pos_z=%.2f  velocity=%.2f  stand_height=%.2f  "
-        "step_length=%.2f  step_height=%.3f  target_loop=%d",
-        target_pos_z, velocity, stand_height, step_length, step_height, target_loop);
+        "step_length=%.2f  step_height=%.3f  duration=%.2fs  ramp_up=%.2fs  ramp_down=%.2fs",
+        target_pos_z, velocity, stand_height, step_length, step_height,
+        total_control_loops * control_dt,
+        ramp_up_loops * control_dt,
+        ramp_down_loops * control_dt);
 
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -104,7 +124,7 @@ int main(int argc, char **argv) {
     auto swing_phase_pub = node->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 10);
     auto trigger_sub    = node->create_subscription<corgi_msgs::msg::TriggerStamped>("trigger", 10, trigger_cb);
 
-    rclcpp::Duration period(0, 1000000); // 1 ms
+    rclcpp::Duration period(0, period_ns);
     rclcpp::Time next_time = node->now();
 
     corgi_msgs::msg::MotorCmdStamped motor_cmd;
@@ -118,13 +138,12 @@ int main(int argc, char **argv) {
         &motor_cmd.module_d
     };
 
-    TrotGait walk_gait(sim, 0, mpc.freq);
-    walk_gait.initialize(init_eta);
-
+    TrotGait walk_gait(sim, 0, control_rate_hz);
     walk_gait.stand_height = stand_height;
     walk_gait.velocity     = velocity;
     walk_gait.step_length  = step_length;
     walk_gait.step_height  = step_height;
+    walk_gait.initialize(init_eta);
 
     walk_gait.set_velocity(mpc.target_vel_x);
     walk_gait.set_stand_height(stand_height);
@@ -201,17 +220,23 @@ int main(int argc, char **argv) {
             while (rclcpp::ok()) {
                 rclcpp::spin_some(node);
 
-                // Velocity ramp-up and ramp-down (1000 cycles each)
-                if (loop_count < 1000) {
-                    mpc.target_vel_x += velocity / 1000.0;
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                // Exact trapezoidal profile: 2 s ramp-up, cruise, then 1 s
+                // ramp-down. The final control sample is clamped to zero.
+                if (loop_count < ramp_up_loops) {
+                    mpc.target_vel_x = velocity *
+                        static_cast<double>(loop_count + 1) / ramp_up_loops;
                 }
-                if (loop_count > mpc.target_loop*10 - 1000 && loop_count < mpc.target_loop*10) {
-                    mpc.target_vel_x -= velocity / 1000.0;
-                    walk_gait.set_velocity(mpc.target_vel_x);
+                else if (loop_count >= total_control_loops - ramp_down_loops) {
+                    const int remaining_loops = total_control_loops - loop_count - 1;
+                    mpc.target_vel_x = velocity *
+                        static_cast<double>(remaining_loops) / ramp_down_loops;
                 }
+                else {
+                    mpc.target_vel_x = velocity;
+                }
+                walk_gait.set_velocity(mpc.target_vel_x);
 
-                mpc.target_pos_x += mpc.target_vel_x * mpc.dt / 10.0;
+                mpc.target_pos_x += mpc.target_vel_x * control_dt;
 
                 // Get next joint angles from trot gait
                 mpc.eta_list = walk_gait.step();
@@ -235,13 +260,17 @@ int main(int argc, char **argv) {
                 motor_cmd_pub->publish(motor_cmd);
                 swing_phase_pub->publish(swing_phase_msg);
 
-                std::cout << std::fixed << std::setprecision(3);
-                std::cout << "Target Position X: "  << mpc.target_pos_x  << std::endl << std::endl;
-                std::cout << "Current Velocity X: " << mpc.target_vel_x  << std::endl << std::endl;
-                std::cout << "'=' '=' '=' '=' '='" << std::endl << std::endl;
+                // Keep diagnostics at 10 Hz so terminal I/O does not disturb
+                // the 1 kHz motor-command loop.
+                if (loop_count % 100 == 0 || loop_count == total_control_loops - 1) {
+                    std::cout << std::fixed << std::setprecision(3)
+                              << "Target Position X: " << mpc.target_pos_x
+                              << "  Current Velocity X: " << mpc.target_vel_x
+                              << '\n';
+                }
 
                 loop_count++;
-                if (loop_count >= mpc.target_loop*10) break;
+                if (loop_count >= total_control_loops) break;
 
                 next_time += period;
                 if (!node->get_clock()->sleep_until(next_time)) {

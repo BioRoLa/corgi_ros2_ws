@@ -36,7 +36,11 @@ common:
     stand_height:  0.25   # body CoM height above ground (m)
     step_length:   0.2    # foot step length (m)
     step_height:   0.06   # foot swing clearance height (m)
-    target_loop:   600    # total MPC control cycles before the robot stops
+    # trot_open runs at 1 kHz. target_loop retains the legacy ×10 scale:
+    # total duration = target_loop × 10 / 1000 Hz = 6 s.
+    target_loop:     600
+    ramp_up_loops:  2000  # 2 s: 0 -> velocity
+    ramp_down_loops: 1000  # 1 s: velocity -> 0
 
   # ── WLW-only parameters (wlw_open) ────────────────────────────────────────
   # Parameters for the open-loop WLW node that drives Hybrid gait directly.
