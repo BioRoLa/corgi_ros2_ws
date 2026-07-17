@@ -61,16 +61,16 @@ int main(int argc, char **argv)
         WALK,
         END
     };
-    const std::array<double, 2> CoM_bias = {-0.02, 0.0}; // real robot com bias
+    const std::array<double, 2> CoM_bias = {0.0, 0.0}; // real robot com bias
     const int sampling_rate = 1000;
     const int transform_count = 5 * sampling_rate; // 5s
     // const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25
     // const double init_eta[8] = {1.8571554834938668,0.4790144528333341,2.0636290799909855,0.10633741753260191,2.0636290799909855,-0.10633741753260191,1.8571554834938668,-0.4790144528333341}; // left stand height 0.25, right stand 0.3
     const double init_eta[8] = {1.2744470401482761, 0.4161719979302237, 1.1222141023936798, 0.11005079310996896, 1.1222141023936798, -0.11005079310996896, 1.2744470401482761, -0.4161719979302237};  // stand height 0.2
-    double velocity = 0.05;
+    double velocity = 0.15;
     double stand_height = 0.2;
-    double step_length = 0.2;
-    double step_height = 0.08;
+    double step_length = 0.30;
+    double step_height = 0.06;
     std::array<double, 4> ground_offset = {0.0, 0.0, 0.0, 0.0}; // LF, RF, RH, LH
     double curvature = 0.0;
     int count = 0;
@@ -88,8 +88,18 @@ int main(int argc, char **argv)
     bool trigger;
     int command_count;
 
-    // Runtime-tunable leg ground offsets (LF, RF, RH, LH), useful for different leg-length tests.
+    // Runtime-tunable walk parameters. These can be set via ROS 2 parameters without recompiling.
+    node->declare_parameter<double>("velocity", velocity);
+    node->declare_parameter<double>("stand_height", stand_height);
+    node->declare_parameter<double>("step_length", step_length);
+    node->declare_parameter<double>("step_height", step_height);
     node->declare_parameter<std::vector<double>>("ground_offset", {ground_offset[0], ground_offset[1], ground_offset[2], ground_offset[3]});
+
+    node->get_parameter("velocity", velocity);
+    node->get_parameter("stand_height", stand_height);
+    node->get_parameter("step_length", step_length);
+    node->get_parameter("step_height", step_height);
+
     std::array<double, 4> applied_ground_offset = ground_offset;
     auto to_array4 = [](const std::vector<double> & values) {
         std::array<double, 4> out = {0.0, 0.0, 0.0, 0.0};
@@ -141,6 +151,50 @@ int main(int argc, char **argv)
     {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
         rclcpp::spin_some(node);
+
+        double requested_velocity;
+        if (node->get_parameter("velocity", requested_velocity))
+        {
+            if (std::abs(requested_velocity - velocity) > 1e-9)
+            {
+                velocity = requested_velocity;
+                walk_gait.set_velocity(velocity);
+                RCLCPP_INFO(node->get_logger(), "Updated velocity = %.4f", velocity);
+            }
+        }
+
+        double requested_stand_height;
+        if (node->get_parameter("stand_height", requested_stand_height))
+        {
+            if (std::abs(requested_stand_height - stand_height) > 1e-9)
+            {
+                stand_height = requested_stand_height;
+                walk_gait.set_stand_height(stand_height);
+                RCLCPP_INFO(node->get_logger(), "Updated stand_height = %.4f", stand_height);
+            }
+        }
+
+        double requested_step_length;
+        if (node->get_parameter("step_length", requested_step_length))
+        {
+            if (std::abs(requested_step_length - step_length) > 1e-9)
+            {
+                step_length = requested_step_length;
+                walk_gait.set_step_length(step_length);
+                RCLCPP_INFO(node->get_logger(), "Updated step_length = %.4f", step_length);
+            }
+        }
+
+        double requested_step_height;
+        if (node->get_parameter("step_height", requested_step_height))
+        {
+            if (std::abs(requested_step_height - step_height) > 1e-9)
+            {
+                step_height = requested_step_height;
+                walk_gait.set_step_height(step_height);
+                RCLCPP_INFO(node->get_logger(), "Updated step_height = %.4f", step_height);
+            }
+        }
 
         std::vector<double> ground_offset_param;
         if (node->get_parameter("ground_offset", ground_offset_param))
