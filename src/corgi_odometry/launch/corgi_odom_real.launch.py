@@ -52,11 +52,19 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+
+    record_bag_arg = DeclareLaunchArgument(
+        'record_bag',
+        default_value='true',
+        description='Start the built-in odometry rosbag recorder.',
+    )
 
     fast_lio_config_dir = os.path.join(
         get_package_share_directory('fast_lio'), 'config')
@@ -212,6 +220,7 @@ def generate_launch_description():
         get_package_share_directory('corgi_odometry'), 'script', 'odom_fusion_bag.sh')
     bag_recorder = TimerAction(
         period=15.0,
+        condition=IfCondition(LaunchConfiguration('record_bag')),
         actions=[
             ExecuteProcess(
                 cmd=['bash', bag_script],
@@ -221,6 +230,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        record_bag_arg,
         imu_raw_node,
         corgi_leg_odom_node,
         livox_driver_node,
