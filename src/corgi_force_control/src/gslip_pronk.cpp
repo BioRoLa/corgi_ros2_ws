@@ -103,9 +103,17 @@ private:
     //
     // k_lateral holds the ABAD axis. It must NOT be zero: with leg_frame the
     // lateral axis is the ABAD direction, so K_joint = J^T K J would give a
-    // near-zero kp_h and the hip roll would go floppy. Each leg carries about
-    // m*g*0.0917/4 ~ 7 N.m about that axis, so 30 kN/m (~250 N.m/rad through
-    // the 0.0917 m moment arm) holds it to under 2 degrees of sag.
+    // near-zero kp_h and the hip roll would go floppy.
+    //
+    // Sizing it from the 0.0917 m ABAD-to-wheel-plane offset was wrong. At
+    // k_lateral = 30000 the measured kp_h was 972 N.m/rad, not the ~250
+    // intended, so the effective moment arm in the Jacobian is nearer 0.18 m.
+    // That over-stiff ABAD fed large off-diagonal coupling torques into the
+    // leg motors: applied torque peaked at 33-35 N.m against the 35 N.m limit
+    // while the model predicted 14 N.m, and the leg could not reach its
+    // commanded extension because it was torque-limited, not
+    // stiffness-limited. 7500 N/m gives roughly the 250 N.m/rad originally
+    // wanted, which held gamma to about 1 degree.
     double k_radial_;
     double k_tangential_;
     double k_lateral_;
@@ -137,10 +145,10 @@ GslipPronkNode::GslipPronkNode()
       sim_(false),
       k_radial_(8941.0),
       k_tangential_(900.0),
-      k_lateral_(30000.0),
+      k_lateral_(7500.0),
       b_radial_(72.0),
       b_tangential_(30.0),
-      b_lateral_(200.0),
+      b_lateral_(60.0),
       k_flight_(2000.0),
       b_flight_(100.0),
       standup_ticks_(2000),

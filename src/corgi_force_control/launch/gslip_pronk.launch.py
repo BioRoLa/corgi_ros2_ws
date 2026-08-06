@@ -64,7 +64,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('k_radial', default_value='8941.0'),
         DeclareLaunchArgument('b_radial', default_value='72.0'),
-        DeclareLaunchArgument('k_lateral', default_value='30000.0'),
+        DeclareLaunchArgument("k_lateral", default_value="7500.0"),
         DeclareLaunchArgument('hold_stance', default_value='false'),
         DeclareLaunchArgument('k_tangential', default_value='1200.0'),
         DeclareLaunchArgument('template_path', default_value=''),
