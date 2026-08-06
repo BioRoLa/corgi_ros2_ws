@@ -19,10 +19,15 @@ LegModel::LegModel(bool sim) :
     R(0.1), // 10 cm
     r(sim? 0.019 : 0.019), // No tire 0.0125: With tire 0.019// they are now the same in webots
     radius(R + r),
-    // Foot design parameters
-    foot_offset(0.02225),      // 22.25 mm
-    tyre_thickness(0.01225),   // 12.25 mm
-    foot_radius(R + foot_offset + tyre_thickness),
+    // Foot design parameters.
+    // These were the archived pre-tyre values (22.25 / 12.25 mm, giving
+    // foot_radius 0.1345), which the LegWheel package keeps only under
+    // OLD_Design. The current design is TIRE_TREAD_RADIUS 0.130 and
+    // TIRE_CORNER_RADIUS 0.015, so foot_offset = 0.130 - R and
+    // foot_radius = 0.145 (WHEEL_RADIUS_OUTER).
+    foot_offset(0.030),        // 30 mm  (TIRE_TREAD_RADIUS - R)
+    tyre_thickness(0.015),     // 15 mm  (TIRE_CORNER_RADIUS)
+    foot_radius(R + foot_offset + tyre_thickness),   // 0.145 m
     wheel_thickness(0.04),
     abad_axis_to_wheel_plane(0.091675),
     // Linkage parameters
