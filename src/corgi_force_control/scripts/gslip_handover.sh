@@ -34,7 +34,9 @@
 
 set -u
 
-CLEAR_METRES="${1:-0.9}"
+# 0.5 m clears the 0.4 m block from a centred start. The trot only manages
+# about 0.45 m in 40 s of sim time, so asking for more just burns the fallback.
+CLEAR_METRES="${1:-0.5}"
 TROT_SECONDS="${2:-40}"
 CSV_NAME="${3:-demo_trot_straight_sim}"
 

@@ -29,6 +29,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -292,16 +293,32 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
 void GslipPronkNode::execute_standup_phase() {
     // Ramp from wherever the robot actually is, not from a hardcoded folded
     // pose. If a CSV has already stood the robot up (theta ~ 120 deg),
-    // starting the ramp at 17 deg would command an immediate collapse.
-    rclcpp::spin_some(this->get_node_base_interface());
+    // starting the ramp at 17 deg commands an immediate collapse.
+    //
+    // A single spin_some() is NOT enough: the subscription has not yet
+    // discovered the publisher at construction time, so motor_state_ is still
+    // zero-initialised and the fallback fires even though the robot is
+    // standing. Wait for a real sample. Wall-clock sleep, deliberately -- this
+    // must work before the sim clock is known to be running.
+    const int kMaxWaitMs = 5000;
+    int waited_ms = 0;
+    while (rclcpp::ok() && motor_state_.module_a.theta == 0.0 && waited_ms < kMaxWaitMs) {
+        rclcpp::spin_some(this->get_node_base_interface());
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        waited_ms += 10;
+    }
+
     double theta_start = motor_state_.module_a.theta;
     double beta_start = motor_state_.module_a.beta;
-    if (theta_start < 1e-6) {
-        // No motor state received yet; fall back to the folded pose.
+    if (theta_start == 0.0) {
         theta_start = 17.0 / 180.0 * M_PI;
         beta_start = 0.0;
-        RCLCPP_WARN(this->get_logger(),
-                    "No motor state yet; assuming the folded pose to start the ramp");
+        RCLCPP_ERROR(this->get_logger(),
+                     "No motor/state after %d ms. Assuming the folded pose, which will "
+                     "COLLAPSE a standing robot. Check that the simulator is running.",
+                     kMaxWaitMs);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Got motor/state after %d ms", waited_ms);
     }
 
     const TemplateRow& first = template_.front();
