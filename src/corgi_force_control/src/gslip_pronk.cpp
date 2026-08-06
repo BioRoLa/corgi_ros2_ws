@@ -81,19 +81,28 @@ private:
     // Stance: the virtual leg spring, split across four legs in a pronk.
     // k_radial = k_rel * m * g / l0 / 4 with k_rel = 18 and l0 = 0.085 m.
     //
-    //   m = 30.0 kg (measured, real robot) -> 15600 N/m per leg, peak 17.8 N.m
-    //   m = 37.8 kg (CorgiRobotABAD.proto) -> 19632 N/m per leg, peak 22.5 N.m
+    //   m = 30.00 kg  measured on scales
+    //   m = 30.84 kg  summed from CorgiRobotABAD.proto -- agrees to 2.8%
     //
-    // The default below is the real robot. Pass k_radial:=19632 for Webots.
-    // Only the stiffness changes: since k = k_rel*m*g/l0, the ratio k/m is
-    // mass-independent and the stance EOM divides through by m, so the
-    // template, fixed point (beta 74.75 deg, alpha 23.75 deg) and GRF in body
-    // weights are all identical. Verified numerically across both masses.
+    // so 15600 N/m per leg covers both (16040 for the sim figure), peak motor
+    // torque ~18 N.m, about half the 35 N.m limit.
+    //
+    // Only the stiffness would change with mass anyway: since
+    // k = k_rel*m*g/l0, the ratio k/m is mass-independent and the stance EOM
+    // divides through by m, so the template, the fixed point (beta 74.75 deg,
+    // alpha 23.75 deg) and the GRF in body weights are all identical.
+    //
+    // k_lateral holds the ABAD axis. It must NOT be zero: with leg_frame the
+    // lateral axis is the ABAD direction, so K_joint = J^T K J would give a
+    // near-zero kp_h and the hip roll would go floppy. Each leg carries about
+    // m*g*0.0917/4 ~ 7 N.m about that axis, so 30 kN/m (~250 N.m/rad through
+    // the 0.0917 m moment arm) holds it to under 2 degrees of sag.
     double k_radial_;
     double k_tangential_;
     double k_lateral_;
     double b_radial_;
     double b_tangential_;
+    double b_lateral_;
 
     // Flight: body-frame position tracking on an unloaded leg.
     double k_flight_;
@@ -108,9 +117,10 @@ GslipPronkNode::GslipPronkNode()
       sim_(false),
       k_radial_(15600.0),
       k_tangential_(1200.0),
-      k_lateral_(0.0),
+      k_lateral_(30000.0),
       b_radial_(120.0),
       b_tangential_(30.0),
+      b_lateral_(200.0),
       k_flight_(2000.0),
       b_flight_(100.0),
       standup_ticks_(2000)
@@ -133,6 +143,7 @@ GslipPronkNode::GslipPronkNode()
     k_lateral_ = this->declare_parameter<double>("k_lateral", k_lateral_);
     b_radial_ = this->declare_parameter<double>("b_radial", b_radial_);
     b_tangential_ = this->declare_parameter<double>("b_tangential", b_tangential_);
+    b_lateral_ = this->declare_parameter<double>("b_lateral", b_lateral_);
     k_flight_ = this->declare_parameter<double>("k_flight", k_flight_);
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
@@ -245,7 +256,7 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
             cmd->ky = k_lateral_;
             cmd->kz = k_tangential_;  // perpendicular, in the sagittal plane
             cmd->bx = b_radial_;
-            cmd->by = 0.0;
+            cmd->by = b_lateral_;
             cmd->bz = b_tangential_;
         } else {
             cmd->leg_frame = false;

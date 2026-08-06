@@ -17,12 +17,13 @@ before any of this will step.
 Arguments:
     use_sim_time   true against Webots, false on hardware (default true)
     k_radial       stance radial stiffness per leg, N/m. Default 15600 sizes
-                   the k_rel=18 spring for the real robot's measured 30.0 kg.
-                   CorgiRobotABAD.proto sums to 37.8 kg, so for Webots pass
-                       k_radial:=19632.0 b_radial:=151.0
-                   Only the stiffness scales: k/m is mass-independent, so the
-                   template and fixed point are unchanged.
+                   the k_rel=18 spring for 30.0 kg, measured on scales;
+                   CorgiRobotABAD.proto sums to 30.84 kg, so the same value
+                   serves both sim and hardware.
     b_radial       stance radial damping per leg, N.s/m
+    k_lateral      stance ABAD stiffness per leg, N/m. Must not be zero --
+                   with leg_frame this axis is the hip roll, and a zero here
+                   leaves kp_h near zero and the ABAD floppy.
     k_tangential   stance tangential stiffness per leg, N/m
     template_path  override the stride template CSV
     hop_in_place   see below
@@ -55,6 +56,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     k_radial = LaunchConfiguration('k_radial')
     b_radial = LaunchConfiguration('b_radial')
+    k_lateral = LaunchConfiguration('k_lateral')
     k_tangential = LaunchConfiguration('k_tangential')
     template_path = LaunchConfiguration('template_path')
 
@@ -62,6 +64,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('k_radial', default_value='15600.0'),
         DeclareLaunchArgument('b_radial', default_value='120.0'),
+        DeclareLaunchArgument('k_lateral', default_value='30000.0'),
         DeclareLaunchArgument('k_tangential', default_value='1200.0'),
         DeclareLaunchArgument('template_path', default_value=''),
 
@@ -87,6 +90,7 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'k_radial': k_radial,
                 'b_radial': b_radial,
+                'k_lateral': k_lateral,
                 'k_tangential': k_tangential,
                 'template_path': template_path,
             }],
