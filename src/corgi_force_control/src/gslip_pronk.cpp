@@ -275,10 +275,24 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
 }
 
 void GslipPronkNode::execute_standup_phase() {
-    RCLCPP_INFO(this->get_logger(), "Standing up to the template's initial pose");
+    // Ramp from wherever the robot actually is, not from a hardcoded folded
+    // pose. If a CSV has already stood the robot up (theta ~ 120 deg),
+    // starting the ramp at 17 deg would command an immediate collapse.
+    rclcpp::spin_some(this->get_node_base_interface());
+    double theta_start = motor_state_.module_a.theta;
+    double beta_start = motor_state_.module_a.beta;
+    if (theta_start < 1e-6) {
+        // No motor state received yet; fall back to the folded pose.
+        theta_start = 17.0 / 180.0 * M_PI;
+        beta_start = 0.0;
+        RCLCPP_WARN(this->get_logger(),
+                    "No motor state yet; assuming the folded pose to start the ramp");
+    }
 
     const TemplateRow& first = template_.front();
-    const double theta_start = 17.0 / 180.0 * M_PI;
+    RCLCPP_INFO(this->get_logger(),
+                "Ramping from measured theta=%.1f deg to template theta=%.1f deg",
+                theta_start * 180.0 / M_PI, first.theta * 180.0 / M_PI);
 
     rclcpp::Duration period(0, 1000000);  // 1 ms
     rclcpp::Time next_time = this->now();
@@ -290,7 +304,7 @@ void GslipPronkNode::execute_standup_phase() {
         TemplateRow row{};
         row.t = 0.0;
         row.theta = theta_start + s * (first.theta - theta_start);
-        row.beta = s * first.beta;
+        row.beta = beta_start + s * (first.beta - beta_start);
         row.gamma = 0.0;
         row.in_stance = false;  // soft gains while posing
         apply_row(row);
