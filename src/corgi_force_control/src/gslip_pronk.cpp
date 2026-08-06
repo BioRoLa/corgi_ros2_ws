@@ -79,13 +79,21 @@ private:
     bool sim_;
 
     // Stance: the virtual leg spring, split across four legs in a pronk.
-    // k_radial = k_rel * m * g / l0 / 4 with k_rel = 18 and l0 = 0.085 m.
+    // k_radial = k_rel * m * g / l0 / 4 with k_rel = 18, at the nominal stance
+    // theta = 100 deg (l0 = 0.1481 m, hip 0.2931 m) -> 8941 N/m per leg.
     //
     //   m = 30.00 kg  measured on scales
     //   m = 30.84 kg  summed from CorgiRobotABAD.proto -- agrees to 2.8%
     //
-    // so 15600 N/m per leg covers both (16040 for the sim figure), peak motor
-    // torque ~18 N.m, about half the 35 N.m limit.
+    // so one value covers both. Peak motor torque ~14 N.m, 41% of the limit.
+    //
+    // The nominal stance is deliberately NOT the paper's r~ = 0.6303 optimum,
+    // which for this robot is a 0.230 m crouch. Standing at 0.293 m instead
+    // costs only a slope penalty (1.154 -> 1.232) and buys a 26% lower peak
+    // ground reaction, 41% rather than 53% torque, and a 43% softer spring --
+    // the last mattering most, since a softer virtual spring is much less
+    // corrupted by the 0.36-0.68 N.m joint friction. See LegWheel
+    // examples/gslip/stance_height_tradeoff.py.
     //
     // Only the stiffness would change with mass anyway: since
     // k = k_rel*m*g/l0, the ratio k/m is mass-independent and the stance EOM
@@ -109,21 +117,27 @@ private:
     double b_flight_;
 
     int standup_ticks_;
+
+    // Phase 5 step 1: hold the standing pose with the STANCE (leg-frame)
+    // impedance rather than the flight gains, so the virtual spring can be
+    // probed by pushing the body before anything hops.
+    bool hold_stance_;
 };
 
 GslipPronkNode::GslipPronkNode()
     : Node("gslip_pronk"),
       trigger_(false),
       sim_(false),
-      k_radial_(15600.0),
-      k_tangential_(1200.0),
+      k_radial_(8941.0),
+      k_tangential_(900.0),
       k_lateral_(30000.0),
-      b_radial_(120.0),
+      b_radial_(72.0),
       b_tangential_(30.0),
       b_lateral_(200.0),
       k_flight_(2000.0),
       b_flight_(100.0),
-      standup_ticks_(2000)
+      standup_ticks_(2000),
+      hold_stance_(false)
 {
     RCLCPP_INFO(this->get_logger(), "G-SLIP pronk controller starting");
 
@@ -147,6 +161,7 @@ GslipPronkNode::GslipPronkNode()
     k_flight_ = this->declare_parameter<double>("k_flight", k_flight_);
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
+    hold_stance_ = this->declare_parameter<bool>("hold_stance", hold_stance_);
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
@@ -364,7 +379,7 @@ void GslipPronkNode::run() {
             execute_running_phase();
         } else {
             TemplateRow hold = template_.front();
-            hold.in_stance = false;
+            hold.in_stance = hold_stance_;
             apply_row(hold);
             imp_cmd_.header.stamp = this->now();
             imp_cmd_pub_->publish(imp_cmd_);

@@ -16,10 +16,10 @@ before any of this will step.
 
 Arguments:
     use_sim_time   true against Webots, false on hardware (default true)
-    k_radial       stance radial stiffness per leg, N/m. Default 15600 sizes
-                   the k_rel=18 spring for 30.0 kg, measured on scales;
-                   CorgiRobotABAD.proto sums to 30.84 kg, so the same value
-                   serves both sim and hardware.
+    k_radial       stance radial stiffness per leg, N/m. Default 8941 sizes
+                   the k_rel=18 spring at the nominal stance theta = 100 deg
+                   for 30.0 kg (measured); CorgiRobotABAD.proto sums to
+                   30.84 kg, so the same value serves both sim and hardware.
     b_radial       stance radial damping per leg, N.s/m
     k_lateral      stance ABAD stiffness per leg, N/m. Must not be zero --
                    with leg_frame this axis is the hip roll, and a zero here
@@ -62,9 +62,10 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
-        DeclareLaunchArgument('k_radial', default_value='15600.0'),
-        DeclareLaunchArgument('b_radial', default_value='120.0'),
+        DeclareLaunchArgument('k_radial', default_value='8941.0'),
+        DeclareLaunchArgument('b_radial', default_value='72.0'),
         DeclareLaunchArgument('k_lateral', default_value='30000.0'),
+        DeclareLaunchArgument('hold_stance', default_value='false'),
         DeclareLaunchArgument('k_tangential', default_value='1200.0'),
         DeclareLaunchArgument('template_path', default_value=''),
 
@@ -91,6 +92,7 @@ def generate_launch_description():
                 'k_radial': k_radial,
                 'b_radial': b_radial,
                 'k_lateral': k_lateral,
+                'hold_stance': LaunchConfiguration('hold_stance'),
                 'k_tangential': k_tangential,
                 'template_path': template_path,
             }],
