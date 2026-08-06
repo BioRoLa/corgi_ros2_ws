@@ -79,8 +79,16 @@ private:
     bool sim_;
 
     // Stance: the virtual leg spring, split across four legs in a pronk.
-    // k_radial = k_rel * m * g / l0 / 4 with k_rel = 18, m = 30 kg,
-    // l0 = 0.085 m -> 15.6 kN/m per leg.
+    // k_radial = k_rel * m * g / l0 / 4 with k_rel = 18 and l0 = 0.085 m.
+    //
+    //   m = 30.0 kg (measured, real robot) -> 15600 N/m per leg, peak 17.8 N.m
+    //   m = 37.8 kg (CorgiRobotABAD.proto) -> 19632 N/m per leg, peak 22.5 N.m
+    //
+    // The default below is the real robot. Pass k_radial:=19632 for Webots.
+    // Only the stiffness changes: since k = k_rel*m*g/l0, the ratio k/m is
+    // mass-independent and the stance EOM divides through by m, so the
+    // template, fixed point (beta 74.75 deg, alpha 23.75 deg) and GRF in body
+    // weights are all identical. Verified numerically across both masses.
     double k_radial_;
     double k_tangential_;
     double k_lateral_;
