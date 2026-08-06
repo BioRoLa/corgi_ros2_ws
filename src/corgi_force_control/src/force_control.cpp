@@ -136,8 +136,38 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd trq_cmd(3, 1);
 
     M(0, 0) = imp_cmd_->mx; M(1, 1) = imp_cmd_->my; M(2, 2) = imp_cmd_->mz;
-    B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
-    K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
+
+    if (imp_cmd_->leg_frame) {
+        // The G-SLIP spring acts along the leg, so the commanded stiffness is
+        // given in the leg frame and rotated here. Build the basis from the
+        // measured contact point rather than from an angle, which keeps this
+        // free of sign conventions:
+        //   e_r  radial, hip -> contact, projected into the sagittal (x-z) plane
+        //   e_t  tangential, perpendicular to e_r in that plane
+        //   e_y  lateral, body y
+        Eigen::Vector3d e_r(legmodel.contact_p_3d[0], 0.0, legmodel.contact_p_3d[2]);
+        const double radial_norm = e_r.norm();
+        if (radial_norm < 1e-9) {
+            // Degenerate (contact directly under the hip axis): fall back to
+            // body-frame axes rather than normalising a zero vector.
+            K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
+            B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
+        } else {
+            e_r /= radial_norm;
+            Eigen::Vector3d e_t(-e_r(2), 0.0, e_r(0));
+            Eigen::Vector3d e_y(0.0, 1.0, 0.0);
+
+            K = imp_cmd_->kx * (e_r * e_r.transpose())
+              + imp_cmd_->ky * (e_y * e_y.transpose())
+              + imp_cmd_->kz * (e_t * e_t.transpose());
+            B = imp_cmd_->bx * (e_r * e_r.transpose())
+              + imp_cmd_->by * (e_y * e_y.transpose())
+              + imp_cmd_->bz * (e_t * e_t.transpose());
+        }
+    } else {
+        B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
+        K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
+    }
 
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma;
     trq_cmd_base = J_fb.transpose() * (force_des + M*(-acc_fb));

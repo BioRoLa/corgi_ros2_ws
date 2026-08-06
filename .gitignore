@@ -3,6 +3,9 @@ devel
 logs
 .*
 *.csv
+# Stride templates are versioned config, not recorded data: gslip_pronk_node
+# loads one at startup and refuses to run without it.
+!src/corgi_force_control/config/*.csv
 input_csv/*
 !input_csv/README.md
 !input_csv/demo_transform_sim.csv

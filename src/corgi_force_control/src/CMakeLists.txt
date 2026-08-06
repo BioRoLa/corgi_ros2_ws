@@ -31,10 +31,20 @@ target_link_libraries(exp_sim_stay_node
   corgi_force_estimation::corgi_force_estimation
 )
 
+# G-SLIP pronk controller node
+add_executable(gslip_pronk_node gslip_pronk.cpp)
+ament_target_dependencies(gslip_pronk_node
+  rclcpp
+  corgi_msgs
+  ament_index_cpp
+  Eigen3
+)
+
 # Install
 install(TARGETS
   force_control_node
   exp_h24_node
   exp_sim_stay_node
+  gslip_pronk_node
   DESTINATION lib/${PROJECT_NAME}
 )
