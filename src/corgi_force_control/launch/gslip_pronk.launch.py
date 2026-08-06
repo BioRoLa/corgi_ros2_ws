@@ -66,7 +66,8 @@ def generate_launch_description():
         DeclareLaunchArgument('b_radial', default_value='72.0'),
         DeclareLaunchArgument("k_lateral", default_value="7500.0"),
         DeclareLaunchArgument('hold_stance', default_value='false'),
-        DeclareLaunchArgument('k_tangential', default_value='1200.0'),
+        DeclareLaunchArgument("k_tangential", default_value="1200.0"),
+        DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -94,6 +95,7 @@ def generate_launch_description():
                 'k_lateral': k_lateral,
                 'hold_stance': LaunchConfiguration('hold_stance'),
                 'k_tangential': k_tangential,
+                'k_flight': LaunchConfiguration('k_flight'),
                 'template_path': template_path,
             }],
             output='screen',

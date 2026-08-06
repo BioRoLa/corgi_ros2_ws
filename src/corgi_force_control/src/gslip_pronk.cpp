@@ -122,10 +122,51 @@ private:
     double b_lateral_;
 
     // Flight: body-frame position tracking on an unloaded leg.
+    //
+    // These have to be STIFF, not gentle. theta = 100 deg is the touchdown
+    // pose and is reached at the END of flight, so the leg must retract and
+    // re-extend through the full 15.6 deg sweep in the 127 ms flight window.
+    // At k_flight = 2000 it managed only 50% of the commanded excursion and
+    // touched down 11 deg short, which left the spring far less compression
+    // than the template assumes, weakened push-off, and killed the flight
+    // phase entirely. The leg is unloaded here, so stiff tracking is cheap.
     double k_flight_;
     double b_flight_;
 
     int standup_ticks_;
+
+    // --- Body attitude correction through the ABAD joints -------------------
+    //
+    // The clocked-torque template shapes where the LEGS go; it contains no
+    // body-level feedback at all. With |dP/dalpha| ~ 1.23 the gait is
+    // unstable, so a symmetric start develops an asymmetry that grows: the
+    // measured pronk stayed level in roll and pitch (< 1.5 deg) but yawed
+    // 14.8 deg in 10 s, driven by the right legs carrying ~50% more contact
+    // time than the left. Nothing in the controller opposed it.
+    //
+    // The paper's TWIX gets away without this because an alternating tripod
+    // is inherently yaw-symmetric. A four-legged pronk is not.
+    //
+    // gamma tilts the leg laterally, moving the contact point sideways, so
+    // differential gamma generates the lateral ground reaction needed for
+    // roll and yaw moments:
+    //   roll : left legs one way, right legs the other   (A,D vs B,C)
+    //   yaw  : front legs one way, rear legs the other   (A,B vs C,D)
+    //
+    // Gain SIGNS are not obvious from the geometry -- if a correction makes
+    // things worse, negate the gain. They are parameters for that reason.
+    void update_attitude(double& roll, double& pitch, double& yaw) const;
+    double gamma_correction(int leg_index) const;
+
+    double roll_{0.0}, pitch_{0.0}, yaw_{0.0};
+    double yaw_ref_{0.0};
+    bool yaw_ref_set_{false};
+
+    double k_roll_;
+    double d_roll_;
+    double k_yaw_;
+    double d_yaw_;
+    double gamma_limit_;   // rad, clamp on the correction
 
     // Ticks to hold the stance after the trigger, before the stride starts.
     // In experiment mode the same /trigger that starts this gait also deletes
@@ -149,9 +190,20 @@ GslipPronkNode::GslipPronkNode()
       b_radial_(72.0),
       b_tangential_(30.0),
       b_lateral_(60.0),
-      k_flight_(2000.0),
-      b_flight_(100.0),
+      k_flight_(12000.0),
+      b_flight_(150.0),
       standup_ticks_(2000),
+      // Gentle. At k_roll 0.6 / k_yaw 0.4 with a 12 deg clamp the correction
+      // saturated -- measured gamma reached 15-17 deg -- and while it did halve
+      // the yaw drift and even out the contact balance, tilting the legs that
+      // far cost the vertical push: flight fell from 34% to 8.9% and the leg
+      // phase correlation from 0.92-0.98 to 0.70-0.91. The authority has to
+      // stay small enough not to disturb the hop it is stabilising.
+      k_roll_(0.25),
+      d_roll_(0.03),
+      k_yaw_(0.15),
+      d_yaw_(0.02),
+      gamma_limit_(5.0 / 180.0 * M_PI),
       settle_ticks_(1000),
       hold_stance_(false)
 {
@@ -179,6 +231,11 @@ GslipPronkNode::GslipPronkNode()
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
     hold_stance_ = this->declare_parameter<bool>("hold_stance", hold_stance_);
     settle_ticks_ = this->declare_parameter<int>("settle_ticks", settle_ticks_);
+    k_roll_ = this->declare_parameter<double>("k_roll", k_roll_);
+    d_roll_ = this->declare_parameter<double>("d_roll", d_roll_);
+    k_yaw_ = this->declare_parameter<double>("k_yaw", k_yaw_);
+    d_yaw_ = this->declare_parameter<double>("d_yaw", d_yaw_);
+    gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
@@ -270,11 +327,43 @@ bool GslipPronkNode::load_template(const std::string& path) {
     return template_.size() > 1;
 }
 
+void GslipPronkNode::update_attitude(double& roll, double& pitch, double& yaw) const {
+    const double x = imu_.orientation.x, y = imu_.orientation.y;
+    const double z = imu_.orientation.z, w = imu_.orientation.w;
+    roll = std::atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
+    pitch = std::asin(std::max(-1.0, std::min(1.0, 2.0 * (w * y - z * x))));
+    yaw = std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+}
+
+double GslipPronkNode::gamma_correction(int leg_index) const {
+    if (!yaw_ref_set_) return 0.0;
+
+    // Module order is A=FL, B=FR, C=RR, D=RL.
+    static const double roll_sign[4] = {+1.0, -1.0, -1.0, +1.0};  // left vs right
+    static const double yaw_sign[4] = {+1.0, +1.0, -1.0, -1.0};   // front vs rear
+
+    double yaw_err = yaw_ - yaw_ref_;
+    while (yaw_err > M_PI) yaw_err -= 2.0 * M_PI;
+    while (yaw_err < -M_PI) yaw_err += 2.0 * M_PI;
+
+    const double wx = imu_.angular_velocity.x;  // roll rate
+    const double wz = imu_.angular_velocity.z;  // yaw rate
+
+    const double correction =
+        roll_sign[leg_index] * (k_roll_ * roll_ + d_roll_ * wx) +
+        yaw_sign[leg_index] * (k_yaw_ * yaw_err + d_yaw_ * wz);
+
+    return std::max(-gamma_limit_, std::min(gamma_limit_, correction));
+}
+
 void GslipPronkNode::apply_row(const TemplateRow& row) {
-    for (auto* cmd : imp_cmd_modules_) {
+    update_attitude(roll_, pitch_, yaw_);
+
+    for (size_t i = 0; i < imp_cmd_modules_.size(); i++) {
+        auto* cmd = imp_cmd_modules_[i];
         cmd->theta = row.theta;
         cmd->beta = row.beta;
-        cmd->gamma = row.gamma;
+        cmd->gamma = row.gamma + gamma_correction(static_cast<int>(i));
 
         // No force feedback yet: with fx/fy/fz and the inertia terms at zero,
         // force_control degenerates to a pure (K, B) impedance and needs no
@@ -300,10 +389,17 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
             cmd->bz = b_flight_;
         }
     }
-    // Legs A and D are on one side, B and C on the other; beta is mirrored
-    // between sides in the same way exp_sim_stay does it.
-    imp_cmd_modules_[1]->beta = -row.beta;
-    imp_cmd_modules_[2]->beta = -row.beta;
+    // NO per-side beta mirroring. corgi_driver already applies dir_beta
+    // (+1, -1, -1, +1 for A..D from motor_config.yaml) to both the command
+    // and the reported state, so the left/right mounting mirror is handled
+    // there. Sending the same beta to all four legs is what makes them swing
+    // the same physical direction -- which is what a pronk requires.
+    //
+    // exp_sim_stay does negate beta for B and C, but that is to SPLAY the
+    // legs into a wide static standing stance. Applying it here double-flipped
+    // the right side so it moved opposite to the left, producing a left/right
+    // alternating pattern instead of a pronk: legs A and D swung +/-20 deg
+    // while B and C managed only -14..+7 deg.
 }
 
 void GslipPronkNode::execute_standup_phase() {
@@ -370,6 +466,10 @@ void GslipPronkNode::execute_running_phase() {
     rclcpp::Duration period(0, 1000000);  // 1 ms
     rclcpp::Time next_time = this->now();
 
+    // Latch the heading to hold. Taken AFTER the settle, so the block-removal
+    // transient is not baked into the reference.
+    yaw_ref_set_ = false;
+
     // Let the robot settle onto its legs before striding. In experiment mode
     // the trigger that got us here also removed the support box.
     if (settle_ticks_ > 0) {
@@ -388,7 +488,14 @@ void GslipPronkNode::execute_running_phase() {
         }
     }
 
-    RCLCPP_INFO(this->get_logger(), "Running the G-SLIP pronk template");
+    update_attitude(roll_, pitch_, yaw_);
+    yaw_ref_ = yaw_;
+    yaw_ref_set_ = true;
+    RCLCPP_INFO(this->get_logger(),
+                "Running the G-SLIP pronk template. Holding heading %.1f deg "
+                "(k_roll=%.2f k_yaw=%.2f, gamma limit %.1f deg)",
+                yaw_ref_ * 180.0 / M_PI, k_roll_, k_yaw_,
+                gamma_limit_ * 180.0 / M_PI);
     size_t index = 0;
     size_t stride_count = 0;
 
