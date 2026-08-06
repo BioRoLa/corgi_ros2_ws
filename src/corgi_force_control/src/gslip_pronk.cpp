@@ -119,6 +119,12 @@ private:
 
     int standup_ticks_;
 
+    // Ticks to hold the stance after the trigger, before the stride starts.
+    // In experiment mode the same /trigger that starts this gait also deletes
+    // SUPPORT_BOX, so the robot is settling onto its legs at that instant.
+    // Striding through the settle would corrupt the first touchdown.
+    int settle_ticks_;
+
     // Phase 5 step 1: hold the standing pose with the STANCE (leg-frame)
     // impedance rather than the flight gains, so the virtual spring can be
     // probed by pushing the body before anything hops.
@@ -138,6 +144,7 @@ GslipPronkNode::GslipPronkNode()
       k_flight_(2000.0),
       b_flight_(100.0),
       standup_ticks_(2000),
+      settle_ticks_(1000),
       hold_stance_(false)
 {
     RCLCPP_INFO(this->get_logger(), "G-SLIP pronk controller starting");
@@ -163,6 +170,7 @@ GslipPronkNode::GslipPronkNode()
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
     hold_stance_ = this->declare_parameter<bool>("hold_stance", hold_stance_);
+    settle_ticks_ = this->declare_parameter<int>("settle_ticks", settle_ticks_);
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
@@ -351,10 +359,28 @@ void GslipPronkNode::execute_standup_phase() {
 }
 
 void GslipPronkNode::execute_running_phase() {
-    RCLCPP_INFO(this->get_logger(), "Running the G-SLIP pronk template");
-
     rclcpp::Duration period(0, 1000000);  // 1 ms
     rclcpp::Time next_time = this->now();
+
+    // Let the robot settle onto its legs before striding. In experiment mode
+    // the trigger that got us here also removed the support box.
+    if (settle_ticks_ > 0) {
+        RCLCPP_INFO(this->get_logger(), "Settling for %d ms before the first stride",
+                    settle_ticks_);
+        TemplateRow settle = template_.front();
+        settle.in_stance = true;
+        for (int i = 0; i < settle_ticks_ && rclcpp::ok() && trigger_; i++) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            apply_row(settle);
+            imp_cmd_.header.stamp = this->now();
+            imp_cmd_pub_->publish(imp_cmd_);
+            next_time = next_time + period;
+            rclcpp::sleep_for(std::chrono::nanoseconds(
+                std::max<int64_t>(0, (next_time - this->now()).nanoseconds())));
+        }
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Running the G-SLIP pronk template");
     size_t index = 0;
     size_t stride_count = 0;
 
