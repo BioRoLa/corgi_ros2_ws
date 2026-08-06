@@ -114,6 +114,18 @@ private:
     // commanded extension because it was torque-limited, not
     // stiffness-limited. 7500 N/m gives roughly the 250 N.m/rad originally
     // wanted, which held gamma to about 1 degree.
+    // b_radial defaults to ZERO, and that is deliberate. The G-SLIP model is
+    // conservative: the spring returns everything it stores, so any radial
+    // damping is a deviation from the model rather than a refinement of it.
+    // The original 72 came from a rule of thumb (0.008*k), not the physics.
+    //
+    // An energy audit over the hop showed why it mattered. At b_radial = 72
+    // the motors did 105 W of positive work and took 99.6 W straight back out,
+    // netting only 5.5 W: energy was being absorbed during extension as fast
+    // as the spring released it, so the body decelerated while still in
+    // contact and never lifted off. At b_radial = 0 the braking work fell to
+    // 77.6 W, net rose to 27.9 W, peak vertical velocity went 1.109 -> 1.503
+    // m/s and the flight phase went 4.0% -> 31.9%.
     double k_radial_;
     double k_tangential_;
     double k_lateral_;
@@ -158,6 +170,11 @@ private:
     void update_attitude(double& roll, double& pitch, double& yaw) const;
     double gamma_correction(int leg_index) const;
 
+    // Rest-length leg extension, taken from the template's maximum theta
+    // (its touchdown pose, where the spring is uncompressed).
+    double theta_rest_{0.0};
+    bool spring_rest_reference_;
+
     double roll_{0.0}, pitch_{0.0}, yaw_{0.0};
     double yaw_ref_{0.0};
     bool yaw_ref_set_{false};
@@ -187,7 +204,7 @@ GslipPronkNode::GslipPronkNode()
       k_radial_(8941.0),
       k_tangential_(900.0),
       k_lateral_(7500.0),
-      b_radial_(72.0),
+      b_radial_(0.0),
       b_tangential_(30.0),
       b_lateral_(60.0),
       k_flight_(12000.0),
@@ -204,6 +221,20 @@ GslipPronkNode::GslipPronkNode()
       k_yaw_(0.15),
       d_yaw_(0.02),
       gamma_limit_(5.0 / 180.0 * M_PI),
+      // Default OFF. The reasoning is sound for the model -- l0 is the rest
+      // length and l(t) is an output -- but in the robot it flipped the
+      // machine: measured compression already reaches 71-75 deg, so
+      // referencing from 100 deg rest gives 29 deg of compression, about
+      // 492 N per leg or 6.7 body weights against the model's 3.64, and the
+      // resulting push threw it over (145 deg tilt, legs folded past their
+      // 17 deg limit).
+      //
+      // The discrepancy is not in this reference choice. It is that the robot
+      // is nowhere near the fixed point the template was solved for: that
+      // fixed point assumes 2.035 m/s of forward travel, and the robot is
+      // essentially hopping in place. Touchdown velocity, and therefore
+      // compression, are simply not the model's.
+      spring_rest_reference_(false),
       settle_ticks_(1000),
       hold_stance_(false)
 {
@@ -236,6 +267,8 @@ GslipPronkNode::GslipPronkNode()
     k_yaw_ = this->declare_parameter<double>("k_yaw", k_yaw_);
     d_yaw_ = this->declare_parameter<double>("d_yaw", d_yaw_);
     gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
+    spring_rest_reference_ =
+        this->declare_parameter<bool>("spring_rest_reference", spring_rest_reference_);
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
@@ -279,9 +312,19 @@ GslipPronkNode::GslipPronkNode()
         throw std::runtime_error("missing stride template");
     }
 
+    // The spring is uncompressed at touchdown, so the template's maximum
+    // theta is the rest extension.
+    theta_rest_ = template_.front().theta;
+    for (const auto& row : template_) theta_rest_ = std::max(theta_rest_, row.theta);
+
     RCLCPP_INFO(this->get_logger(),
                 "Loaded %zu template rows (%.4f s stride), k_radial=%.0f N/m per leg",
                 template_.size(), template_.back().t, k_radial_);
+    RCLCPP_INFO(this->get_logger(),
+                "Radial reference: %s (rest theta %.2f deg)",
+                spring_rest_reference_ ? "SPRING REST (constant)"
+                                       : "template trajectory",
+                theta_rest_ * 180.0 / M_PI);
 }
 
 void GslipPronkNode::trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
@@ -359,9 +402,29 @@ double GslipPronkNode::gamma_correction(int leg_index) const {
 void GslipPronkNode::apply_row(const TemplateRow& row) {
     update_attitude(roll_, pitch_, yaw_);
 
+    // The radial reference is the spring's REST length, not the template's
+    // compressed trajectory.
+    //
+    // In SLIP-RF the rest length l0 is constant and l(t) is what the dynamics
+    // produce under load -- an output, not a setpoint. Feeding l(t) to an
+    // impedance controller as its rest position makes the leg compress by
+    // F/k on top of a trajectory that already contains the compression,
+    // double-counting it. Measured: commanded theta bottomed at 84.4 deg
+    // while the leg reached 71-75 deg, 10-13 deg deeper on every damping
+    // setting tried.
+    //
+    // Holding theta at the rest value instead reproduces the model: the leg
+    // compresses to 84.4 deg under load, which at 8941 N/m is 262 N per leg,
+    // 1048 N total, 3.56 body weights -- against the 3.64 the fixed point
+    // predicts.
+    //
+    // beta still follows the template: that is the clocked-torque part, the
+    // leg angle the controller genuinely has to drive.
+    const double theta_ref = spring_rest_reference_ ? theta_rest_ : row.theta;
+
     for (size_t i = 0; i < imp_cmd_modules_.size(); i++) {
         auto* cmd = imp_cmd_modules_[i];
-        cmd->theta = row.theta;
+        cmd->theta = theta_ref;
         cmd->beta = row.beta;
         cmd->gamma = row.gamma + gamma_correction(static_cast<int>(i));
 
