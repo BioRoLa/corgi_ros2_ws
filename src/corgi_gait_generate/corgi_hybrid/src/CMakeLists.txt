@@ -11,6 +11,18 @@ ament_target_dependencies(hybrid_test
   corgi_msgs
 )
 
+add_executable(hybrid_csv_export hybrid_csv_export.cpp)
+target_link_libraries(hybrid_csv_export ${PROJECT_NAME})
+ament_target_dependencies(hybrid_csv_export
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  joy
+  visualization_msgs
+  corgi_msgs
+)
+
 add_executable(single_leg_traj Single_leg_traj.cpp)
 target_link_libraries(single_leg_traj ${PROJECT_NAME})
 ament_target_dependencies(single_leg_traj
@@ -62,6 +74,7 @@ ament_target_dependencies(four
 # Install executables
 install(TARGETS
   hybrid_test
+  hybrid_csv_export
   single_leg_traj
   alpha_calculation
   stability
