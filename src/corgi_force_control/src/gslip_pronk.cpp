@@ -116,6 +116,9 @@ GslipPronkNode::GslipPronkNode()
         + "/config/gslip_pronk_template.csv";
     std::string template_path =
         this->declare_parameter<std::string>("template_path", default_template);
+    // Launch files pass an empty string to mean "use the installed default"
+    // rather than having to repeat the share-directory lookup.
+    if (template_path.empty()) template_path = default_template;
 
     k_radial_ = this->declare_parameter<double>("k_radial", k_radial_);
     k_tangential_ = this->declare_parameter<double>("k_tangential", k_tangential_);
