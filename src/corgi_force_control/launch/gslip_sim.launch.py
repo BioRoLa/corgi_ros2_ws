@@ -35,14 +35,23 @@ Notes for WSL, from getting this working:
   processes. Clear them with
       pkill -f webots_ros2_driver && ros2 daemon stop
 
-* Known-unresolved: with a clean graph and mode:=fast, Webots does start
-  (the process shows `--batch --mode=fast` and burns CPU) and the driver
-  reports "Controller successfully connected", but /clock never ticks, so
-  the plugin's step() is never called and nothing downstream runs. The
-  extern-controller connection succeeds over TCP while the stepping handshake
-  does not. The documented webots_ros2 mechanism for this cross-boundary case
-  is WEBOTS_SHARED_FOLDER, which switches WebotsLauncher to its
-  webots_tcp_client.py path; that is the next thing to try.
+* The `mode` argument alone does not start the simulation. corgi_driver.py
+  calls
+      self.__robot.simulationSetMode(Supervisor.SIMULATION_MODE_PAUSE)
+  on init whenever CORGI_EXPERIMENT_MODE is unset, so whatever --mode
+  WebotsLauncher passed is overridden the moment the controller connects.
+  This is intended behaviour -- the normal workflow is to press Play -- but
+  it does mean `mode` on its own looks broken.
+
+* experiment_mode:=true here does NOT work, and the argument is kept only so
+  the finding is not lost: SetEnvironmentVariable from a launch file does not
+  reach the driver, because webots-controller re-execs with a sanitised
+  environment (verified by reading /proc/<driver-pid>/environ). To skip the
+  pause, export it in the shell before launching:
+      export CORGI_EXPERIMENT_MODE=1
+  Note that also enables trigger-driven removal of the SUPPORT_BOX, which is
+  NOT the normal flow -- normally the robot stands up off the box under CSV
+  position control and the box simply stays there.
 """
 
 import os
@@ -71,6 +80,7 @@ def _find_free_port(start_port=1234, max_tries=100):
 def _setup(context, *args, **kwargs):
     mode = LaunchConfiguration('mode').perform(context)
     gui = LaunchConfiguration('gui').perform(context).lower() in ('true', '1')
+    experiment = LaunchConfiguration('experiment_mode').perform(context).lower() in ('true', '1')
 
     package_dir = get_package_share_directory('corgi_sim')
     world_path = os.path.join(package_dir, 'worlds', 'Corgi_ABAD.wbt')
@@ -94,6 +104,12 @@ def _setup(context, *args, **kwargs):
     if not gui:
         # WebotsLauncher checks for this and wraps the command in xvfb-run.
         actions.append(SetEnvironmentVariable(name='WEBOTS_OFFSCREEN', value='1'))
+    if experiment:
+        # Without this, corgi_driver calls simulationSetMode(PAUSE) on init and
+        # the simulation sits still no matter what --mode WebotsLauncher passed.
+        # It also enables trigger-driven removal of the SUPPORT_BOX, so the
+        # robot is held up until /trigger goes true.
+        actions.append(SetEnvironmentVariable(name='CORGI_EXPERIMENT_MODE', value='1'))
     actions += [
         webots,
         robot_driver,
@@ -114,6 +130,7 @@ def generate_launch_description():
         DeclareLaunchArgument('mode', default_value='fast'),
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('panel', default_value='true'),
+        DeclareLaunchArgument('experiment_mode', default_value='true'),
 
         launch.actions.SetEnvironmentVariable(name='USER', value=launch_user),
         launch.actions.SetEnvironmentVariable(name='USERNAME', value=launch_user),
