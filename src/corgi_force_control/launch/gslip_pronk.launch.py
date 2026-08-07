@@ -70,6 +70,7 @@ def generate_launch_description():
         DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
         DeclareLaunchArgument("k_yaw", default_value="0.15"),
+        DeclareLaunchArgument("spring_rest_reference", default_value="false"),
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -100,6 +101,7 @@ def generate_launch_description():
                 'k_flight': LaunchConfiguration('k_flight'),
                 'k_roll': LaunchConfiguration('k_roll'),
                 'k_yaw': LaunchConfiguration('k_yaw'),
+                'spring_rest_reference': LaunchConfiguration('spring_rest_reference'),
                 'template_path': template_path,
             }],
             output='screen',
