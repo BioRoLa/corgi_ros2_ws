@@ -16,9 +16,17 @@ bash sim_cycle.sh <template.csv> [launch args...]
 Every run needs its own restart. A Webots *Reset* is not enough, and *Reload*
 drops the extern controller without recovering.
 
+For the **speed ramp**, use `ramp_cycle.sh` instead — `sim_cycle.sh` cannot
+measure it correctly (see "Measuring the speed ramp" below):
+
+```bash
+bash ramp_cycle.sh <gslip_speed_ramp_template.csv> [launch args...]
+```
+
 Templates are installed at
 `install/corgi_force_control/share/corgi_force_control/config/` —
-`gslip_hop_template.csv` and `gslip_pronk_template.csv`.
+`gslip_hop_template.csv`, `gslip_pronk_template.csv` and
+`gslip_speed_ramp_template.csv`.
 
 ## Scripts
 
@@ -32,6 +40,12 @@ Templates are installed at
 | `check_env_propagation.sh` | whether `CORGI_*` env vars reach the driver process |
 | `hop_spring_rest.sh` | the `spring_rest_reference` experiment (rejected) |
 | `hop_bradial72.sh` | hop at `b_radial = 72` vs 0 |
+| `ramp_cycle.sh` | the speed-ramp run: recorder started **before** the trigger, per-segment result |
+| `check_ramp.py` | flight fraction **per ramp segment and per stride**, anchored to sim time |
+| `ramp_segments.py` | recovers the ramp's segment / stride boundaries from the CSV |
+| `check_gains.sh` | reads back the gains actually in effect on the running node |
+| `net_probe.sh` | whether WSL can reach the Windows-side Webots on 1234 |
+| `check_port_1234.sh` | distinguishes "can't reach Webots" from "Webots isn't there" |
 
 ## Things that will waste your time otherwise
 
@@ -64,4 +78,43 @@ the stale process holds port 1234 — the next launch then fails with *"not in t
 list of robots with `<extern>` controllers"*. `sim_cycle.sh` does this already.
 
 **Gains must be floats on the launch line.** `b_radial:=10` aborts the node
-against a `double` parameter; use `10.0`.
+against a `double` parameter; use `10.0`. The node only logs `k_radial` at
+startup, so a gain that silently failed to apply is otherwise invisible --
+`check_gains.sh` reads back what is actually in effect.
+
+**Webots runs far below real time, and the factor varies.** Measured ~14x
+slower (8 strides = 2.13 s sim in 30 s wall). `sim_cycle.sh` waits a fixed
+**20 s of wall clock** before sampling, so the sample lands at a different
+*gait age* every run. Two identical hop invocations gave 68.2% and 9.3% flight
+purely from this: one caught strides ~3-6, the other the startup transient at
+strides ~1-4. Anything quantitative should key off **sim** time.
+
+**The controller stops the instant the trigger goes false.** `gslip_pronk`
+exits its run loop when `trigger_` clears, so killing the trigger publisher
+truncates the gait -- that is what "Stopped after N strides" means in the logs.
+A measurement must hold the trigger for as long as it wants to record.
+
+## Measuring the speed ramp
+
+`sim_cycle.sh` is wrong for the ramp in three separate ways, which is why
+`ramp_cycle.sh` exists:
+
+1. **One average hides the answer.** The ramp climbs six fixed points across
+   9.58 s; a single flight fraction over all of it cannot show which rungs
+   worked.
+2. **The template wraps.** `gslip_pronk.cpp` wraps `index` at
+   `template_.size()`, so after 9.575 s the ramp snaps from v~1.20 back to the
+   in-place hop *while the robot is still carrying 2.035 m/s*. `sim_cycle.sh`'s
+   20 s sample sits in the third pass, past two wrap discontinuities. Only the
+   first pass means anything.
+3. **The phase has to be recovered, not assumed.** `check_ramp.py` anchors on
+   commanded beta, which is exactly zero through the hop segment and steps to
+   +-7 deg when the first forward segment begins -- an unambiguous fiducial at
+   a known template time.
+
+**The ramp carries its own validity gate.** Its first segment *is* the in-place
+hop, the one gait validated from standstill. If that segment does not reach
+theta ~ 100 deg and ~58% flight, the run is dead and says nothing about the
+ramp. A run reading ~10% on *every* rung with theta topping out at 97.7 deg is
+this failure, not a ramp result -- it looks exactly like "the ramp does not
+work" and is not.
