@@ -1,0 +1,21 @@
+# Normalise line endings. This repo is built and run under Linux/WSL, but is
+# often edited from Windows tools, which was silently rewriting every line of
+# 32 files to CRLF -- 6455 insertions against 6455 deletions with no content
+# change, burying real work in the diff.
+#
+# text=auto lets git detect text vs binary; eol=lf checks text out with LF on
+# every platform.
+* text=auto eol=lf
+
+# Keep shell scripts and CSV templates explicitly LF: the ROS launch path and
+# the template parser both read these directly.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.csv  text eol=lf
+
+# Binary: never touch.
+*.stl  binary
+*.STL  binary
+*.png  binary
+*.jpg  binary
+*.pdf  binary

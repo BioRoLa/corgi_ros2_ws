@@ -25,3 +25,5 @@ output_data/*
 **/build
 **/log
 **/COLCON_IGNORE
+# .gitattributes must survive the blanket `.*` rule above.
+!.gitattributes
