@@ -24,7 +24,23 @@ Arguments:
     k_lateral      stance ABAD stiffness per leg, N/m. Must not be zero --
                    with leg_frame this axis is the hip roll, and a zero here
                    leaves kp_h near zero and the ABAD floppy.
-    k_tangential   stance tangential stiffness per leg, N/m
+    k_tangential   stance tangential stiffness per leg, N/m. Default 600,
+                   lowered from 1200 on 2026-08-08. The tangential force acts
+                   perpendicular to the leg, so unlike the axial spring it does
+                   NOT pass through the hip: it carries a pitch moment on the
+                   full 0.29 m hip-to-contact lever, ~30x the axial term at a
+                   realistic beta tracking error. That moment desynchronises
+                   front and rear legs. Measured over a sweep (n=3 at 600):
+                     k_t   leg split      flight        top-rung v
+                     1200  40.1%          41.1%         0.658   (n=1)
+                      900  38.5 +-0.9%    42.4 +-0.2%   0.585   (n=2)
+                      600  32.7 +-2.1%    46.6 +-1.5%   0.826   (n=3)
+                      300  37.1%          42.6%         0.686   (n=1)
+                   There is a MINIMUM, not a monotonic trend: k_t is also the
+                   compliance that lets the leg track the template's sweep, so
+                   cutting it too far degrades tracking, which feeds back into
+                   the very error driving the moment. See
+                   examples/gslip/pitch_moment_kt.py in LegWheel.
     template_path  override the stride template CSV
     hop_in_place   see below
 
@@ -66,7 +82,7 @@ def generate_launch_description():
         DeclareLaunchArgument("b_radial", default_value="0.0"),
         DeclareLaunchArgument("k_lateral", default_value="7500.0"),
         DeclareLaunchArgument('hold_stance', default_value='false'),
-        DeclareLaunchArgument("k_tangential", default_value="1200.0"),
+        DeclareLaunchArgument("k_tangential", default_value="600.0"),
         DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
         DeclareLaunchArgument("k_yaw", default_value="0.15"),
