@@ -123,21 +123,47 @@ def segment_speed(ot, ov, t0, t1):
     return v_pose, float(np.mean(seg[:, 3]))
 
 
-def find_anchor(cmd, fiducial_t, settle, t_trigger):
-    """-> (t_sim of template t=0, how it was found)."""
+def fiducial_anchor(cmd, fiducial_t):
+    """-> t_sim of template t=0 from the commanded-beta fiducial, else None.
+
+    Split out from find_anchor deliberately. The polling loop below must latch
+    ONLY on the fiducial: during the controller's settle, commanded beta is
+    still zero, so a combined lookup returns the trigger+settle FALLBACK, that
+    value gets latched, and it is never revisited once anchor is non-None.
+
+    That bug was invisible while the controller's settle_ticks (1000 ms) and
+    this script's --settle default (1.0 s) happened to agree. Raising
+    settle_ticks to 2500 made every segment boundary wrong by exactly 1.5 s --
+    and the run still PRINTED "commanded beta fiducial", because the final
+    call recomputed the description without recomputing the anchor.
+    """
     for t, mods in cmd:
         if max(abs(m[1]) for m in mods) > BETA_FIDUCIAL_RAD:
-            return t - fiducial_t, f"commanded beta fiducial at t={fiducial_t:.3f}s"
+            return t - fiducial_t
+    return None
+
+
+def find_anchor(cmd, fiducial_t, settle, t_trigger):
+    """-> (t_sim of template t=0, how it was found). Fiducial preferred."""
+    a = fiducial_anchor(cmd, fiducial_t)
+    if a is not None:
+        return a, f"commanded beta fiducial at t={fiducial_t:.3f}s"
     if t_trigger is not None:
-        return t_trigger + settle, "trigger + settle (beta fiducial never seen)"
+        return (t_trigger + settle,
+                f"trigger + settle={settle:.2f}s (beta fiducial never seen) "
+                f"-- MUST match the controller's settle_ticks or every segment "
+                f"boundary is offset")
     return None, "no anchor"
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("template")
-    ap.add_argument("--settle", type=float, default=1.0,
-                    help="controller settle_ticks, in seconds")
+    ap.add_argument("--settle", type=float, default=2.5,
+                    help="controller settle_ticks, in seconds. Only used as a "
+                         "FALLBACK when the commanded-beta fiducial is never "
+                         "seen; must match gslip_pronk's settle_ticks or every "
+                         "segment boundary is offset by the difference.")
     ap.add_argument("--timeout", type=float, default=400.0,
                     help="wall-clock give-up, seconds")
     ap.add_argument("--dump", default=None,
@@ -157,16 +183,18 @@ def main():
     anchor = None
     while rclpy.ok() and time.time() < wall_end:
         rclpy.spin_once(n, timeout_sec=0.0)
+        # Latch ONLY on the fiducial. Latching the fallback here is what made
+        # the reported anchor and the used anchor disagree; see fiducial_anchor.
         if anchor is None and fiducial_t is not None and len(n.cmd) > 50:
-            anchor, _ = find_anchor(n.cmd, fiducial_t, args.settle, n.t_trigger)
+            anchor = fiducial_anchor(n.cmd, fiducial_t)
         if anchor is not None and n.contact and n.contact[-1][0] - anchor > duration:
             break
 
-    if anchor is None:
+    if anchor is not None:
+        how = f"commanded beta fiducial at t={fiducial_t:.3f}s"
+    else:
         anchor, how = find_anchor(n.cmd, fiducial_t or 0.0, args.settle,
                                   n.t_trigger)
-    else:
-        _, how = find_anchor(n.cmd, fiducial_t or 0.0, args.settle, n.t_trigger)
 
     print(f"samples: contact={len(n.contact)} motor={len(n.motor)} "
           f"cmd={len(n.cmd)} imu={len(n.imu)} odom={len(n.odom)}")

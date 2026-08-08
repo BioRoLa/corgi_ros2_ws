@@ -189,6 +189,15 @@ private:
     // In experiment mode the same /trigger that starts this gait also deletes
     // SUPPORT_BOX, so the robot is settling onto its legs at that instant.
     // Striding through the settle would corrupt the first touchdown.
+    //
+    // Raised 1000 -> 2500 on 2026-08-08. 1 s was marginal: per-stride hop data
+    // across eight ramp runs shows the opening strides frequently below par and
+    // then recovering, and in the worst case the robot took FIVE strides
+    // (~1.34 s) to start hopping at all -- 0, 0, 0, 0, 0, 3.4, 15.0, 56.2% --
+    // which failed the run's validity gate outright. Even a healthy run showed
+    // a one-to-two stride transient (21.4, 55.1, then 70s). The cost is ~1.5 s
+    // of extra sim time per run, against a 9.57 s pass; the benefit is fewer
+    // discarded runs, and the hop segment IS the gate.
     int settle_ticks_;
 
     // Phase 5 step 1: hold the standing pose with the STANCE (leg-frame)
@@ -235,7 +244,7 @@ GslipPronkNode::GslipPronkNode()
       // essentially hopping in place. Touchdown velocity, and therefore
       // compression, are simply not the model's.
       spring_rest_reference_(false),
-      settle_ticks_(1000),
+      settle_ticks_(2500),
       hold_stance_(false)
 {
     RCLCPP_INFO(this->get_logger(), "G-SLIP pronk controller starting");
