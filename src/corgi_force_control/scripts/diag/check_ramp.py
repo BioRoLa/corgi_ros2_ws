@@ -94,7 +94,12 @@ class Rec(Node):
     def o_cb(self, msg):
         p = msg.pose.pose.position
         v = msg.twist.twist.linear
-        self.odom.append((self._now(), [p.x, p.y, p.z, v.x, v.y, v.z]))
+        # Orientation too: this is Supervisor GROUND TRUTH, and the only way to
+        # check the IMU-derived yaw the controller actually steers on. The
+        # controller's yaw_ has never been validated against truth.
+        q = msg.pose.pose.orientation
+        self.odom.append((self._now(),
+                          [p.x, p.y, p.z, v.x, v.y, v.z, q.x, q.y, q.z, q.w]))
 
     def t_cb(self, msg):
         if msg.enable and self.t_trigger is None:
@@ -213,7 +218,9 @@ def main():
     mt = np.array([t for t, _ in n.motor]) - anchor
     mv = np.rad2deg(np.array([v for _, v in n.motor]))
     ot = np.array([t for t, _ in n.odom]) - anchor
-    ov = np.array([v for _, v in n.odom]) if n.odom else np.empty((0, 6))
+    ov = np.array([v for _, v in n.odom]) if n.odom else np.empty((0, 10))
+    it = np.array([t for t, _ in n.imu]) - anchor
+    iv = np.array([v for _, v in n.imu]) if n.imu else np.empty((0, 4))
 
     covered = ct.max() if len(ct) else -1
     print(f"template time covered: {ct.min():.2f} .. {covered:.2f} s "
@@ -288,6 +295,7 @@ def main():
     if args.dump:
         np.savez_compressed(args.dump, contact_t=ct, contact=cv,
                             motor_t=mt, motor_deg=mv, odom_t=ot, odom=ov,
+                            imu_t=it, imu_quat=iv,
                             anchor=anchor, template=args.template)
         print(f"\nraw samples written to {args.dump}")
 
