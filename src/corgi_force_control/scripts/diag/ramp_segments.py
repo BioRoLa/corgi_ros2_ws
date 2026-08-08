@@ -19,6 +19,10 @@ import numpy as np
 # Used only to group strides; the boundary *times* come from the data.
 STRIDES_PER_SEGMENT = [8, 6, 6, 6, 6, 6]
 SEGMENT_NAMES = ["hop 30mm", "v~0.50", "v~0.70", "v~0.90", "v~1.05", "v~1.20"]
+# Designed forward speed of each rung, m/s. The CSV carries only theta/beta/
+# in_stance, so this cannot be recovered from the file -- it must track
+# export_speed_ramp_csv.py by hand, like the two lists above.
+SEGMENT_DESIGN_V = [0.000, 0.848, 1.187, 1.526, 1.781, 2.035]
 
 
 def load(path):
@@ -50,6 +54,7 @@ def segment_template(path, strides_per_segment=None):
         # than silently mis-slicing it -- a wrong cut is worse than no cut.
         return [{
             "name": "whole template",
+            "design_v": None,
             "t_start": float(t[0]),
             "t_end": float(t[-1]),
             "strides": len(starts),
@@ -63,12 +68,14 @@ def segment_template(path, strides_per_segment=None):
 
     segments = []
     cut = 0
-    for name, n in zip(SEGMENT_NAMES, counts):
+    design_v = list(SEGMENT_DESIGN_V) + [None] * len(SEGMENT_NAMES)
+    for k, (name, n) in enumerate(zip(SEGMENT_NAMES, counts)):
         i0 = starts[cut]
         i1 = starts[cut + n] if cut + n < len(starts) else len(t)
         sl = slice(i0, i1)
         segments.append({
             "name": name,
+            "design_v": design_v[k],
             "t_start": float(t[i0]),
             "t_end": float(t[i1 - 1]),
             "strides": n,
