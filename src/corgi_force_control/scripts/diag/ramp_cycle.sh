@@ -15,11 +15,27 @@
 #
 # Usage: ramp_cycle.sh <template.csv> [extra launch args...]
 #
+# Two environment knobs, because everything after the template is forwarded
+# verbatim to `ros2 launch` and cannot carry recorder options:
+#
+#   RAMP_UNTIL   seconds of TEMPLATE time to record before stopping, instead of
+#                the full 9.58 s pass. The recorder gates the run -- the trigger
+#                is dropped as soon as it exits -- so this shortens the whole
+#                thing. RAMP_UNTIL=2.6 covers the hop segment (0.00-2.14 s),
+#                which is where yaw is measured, at about a quarter of the cost.
+#   RAMP_DUMP    where to write the raw .npz (default /tmp/ramp_raw.npz). Give
+#                each run of a sweep its own path or the next run overwrites it.
+#
+#   RAMP_UNTIL=2.6 RAMP_DUMP=/tmp/steer_p5.npz ramp_cycle.sh <tpl> steer_offset:=0.0873
+#
 # No `set -u`: the ROS setup scripts reference unbound variables.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TPL="$1"; shift
 EXTRA="$@"
+DUMP="${RAMP_DUMP:-/tmp/ramp_raw.npz}"
+UNTIL_ARG=""
+[ -n "$RAMP_UNTIL" ] && UNTIL_ARG="--until $RAMP_UNTIL"
 
 source /opt/ros/humble/setup.bash
 source ~/corgi_ws/corgi_ros2_ws/install/setup.bash
@@ -70,7 +86,7 @@ fi
 # --- recorder first, THEN trigger ------------------------------------------
 # Deliberately NOT setsid here: setsid forks, so $! would be the wrapper rather
 # than the recorder and `wait` would return immediately.
-python3 "$HERE/check_ramp.py" "$TPL" --dump /tmp/ramp_raw.npz \
+python3 "$HERE/check_ramp.py" "$TPL" --dump "$DUMP" $UNTIL_ARG \
     > /tmp/ramp_meas.log 2>&1 < /dev/null &
 REC=$!
 sleep 3

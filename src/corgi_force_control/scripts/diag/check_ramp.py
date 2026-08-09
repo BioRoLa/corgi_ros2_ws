@@ -25,7 +25,8 @@ back to the in-place hop while the robot is still carrying 2.035 m/s, so
 anything after that is measuring a different experiment.
 
 Usage:
-    python3 check_ramp.py <template.csv> [--settle 1.0] [--timeout 400]
+    python3 check_ramp.py <template.csv> [--settle 2.5] [--timeout 400]
+                          [--dump raw.npz] [--until 2.6]
 """
 import argparse
 import os
@@ -45,6 +46,26 @@ from ramp_segments import segment_template, stride_boundaries  # noqa: E402
 # Template time at which the first forward segment begins, i.e. the first row
 # with non-zero commanded beta. Recovered from the CSV, not hard-coded.
 BETA_FIDUCIAL_RAD = np.deg2rad(0.5)
+
+
+def common_mode_beta(mods):
+    """-> the template's beta, with any steering differential removed.
+
+    The fiducial has to track the TEMPLATE, and the template's beta is the
+    common mode of the four commanded betas. gslip_pronk's steering channel is
+    antisymmetric left/right -- signs {+1,-1,-1,+1} on A,B,C,D for both the
+    stance-gated offset and the amplitude scaling -- so it sums to zero and the
+    mean is exactly row.beta either way.
+
+    Taking max|beta| across the modules instead, which is what this did
+    originally, breaks the moment anything steers: a stance-gated offset makes
+    beta non-zero during the SETTLE, the fiducial fires ~4.6 s early, and every
+    segment boundary shifts by that much. The symptom is a "hop" segment
+    showing 0% flight, 100% all-down and theta pinned below command -- i.e. the
+    standing settle wearing the hop's label. With steering off the two
+    definitions agree, so old dumps read the same.
+    """
+    return sum(m[1] for m in mods) / len(mods)
 
 
 class Rec(Node):
@@ -143,7 +164,7 @@ def fiducial_anchor(cmd, fiducial_t):
     call recomputed the description without recomputing the anchor.
     """
     for t, mods in cmd:
-        if max(abs(m[1]) for m in mods) > BETA_FIDUCIAL_RAD:
+        if abs(common_mode_beta(mods)) > BETA_FIDUCIAL_RAD:
             return t - fiducial_t
     return None
 
@@ -173,6 +194,14 @@ def main():
                     help="wall-clock give-up, seconds")
     ap.add_argument("--dump", default=None,
                     help="write raw samples to this .npz for offline analysis")
+    ap.add_argument("--until", type=float, default=None,
+                    help="stop recording this many seconds into the template "
+                         "instead of after a full pass. ramp_cycle.sh waits on "
+                         "this process and drops the trigger when it exits, so "
+                         "this ends the whole run: --until 2.6 covers the hop "
+                         "segment (0.00-2.14 s) for about a quarter of the "
+                         "cost of the 9.58 s pass. Leave unset for a full "
+                         "ramp.")
     args = ap.parse_args()
 
     segs = segment_template(args.template)
@@ -186,13 +215,26 @@ def main():
     import time
     wall_end = time.time() + args.timeout
     anchor = None
+    stop_at = args.until if args.until is not None else duration
     while rclpy.ok() and time.time() < wall_end:
         rclpy.spin_once(n, timeout_sec=0.0)
         # Latch ONLY on the fiducial. Latching the fallback here is what made
         # the reported anchor and the used anchor disagree; see fiducial_anchor.
         if anchor is None and fiducial_t is not None and len(n.cmd) > 50:
             anchor = fiducial_anchor(n.cmd, fiducial_t)
-        if anchor is not None and n.contact and n.contact[-1][0] - anchor > duration:
+        # Stopping and REPORTING use different anchors on purpose. The fiducial
+        # is the first non-zero commanded beta, at t = 2.14 s, so it cannot be
+        # what decides whether to stop before then -- a --until inside the hop
+        # would wait forever for a fiducial the run is about to end before
+        # reaching. Fall back to trigger + settle for the stopping decision
+        # only; everything printed below still re-anchors on the fiducial once
+        # it has been seen, which is the accurate one.
+        stop_anchor = anchor
+        if (stop_anchor is None and args.until is not None
+                and n.t_trigger is not None):
+            stop_anchor = n.t_trigger + args.settle
+        if (stop_anchor is not None and n.contact
+                and n.contact[-1][0] - stop_anchor > stop_at):
             break
 
     if anchor is not None:
@@ -225,7 +267,13 @@ def main():
     covered = ct.max() if len(ct) else -1
     print(f"template time covered: {ct.min():.2f} .. {covered:.2f} s "
           f"(one pass is {duration:.2f} s)")
-    if covered < duration:
+    if args.until is not None:
+        print(f"  --until {args.until:.2f} s: stopped deliberately inside the "
+              f"pass. Segments past that point are expected to be blank.")
+        if covered < args.until - 0.05:
+            print(f"  WARNING: only reached {covered:.2f} s, short even of "
+                  f"--until; the run ended early or the gait never started")
+    elif covered < duration:
         print(f"  WARNING: recording ended {duration-covered:.2f} s short of a "
               f"full pass; late segments are missing or partial")
 

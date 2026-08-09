@@ -44,6 +44,32 @@ Arguments:
     template_path  override the stride template CSV
     hop_in_place   see below
 
+    steer_offset   per-side beta offset in RADIANS, applied only while the leg
+                   is in stance. This is the steering channel: the foot is a
+                   0.145 m arc in rolling contact, so a differential sweep
+                   during stance drives the robot like a differential drive,
+                   d_psi ~ r*(sweep_L - sweep_R)/track with track = 0.24 m. A
+                   5 deg (0.0873 rad) differential predicts ~3.0 deg/stride,
+                   comparable to the parasitic yaw it has to cancel.
+                   Stance-gating is not optional: in the hop segment beta is
+                   identically zero, so a constant offset is a static leg angle
+                   that rolls nothing.
+    k_steer        per-side beta AMPLITUDE scale, beta*(1 +- k_steer). Only
+                   bites where the template already sweeps, i.e. the forward
+                   rungs, and moves speed as well as heading.
+    steer_prepose  also drive the leg -s*u during flight, so it lands
+                   pre-positioned and sweeps through the full 2*u. Doubles the
+                   authority, bigger step at the phase boundaries.
+    steer_limit    clamp on the total beta perturbation, radians.
+    k_steer_yaw    heading feedback: yaw error -> steer offset. The SIGN is not
+                   derivable from the geometry -- take it from an open-loop
+                   +-steer_offset pair and negate if the correction makes
+                   things worse.
+    d_steer_yaw    damping on yaw rate for the same loop.
+
+    All six default to values that make the node behave exactly as it did
+    before the channel existed, so old runs stay reproducible.
+
 Suggested order, each step gating the next:
 
   0. Baseline, no G-SLIP: run corgi_force_control's exp_sim_stay_node against
@@ -87,6 +113,12 @@ def generate_launch_description():
         DeclareLaunchArgument("k_roll", default_value="0.25"),
         DeclareLaunchArgument("k_yaw", default_value="0.15"),
         DeclareLaunchArgument("spring_rest_reference", default_value="false"),
+        DeclareLaunchArgument("k_steer", default_value="0.0"),
+        DeclareLaunchArgument("steer_offset", default_value="0.0"),
+        DeclareLaunchArgument("steer_limit", default_value="0.13963"),  # 8 deg
+        DeclareLaunchArgument("steer_prepose", default_value="false"),
+        DeclareLaunchArgument("k_steer_yaw", default_value="0.0"),
+        DeclareLaunchArgument("d_steer_yaw", default_value="0.0"),
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -118,6 +150,12 @@ def generate_launch_description():
                 'k_roll': LaunchConfiguration('k_roll'),
                 'k_yaw': LaunchConfiguration('k_yaw'),
                 'spring_rest_reference': LaunchConfiguration('spring_rest_reference'),
+                'k_steer': LaunchConfiguration('k_steer'),
+                'steer_offset': LaunchConfiguration('steer_offset'),
+                'steer_limit': LaunchConfiguration('steer_limit'),
+                'steer_prepose': LaunchConfiguration('steer_prepose'),
+                'k_steer_yaw': LaunchConfiguration('k_steer_yaw'),
+                'd_steer_yaw': LaunchConfiguration('d_steer_yaw'),
                 'template_path': template_path,
             }],
             output='screen',

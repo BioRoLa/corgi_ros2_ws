@@ -170,6 +170,60 @@ private:
     void update_attitude(double& roll, double& pitch, double& yaw) const;
     double gamma_correction(int leg_index) const;
 
+    // --- Steering: differential beta ----------------------------------------
+    //
+    // gamma above is INERT in yaw. Measured: k_yaw = 0 collapses gamma from
+    // +-5 deg pinned to +-0.3 deg and leaves the heading trajectory unchanged,
+    // while the correction saturates 67-78% of the time. The robot yaws right
+    // at 2.3-3.6 deg/stride whatever the controller does -- and it does it in
+    // the in-place hop too, where beta is identically zero, so the yaw is
+    // intrinsic to the plant. That is a MISSING ACTUATOR, not a gain to tune;
+    // see "The yaw problem, consolidated" in the weekly progress log for the
+    // eleven candidate causes already eliminated.
+    //
+    // The channel added here is differential beta. The foot is a circular arc
+    // of radius 0.145 m and stance is ROLLING contact, so sweeping a leg by
+    // d_beta while it is down rolls that side forward by ~r*d_beta: during
+    // stance the robot is a differential drive. Unequal left/right sweep yaws
+    // it,
+    //
+    //     d_psi ~ r * (sweep_L - sweep_R) / track,    track = 0.24 m
+    //
+    // which for a 5 deg sweep differential predicts 0.145*0.0873/0.24 = 0.053
+    // rad ~ 3.0 deg/stride -- comparable to the parasitic rate, so the channel
+    // is plausibly strong enough to cancel it as a disturbance without ever
+    // finding its cause.
+    //
+    // CAVEAT, recorded because it is easy to forget: differential rolling
+    // already FAILED as an explanation of the parasitic yaw (per-stride
+    // correlation -0.011, n=150). That tested whether INCIDENTAL sweep
+    // differences predict the EXISTING yaw. Whether a COMMANDED differential
+    // steers is a different claim, and open. The mean rates did agree
+    // (predicted 3.4-4.8 vs measured 2.9-3.4 deg/stride), so the magnitude
+    // scale is right. Test open-loop first.
+    //
+    // Two forms, because neither covers both regimes:
+    //
+    //   steer_offset  a per-side beta offset, applied ONLY while in stance.
+    //                 Works everywhere, including the hop. It has to be
+    //                 stance-gated to do anything: in the hop row.beta is
+    //                 identically 0 for the whole stride, so a CONSTANT offset
+    //                 is a static leg angle, not a sweep, and under a rolling
+    //                 model it rolls nothing. Gated, the leg is driven to +-s
+    //                 during contact and returns in flight, which is a real
+    //                 differential roll of ~s per side.
+    //
+    //   k_steer       per-side amplitude scale, beta * (1 +- k_steer). Only
+    //                 does anything where the template already sweeps, i.e.
+    //                 the forward rungs. Changes fore-aft impulse as well as
+    //                 yaw, so speed moves a little -- that is how a
+    //                 differential drive works.
+    //
+    // Both default to ZERO so this is a no-op until a run asks for steering.
+    // The members themselves live below gamma_limit_, so the declaration order
+    // matches the constructor's initialiser list (-Wreorder).
+    double steer_command() const;
+
     // Rest-length leg extension, taken from the template's maximum theta
     // (its touchdown pose, where the spring is uncompressed).
     double theta_rest_{0.0};
@@ -184,6 +238,14 @@ private:
     double k_yaw_;
     double d_yaw_;
     double gamma_limit_;   // rad, clamp on the correction
+
+    // Steering; see the block comment above steer_command().
+    double k_steer_;
+    double steer_offset_;   // rad
+    double steer_limit_;    // rad, clamp on the total beta perturbation
+    bool steer_prepose_;
+    double k_steer_yaw_;
+    double d_steer_yaw_;
 
     // Ticks to hold the stance after the trigger, before the stride starts.
     // In experiment mode the same /trigger that starts this gait also deletes
@@ -219,17 +281,6 @@ GslipPronkNode::GslipPronkNode()
       k_flight_(12000.0),
       b_flight_(150.0),
       standup_ticks_(2000),
-      // Gentle. At k_roll 0.6 / k_yaw 0.4 with a 12 deg clamp the correction
-      // saturated -- measured gamma reached 15-17 deg -- and while it did halve
-      // the yaw drift and even out the contact balance, tilting the legs that
-      // far cost the vertical push: flight fell from 34% to 8.9% and the leg
-      // phase correlation from 0.92-0.98 to 0.70-0.91. The authority has to
-      // stay small enough not to disturb the hop it is stabilising.
-      k_roll_(0.25),
-      d_roll_(0.03),
-      k_yaw_(0.15),
-      d_yaw_(0.02),
-      gamma_limit_(5.0 / 180.0 * M_PI),
       // Default OFF. The reasoning is sound for the model -- l0 is the rest
       // length and l(t) is an output -- but in the robot it flipped the
       // machine: measured compression already reaches 71-75 deg, so
@@ -243,7 +294,31 @@ GslipPronkNode::GslipPronkNode()
       // fixed point assumes 2.035 m/s of forward travel, and the robot is
       // essentially hopping in place. Touchdown velocity, and therefore
       // compression, are simply not the model's.
+      //
+      // (Initialised here, out of narrative order, because it is DECLARED
+      // before the attitude gains and -Wreorder tracks declaration order.)
       spring_rest_reference_(false),
+      // Gentle. At k_roll 0.6 / k_yaw 0.4 with a 12 deg clamp the correction
+      // saturated -- measured gamma reached 15-17 deg -- and while it did halve
+      // the yaw drift and even out the contact balance, tilting the legs that
+      // far cost the vertical push: flight fell from 34% to 8.9% and the leg
+      // phase correlation from 0.92-0.98 to 0.70-0.91. The authority has to
+      // stay small enough not to disturb the hop it is stabilising.
+      k_roll_(0.25),
+      d_roll_(0.03),
+      k_yaw_(0.15),
+      d_yaw_(0.02),
+      gamma_limit_(5.0 / 180.0 * M_PI),
+      k_steer_(0.0),
+      steer_offset_(0.0),
+      // 8 deg. Sized above the 5 deg the authority estimate calls for, so the
+      // clamp does not silently cap the first experiments, but well inside the
+      // sweep the template already commands (+-18 deg at the top rung) so a
+      // runaway feedback term cannot fold a leg.
+      steer_limit_(8.0 / 180.0 * M_PI),
+      steer_prepose_(false),
+      k_steer_yaw_(0.0),
+      d_steer_yaw_(0.0),
       settle_ticks_(2500),
       hold_stance_(false)
 {
@@ -276,6 +351,12 @@ GslipPronkNode::GslipPronkNode()
     k_yaw_ = this->declare_parameter<double>("k_yaw", k_yaw_);
     d_yaw_ = this->declare_parameter<double>("d_yaw", d_yaw_);
     gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
+    k_steer_ = this->declare_parameter<double>("k_steer", k_steer_);
+    steer_offset_ = this->declare_parameter<double>("steer_offset", steer_offset_);
+    steer_limit_ = this->declare_parameter<double>("steer_limit", steer_limit_);
+    steer_prepose_ = this->declare_parameter<bool>("steer_prepose", steer_prepose_);
+    k_steer_yaw_ = this->declare_parameter<double>("k_steer_yaw", k_steer_yaw_);
+    d_steer_yaw_ = this->declare_parameter<double>("d_steer_yaw", d_steer_yaw_);
     spring_rest_reference_ =
         this->declare_parameter<bool>("spring_rest_reference", spring_rest_reference_);
 
@@ -408,6 +489,56 @@ double GslipPronkNode::gamma_correction(int leg_index) const {
     return std::max(-gamma_limit_, std::min(gamma_limit_, correction));
 }
 
+// -> the per-side beta differential to command, in radians, already clamped.
+//
+// One scalar for the whole robot; apply_row multiplies it by the leg's
+// left/right sign. Open-loop bias plus heading feedback, so a fixed
+// steer_offset can be swept on its own (k_steer_yaw = 0) to measure the
+// channel's authority before any loop is closed.
+//
+// yaw_ is trustworthy: it matches Supervisor ground truth to 1.17 deg over a
+// whole pass, so the historic failure to hold heading was authority, not
+// estimation. Guarded on yaw_ref_set_ exactly like gamma_correction -- before
+// the reference is latched (i.e. during standup and the settle) there is no
+// error to act on, and only the open-loop term applies.
+//
+// The gain SIGN is not obvious from the geometry: which way a rolling
+// differential turns the body depends on the sense of beta and of the
+// world-frame yaw together. Decide it from the open-loop runs and negate the
+// gain if the correction makes things worse -- the same reason k_roll/k_yaw
+// are parameters.
+double GslipPronkNode::steer_command() const {
+    // NOTHING is steered until the stride loop starts. yaw_ref_set_ is the
+    // flag for that: false through standup, through the hold-for-trigger loop
+    // and through the settle, true from the first template row onward.
+    //
+    // This gates the OPEN-LOOP offset as well as the feedback, which matters
+    // for two separate reasons:
+    //
+    //   Physically, execute_running_phase holds the settle pose with
+    //   in_stance = true, so a stance-gated offset would twist the legs against
+    //   the ground for 2.5 s while the robot is settling onto them after the
+    //   support box is removed -- corrupting the very touchdown the settle
+    //   exists to protect.
+    //
+    //   For measurement, check_ramp.py recovers template time from the first
+    //   non-zero COMMANDED beta. Steering during the settle fires that fiducial
+    //   about 4.6 s early and silently relabels the standing settle as the hop
+    //   segment. That is exactly what the first two open-loop runs did: 0.0%
+    //   flight, 100% all-down, theta pinned at 97 deg -- a picture of a robot
+    //   standing still, reported as a failed hop.
+    if (!yaw_ref_set_) return 0.0;
+
+    double yaw_err = yaw_ - yaw_ref_;
+    while (yaw_err > M_PI) yaw_err -= 2.0 * M_PI;
+    while (yaw_err < -M_PI) yaw_err += 2.0 * M_PI;
+
+    const double wz = imu_.angular_velocity.z;  // yaw rate
+    const double u = steer_offset_ + k_steer_yaw_ * yaw_err + d_steer_yaw_ * wz;
+
+    return std::max(-steer_limit_, std::min(steer_limit_, u));
+}
+
 void GslipPronkNode::apply_row(const TemplateRow& row) {
     update_attitude(roll_, pitch_, yaw_);
 
@@ -431,10 +562,31 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
     // leg angle the controller genuinely has to drive.
     const double theta_ref = spring_rest_reference_ ? theta_rest_ : row.theta;
 
+    // Left/right selector, same partition as gamma_correction's roll_sign.
+    // A=FL, B=FR, C=RR, D=RL.
+    static const double steer_sign[4] = {+1.0, -1.0, -1.0, +1.0};
+
+    // One steering command for the whole robot, evaluated once per tick rather
+    // than per leg so all four legs act on the same yaw error.
+    const double u = steer_command();
+
+    // Where the differential is applied within the stride. Stance is the only
+    // place it can do anything: the foot rolls when it is DOWN, so a sweep in
+    // flight contributes nothing (the same reason peak-to-peak beta overstates
+    // the rolling sweep -- the swing-back rolls nothing).
+    //
+    // steer_prepose additionally drives the leg the OTHER way during flight, so
+    // it touches down pre-positioned at -s*u and sweeps through to +s*u. That
+    // doubles the swept differential for free, at the cost of a bigger step at
+    // the stance/flight boundaries. Off by default: try it only if the plain
+    // gate turns out to be short on authority.
+    const double gate = row.in_stance ? 1.0 : (steer_prepose_ ? -1.0 : 0.0);
+
     for (size_t i = 0; i < imp_cmd_modules_.size(); i++) {
         auto* cmd = imp_cmd_modules_[i];
+        const double s = steer_sign[i];
         cmd->theta = theta_ref;
-        cmd->beta = row.beta;
+        cmd->beta = row.beta * (1.0 + s * k_steer_) + s * u * gate;
         cmd->gamma = row.gamma + gamma_correction(static_cast<int>(i));
 
         // No force feedback yet: with fx/fy/fz and the inertia terms at zero,
@@ -472,6 +624,16 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
     // the right side so it moved opposite to the left, producing a left/right
     // alternating pattern instead of a pronk: legs A and D swung +/-20 deg
     // while B and C managed only -14..+7 deg.
+    //
+    // steer_sign above does NOT contradict any of that, despite holding the
+    // same numbers as dir_beta. dir_beta is a MOUNTING mirror the driver
+    // applies on the way out; steer_sign is a left/right SELECTOR applied to a
+    // deliberate perturbation, in the command convention, where equal beta
+    // already means equal physical direction. The two lists coincide only
+    // because A/D are the left pair and B/C the right pair in both. With
+    // k_steer = steer_offset = 0 this reduces exactly to `cmd->beta =
+    // row.beta`, so every result recorded before this channel existed is
+    // reproducible by leaving the parameters at their defaults.
 }
 
 void GslipPronkNode::execute_standup_phase() {
@@ -568,6 +730,16 @@ void GslipPronkNode::execute_running_phase() {
                 "(k_roll=%.2f k_yaw=%.2f, gamma limit %.1f deg)",
                 yaw_ref_ * 180.0 / M_PI, k_roll_, k_yaw_,
                 gamma_limit_ * 180.0 / M_PI);
+    // Printed every run, so /tmp/ramp_ctl.log always records what the steering
+    // channel was actually asked for. A sweep is only as good as the record of
+    // which value produced which dump.
+    RCLCPP_INFO(this->get_logger(),
+                "Steering: k_steer=%.3f steer_offset=%.2f deg "
+                "(stance-gated, prepose %s) k_steer_yaw=%.3f d_steer_yaw=%.3f "
+                "limit %.1f deg",
+                k_steer_, steer_offset_ * 180.0 / M_PI,
+                steer_prepose_ ? "ON" : "off", k_steer_yaw_, d_steer_yaw_,
+                steer_limit_ * 180.0 / M_PI);
     size_t index = 0;
     size_t stride_count = 0;
 

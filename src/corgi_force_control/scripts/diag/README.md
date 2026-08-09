@@ -42,6 +42,7 @@ Templates are installed at
 | `hop_bradial72.sh` | hop at `b_radial = 72` vs 0 |
 | `ramp_cycle.sh` | the speed-ramp run: recorder started **before** the trigger, per-segment result |
 | `check_ramp.py` | flight fraction **per ramp segment and per stride**, anchored to sim time |
+| `check_yaw_phase.py` | *where in the stride* the yaw accumulates — offline, from a `check_ramp.py --dump` |
 | `ramp_segments.py` | recovers the ramp's segment / stride boundaries from the CSV |
 | `check_gains.sh` | reads back the gains actually in effect on the running node |
 | `net_probe.sh` | whether WSL can reach the Windows-side Webots on 1234 |
@@ -69,6 +70,38 @@ between legs, or when its magnitude is far from the design compression
 
 **Repeat everything.** Pronk flight has read 11-42% under identical settings;
 the hop 69.2 / 69.4 / 77.0. Single runs decide nothing.
+
+**Measure yaw on the HOP, and stop the run early.** `RAMP_UNTIL=<seconds of
+template time>` makes `ramp_cycle.sh` end once that much of the pass is
+recorded; the recorder gates the trigger, so this shortens the whole run.
+`RAMP_UNTIL=2.6` covers the hop segment (0.00-2.14 s) at about a quarter the
+cost of the full 9.58 s pass, and the hop shows the yaw effect in full.
+`RAMP_DUMP=<path>` names the .npz so a parameter sweep does not overwrite
+itself.
+
+**A per-leg beta command breaks the template-time anchor.** `check_ramp.py`
+recovers template t=0 from the first non-zero *commanded* beta, so anything that
+makes beta non-zero off-template moves the anchor. The stance-gated steering
+offset did exactly that during the settle and shifted every segment boundary by
+~4.6 s; the run then reported 0% flight, 100% all-down and theta pinned below
+command -- the settle wearing the hop's label, indistinguishable from a dead
+gait. The anchor now uses the **common-mode** beta across the four legs, which
+is immune to any antisymmetric per-leg term. **Check `template time covered` in
+the header**: a good run shows about -2.9 s of settle before t=0, a
+mis-anchored one shows almost none.
+
+**Averages hide mechanisms.** Per-segment and even per-stride averages cannot
+distinguish an impulse at touchdown from a torque through stance from a
+pre-existing spin -- all three give the same per-stride average, and that is
+what made the yaw look like a per-stride contact asymmetry for ten candidate
+causes running. Bin the *rate* by contact state before believing any mechanism.
+`check_yaw_phase.py` does this for yaw and needs no simulator time.
+
+**`--dump` everything.** `check_ramp.py --dump` costs nothing at run time and
+the .npz files are what made the yaw-phase analysis possible weeks later with
+no new runs. Only dumps from `corgi_sim >= 77dcac1` carry the odom quaternion
+(10-column `odom`); the earlier 6-column ones cannot answer anything about
+orientation.
 
 **Use the bracket trick in `pkill`.** A bare `pkill -f name` matches the calling
 script's own command line and kills the caller.
