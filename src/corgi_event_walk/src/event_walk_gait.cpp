@@ -575,4 +575,17 @@ void EventWalkGait::fill_output(GaitOutput & out) const
     out.theta      = theta_;
     out.beta       = beta_;
     out.swing_mask = swing_mask_;
+
+    out.leg_state.fill(static_cast<int>(LegState::INACTIVE));
+    LegState active_state = LegState::INACTIVE;
+    switch (phase_) {
+    case Phase::PRE_SWING: active_state = LegState::PRE_SWING; break;
+    case Phase::SWING:     active_state = LegState::SWING;     break;
+    case Phase::PROBING:   active_state = LegState::PROBING;   break;
+    case Phase::ADJUSTING: active_state = LegState::ADJUSTING; break;
+    default: return;
+    }
+
+    out.leg_state.fill(static_cast<int>(LegState::STANCE));
+    out.leg_state[swing_leg_] = static_cast<int>(active_state);
 }

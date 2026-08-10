@@ -32,6 +32,15 @@
 class EventWalkGait
 {
 public:
+    enum class LegState : int {
+        INACTIVE  = -1,
+        STANCE    = 0,
+        SWING     = 1,
+        PROBING   = 2,
+        ADJUSTING = 3,
+        PRE_SWING = 4
+    };
+
     // ── I/O types ─────────────────────────────────────────────────────────────
 
     struct ExternalInput {
@@ -54,6 +63,8 @@ public:
         ///   imp_cmd.beta[i] = (i==1||i==2) ? out.beta[i] : -out.beta[i]
         std::array<double, 4> beta{};
         std::array<int, 4>    swing_mask{0, 0, 0, 0};  // 1=swinging, 0=stance
+        /// Per-leg state, ordered FL, FR, RR, RL. Values follow LegState.
+        std::array<int, 4>    leg_state{-1, -1, -1, -1};
         int  phase_int{0};    // 0 = normal/passthrough, 2 = ADJUSTING
         bool in_walk{false};  // true iff phase is SWING or ADJUSTING
     };

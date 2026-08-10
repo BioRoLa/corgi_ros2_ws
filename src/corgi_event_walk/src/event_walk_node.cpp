@@ -58,6 +58,7 @@ EventWalkNode::EventWalkNode(const rclcpp::NodeOptions & opts)
     pub_phase_       = this->create_publisher<std_msgs::msg::Int32>("walk/phase", 5);
     pub_swing_mask_  = this->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_mask", 5);
     pub_swing_phase_ = this->create_publisher<std_msgs::msg::Int32MultiArray>("walk/swing_phase", 5);
+    pub_leg_state_   = this->create_publisher<std_msgs::msg::Int32MultiArray>("walk/leg_state", 5);
 
     // ── subscriptions ─────────────────────────────────────────────────────
     sub_trigger_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -171,6 +172,11 @@ void EventWalkNode::on_timer()
         mask_msg.data[i] = out.in_walk ? out.swing_mask[i] : -1;
     pub_swing_mask_->publish(mask_msg);
     pub_swing_phase_->publish(mask_msg);   // legacy compat topic
+
+    // Per-leg gait state, ordered FL, FR, RR, RL.
+    std_msgs::msg::Int32MultiArray leg_state_msg;
+    leg_state_msg.data.assign(out.leg_state.begin(), out.leg_state.end());
+    pub_leg_state_->publish(leg_state_msg);
 
     if (!shutdown_requested_ &&
         max_cycles_ > 0 &&

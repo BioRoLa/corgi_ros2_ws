@@ -30,6 +30,9 @@
  *   walk/phase        Int32            — 0=normal, 2=adjusting
  *   walk/swing_mask   Int32MultiArray  — per-leg 1=swing, 0=stance, -1=not in walk
  *   walk/swing_phase  Int32MultiArray  — same as swing_mask (legacy compat)
+ *   walk/leg_state    Int32MultiArray  — FL/FR/RR/RL: -1=inactive, 0=stance,
+ *                                        1=swing, 2=probing, 3=adjusting,
+ *                                        4=pre-swing
  *
  * Topics subscribed:
  *   trigger                       TriggerStamped
@@ -71,6 +74,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr                pub_phase_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr      pub_swing_mask_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr      pub_swing_phase_;
+    rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr      pub_leg_state_;
 
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr    sub_trigger_;
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr sub_state_;
