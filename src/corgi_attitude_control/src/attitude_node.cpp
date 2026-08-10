@@ -61,13 +61,13 @@ public:
         double BL           = this->declare_parameter("BL",           0.444);
         double BW           = this->declare_parameter("BW",           0.4);
         double stand_height = this->declare_parameter("stand_height", 0.20);
-        double roll_thresh  = this->declare_parameter("roll_thresh",  0.0087);
-        double pitch_thresh = this->declare_parameter("pitch_thresh", 0.0087);
-        double omega_thresh = this->declare_parameter("omega_thresh", 0.02);
+        double roll_thresh  = this->declare_parameter("roll_thresh",  0.026);
+        double pitch_thresh = this->declare_parameter("pitch_thresh", 0.026);
+        double omega_thresh = this->declare_parameter("omega_thresh", 0.1);
         double max_joint_rate = this->declare_parameter("max_joint_rate", 2.0);  // rad/s
         attitude_source_ = this->declare_parameter("attitude_source", std::string("ekf"));
-        stable_debounce_count_ = this->declare_parameter("stable_debounce_count", 50);
-        adjust_min_ticks_ = this->declare_parameter("adjust_min_ticks", 50);
+        stable_debounce_count_ = this->declare_parameter("stable_debounce_count", 30);
+        adjust_min_ticks_ = this->declare_parameter("adjust_min_ticks", 30);
         nominal_stand_height_ = stand_height;
         max_delta_ = max_joint_rate * 0.001;  // per 1-ms tick
 
@@ -381,8 +381,8 @@ private:
     std::array<double, 4> hip_y_ = {};
     double nominal_stand_height_ = 0.20;
     double max_delta_ = 0.002;  // rad/tick, set from param in constructor
-    int stable_debounce_count_ = 50;
-    int adjust_min_ticks_ = 50;
+    int stable_debounce_count_ = 30;
+    int adjust_min_ticks_ = 30;
     int stable_count_ = 0;
     int adjust_tick_ = 0;
     std::string attitude_source_ = "imu";
