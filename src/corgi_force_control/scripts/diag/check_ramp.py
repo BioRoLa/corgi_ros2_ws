@@ -77,6 +77,12 @@ class Rec(Node):
                                  rclpy.Parameter.Type.BOOL, True)])
         self.contact, self.motor, self.cmd, self.imu = [], [], [], []
         self.odom = []
+        # Torque, kept in its own list rather than appended to `motor`.
+        # `motor` is converted wholesale with np.rad2deg() downstream, which
+        # would silently multiply every torque by 57.3 -- a wrong answer that
+        # looks like a plausible one. Separate list, separate npz key, so no
+        # existing analysis changes behaviour and old dumps still load.
+        self.torque = []
         self.t_trigger = None
         # Spin with timeout_sec=0.0 (see README): with a timeout, three 1 kHz
         # subscriptions round-robin down to ~67 Hz and alias the stride.
@@ -99,8 +105,16 @@ class Rec(Node):
             msg.module_c.contact, msg.module_d.contact]))
 
     def m_cb(self, msg):
-        self.motor.append((self._now(), [
+        now = self._now()
+        self.motor.append((now, [
             [m.theta, m.beta, m.gamma] for m in
+            (msg.module_a, msg.module_b, msg.module_c, msg.module_d)]))
+        # Applied motor torque, N.m. The 35 N.m limit is what bounds the trot
+        # (implementation log section 14) and the pronk has been recorded pegged
+        # against it, so the margin is worth capturing on every run rather than
+        # re-instrumenting when the question comes up.
+        self.torque.append((now, [
+            [m.torque_r, m.torque_l, m.torque_h] for m in
             (msg.module_a, msg.module_b, msg.module_c, msg.module_d)]))
 
     def k_cb(self, msg):
@@ -341,10 +355,21 @@ def main():
         print("  " + line)
 
     if args.dump:
+        qt = np.array([t for t, _ in n.torque]) - anchor if n.torque \
+            else np.empty(0)
+        qv = np.array([v for _, v in n.torque]) if n.torque \
+            else np.empty((0, 4, 3))
         np.savez_compressed(args.dump, contact_t=ct, contact=cv,
                             motor_t=mt, motor_deg=mv, odom_t=ot, odom=ov,
                             imu_t=it, imu_quat=iv,
+                            torque_t=qt, torque_nm=qv,
                             anchor=anchor, template=args.template)
+        if len(qv):
+            print(f"peak |torque| over the run: "
+                  f"r {np.abs(qv[:, :, 0]).max():5.1f}  "
+                  f"l {np.abs(qv[:, :, 1]).max():5.1f}  "
+                  f"h {np.abs(qv[:, :, 2]).max():5.1f} N.m  "
+                  f"(limit 35)")
         print(f"\nraw samples written to {args.dump}")
 
     rclpy.shutdown()

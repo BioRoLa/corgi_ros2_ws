@@ -224,6 +224,19 @@ private:
     // matches the constructor's initialiser list (-Wreorder).
     double steer_command() const;
 
+    // --- Commanded turns: a ramping heading reference ------------------------
+    //
+    // The steering channel above holds a HEADING; turning is the same channel
+    // tracking a heading that moves. yaw_ref_ is latched once after the settle
+    // and then advanced by turn_rate_ every tick, so steer_command() sees a
+    // rotating reference and the control law is untouched. turn_rate_ = 0 leaves
+    // the reference latched and reduces this EXACTLY to the heading hold, which
+    // is what keeps every result recorded before turns existed reproducible.
+    //
+    // Radius follows from the speed: R = v / turn_rate. At the measured
+    // top-rung 0.787 m/s, R = 2.0 m wants 0.394 rad/s.
+    void advance_yaw_ref(double dt);
+
     // Rest-length leg extension, taken from the template's maximum theta
     // (its touchdown pose, where the spring is uncompressed).
     double theta_rest_{0.0};
@@ -246,6 +259,14 @@ private:
     bool steer_prepose_;
     double k_steer_yaw_;
     double d_steer_yaw_;
+
+    // Commanded turn rate, rad/s. Positive is a LEFT turn, following
+    // steer_offset's measured sense (+offset turns left) and the right-handed
+    // world yaw the IMU reports.
+    double turn_rate_;
+
+    // Anti-runaway on the reference, rad. See advance_yaw_ref().
+    double turn_err_limit_;
 
     // Ticks to hold the stance after the trigger, before the stride starts.
     // In experiment mode the same /trigger that starts this gait also deletes
@@ -319,6 +340,11 @@ GslipPronkNode::GslipPronkNode()
       steer_prepose_(false),
       k_steer_yaw_(0.0),
       d_steer_yaw_(0.0),
+      turn_rate_(0.0),
+      // 90 deg. Wide enough never to bite while the loop is keeping up -- a
+      // heading-hold run that is 90 deg off has already failed -- and tight
+      // enough to stop the reference lapping the robot when it is not.
+      turn_err_limit_(M_PI / 2.0),
       settle_ticks_(2500),
       hold_stance_(false)
 {
@@ -357,6 +383,9 @@ GslipPronkNode::GslipPronkNode()
     steer_prepose_ = this->declare_parameter<bool>("steer_prepose", steer_prepose_);
     k_steer_yaw_ = this->declare_parameter<double>("k_steer_yaw", k_steer_yaw_);
     d_steer_yaw_ = this->declare_parameter<double>("d_steer_yaw", d_steer_yaw_);
+    turn_rate_ = this->declare_parameter<double>("turn_rate", turn_rate_);
+    turn_err_limit_ =
+        this->declare_parameter<double>("turn_err_limit", turn_err_limit_);
     spring_rest_reference_ =
         this->declare_parameter<bool>("spring_rest_reference", spring_rest_reference_);
 
@@ -537,6 +566,46 @@ double GslipPronkNode::steer_command() const {
     const double u = steer_offset_ + k_steer_yaw_ * yaw_err + d_steer_yaw_ * wz;
 
     return std::max(-steer_limit_, std::min(steer_limit_, u));
+}
+
+// Advance the commanded heading by one control tick.
+//
+// Called only from the stride loop, i.e. only after yaw_ref_ is latched, so
+// with turn_rate_ = 0 the reference never moves and this is a no-op.
+//
+// Two guards, and they are guarding different things:
+//
+//   The WRAP keeps yaw_ref_ in the same +-pi representation as yaw_. It is not
+//   what saves the control law -- steer_command() wraps the error with `while`
+//   loops, so it already handles a reference that has been integrating for
+//   minutes. It matters for the log line and for keeping a long run's reference
+//   from drifting off into a range where the difference loses precision.
+//
+//   The CLAMP is the one that earns its place. The wrapped error is what the
+//   loop acts on, so if the commanded rate exceeds what the channel can deliver
+//   the reference walks away from the robot, the error grows past pi, wraps,
+//   and the correction SIGN FLIPS -- the robot suddenly steers hard the wrong
+//   way while the command looks perfectly reasonable. That is precisely the
+//   regime an envelope sweep is built to visit, so it cannot be left to chance.
+//   Holding the reference back at turn_err_limit_ makes an over-command
+//   degrade into "turning as fast as it can" instead of into garbage, and the
+//   measured-vs-commanded yaw rate in check_turn.py still reports the shortfall.
+void GslipPronkNode::advance_yaw_ref(double dt) {
+    if (turn_rate_ == 0.0) return;
+
+    yaw_ref_ += turn_rate_ * dt;
+    while (yaw_ref_ > M_PI) yaw_ref_ -= 2.0 * M_PI;
+    while (yaw_ref_ < -M_PI) yaw_ref_ += 2.0 * M_PI;
+
+    if (turn_err_limit_ > 0.0) {
+        double err = yaw_ref_ - yaw_;
+        while (err > M_PI) err -= 2.0 * M_PI;
+        while (err < -M_PI) err += 2.0 * M_PI;
+        if (err > turn_err_limit_) yaw_ref_ -= err - turn_err_limit_;
+        else if (err < -turn_err_limit_) yaw_ref_ -= err + turn_err_limit_;
+        while (yaw_ref_ > M_PI) yaw_ref_ -= 2.0 * M_PI;
+        while (yaw_ref_ < -M_PI) yaw_ref_ += 2.0 * M_PI;
+    }
 }
 
 void GslipPronkNode::apply_row(const TemplateRow& row) {
@@ -740,11 +809,23 @@ void GslipPronkNode::execute_running_phase() {
                 k_steer_, steer_offset_ * 180.0 / M_PI,
                 steer_prepose_ ? "ON" : "off", k_steer_yaw_, d_steer_yaw_,
                 steer_limit_ * 180.0 / M_PI);
+    // Separate line, so a grep for "Turn:" over /tmp/ramp_ctl.log identifies the
+    // commanded radius of a dump without re-reading the invocation.
+    RCLCPP_INFO(this->get_logger(),
+                "Turn: turn_rate=%.4f rad/s (%.2f deg/s), err limit %.1f deg%s",
+                turn_rate_, turn_rate_ * 180.0 / M_PI,
+                turn_err_limit_ * 180.0 / M_PI,
+                turn_rate_ == 0.0 ? "  -- HEADING HOLD, no turn commanded" : "");
     size_t index = 0;
     size_t stride_count = 0;
 
     while (rclcpp::ok() && trigger_) {
         rclcpp::spin_some(this->get_node_base_interface());
+
+        // Before apply_row, so the row is commanded against this tick's
+        // reference. period is 1 ms; hard-coding the same figure here would be
+        // a second place to change the tick rate.
+        advance_yaw_ref(period.nanoseconds() * 1e-9);
 
         apply_row(template_[index]);
         imp_cmd_.header.stamp = this->now();

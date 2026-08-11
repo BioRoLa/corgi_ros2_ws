@@ -70,6 +70,28 @@ Arguments:
     All six default to values that make the node behave exactly as it did
     before the channel existed, so old runs stay reproducible.
 
+    turn_rate      commanded turn rate in RADIANS PER SECOND, positive left.
+                   The heading reference is advanced at this rate instead of
+                   being held, so the steering loop above tracks a rotating
+                   setpoint -- which is a turn, with no change to the control
+                   law. Radius follows from the speed, R = v/turn_rate: at the
+                   measured 0.787 m/s, 0.394 rad/s is R = 2.0 m and 0.315 rad/s
+                   is R = 2.5 m. Zero (the default) is the heading hold.
+
+                   Use a CONSTANT-SPEED template with this, not the speed ramp.
+                   The ramp changes rung every ~6 strides and cannot settle into
+                   a circle; gslip_pronk_template.csv is a single stride at the
+                   v~1.20 fixed point which the node loops indefinitely. Set
+                   RAMP_UNTIL explicitly when recording, because the recorder's
+                   default stop is one template duration (0.22 s) and it will
+                   otherwise exit immediately.
+    turn_err_limit cap on how far the advancing reference may get ahead of the
+                   measured heading, radians (default pi/2). Without it an
+                   over-commanded turn lets the reference lap the robot: the
+                   wrapped error passes pi and the steering correction flips
+                   sign at full clamp. That regime is exactly what an envelope
+                   sweep goes looking for.
+
 Suggested order, each step gating the next:
 
   0. Baseline, no G-SLIP: run corgi_force_control's exp_sim_stay_node against
@@ -119,6 +141,8 @@ def generate_launch_description():
         DeclareLaunchArgument("steer_prepose", default_value="false"),
         DeclareLaunchArgument("k_steer_yaw", default_value="0.0"),
         DeclareLaunchArgument("d_steer_yaw", default_value="0.0"),
+        DeclareLaunchArgument("turn_rate", default_value="0.0"),
+        DeclareLaunchArgument("turn_err_limit", default_value="1.5708"),  # 90 deg
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -156,6 +180,8 @@ def generate_launch_description():
                 'steer_prepose': LaunchConfiguration('steer_prepose'),
                 'k_steer_yaw': LaunchConfiguration('k_steer_yaw'),
                 'd_steer_yaw': LaunchConfiguration('d_steer_yaw'),
+                'turn_rate': LaunchConfiguration('turn_rate'),
+                'turn_err_limit': LaunchConfiguration('turn_err_limit'),
                 'template_path': template_path,
             }],
             output='screen',
