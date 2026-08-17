@@ -45,6 +45,19 @@ export TMPDIR=/mnt/c/Users/alexc/AppData/Local/Temp/webots_ws
 export CORGI_EXPERIMENT_MODE=1
 mkdir -p "$TMPDIR"
 
+# A log is EVIDENCE ONLY IF THIS RUN WROTE IT. Both gates below used to grep
+# the log files alone, and on 2026-08-17 a 3-hour-old /tmp/ramp_sim.log
+# satisfied both while no simulator existed at all -- the script had hung in
+# the teardown and never reached the launch line that truncates them. The pass
+# then ran to completion against nothing. Freshness is the difference between
+# a gate and a decoration.
+RUN_START=$(date +%s)
+fresh_grep() {   # fresh_grep <file> <pattern>
+    [ -f "$1" ] || return 1
+    [ "$(stat -c %Y "$1")" -ge "$RUN_START" ] || return 1
+    grep -q "$2" "$1" 2>/dev/null
+}
+
 # --- tear everything down --------------------------------------------------
 for p in "gslip_pron[k]_node" "force_contro[l]_node" "force_estimatio[n]_node" \
          "topi[c] pub" "corgi_control_pane[l]" "corgi_data_recorde[r]" \
@@ -56,16 +69,21 @@ powershell.exe -Command \
     "Get-Process webots,webots-bin -ErrorAction SilentlyContinue | Stop-Process -Force" \
     >/dev/null 2>&1
 sleep 6
-ros2 daemon stop >/dev/null 2>&1
+# NOTE: ros2 daemon stop can hang indefinitely when the daemon is wedged, and
+# with no timeout it hangs the ENTIRE pass in the TEARDOWN -- before the launch
+# line, so the sim log is never even truncated and the symptom reads as "the
+# simulator did not start". Seen 2026-08-17, hung 12 min. A wedged daemon is
+# not fatal to the run, so bound it and carry on.
+timeout 15 ros2 daemon stop >/dev/null 2>&1
 sleep 2
 
 # --- bring the simulator up ------------------------------------------------
 setsid nohup ros2 launch corgi_sim Corgi_launch.py > /tmp/ramp_sim.log 2>&1 < /dev/null &
 for _ in $(seq 1 90); do
-    grep -q "successfully connected" /tmp/ramp_sim.log 2>/dev/null && break
+    fresh_grep /tmp/ramp_sim.log "successfully connected" && break
     sleep 2
 done
-if ! grep -q "successfully connected" /tmp/ramp_sim.log 2>/dev/null; then
+if ! fresh_grep /tmp/ramp_sim.log "successfully connected"; then
     echo "SIM FAILED TO START -- see /tmp/ramp_sim.log"
     grep -iE "Cannot connect|not in the list" /tmp/ramp_sim.log | tail -3
     exit 1
@@ -76,10 +94,10 @@ sleep 4
 setsid nohup ros2 launch corgi_force_control gslip_pronk.launch.py \
     template_path:="$TPL" $EXTRA > /tmp/ramp_ctl.log 2>&1 < /dev/null &
 for _ in $(seq 1 120); do
-    grep -q "Holding pose" /tmp/ramp_ctl.log 2>/dev/null && break
+    fresh_grep /tmp/ramp_ctl.log "Holding pose" && break
     sleep 2
 done
-if ! grep -q "Holding pose" /tmp/ramp_ctl.log 2>/dev/null; then
+if ! fresh_grep /tmp/ramp_ctl.log "Holding pose"; then
     echo "CONTROLLER FAILED TO REACH HOLD -- see /tmp/ramp_ctl.log"; exit 1
 fi
 

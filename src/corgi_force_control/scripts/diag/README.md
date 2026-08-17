@@ -151,3 +151,18 @@ theta ~ 100 deg and ~58% flight, the run is dead and says nothing about the
 ramp. A run reading ~10% on *every* rung with theta topping out at 97.7 deg is
 this failure, not a ramp result -- it looks exactly like "the ramp does not
 work" and is not.
+
+## Harness rules added 2026-08-17 (ramp_cycle.sh has them; port to new scripts)
+
+- **Bound every teardown call.** `ros2 daemon stop` can wedge indefinitely; it
+  hung a whole pass for 12 min *before* the launch line, so the logs were never
+  truncated and the failure pointed at the wrong step. Use
+  `timeout 15 ros2 daemon stop`.
+- **A log is evidence only if this run wrote it.** The readiness gates in
+  ramp_cycle.sh go through `fresh_grep` (mtime >= RUN_START before grepping).
+  A 3-hour-old log once satisfied the bare-grep gates while no simulator
+  existed. sim_cycle.sh / camber_cycle.sh still bare-grep; port when touched.
+- **Shared sim, shared paths.** Check for a foreign `ros2 launch` before
+  starting (bracket-trick pgrep: `ramp_cycl[e].sh` -- a plain `pgrep -f`
+  matches your own watcher). Give each capture its own output path:
+  /tmp/corgi_torque_terms.csv had two sessions interleaved into it.
