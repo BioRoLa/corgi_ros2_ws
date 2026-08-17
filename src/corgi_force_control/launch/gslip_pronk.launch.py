@@ -130,6 +130,23 @@ def generate_launch_description():
         DeclareLaunchArgument("b_radial", default_value="0.0"),
         DeclareLaunchArgument("k_lateral", default_value="7500.0"),
         DeclareLaunchArgument('hold_stance', default_value='false'),
+        # Gain regime follows measured per-leg contact instead of the template's
+        # single global phase.
+        #
+        # !!! TRIED 2026-08-17 AND IT WRECKS THE ROBOT -- DO NOT ENABLE. !!!
+        # It gates the gains but NOT the reference trajectory, so the command
+        # becomes internally inconsistent and the legs break. Full reasoning in
+        # the gslip_pronk.cpp comment. Kept as the record; the principled fix is
+        # per-leg PHASE, not per-leg gains.
+        DeclareLaunchArgument('contact_gated_gains', default_value='false'),
+        DeclareLaunchArgument('contact_debounce', default_value='3'),
+        DeclareLaunchArgument('contact_timeout_s', default_value='0.25'),
+        # Constant rotation of the template's in_stance labels, seconds;
+        # positive delays the gain switch relative to the trajectory. Measured
+        # need: ~+0.080 (the schedule runs ~80 ms ahead of real touchdown).
+        # 0.0 = shipped behaviour. Runs with it set are NOT comparable to
+        # unshifted campaigns.
+        DeclareLaunchArgument('stance_label_shift_s', default_value='0.0'),
         DeclareLaunchArgument("k_tangential", default_value="600.0"),
         DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
@@ -143,6 +160,26 @@ def generate_launch_description():
         DeclareLaunchArgument("d_steer_yaw", default_value="0.0"),
         DeclareLaunchArgument("turn_rate", default_value="0.0"),
         DeclareLaunchArgument("turn_err_limit", default_value="1.5708"),  # 90 deg
+        # --- Added 2026-08-17 -------------------------------------------------
+        # gslip_pronk declares all of these; the launch file did NOT, so
+        # passing them as name:=value was SILENTLY IGNORED -- ros2 launch
+        # accepts undeclared launch configurations without complaint and
+        # nothing consumed them. An f_lateral sweep therefore ran its entire
+        # matrix at the constructor default 0.0 and read as "the channel does
+        # nothing at all", which is indistinguishable from a real null.
+        #
+        # Defaults below are copied from the constructor, so adding them
+        # changes no result recorded before this date.
+        DeclareLaunchArgument("f_lateral", default_value="0.0"),
+        DeclareLaunchArgument("f_lateral_front_only", default_value="false"),
+        DeclareLaunchArgument("settle_ticks", default_value="2500"),
+        DeclareLaunchArgument("standup_ticks", default_value="2000"),
+        DeclareLaunchArgument("b_tangential", default_value="30.0"),
+        DeclareLaunchArgument("b_lateral", default_value="60.0"),
+        DeclareLaunchArgument("b_flight", default_value="150.0"),
+        DeclareLaunchArgument("d_roll", default_value="0.0"),
+        DeclareLaunchArgument("d_yaw", default_value="0.0"),
+        DeclareLaunchArgument("gamma_limit", default_value="0.0873"),  # 5 deg
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -169,6 +206,10 @@ def generate_launch_description():
                 'b_radial': b_radial,
                 'k_lateral': k_lateral,
                 'hold_stance': LaunchConfiguration('hold_stance'),
+                'contact_gated_gains': LaunchConfiguration('contact_gated_gains'),
+                'contact_debounce': LaunchConfiguration('contact_debounce'),
+                'contact_timeout_s': LaunchConfiguration('contact_timeout_s'),
+                'stance_label_shift_s': LaunchConfiguration('stance_label_shift_s'),
                 'k_tangential': k_tangential,
                 'k_flight': LaunchConfiguration('k_flight'),
                 'k_roll': LaunchConfiguration('k_roll'),
@@ -182,6 +223,16 @@ def generate_launch_description():
                 'd_steer_yaw': LaunchConfiguration('d_steer_yaw'),
                 'turn_rate': LaunchConfiguration('turn_rate'),
                 'turn_err_limit': LaunchConfiguration('turn_err_limit'),
+                'f_lateral': LaunchConfiguration('f_lateral'),
+                'f_lateral_front_only': LaunchConfiguration('f_lateral_front_only'),
+                'settle_ticks': LaunchConfiguration('settle_ticks'),
+                'standup_ticks': LaunchConfiguration('standup_ticks'),
+                'b_tangential': LaunchConfiguration('b_tangential'),
+                'b_lateral': LaunchConfiguration('b_lateral'),
+                'b_flight': LaunchConfiguration('b_flight'),
+                'd_roll': LaunchConfiguration('d_roll'),
+                'd_yaw': LaunchConfiguration('d_yaw'),
+                'gamma_limit': LaunchConfiguration('gamma_limit'),
                 'template_path': template_path,
             }],
             output='screen',

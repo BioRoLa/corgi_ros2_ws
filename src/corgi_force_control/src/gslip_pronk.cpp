@@ -24,6 +24,7 @@
 // grows ~15% per stride, doubling in about 5 strides -- so this loop has
 // ample authority, but without it the gait does not persist.
 
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <memory>
@@ -39,6 +40,7 @@
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
+#include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "corgi_msgs/msg/imu_stamped.hpp"
 
 struct TemplateRow {
@@ -58,6 +60,11 @@ private:
     void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg);
     void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg);
     void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg);
+    void contact_cb(const corgi_msgs::msg::SimLegContactStamped::SharedPtr msg);
+
+    // Which gain regime leg i should be in for this row. With contact gating
+    // off this is just row.in_stance, i.e. the historical behaviour.
+    bool leg_in_stance(int leg, const TemplateRow& row) const;
 
     bool load_template(const std::string& path);
     void apply_row(const TemplateRow& row);
@@ -68,10 +75,76 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::TriggerStamped>::SharedPtr trigger_sub_;
     rclcpp::Subscription<corgi_msgs::msg::MotorStateStamped>::SharedPtr motor_state_sub_;
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
+    rclcpp::Subscription<corgi_msgs::msg::SimLegContactStamped>::SharedPtr contact_sub_;
 
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd_;
     corgi_msgs::msg::MotorStateStamped motor_state_;
     corgi_msgs::msg::ImuStamped imu_;
+
+    // --- per-leg contact gating -------------------------------------------
+    //
+    // WHY. apply_row historically applied ONE row.in_stance to all four legs,
+    // because the pronk reduction assumes four legs in phase collapsing to a
+    // single virtual leg. Measured, they are 32-45% desynchronised, so a shared
+    // schedule cannot match all four: a capture found the controller running
+    // FLIGHT gains for ~71% of the time a foot was actually on the ground --
+    // holding a loaded leg at ~289 N.m/rad instead of the ~36 N.m/rad virtual
+    // spring the template exists to present.
+    //
+    // Gating the GAIN REGIME (and only that) on measured per-leg contact makes
+    // the spring exist whenever the leg is really loaded. The commanded
+    // trajectory stays global: theta/beta still come from the template, because
+    // that is the gait. Only which stiffness matrix is applied becomes per-leg.
+    //
+    // !!! TRIED 2026-08-17 AND IT WRECKS THE ROBOT. DO NOT ENABLE. !!!
+    //
+    // The gate engaged correctly (the startup WARN fired) and the run had to be
+    // aborted: legs hopping at visibly different times, then the five-bar
+    // geometry inverting on several of them.
+    //
+    // WHY, and it is a design error not a tuning one. Gains and the reference
+    // trajectory are two halves of ONE phase description, and this gates only
+    // half of it:
+    //
+    //   leg still loaded, template in flight  -> STANCE gains (k_tangential
+    //       600-900) commanded to track a fast flight swing-back. It cannot,
+    //       so the error grows without bound.
+    //   leg airborne, template in stance      -> stiff 12000 isotropic against
+    //       a slow compression reference, snapping the leg toward a pose it
+    //       should not hold.
+    //
+    // Before the change the command was at least SELF-consistent -- gains and
+    // reference both came from row.in_stance -- and merely disagreed with
+    // reality. This replaced that with a command that disagrees with ITSELF,
+    // which is strictly worse. Nothing catches the result, because theta's
+    // 17-160 deg range is a LINKAGE constraint that cannot be a per-joint stop
+    // and so is unmodelled (see the joint-limits work).
+    //
+    // There is also positive feedback: each leg's stiffness follows its own
+    // contact, so a leg that lands early gets soft gains early, diverges
+    // further, and the legs desynchronise progressively.
+    //
+    // The principled version is PER-LEG PHASE, not per-leg gains: each leg runs
+    // the template with its own clock, advanced by its own touchdown, so gains
+    // and reference stay consistent within a leg. That is a real gait
+    // scheduler, not a flag. Kept here, off by default, as the record of what
+    // was tried and why it failed.
+    bool contact_gated_gains_;          // off by default -- opt in
+    int contact_debounce_;              // consecutive samples before switching
+    double contact_timeout_s_;          // stale topic -> fall back to template
+    std::array<bool, 4> leg_contact_{{false, false, false, false}};
+    std::array<bool, 4> leg_contact_stable_{{false, false, false, false}};
+    std::array<int, 4> leg_contact_count_{{0, 0, 0, 0}};
+    double last_contact_stamp_;
+    // mutable so the one-shot staleness warning can fire from the const
+    // leg_in_stance(). A gate falling back silently is exactly the class of
+    // fault this session kept finding.
+    mutable bool contact_stale_warned_;
+
+    // Constant rotation of the template's in_stance labels, seconds; positive
+    // delays the gain switch. See load_template for the measurement and the
+    // reasoning. 0.0 = shipped behaviour, bit-identical.
+    double stance_label_shift_s_;
 
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules_;
     std::vector<TemplateRow> template_;
@@ -132,6 +205,57 @@ private:
     double b_radial_;
     double b_tangential_;
     double b_lateral_;
+
+    // --- Commanded lateral force: steering by FORCE, not by lean ------------
+    //
+    // ImpedanceCmd carries fx/fy/fz straight into
+    //     trq_cmd_base = J^T * force_des        (force_control.cpp:173)
+    // and this controller has always sent zeros there. Populating fy is the
+    // cheapest available lateral ground reaction: no k_lateral re-tune, no new
+    // estimator, and M = 0 so nothing else in that expression wakes up. Note
+    // force_control also builds a force_err (line 80) and never uses it, so a
+    // non-zero fy does NOT close any force-feedback loop -- which matters,
+    // because force_state is not trustworthy in sim.
+    //
+    // WHY THIS EXISTS. Camber steers by rolling the contact along a curved
+    // path, and S33 measured that at 0.02% of its geometric turn. This is the
+    // other route to the same turn: a lateral ground reaction and its yaw
+    // moment. Same ABAD joint, different physics. S33 could not have seen it --
+    // its peak |tau_h| was 3.8-7.0 N.m because the legs ACHIEVED their
+    // commanded camber, so the lateral spring sat at rest and produced almost
+    // no force. Lateral force needs a demand the foot must resist.
+    //
+    // FRAME. fy is PER-LEG, not body frame. force_control builds the leg
+    // kinematics from ROS gamma (the driver un-mirrors it at
+    // corgi_driver.py:514) and ROS gamma > 0 abducts OUTWARD on all four legs,
+    // so +fy is outward on all four. Converting a body-frame command therefore
+    // needs the left/right selector {+1,-1,-1,+1} -- the same partition as
+    // roll_sign and steer_sign, and NOT dir_abad{+1,-1,+1,-1}, which is the
+    // mounting mirror the driver already applies on the way out.
+    //
+    // SIGN. J^T maps the force the FOOT exerts on the GROUND, so pushing the
+    // feet toward +y accelerates the body toward -y. f_lateral_ is declared as
+    // the force on the BODY (positive = body +y = LEFT) and negated here. If it
+    // pushes the wrong way, negate the parameter -- same idiom as the attitude
+    // gains, and for the same reason.
+    //
+    // GATING. Stance only (unloaded feet just get flung), and only once
+    // yaw_ref_set_ is true, which is the existing "template is actually
+    // running" flag that gamma_correction already uses. Without the second
+    // gate the settle phase (in_stance = true, execute_running_phase) would be
+    // pushed sideways before the first stride and bias the initial condition.
+    //
+    // UNITS: newtons per stance leg. Torque is clamped downstream per joint
+    // (leg 29.5 / ABAD 44.25), so an over-large demand saturates rather than
+    // exploding -- but it will still tip the robot, so ramp it.
+    //
+    // f_lateral_front_only_ applies it to A,B only. All four is a pure lateral
+    // push (crab, no yaw) and isolates "does the channel produce force at all".
+    // Front-only adds the yaw moment and is the steering test, and is what the
+    // turning-strategies paper does (forelimbs steer, hindlimbs do not).
+    double f_lateral_;
+    bool f_lateral_front_only_;
+    double lateral_force(int leg_index, bool in_stance) const;
 
     // Flight: body-frame position tracking on an unloaded leg.
     //
@@ -291,6 +415,15 @@ private:
 
 GslipPronkNode::GslipPronkNode()
     : Node("gslip_pronk"),
+      // Order here must match DECLARATION order -- the contact members are
+      // declared above trigger_, and C++ initializes in declaration order
+      // regardless of what this list says.
+      contact_gated_gains_(false),
+      contact_debounce_(3),
+      contact_timeout_s_(0.25),
+      last_contact_stamp_(0.0),
+      contact_stale_warned_(false),
+      stance_label_shift_s_(0.0),
       trigger_(false),
       sim_(false),
       k_radial_(8941.0),
@@ -299,6 +432,8 @@ GslipPronkNode::GslipPronkNode()
       b_radial_(0.0),
       b_tangential_(30.0),
       b_lateral_(60.0),
+      f_lateral_(0.0),
+      f_lateral_front_only_(false),
       k_flight_(12000.0),
       b_flight_(150.0),
       standup_ticks_(2000),
@@ -367,10 +502,21 @@ GslipPronkNode::GslipPronkNode()
     b_radial_ = this->declare_parameter<double>("b_radial", b_radial_);
     b_tangential_ = this->declare_parameter<double>("b_tangential", b_tangential_);
     b_lateral_ = this->declare_parameter<double>("b_lateral", b_lateral_);
+    f_lateral_ = this->declare_parameter<double>("f_lateral", f_lateral_);
+    f_lateral_front_only_ =
+        this->declare_parameter<bool>("f_lateral_front_only", f_lateral_front_only_);
     k_flight_ = this->declare_parameter<double>("k_flight", k_flight_);
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
     hold_stance_ = this->declare_parameter<bool>("hold_stance", hold_stance_);
+    contact_gated_gains_ = this->declare_parameter<bool>(
+        "contact_gated_gains", contact_gated_gains_);
+    contact_debounce_ = this->declare_parameter<int>(
+        "contact_debounce", contact_debounce_);
+    contact_timeout_s_ = this->declare_parameter<double>(
+        "contact_timeout_s", contact_timeout_s_);
+    stance_label_shift_s_ = this->declare_parameter<double>(
+        "stance_label_shift_s", stance_label_shift_s_);
     settle_ticks_ = this->declare_parameter<int>("settle_ticks", settle_ticks_);
     k_roll_ = this->declare_parameter<double>("k_roll", k_roll_);
     d_roll_ = this->declare_parameter<double>("d_roll", d_roll_);
@@ -415,6 +561,23 @@ GslipPronkNode::GslipPronkNode()
     imu_sub_ = this->create_subscription<corgi_msgs::msg::ImuStamped>(
         "imu", 1000,
         std::bind(&GslipPronkNode::imu_cb, this, std::placeholders::_1));
+    contact_sub_ = this->create_subscription<corgi_msgs::msg::SimLegContactStamped>(
+        "sim/leg_contact", 1000,
+        std::bind(&GslipPronkNode::contact_cb, this, std::placeholders::_1));
+
+    if (contact_gated_gains_) {
+        // Say so loudly. This changes which stiffness matrix each leg sees, so
+        // a run made with it on is not comparable to the existing campaigns.
+        RCLCPP_WARN(this->get_logger(),
+                    "CONTACT-GATED GAINS ON (debounce %d, timeout %.2fs). "
+                    "Gain regime follows measured per-leg contact, not the "
+                    "template phase. Results are NOT comparable to prior runs.",
+                    contact_debounce_, contact_timeout_s_);
+        RCLCPP_WARN(this->get_logger(),
+                    "Source is sim/leg_contact, which does not exist on "
+                    "hardware; if it never arrives the gate falls back to the "
+                    "template phase and says so.");
+    }
 
     imp_cmd_modules_ = {
         &imp_cmd_.module_a,
@@ -444,6 +607,51 @@ GslipPronkNode::GslipPronkNode()
                 spring_rest_reference_ ? "SPRING REST (constant)"
                                        : "template trajectory",
                 theta_rest_ * 180.0 / M_PI);
+}
+
+void GslipPronkNode::contact_cb(
+        const corgi_msgs::msg::SimLegContactStamped::SharedPtr msg) {
+    const bool raw[4] = {
+        msg->module_a.contact, msg->module_b.contact,
+        msg->module_c.contact, msg->module_d.contact,
+    };
+    // Debounce. Contact chatters at touchdown, and an undebounced gate would
+    // flip the commanded stiffness by 8x between consecutive control ticks --
+    // which is a bigger disturbance than the mismatch being fixed.
+    for (int i = 0; i < 4; i++) {
+        if (raw[i] == leg_contact_[i]) {
+            leg_contact_count_[i]++;
+        } else {
+            leg_contact_[i] = raw[i];
+            leg_contact_count_[i] = 1;
+        }
+        if (leg_contact_count_[i] >= contact_debounce_) {
+            leg_contact_stable_[i] = leg_contact_[i];
+        }
+    }
+    last_contact_stamp_ = this->now().seconds();
+}
+
+bool GslipPronkNode::leg_in_stance(int leg, const TemplateRow& row) const {
+    if (!contact_gated_gains_) {
+        return row.in_stance;
+    }
+    // Fall back to the template if the contact topic goes stale rather than
+    // freezing on the last value. A gate that silently keeps asserting a dead
+    // signal is the failure mode this project keeps finding.
+    const double age = this->now().seconds() - last_contact_stamp_;
+    if (last_contact_stamp_ <= 0.0 || age > contact_timeout_s_) {
+        if (!contact_stale_warned_) {
+            contact_stale_warned_ = true;
+            RCLCPP_ERROR(this->get_logger(),
+                         "contact gate STALE (age %.2fs) -- falling back to the "
+                         "template phase. Gains are no longer contact-gated.",
+                         age);
+        }
+        return row.in_stance;
+    }
+    contact_stale_warned_ = false;
+    return leg_contact_stable_[leg];
 }
 
 void GslipPronkNode::trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
@@ -486,6 +694,48 @@ bool GslipPronkNode::load_template(const std::string& path) {
     // The final row is the wrap-around of the first; dropping it keeps the
     // cycle from stalling for one tick at every stride boundary.
     if (template_.size() > 1) template_.pop_back();
+
+    // --- stance-label phase shift --------------------------------------
+    //
+    // Measured (template_contact_lag.py, nine runs, three k_t settings): the
+    // schedule's stance window runs ~80 ms AHEAD of actual touchdown, against
+    // a ~95 ms commanded stance -- so real stance is spent almost entirely
+    // under commanded flight gains (~289 N.m/rad instead of the ~36 virtual
+    // spring). Offline replay says delaying the labels ~80 ms takes
+    // P(spring | foot down) from 0.6x chance to ~1.6x.
+    //
+    // The shift rotates ONLY the in_stance labels around the cycle; theta/
+    // beta/gamma are untouched, so the trajectory -- and everything reality
+    // phase-locks to -- is unchanged. Shifting the whole template would shift
+    // reality with it and change nothing.
+    //
+    // Deliberately GLOBAL and CONSTANT: the per-leg contact gate that
+    // re-timed gains from live feedback wrecked the robot (chatter + per-leg
+    // positive feedback + internally inconsistent commands). A constant
+    // rotation cannot chatter, treats all four legs identically, and keeps
+    // the command sequence identical from stride to stride.
+    //
+    // Positive = labels DELAYED (gains switch later in the cycle). The
+    // offline payoff is an open-loop replay estimate; in closed loop the
+    // phase equilibrium may partly re-establish -- which is exactly what the
+    // experiment measures.
+    if (template_.size() > 1 && stance_label_shift_s_ != 0.0) {
+        const size_t n = template_.size();
+        const double dt = template_.back().t / static_cast<double>(n - 1);
+        const long k_raw = std::lround(stance_label_shift_s_ / dt);
+        const size_t k = static_cast<size_t>(((k_raw % static_cast<long>(n))
+                                              + static_cast<long>(n))
+                                             % static_cast<long>(n));
+        std::vector<bool> orig(n);
+        for (size_t i = 0; i < n; i++) orig[i] = template_[i].in_stance;
+        for (size_t i = 0; i < n; i++)
+            template_[i].in_stance = orig[(i + n - k) % n];
+        RCLCPP_WARN(this->get_logger(),
+                    "STANCE LABELS SHIFTED by %+.0f ms (%zu of %zu rows). "
+                    "Gain schedule is re-phased against the trajectory; runs "
+                    "are NOT comparable to unshifted campaigns.",
+                    stance_label_shift_s_ * 1e3, k, n);
+    }
     return template_.size() > 1;
 }
 
@@ -495,6 +745,22 @@ void GslipPronkNode::update_attitude(double& roll, double& pitch, double& yaw) c
     roll = std::atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
     pitch = std::asin(std::max(-1.0, std::min(1.0, 2.0 * (w * y - z * x))));
     yaw = std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+}
+
+double GslipPronkNode::lateral_force(int leg_index, bool in_stance) const {
+    // yaw_ref_set_ is the "template is running" flag, same gate as
+    // gamma_correction: keeps the settle phase clean.
+    if (f_lateral_ == 0.0 || !in_stance || !yaw_ref_set_) return 0.0;
+
+    // Module order is A=FL, B=FR, C=RR, D=RL, so the forelimbs are 0 and 1.
+    if (f_lateral_front_only_ && leg_index > 1) return 0.0;
+
+    // Body +y -> leg-frame outward. Left legs abduct toward +y, right legs
+    // toward -y.
+    static const double lat_sign[4] = {+1.0, -1.0, -1.0, +1.0};
+
+    // Negated: J^T wants the force the foot puts INTO the ground.
+    return -f_lateral_ * lat_sign[leg_index];
 }
 
 double GslipPronkNode::gamma_correction(int leg_index) const {
@@ -658,13 +924,20 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
         cmd->beta = row.beta * (1.0 + s * k_steer_) + s * u * gate;
         cmd->gamma = row.gamma + gamma_correction(static_cast<int>(i));
 
-        // No force feedback yet: with fx/fy/fz and the inertia terms at zero,
-        // force_control degenerates to a pure (K, B) impedance and needs no
-        // contact-force estimate.
-        cmd->fx = 0.0; cmd->fy = 0.0; cmd->fz = 0.0;
+        // fx/fz and the inertia terms stay zero, so trq_cmd_base reduces to
+        // J^T * [0, fy, 0] and the rest of the law is still a pure (K, B)
+        // impedance needing no contact-force estimate. See the f_lateral_
+        // block above for frame, sign and gating.
+        cmd->fx = 0.0;
+        cmd->fy = lateral_force(static_cast<int>(i), row.in_stance);
+        cmd->fz = 0.0;
         cmd->mx = 0.0; cmd->my = 0.0; cmd->mz = 0.0;
 
-        if (row.in_stance) {
+        // Per-leg gain regime. With contact_gated_gains off this is exactly
+        // row.in_stance for every leg, i.e. unchanged behaviour; with it on,
+        // each leg gets the spring when IT is loaded rather than when the
+        // template says the virtual leg is.
+        if (leg_in_stance(static_cast<int>(i), row)) {
             cmd->leg_frame = true;
             cmd->kx = k_radial_;      // along the leg: the virtual spring
             cmd->ky = k_lateral_;
@@ -795,10 +1068,20 @@ void GslipPronkNode::execute_running_phase() {
     yaw_ref_ = yaw_;
     yaw_ref_set_ = true;
     RCLCPP_INFO(this->get_logger(),
+                // f_lateral and settle_ticks are echoed because a parameter
+                // that never reaches the node looks EXACTLY like a parameter
+                // that does nothing. Both were unreachable from the launch
+                // file until 2026-08-17, and an entire f_lateral sweep ran at
+                // 0.0 without a single sign that anything was wrong. Anything
+                // an experiment varies belongs on this line.
                 "Running the G-SLIP pronk template. Holding heading %.1f deg "
-                "(k_roll=%.2f k_yaw=%.2f, gamma limit %.1f deg)",
+                "(k_roll=%.2f k_yaw=%.2f, gamma limit %.1f deg, "
+                "f_lateral=%.2f N%s, settle_ticks=%d)",
                 yaw_ref_ * 180.0 / M_PI, k_roll_, k_yaw_,
-                gamma_limit_ * 180.0 / M_PI);
+                gamma_limit_ * 180.0 / M_PI,
+                f_lateral_,
+                f_lateral_front_only_ ? " (front only)" : "",
+                settle_ticks_);
     // Printed every run, so /tmp/ramp_ctl.log always records what the steering
     // channel was actually asked for. A sweep is only as good as the record of
     // which value produced which dump.
