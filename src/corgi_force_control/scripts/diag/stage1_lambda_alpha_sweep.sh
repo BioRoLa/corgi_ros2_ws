@@ -88,9 +88,11 @@ fi
 # dump good, sim dirty). A dirty sim stops the sweep rather than contaminating
 # the next dump.
 export CAMBER_EXTRA="--kp-h $KP"
+# REP (env, optional): repeat index appended to the tag so n>=1 repeats per
+# lambda coexist -- without it a second sweep silently OVERWRITES the first.
 done_runs=""
 for lam in $LAMS; do
-    tag="s1_lam${lam}_kp${KP}_pl"
+    tag="s1_lam${lam}_kp${KP}${REP:+_r$REP}_pl"
     echo "=== lam $lam kp $KP start $(date +%T) ==="
     bash "$HERE/camber_cycle.sh" "$lam" lr "$tag"
     rc=$?
