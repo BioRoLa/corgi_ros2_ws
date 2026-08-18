@@ -342,6 +342,14 @@ def parse_args(argv=None):
                     help="seconds of rolling. The circle fit needs at least a "
                          "quarter turn and is badly conditioned below it "
                          "(default: %(default)s)")
+    ap.add_argument("--theta-wheel", type=float, default=None,
+                    help="wheel-mode theta command (deg), default "
+                         "THETA_WHEEL_DEG (17.0). The theta loop sags ~0.85 "
+                         "deg below command while rolling and the sim does "
+                         "not enforce the 17-deg closure stop, so the wheel "
+                         "rolls over-closed and eccentric (log section 68); "
+                         "command ~17.85 to land the ACHIEVED theta at the "
+                         "concentric closure.")
     ap.add_argument("--fold-settle", type=float, default=0.0,
                     help="dwell folded and UNLEANED before the lean (s). "
                          "0 reproduces the original schedule; a drop "
@@ -502,10 +510,13 @@ def predicted_turn_radius(lam_deg):
 
 def main(argv=None):
     args = parse_args(argv)
-    global KP_H
+    global KP_H, THETA_WHEEL_DEG
     KP_H = args.kp_h
+    if args.theta_wheel is not None:
+        THETA_WHEEL_DEG = args.theta_wheel
     print(f"AB/AD kp_h = {KP if KP_H is None else KP_H:.1f} "
-          f"(leg kp = {KP:.1f})", flush=True)
+          f"(leg kp = {KP:.1f}), theta_wheel = {THETA_WHEEL_DEG:.2f} deg",
+          flush=True)
     if args.dry_run:
         return dry_run(args)
 
