@@ -45,6 +45,7 @@ teardown() {
   pkill -f '[w]ebots-controller' 2>/dev/null || true
   pkill -f '[c]orgi_control_panel' 2>/dev/null || true
   pkill -f 'topic pub .*[t]rigger' 2>/dev/null || true
+  pkill -f 'topic echo .*[b]ase_odom' 2>/dev/null || true
   /mnt/c/Windows/System32/taskkill.exe /F /IM webots.exe /IM webots-bin.exe >/dev/null 2>&1 || true
   rm -f /dev/shm/fastrtps_* 2>/dev/null || true
   sleep 3
@@ -85,8 +86,25 @@ for RUN in $(seq 1 "$N"); do
       '{enable: true}' > /dev/null 2>&1 < /dev/null &
 
   sleep "$SETTLE_WALL"
+
+  # Optional: record body odometry alongside the torque capture, so speed is
+  # measured in the SAME run the demand is (RECORD_ODOM=1). Exists because the
+  # label-shift conditions change contact duty, and a demand reduction bought
+  # with forward speed is not a reduction. Full --csv keeps the Odometry field
+  # order fixed by the message spec (stamp at cols 0-1, position at 4-6).
+  if [ -n "${RECORD_ODOM:-}" ]; then
+    setsid ros2 topic echo /sim/base_odom --csv \
+        > "$OUTDIR/odom_run${RUN}.csv" 2>/dev/null < /dev/null &
+    ODOM_PID=$!
+  fi
+
   echo "  gait running; capturing for ${GAIT_WALL}s wall"
   sleep "$GAIT_WALL"
+
+  if [ -n "${RECORD_ODOM:-}" ]; then
+    kill "$ODOM_PID" 2>/dev/null
+    echo "  odom saved: $(wc -l < "$OUTDIR/odom_run${RUN}.csv") rows"
+  fi
 
   cp /tmp/corgi_torque_terms.csv "$OUTDIR/run${RUN}.csv"
   SIMT=$(tail -1 /tmp/corgi_torque_terms.csv | cut -d, -f1)
@@ -118,6 +136,34 @@ for RUN in $(seq 1 "$N"); do
              "$(grep -o 'SHIFTED by [+-][0-9]* ms' "/tmp/ctl_run$RUN.log" | head -1)"
       else
         echo "  !! run $RUN: shift requested but never announced itself"
+        echo "  !! treat this arm as INVALID"
+      fi
+      ;;
+  esac
+  case "$CTL_ARGS" in
+    *stance_label_duty:=*)
+      if grep -q 'STANCE LABEL DUTY set' "/tmp/ctl_run$RUN.log"; then
+        echo "  label duty CONFIRMED in run $RUN:" \
+             "$(grep -o 'DUTY set to [0-9.]*' "/tmp/ctl_run$RUN.log" | head -1)"
+      elif grep -q 'stance_label_duty=.*REFUSED' "/tmp/ctl_run$RUN.log"; then
+        echo "  !! run $RUN: duty requested but REFUSED by the controller"
+        echo "  !! treat this arm as INVALID"
+      else
+        echo "  !! run $RUN: duty requested but never announced itself"
+        echo "  !! treat this arm as INVALID"
+      fi
+      ;;
+  esac
+  case "$CTL_ARGS" in
+    *stance_sweep_scale:=*)
+      if grep -q 'STANCE SWEEP SCALED' "/tmp/ctl_run$RUN.log"; then
+        echo "  sweep scale CONFIRMED in run $RUN:" \
+             "$(grep -o 'SCALED by [0-9.]*' "/tmp/ctl_run$RUN.log" | head -1)"
+      elif grep -q 'stance_sweep_scale=.*REFUSED' "/tmp/ctl_run$RUN.log"; then
+        echo "  !! run $RUN: sweep scale requested but REFUSED by the controller"
+        echo "  !! treat this arm as INVALID"
+      else
+        echo "  !! run $RUN: sweep scale requested but never announced itself"
         echo "  !! treat this arm as INVALID"
       fi
       ;;

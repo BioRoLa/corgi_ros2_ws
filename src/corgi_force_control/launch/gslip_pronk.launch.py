@@ -147,6 +147,18 @@ def generate_launch_description():
         # 0.0 = shipped behaviour. Runs with it set are NOT comparable to
         # unshifted campaigns.
         DeclareLaunchArgument('stance_label_shift_s', default_value='0.0'),
+        # Fraction of the cycle the stance labels span; resized at the LIFTOFF
+        # edge only (onset untouched, composes with the shift). Measured real
+        # duty on the on-design legs ~0.40 vs the template's ~0.43 window.
+        # 0.0 = off, template's own labels. Runs with it set are NOT
+        # comparable to unmodified campaigns.
+        DeclareLaunchArgument('stance_label_duty', default_value='0.0'),
+        # beta-dot slaving (S29): scale the stance beta sweep about touchdown
+        # by f = v_slave / v_design, so rolling holds at f times the
+        # template's design speed. Flight is blended back so touchdown beta
+        # is unchanged. 1.0 = off, shipped behaviour. Runs with it set are
+        # NOT comparable to unscaled campaigns.
+        DeclareLaunchArgument('stance_sweep_scale', default_value='1.0'),
         DeclareLaunchArgument("k_tangential", default_value="600.0"),
         DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
@@ -210,6 +222,8 @@ def generate_launch_description():
                 'contact_debounce': LaunchConfiguration('contact_debounce'),
                 'contact_timeout_s': LaunchConfiguration('contact_timeout_s'),
                 'stance_label_shift_s': LaunchConfiguration('stance_label_shift_s'),
+                'stance_label_duty': LaunchConfiguration('stance_label_duty'),
+                'stance_sweep_scale': LaunchConfiguration('stance_sweep_scale'),
                 'k_tangential': k_tangential,
                 'k_flight': LaunchConfiguration('k_flight'),
                 'k_roll': LaunchConfiguration('k_roll'),

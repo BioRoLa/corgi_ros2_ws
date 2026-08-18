@@ -146,6 +146,17 @@ private:
     // reasoning. 0.0 = shipped behaviour, bit-identical.
     double stance_label_shift_s_;
 
+    // Fraction of the cycle the in_stance labels should span; the window is
+    // resized by moving the LIFTOFF edge only, onset untouched, so it composes
+    // with the shift (shift places the onset, duty sets the length). See
+    // load_template. 0.0 = off, template's own labels, bit-identical.
+    double stance_label_duty_;
+
+    // beta-dot slaving (S29): scale the stance beta sweep about touchdown by
+    // f = v_slave / v_design, so rolling holds at f times the template's
+    // design speed. See load_template. 1.0 = off, bit-identical.
+    double stance_sweep_scale_;
+
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules_;
     std::vector<TemplateRow> template_;
 
@@ -424,6 +435,8 @@ GslipPronkNode::GslipPronkNode()
       last_contact_stamp_(0.0),
       contact_stale_warned_(false),
       stance_label_shift_s_(0.0),
+      stance_label_duty_(0.0),
+      stance_sweep_scale_(1.0),
       trigger_(false),
       sim_(false),
       k_radial_(8941.0),
@@ -517,6 +530,10 @@ GslipPronkNode::GslipPronkNode()
         "contact_timeout_s", contact_timeout_s_);
     stance_label_shift_s_ = this->declare_parameter<double>(
         "stance_label_shift_s", stance_label_shift_s_);
+    stance_label_duty_ = this->declare_parameter<double>(
+        "stance_label_duty", stance_label_duty_);
+    stance_sweep_scale_ = this->declare_parameter<double>(
+        "stance_sweep_scale", stance_sweep_scale_);
     settle_ticks_ = this->declare_parameter<int>("settle_ticks", settle_ticks_);
     k_roll_ = this->declare_parameter<double>("k_roll", k_roll_);
     d_roll_ = this->declare_parameter<double>("d_roll", d_roll_);
@@ -695,6 +712,65 @@ bool GslipPronkNode::load_template(const std::string& path) {
     // cycle from stalling for one tick at every stride boundary.
     if (template_.size() > 1) template_.pop_back();
 
+    // --- stance-label duty (window length) ------------------------------
+    //
+    // The +80 ms label shift fixed the touchdown boundary (regime ratio
+    // 0.76 -> 1.30, holds in closed loop) but moved the demand peak to the
+    // LIFTOFF boundary: real liftoff happens while the labels still say
+    // stance, so the leg starts its fast swing under soft stance gains and
+    // pays catch-up when flight gains arrive late. Measured real contact duty
+    // is ~0.40 on the on-design legs against the template's ~0.43 window --
+    // the window is simply longer than real stance.
+    //
+    // This resizes the stance window to duty * cycle by moving the LIFTOFF
+    // edge only; the onset edge stays where the template (plus any shift)
+    // puts it. Applied BEFORE the shift so the two parameters are orthogonal:
+    // duty = window length, shift = window placement.
+    //
+    // Same safety shape as the shift: global, constant, label-only --
+    // theta/beta/gamma untouched, no feedback path, cannot chatter.
+    if (template_.size() > 1 && stance_label_duty_ > 0.0) {
+        const size_t n = template_.size();
+        // The labels must form exactly one contiguous circular stance
+        // segment for "the liftoff edge" to be well-defined. Refuse
+        // anything else rather than guess (see the analyser-gating rule).
+        size_t onset = n, transitions = 0;
+        for (size_t i = 0; i < n; i++) {
+            const bool prev = template_[(i + n - 1) % n].in_stance;
+            const bool cur = template_[i].in_stance;
+            if (prev != cur) transitions++;
+            if (!prev && cur) onset = i;
+        }
+        const size_t m_target =
+            static_cast<size_t>(std::lround(stance_label_duty_ *
+                                            static_cast<double>(n)));
+        if (transitions != 2 || onset == n) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "stance_label_duty=%.3f REFUSED: labels have %zu "
+                         "transitions (need exactly 2, one stance segment). "
+                         "Labels left untouched.",
+                         stance_label_duty_, transitions);
+        } else if (m_target == 0 || m_target >= n) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "stance_label_duty=%.3f REFUSED: %zu of %zu rows "
+                         "is not a usable window. Labels left untouched.",
+                         stance_label_duty_, m_target, n);
+        } else {
+            size_t m_orig = 0;
+            for (size_t i = 0; i < n; i++)
+                if (template_[i].in_stance) m_orig++;
+            for (size_t i = 0; i < n; i++)
+                template_[i].in_stance = false;
+            for (size_t i = 0; i < m_target; i++)
+                template_[(onset + i) % n].in_stance = true;
+            RCLCPP_WARN(this->get_logger(),
+                        "STANCE LABEL DUTY set to %.3f (%zu of %zu rows, "
+                        "template had %zu). Liftoff edge moved, onset kept; "
+                        "runs are NOT comparable to unmodified campaigns.",
+                        stance_label_duty_, m_target, n, m_orig);
+        }
+    }
+
     // --- stance-label phase shift --------------------------------------
     //
     // Measured (template_contact_lag.py, nine runs, three k_t settings): the
@@ -735,6 +811,76 @@ bool GslipPronkNode::load_template(const std::string& path) {
                     "Gain schedule is re-phased against the trajectory; runs "
                     "are NOT comparable to unshifted campaigns.",
                     stance_label_shift_s_ * 1e3, k, n);
+    }
+
+    // --- stance beta-sweep scaling (beta-dot slaving, S29's fix) ----------
+    //
+    // Rolling contact requires beta-dot = v_body / L(theta) at every instant
+    // of stance (the foot rim's absolute angle IS beta). The template
+    // satisfies this at its own design speed; the robot runs slower, so the
+    // clocked beta(t) drags the feet through the ground -- the S28
+    // dissipation, and the self-reinforcing "grip costs speed" loop.
+    //
+    // Because the template is rolling-consistent at v_design, slaving to a
+    // slower v is EXACTLY a scaling of the stance sweep about touchdown:
+    //   beta'(t) = beta_td + f * (beta(t) - beta_td),  f = v_slave/v_design
+    // gives beta-dot' = f * v_design / L = v_slave / L. No kinematics needed.
+    //
+    // Flight rows get the liftoff offset blended linearly to zero so the
+    // next touchdown beta is unchanged and beta is continuous at both
+    // boundaries. theta, gamma, labels untouched. Same safety shape as the
+    // shift and duty: global, constant, precomputed at load, no feedback
+    // path, cannot chatter. 1.0 = shipped behaviour, bit-identical.
+    if (template_.size() > 1 && stance_sweep_scale_ != 1.0) {
+        const size_t n = template_.size();
+        size_t onset = n, transitions = 0;
+        for (size_t i = 0; i < n; i++) {
+            const bool prev = template_[(i + n - 1) % n].in_stance;
+            const bool cur = template_[i].in_stance;
+            if (prev != cur) transitions++;
+            if (!prev && cur) onset = i;
+        }
+        size_t m = 0;
+        for (size_t i = 0; i < n; i++)
+            if (template_[i].in_stance) m++;
+        if (stance_sweep_scale_ <= 0.0 || stance_sweep_scale_ > 1.0) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "stance_sweep_scale=%.3f REFUSED: must be in (0, 1]."
+                         " Beta left untouched.", stance_sweep_scale_);
+        } else if (transitions != 2 || onset == n || m == 0 || m >= n) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "stance_sweep_scale=%.3f REFUSED: labels have %zu "
+                         "transitions (need exactly 2, one stance segment). "
+                         "Beta left untouched.",
+                         stance_sweep_scale_, transitions);
+        } else {
+            const double f = stance_sweep_scale_;
+            const double b_td = template_[onset].beta;
+            double sweep_orig = 0.0, off = 0.0;
+            for (size_t k2 = 0; k2 < m; k2++) {
+                const size_t idx = (onset + k2) % n;
+                const double b = template_[idx].beta;
+                template_[idx].beta = b_td + f * (b - b_td);
+                if (k2 == m - 1) {
+                    sweep_orig = b - b_td;
+                    off = template_[idx].beta - b;  // (f-1)*sweep, negative
+                }
+            }
+            const size_t nf = n - m;
+            for (size_t k2 = 0; k2 < nf; k2++) {
+                const size_t idx = (onset + m + k2) % n;
+                const double s = static_cast<double>(k2 + 1) /
+                                 static_cast<double>(nf);
+                template_[idx].beta += off * (1.0 - s);
+            }
+            RCLCPP_WARN(this->get_logger(),
+                        "STANCE SWEEP SCALED by %.3f: stance beta sweep "
+                        "%.3f -> %.3f rad about touchdown, flight blended "
+                        "back over %zu rows. beta-dot is now slaved to "
+                        "%.0f%% of the template's design speed; runs are NOT "
+                        "comparable to unscaled campaigns.",
+                        f, sweep_orig, f * sweep_orig, nf, f * 100.0);
+        }
     }
     return template_.size() > 1;
 }
