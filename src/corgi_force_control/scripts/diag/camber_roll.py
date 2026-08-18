@@ -220,8 +220,9 @@ class Schedule:
     """
 
     def __init__(self, lam_deg, pattern, beta_rate, settle=1.0, fold_time=3.0,
-                 lean_time=2.0, lean_settle=1.5, roll_time=20.0,
-                 lift="none", lift_camber=45.0, acker=False, beta_ramp=2.0):
+                 fold_settle=0.0, lean_time=2.0, lean_settle=1.5,
+                 roll_time=20.0, lift="none", lift_camber=45.0, acker=False,
+                 beta_ramp=2.0):
         self.lam = math.radians(lam_deg)
         self.signs = PATTERNS[pattern]
         self.pattern = pattern
@@ -232,9 +233,17 @@ class Schedule:
         self.gamma_target = camber_target(lam_deg, pattern, lift, lift_camber,
                                           acker)
 
+        # fold_settle: dwell in the folded, UNLEANED pose before the lean.
+        # Default 0.0 reproduces the original schedule exactly. Without it the
+        # fold abuts the lean and no settled unleaned window exists anywhere
+        # in the run -- the [3.4, 3.9] "pre-lean" analysis window sits INSIDE
+        # the fold transient (z still moving ~18 mm/s there), which
+        # contaminated every absolute ride-drop measurement through log
+        # section 62. A drop measurement needs fold_settle >= 2.
         self.t_settle = settle
         self.t_fold = self.t_settle + fold_time
-        self.t_lean = self.t_fold + lean_time
+        self.t_fold_settle = self.t_fold + fold_settle
+        self.t_lean = self.t_fold_settle + lean_time
         self.t_lean_settle = self.t_lean + lean_settle
         self.t_roll = self.t_lean_settle + roll_time
         self.roll_time = roll_time
@@ -248,6 +257,8 @@ class Schedule:
             return "settle"
         if t < self.t_fold:
             return "fold"
+        if t < self.t_fold_settle:
+            return "fold_settle"
         if t < self.t_lean:
             return "lean"
         if t < self.t_lean_settle:
@@ -274,10 +285,11 @@ class Schedule:
         # Scaled as a vector rather than a single lambda times a sign pattern,
         # because the Ackermann and lifted-pair poses give each leg its own
         # magnitude.
-        if t < self.t_fold:
+        if t < self.t_fold_settle:
             s = 0.0
         elif t < self.t_lean:
-            s = smoothstep((t - self.t_fold) / (self.t_lean - self.t_fold))
+            s = smoothstep((t - self.t_fold_settle)
+                           / (self.t_lean - self.t_fold_settle))
         else:
             s = 1.0
         gammas = [s * g for g in self.gamma_target]
@@ -330,6 +342,11 @@ def parse_args(argv=None):
                     help="seconds of rolling. The circle fit needs at least a "
                          "quarter turn and is badly conditioned below it "
                          "(default: %(default)s)")
+    ap.add_argument("--fold-settle", type=float, default=0.0,
+                    help="dwell folded and UNLEANED before the lean (s). "
+                         "0 reproduces the original schedule; a drop "
+                         "measurement needs >= 2 so a settled pre-lean "
+                         "baseline window exists (log section 62/63).")
     ap.add_argument("--fold-time", type=float, default=3.0,
                     help="seconds to fold from the standing pose to wheeled "
                          "mode (default: %(default)s)")
@@ -398,6 +415,7 @@ def dry_run(args):
     """
     sched = Schedule(args.lam_deg, args.pattern, args.beta_rate,
                      settle=args.settle, fold_time=args.fold_time,
+                     fold_settle=args.fold_settle,
                      lean_time=args.lean_time, roll_time=args.roll_time,
                      lift=args.lift, lift_camber=resolve_lift_camber(args),
                      acker=args.acker, beta_ramp=args.beta_ramp)
@@ -421,6 +439,7 @@ def dry_run(args):
               f"{1000*clear:.1f} mm of clearance")
     print(f"  beta_dot eased in over {args.beta_ramp:.1f} s")
     print(f"phases: settle {sched.t_settle:.1f} | fold {sched.t_fold:.1f} | "
+          f"fold_settle {sched.t_fold_settle:.1f} | "
           f"lean {sched.t_lean:.1f} | settle {sched.t_lean_settle:.1f} | "
           f"roll ends {sched.t_roll:.1f}  (seconds after trigger)")
     print()
@@ -496,6 +515,7 @@ def main(argv=None):
 
     sched = Schedule(args.lam_deg, args.pattern, args.beta_rate,
                      settle=args.settle, fold_time=args.fold_time,
+                     fold_settle=args.fold_settle,
                      lean_time=args.lean_time, roll_time=args.roll_time,
                      lift=args.lift, lift_camber=resolve_lift_camber(args),
                      acker=args.acker, beta_ramp=args.beta_ramp)

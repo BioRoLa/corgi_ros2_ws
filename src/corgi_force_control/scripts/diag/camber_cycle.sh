@@ -34,10 +34,14 @@ DUMP="$DUMPDIR/camber_$TAG.npz"
 ROLL="${ROLL_TIME:-20}"
 mkdir -p "$DUMPDIR"
 
-# camber_roll.py's schedule is settle 1 + fold 3 + lean 2 + settle 1.5 = 7.5 s
-# before the roll starts. Record a little past the end so the last samples are
-# not clipped mid-stride.
-UNTIL=$(python3 -c "print(7.5 + $ROLL + 2.0)")
+# camber_roll.py's schedule is settle 1 + fold 3 + fold_settle FS + lean 2 +
+# settle 1.5 = 7.5 + FS seconds before the roll starts. FOLD_SETTLE (env,
+# default 0 = the original schedule) is forwarded to camber_roll AND added
+# here -- the recorder window and the schedule must move together or the last
+# samples are silently clipped.
+FS="${FOLD_SETTLE:-0}"
+UNTIL=$(python3 -c "print(7.5 + $FS + $ROLL + 2.0)")
+CAMBER_EXTRA="--fold-settle $FS $CAMBER_EXTRA"
 
 source /opt/ros/humble/setup.bash
 source ~/corgi_ws/corgi_ros2_ws/install/setup.bash

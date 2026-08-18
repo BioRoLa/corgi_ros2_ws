@@ -49,13 +49,21 @@ else
     LAMS="0 5 10 15 20 25 30 35 40"
 fi
 
+# Every run dwells 3 s folded-and-unleaned before the lean so a SETTLED
+# pre-lean baseline window exists -- without it the fold transient
+# contaminates every absolute ride-height measurement (log section 62/63).
+# The analysis windows in stage1_contact_sweep_analysis.py assume this value.
+FOLD_SETTLE=3
+export FOLD_SETTLE
+
 if [ "$DRY" = "1" ]; then
-    echo "DRY RUN: kp_h $KP, grid: $LAMS (no ROS, no simulator)"
+    echo "DRY RUN: kp_h $KP, fold_settle $FOLD_SETTLE, grid: $LAMS (no ROS, no simulator)"
     fails=0
     for lam in $LAMS; do
         echo "--- lam $lam ---"
         python3 "$HERE/camber_roll.py" --lam-deg "$lam" --pattern lr \
-            --kp-h "$KP" --dry-run || fails=$((fails + 1))
+            --kp-h "$KP" --fold-settle "$FOLD_SETTLE" --dry-run \
+            || fails=$((fails + 1))
     done
     echo
     echo "run plan (tags):"
