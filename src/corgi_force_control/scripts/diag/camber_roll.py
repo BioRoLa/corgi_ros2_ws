@@ -88,6 +88,11 @@ THETA_STAND_DEG = 100.0
 # geometric, and an impedance law would put the leg somewhere other than where
 # it was commanded, which is the one thing this run cannot tolerate.
 KP, KD = 90.0, 1.75
+# AB/AD proportional gain. Separate from KP because it is the only
+# lateral-stiffness knob this rig has: k_lateral belongs to gslip_pronk
+# -> force_control -> K_joint(2,2) -> kp_h, and this rig launches neither
+# node. Overridden by --kp-h; None means "use KP", i.e. unchanged.
+KP_H = None
 
 
 # Which legs a --lift option takes off the ground. A=FL B=FR C=RR D=RL.
@@ -364,6 +369,10 @@ def parse_args(argv=None):
                          "outer one is solved so both apexes coincide. Uniform "
                          "camber puts them exactly one track width apart at "
                          "every angle, which is why it cannot roll a curve.")
+    ap.add_argument("--kp-h", type=float, default=None,
+                    help="AB/AD proportional gain, default = KP (90). "
+                         "The lateral-stiffness knob for this rig; "
+                         "k_lateral does not reach it.")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the commanded trajectory and its invariants "
                          "with no ROS traffic and no simulator")
@@ -474,6 +483,10 @@ def predicted_turn_radius(lam_deg):
 
 def main(argv=None):
     args = parse_args(argv)
+    global KP_H
+    KP_H = args.kp_h
+    print(f"AB/AD kp_h = {KP if KP_H is None else KP_H:.1f} "
+          f"(leg kp = {KP:.1f})", flush=True)
     if args.dry_run:
         return dry_run(args)
 
@@ -537,7 +550,8 @@ def main(argv=None):
             for leg, gamma in zip(("a", "b", "c", "d"), gammas):
                 cmd = getattr(msg, f"module_{leg}")
                 cmd.theta, cmd.beta, cmd.gamma = theta, beta, gamma
-                cmd.kp_r = cmd.kp_l = cmd.kp_h = KP
+                cmd.kp_r = cmd.kp_l = KP
+                cmd.kp_h = KP if KP_H is None else KP_H
                 cmd.ki_r = cmd.ki_l = cmd.ki_h = 0.0
                 cmd.kd_r = cmd.kd_l = cmd.kd_h = KD
                 cmd.torque_r = cmd.torque_l = cmd.torque_h = 0.0

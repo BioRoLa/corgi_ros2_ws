@@ -27,32 +27,60 @@ export TMPDIR=/mnt/c/Users/alexc/AppData/Local/Temp/webots_ws
 export CORGI_EXPERIMENT_MODE=1
 mkdir -p "$TMPDIR"
 
-# --- tear everything down --------------------------------------------------
+# --- teardown machinery (ported from camber_cycle.sh 2026-08-18; this script
+# carried the bare-grep form the harness rules warn about) -------------------
 # Bracket trick throughout: a bare `pkill -f name` matches this script's own
 # command line and kills the caller.
-for p in "gslip_pron[k]_node" "force_contro[l]_node" "force_estimatio[n]_node" \
-         "topi[c] pub" "corgi_control_pane[l]" "corgi_data_recorde[r]" \
-         "webots_ros2_drive[r]" "webots-controlle[r]" "Corgi_launc[h]" \
-         "webots\.ex[e]"; do
-    pkill -9 -f "$p" 2>/dev/null
-done
-# The WSL-side pkill does not reap the WINDOWS Webots process, which keeps
-# holding port 1234; the next launch then fails with "not in the list of robots
-# with <extern> controllers".
-powershell.exe -Command \
-    "Get-Process webots,webots-bin -ErrorAction SilentlyContinue | Stop-Process -Force" \
-    >/dev/null 2>&1
-sleep 6
-ros2 daemon stop >/dev/null 2>&1
-sleep 2
+RUN_START=$(date +%s)
+fresh_grep() {   # fresh_grep <file> <pattern> -- a log is evidence only if
+    [ -f "$1" ] || return 1        # THIS run wrote it (a 3-hour-old log once
+    [ "$(stat -c %Y "$1")" -ge "$RUN_START" ] || return 1   # satisfied a
+    grep -q "$2" "$1" 2>/dev/null  # bare grep while no simulator existed)
+}
+
+KILL_PATTERNS=("gslip_pron[k]_node" "force_contro[l]_node"
+    "force_estimatio[n]_node" "topi[c] pub" "corgi_control_pane[l]"
+    "corgi_data_recorde[r]" "webots_ros2_drive[r]" "webots-controlle[r]"
+    "Corgi_launc[h]" "webots\.ex[e]")
+
+teardown_all() {
+    for p in "${KILL_PATTERNS[@]}"; do
+        pkill -9 -f "$p" 2>/dev/null
+    done
+    # The WSL-side pkill does not reap the WINDOWS Webots process, which keeps
+    # holding port 1234; the next launch then fails with "not in the list of
+    # robots with <extern> controllers".
+    powershell.exe -Command \
+        "Get-Process webots,webots-bin -ErrorAction SilentlyContinue | Stop-Process -Force" \
+        >/dev/null 2>&1
+    sleep 6
+    # Unbounded `ros2 daemon stop` once wedged a teardown for 12 minutes.
+    timeout 15 ros2 daemon stop >/dev/null 2>&1
+    sleep 2
+}
+
+verify_dead() {
+    local alive=""
+    for p in "${KILL_PATTERNS[@]}"; do
+        alive="$alive$(pgrep -af "$p" 2>/dev/null)"
+    done
+    [ -z "$alive" ] && return 0
+    echo "SIM NOT CLEAR after teardown:"
+    for p in "${KILL_PATTERNS[@]}"; do
+        pgrep -af "$p" 2>/dev/null
+    done
+    return 1
+}
+
+teardown_all
 
 # --- bring the simulator up ------------------------------------------------
 setsid nohup ros2 launch corgi_sim Corgi_launch.py > /tmp/cyc_sim.log 2>&1 < /dev/null &
 for _ in $(seq 1 90); do
-    grep -q "successfully connected" /tmp/cyc_sim.log 2>/dev/null && break
+    fresh_grep /tmp/cyc_sim.log "successfully connected" && break
     sleep 2
 done
-if ! grep -q "successfully connected" /tmp/cyc_sim.log 2>/dev/null; then
+if ! fresh_grep /tmp/cyc_sim.log "successfully connected"; then
     echo "SIM FAILED TO START"; exit 1
 fi
 sleep 4
@@ -61,10 +89,10 @@ sleep 4
 setsid nohup ros2 launch corgi_force_control gslip_pronk.launch.py \
     template_path:="$TPL" $EXTRA > /tmp/cyc_ctl.log 2>&1 < /dev/null &
 for _ in $(seq 1 90); do
-    grep -q "Holding pose" /tmp/cyc_ctl.log 2>/dev/null && break
+    fresh_grep /tmp/cyc_ctl.log "Holding pose" && break
     sleep 2
 done
-if ! grep -q "Holding pose" /tmp/cyc_ctl.log 2>/dev/null; then
+if ! fresh_grep /tmp/cyc_ctl.log "Holding pose"; then
     echo "CONTROLLER FAILED TO REACH HOLD"; exit 1
 fi
 
@@ -81,3 +109,14 @@ echo "  --- attitude ---"
 python3 "$HERE/check_rpy.py" 2>/dev/null | grep -E "mean|contact %"
 
 pkill -9 -f "topi[c] pub" 2>/dev/null
+
+# --- end-of-run teardown, VERIFIED (see camber_cycle.sh; log section 62) ---
+teardown_all
+if ! verify_dead; then
+    teardown_all
+    if ! verify_dead; then
+        echo "TEARDOWN FAILED TWICE -- kill the survivors above by PID."
+        exit 3
+    fi
+fi
+echo "sim clear."

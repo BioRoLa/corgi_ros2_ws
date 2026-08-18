@@ -52,34 +52,66 @@ export TMPDIR=/mnt/c/Users/alexc/AppData/Local/Temp/webots_ws
 export CORGI_EXPERIMENT_MODE=1
 mkdir -p "$TMPDIR"
 
-# --- tear everything down --------------------------------------------------
+# A log is EVIDENCE ONLY IF THIS RUN WROTE IT -- and every teardown call is
+# bounded. Both ported from ramp_cycle.sh (commit 9fdb5e3), each bought with
+# a failed run: a wedged `ros2 daemon stop` hung a pass for 12 min in the
+# teardown, and a 3-hour-old log satisfied a bare grep while no simulator
+# existed. See scripts/diag/README.md, harness rules.
+RUN_START=$(date +%s)
+fresh_grep() {   # fresh_grep <file> <pattern>
+    [ -f "$1" ] || return 1
+    [ "$(stat -c %Y "$1")" -ge "$RUN_START" ] || return 1
+    grep -q "$2" "$1" 2>/dev/null
+}
+
+# --- teardown machinery ----------------------------------------------------
 # Bracket trick throughout: a bare `pkill -f name` matches this script's own
 # command line and kills the caller.
-for p in "camber_rol[l]" "record_cambe[r]" "gslip_pron[k]_node" \
-         "force_contro[l]_node" "force_estimatio[n]_node" "topi[c] pub" \
-         "corgi_control_pane[l]" "corgi_data_recorde[r]" \
-         "webots_ros2_drive[r]" "webots-controlle[r]" "Corgi_launc[h]" \
-         "webots\.ex[e]"; do
-    pkill -9 -f "$p" 2>/dev/null
-done
-# The WSL-side pkill does not reap the WINDOWS Webots process, which keeps
-# holding port 1234; the next launch then fails with "not in the list of robots
-# with <extern> controllers".
-powershell.exe -Command \
-    "Get-Process webots,webots-bin -ErrorAction SilentlyContinue | Stop-Process -Force" \
-    >/dev/null 2>&1
-sleep 6
-ros2 daemon stop >/dev/null 2>&1
-sleep 2
+KILL_PATTERNS=("camber_rol[l]" "record_cambe[r]" "gslip_pron[k]_node"
+    "force_contro[l]_node" "force_estimatio[n]_node" "topi[c] pub"
+    "corgi_control_pane[l]" "corgi_data_recorde[r]"
+    "webots_ros2_drive[r]" "webots-controlle[r]" "Corgi_launc[h]"
+    "webots\.ex[e]")
+
+teardown_all() {
+    for p in "${KILL_PATTERNS[@]}"; do
+        pkill -9 -f "$p" 2>/dev/null
+    done
+    # The WSL-side pkill does not reap the WINDOWS Webots process, which keeps
+    # holding port 1234; the next launch then fails with "not in the list of
+    # robots with <extern> controllers".
+    powershell.exe -Command \
+        "Get-Process webots,webots-bin -ErrorAction SilentlyContinue | Stop-Process -Force" \
+        >/dev/null 2>&1
+    sleep 6
+    timeout 15 ros2 daemon stop >/dev/null 2>&1
+    sleep 2
+}
+
+verify_dead() {   # returns 0 iff nothing from KILL_PATTERNS is running
+    local alive=""
+    for p in "${KILL_PATTERNS[@]}"; do
+        alive="$alive$(pgrep -af "$p" 2>/dev/null)"
+    done
+    [ -z "$alive" ] && return 0
+    echo "SIM NOT CLEAR after teardown:"
+    for p in "${KILL_PATTERNS[@]}"; do
+        pgrep -af "$p" 2>/dev/null
+    done
+    return 1
+}
+
+# --- tear down any leftovers before starting -------------------------------
+teardown_all
 
 # --- bring the simulator up ------------------------------------------------
 setsid nohup ros2 launch corgi_sim Corgi_launch.py \
     > /tmp/camber_sim.log 2>&1 < /dev/null &
 for _ in $(seq 1 90); do
-    grep -q "successfully connected" /tmp/camber_sim.log 2>/dev/null && break
+    fresh_grep /tmp/camber_sim.log "successfully connected" && break
     sleep 2
 done
-if ! grep -q "successfully connected" /tmp/camber_sim.log 2>/dev/null; then
+if ! fresh_grep /tmp/camber_sim.log "successfully connected"; then
     echo "SIM FAILED TO START -- see /tmp/camber_sim.log"
     grep -iE "Cannot connect|not in the list" /tmp/camber_sim.log | tail -3
     exit 1
@@ -91,10 +123,10 @@ setsid nohup python3 "$HERE/camber_roll.py" \
     --lam-deg "$LAM" --pattern "$PAT" --roll-time "$ROLL" $CAMBER_EXTRA \
     > /tmp/camber_ctl.log 2>&1 < /dev/null &
 for _ in $(seq 1 120); do
-    grep -q "holding for the trigger" /tmp/camber_ctl.log 2>/dev/null && break
+    fresh_grep /tmp/camber_ctl.log "holding for the trigger" && break
     sleep 2
 done
-if ! grep -q "holding for the trigger" /tmp/camber_ctl.log 2>/dev/null; then
+if ! fresh_grep /tmp/camber_ctl.log "holding for the trigger"; then
     echo "COMMANDER NEVER STOOD UP -- see /tmp/camber_ctl.log"
     tail -5 /tmp/camber_ctl.log
     exit 1
@@ -125,3 +157,22 @@ grep -E "Trigger at|--- |Roll complete|enter |final" /tmp/camber_ctl.log | tail 
 echo
 echo "--- circle fit ---"
 python3 "$HERE/check_camber_turn.py" "$DUMP" --lam-deg "$LAM" --pattern "$PAT"
+
+# --- end-of-run teardown, VERIFIED ----------------------------------------
+# Until 2026-08-18 the cycle relied on the NEXT run's start-teardown, so the
+# last run of a session left the whole launch tree alive -- including an
+# orphan corgi_data_recorder, the exact dump-contamination vector the
+# timestamp gate exists for (log section 62; found by post-run pgrep, six
+# minutes after "done"). The dump is saved and analysed by this point, so a
+# dirty exit here loses nothing -- but a teardown that cannot fail loudly is
+# a teardown that exits 0 with the sim alive. Exit 3 means: dump is good,
+# sim is NOT clear, do not start another run until it is.
+teardown_all
+if ! verify_dead; then
+    teardown_all
+    if ! verify_dead; then
+        echo "TEARDOWN FAILED TWICE -- kill the survivors above by PID."
+        exit 3
+    fi
+fi
+echo "sim clear."
