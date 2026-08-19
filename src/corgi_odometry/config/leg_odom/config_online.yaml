@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────
+# Online node parameters — corgi_odometry
+# Loaded by corgi_leg_odom and corgi_contact_leg_est at startup
+# via yaml-cpp (no recompile needed).
+# ─────────────────────────────────────────────────────────────────
+
+# ES-EKF noise tuning
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
+
+# Disturbance observer / encoder filter
+observer:
+  cutoff_freq:         15.0   # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+
+# Schmitt-trigger contact thresholds
+contact:
+
+  ###### real walk/trot ######
+  # rm_threshold_high:   35.0
+  # rm_threshold_low:    25.0
+  # beta_threshold_high:  4.0
+  # beta_threshold_low:   0.5
+
+  ###### real wlw ######
+  # rm_threshold_high:   50.0
+  # rm_threshold_low:    25.0
+  # beta_threshold_high:  3.0
+  # beta_threshold_low:   1.5
+
+  ###### sim walk/trot ######
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high:  2.0
+  beta_threshold_low:   1.0
+
+  ###### sim wlw ######
+  # rm_threshold_high:   25.0
+  # rm_threshold_low:    15.0
+  # beta_threshold_high:  1.5
+  # beta_threshold_low:   1.0
+
+
+
+# Logic switches
+# NOTE: use_esekf_state is intentionally absent here.  The online node
+# (corgi_leg_odom) hard-codes this to true because real hardware has no
+# ground-truth position/velocity.  This parameter is only meaningful for
+# sim and offline nodes, which load their own config files.
+use_dynamic_dt:  true
+quiet:           true
+use_bv_feedback: true
+
+# Static IMU initialization (bias calibration before first ESEKF tick)
+static_init:
+  window_ms:          200    # Collect this many ms of IMU before trigger
+  motion_gyro_thresh: 0.02   # Warn if |w_mean| > this [rad/s]
+  initial_z:          0.2    # Initial ESEKF z [m]; matches legacy hip height TODO: initial z should be set to the actual standing height instead of hardcoded 0.2 m
+
+# Zero Velocity Update: applied when all 4 legs are off the ground
+# sigma_vec: velocity measurement noise std dev [m/s] (tighter = stronger constraint)
+# gyro_thresh: skip ZUPT if bias-corrected gyro norm exceeds this [rad/s]
+zupt:
+  enabled:      true
+  sigma_vec:    [0.01, 0.01, 0.01]
+  gyro_thresh:  0.3
