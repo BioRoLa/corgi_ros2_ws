@@ -192,6 +192,21 @@ def generate_launch_description():
         DeclareLaunchArgument("d_roll", default_value="0.0"),
         DeclareLaunchArgument("d_yaw", default_value="0.0"),
         DeclareLaunchArgument("gamma_limit", default_value="0.0873"),  # 5 deg
+        # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
+        # Held left/right camber differential, RADIANS: the pair on the turn
+        # side (gamma_acker_dir +1 left / -1 right) leans at gamma_acker_in,
+        # the outer pair at gamma_acker_out, both toward the turn centre.
+        # Compute the pair offline with ackermann_pair() (LegWheel
+        # cambered_return_map.py) -- the node applies, it does not derive.
+        # dir 0.0 (default) is EXACTLY off: bit-identical to before the
+        # channel existed. The node announces engagement with an
+        # "ACKER CAMBER set" WARN; a run that requested camber and did not
+        # log that line is INVALID.
+        DeclareLaunchArgument("gamma_acker_in", default_value="0.0"),
+        DeclareLaunchArgument("gamma_acker_out", default_value="0.0"),
+        DeclareLaunchArgument("gamma_acker_dir", default_value="0.0"),
+        DeclareLaunchArgument("gamma_acker_limit", default_value="0.3491"),  # 20 deg
+        DeclareLaunchArgument("gamma_acker_ramp_ticks", default_value="500"),
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -247,6 +262,12 @@ def generate_launch_description():
                 'd_roll': LaunchConfiguration('d_roll'),
                 'd_yaw': LaunchConfiguration('d_yaw'),
                 'gamma_limit': LaunchConfiguration('gamma_limit'),
+                'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
+                'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
+                'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),
+                'gamma_acker_limit': LaunchConfiguration('gamma_acker_limit'),
+                'gamma_acker_ramp_ticks':
+                    LaunchConfiguration('gamma_acker_ramp_ticks'),
                 'template_path': template_path,
             }],
             output='screen',

@@ -305,6 +305,21 @@ private:
     void update_attitude(double& roll, double& pitch, double& yaw) const;
     double gamma_correction(int leg_index) const;
 
+    // --- Open-loop Ackermann camber pair (Stage 3 mechanism demo) -----------
+    //
+    // A held left/right camber differential: the pair on the turn side leans
+    // harder (lam_in), the outer pair follows at the apex-condition angle
+    // (lam_out), both toward the turn centre -- the rolling geometry that a
+    // pair of cambered wheels needs to share one turn apex. Magnitudes come
+    // from ackermann_pair() offline (LegWheel cambered_return_map.py /
+    // camber_roll.py --acker); NO geometry lives here.
+    //
+    // gamma_acker_dir_ = 0 (the default) returns literal 0.0 before touching
+    // anything, so every run without the flag is bit-identical to before this
+    // existed. Applied additively in apply_row next to gamma_correction, and
+    // clamped by its OWN limit -- gamma_limit_ clamps only the feedback term.
+    double gamma_openloop(int leg_index) const;
+
     // --- Steering: differential beta ----------------------------------------
     //
     // gamma above is INERT in yaw. Measured: k_yaw = 0 collapses gamma from
@@ -386,6 +401,16 @@ private:
     double k_yaw_;
     double d_yaw_;
     double gamma_limit_;   // rad, clamp on the correction
+
+    // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
+    double gamma_acker_in_;
+    double gamma_acker_out_;
+    double gamma_acker_dir_;    // +1 left turn / -1 right turn / 0 off
+    double gamma_acker_limit_;  // clamp on the open-loop term alone
+    int gamma_acker_ramp_ticks_;
+    // Ticks since the stride loop started, for the entry ramp. Counted in
+    // apply_row so the settle (yaw_ref_set_ false) never advances it.
+    int acker_ramp_count_{0};
 
     // Steering; see the block comment above steer_command().
     double k_steer_;
@@ -478,6 +503,15 @@ GslipPronkNode::GslipPronkNode()
       k_yaw_(0.15),
       d_yaw_(0.02),
       gamma_limit_(5.0 / 180.0 * M_PI),
+      gamma_acker_in_(0.0),
+      gamma_acker_out_(0.0),
+      gamma_acker_dir_(0.0),
+      // 20 deg: above the 15 deg the Stage 3 sweep tops out at, well under
+      // the +-30 deg the model's u_limits allow, and far from folding a leg.
+      gamma_acker_limit_(20.0 / 180.0 * M_PI),
+      // 500 ms entry ramp, mirroring camber_roll.py's lean window: a step
+      // into a stiff position loop at 1 kHz is a torque spike.
+      gamma_acker_ramp_ticks_(500),
       k_steer_(0.0),
       steer_offset_(0.0),
       // 8 deg. Sized above the 5 deg the authority estimate calls for, so the
@@ -540,6 +574,16 @@ GslipPronkNode::GslipPronkNode()
     k_yaw_ = this->declare_parameter<double>("k_yaw", k_yaw_);
     d_yaw_ = this->declare_parameter<double>("d_yaw", d_yaw_);
     gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
+    gamma_acker_in_ =
+        this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
+    gamma_acker_out_ =
+        this->declare_parameter<double>("gamma_acker_out", gamma_acker_out_);
+    gamma_acker_dir_ =
+        this->declare_parameter<double>("gamma_acker_dir", gamma_acker_dir_);
+    gamma_acker_limit_ =
+        this->declare_parameter<double>("gamma_acker_limit", gamma_acker_limit_);
+    gamma_acker_ramp_ticks_ = this->declare_parameter<int>(
+        "gamma_acker_ramp_ticks", gamma_acker_ramp_ticks_);
     k_steer_ = this->declare_parameter<double>("k_steer", k_steer_);
     steer_offset_ = this->declare_parameter<double>("steer_offset", steer_offset_);
     steer_limit_ = this->declare_parameter<double>("steer_limit", steer_limit_);
@@ -930,6 +974,35 @@ double GslipPronkNode::gamma_correction(int leg_index) const {
     return std::max(-gamma_limit_, std::min(gamma_limit_, correction));
 }
 
+double GslipPronkNode::gamma_openloop(int leg_index) const {
+    // Off is EXACTLY off: dir 0 adds literal 0.0 in apply_row, keeping every
+    // pre-existing run bit-identical.
+    if (gamma_acker_dir_ == 0.0) return 0.0;
+
+    // Gated like gamma_correction and steer_command, and for steer_command's
+    // documented reasons: a held offset during the settle twists the legs
+    // against the ground and fires check_ramp's template-time fiducial early.
+    if (!yaw_ref_set_) return 0.0;
+
+    // Same left/right partition as roll_sign/steer_sign. gamma > 0 abducts
+    // outward, so s * lr_sign < 0 marks the pair whose contacts move TOWARD
+    // the turn centre -- the inner pair, which takes lam_in (it runs the
+    // tighter circle; camber_roll.py --acker is the sign-convention source).
+    static const double lr_sign[4] = {+1.0, -1.0, -1.0, +1.0};
+    const double s = gamma_acker_dir_ > 0.0 ? 1.0 : -1.0;
+    const double signed_unit = s * lr_sign[leg_index];
+    const double mag = signed_unit < 0.0 ? gamma_acker_in_ : gamma_acker_out_;
+
+    const double ramp =
+        gamma_acker_ramp_ticks_ > 0
+            ? std::min(1.0, static_cast<double>(acker_ramp_count_) /
+                                gamma_acker_ramp_ticks_)
+            : 1.0;
+
+    const double u = signed_unit * mag * ramp;
+    return std::max(-gamma_acker_limit_, std::min(gamma_acker_limit_, u));
+}
+
 // -> the per-side beta differential to command, in radians, already clamped.
 //
 // One scalar for the whole robot; apply_row multiplies it by the leg's
@@ -1023,6 +1096,12 @@ void GslipPronkNode::advance_yaw_ref(double dt) {
 void GslipPronkNode::apply_row(const TemplateRow& row) {
     update_attitude(roll_, pitch_, yaw_);
 
+    // One tick of the open-loop camber entry ramp. Counted here, gated on
+    // yaw_ref_set_, so the settle contributes nothing and the ramp starts
+    // with the first stride tick.
+    if (yaw_ref_set_ && acker_ramp_count_ < gamma_acker_ramp_ticks_)
+        acker_ramp_count_++;
+
     // The radial reference is the spring's REST length, not the template's
     // compressed trajectory.
     //
@@ -1068,7 +1147,8 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
         const double s = steer_sign[i];
         cmd->theta = theta_ref;
         cmd->beta = row.beta * (1.0 + s * k_steer_) + s * u * gate;
-        cmd->gamma = row.gamma + gamma_correction(static_cast<int>(i));
+        cmd->gamma = row.gamma + gamma_openloop(static_cast<int>(i))
+                     + gamma_correction(static_cast<int>(i));
 
         // fx/fz and the inertia terms stay zero, so trq_cmd_base reduces to
         // J^T * [0, fy, 0] and the rest of the law is still a pure (K, B)
@@ -1213,6 +1293,21 @@ void GslipPronkNode::execute_running_phase() {
     update_attitude(roll_, pitch_, yaw_);
     yaw_ref_ = yaw_;
     yaw_ref_set_ = true;
+    if (gamma_acker_dir_ != 0.0) {
+        // Grep-able engagement announcement, same pattern as STANCE LABEL
+        // DUTY: the harness asserts this line per run, because a camber
+        // command that silently failed to engage looks exactly like "camber
+        // does not curve the path" -- the one wrong answer this experiment
+        // cannot afford.
+        RCLCPP_WARN(this->get_logger(),
+                    "ACKER CAMBER set: in=%.2f deg out=%.2f deg dir=%+.0f "
+                    "(ramp %d ms, clamp %.1f deg)",
+                    gamma_acker_in_ * 180.0 / M_PI,
+                    gamma_acker_out_ * 180.0 / M_PI,
+                    gamma_acker_dir_,
+                    gamma_acker_ramp_ticks_,
+                    gamma_acker_limit_ * 180.0 / M_PI);
+    }
     RCLCPP_INFO(this->get_logger(),
                 // f_lateral and settle_ticks are echoed because a parameter
                 // that never reaches the node looks EXACTLY like a parameter
