@@ -194,8 +194,10 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_limit", default_value="0.0873"),  # 5 deg
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
-        # side (gamma_acker_dir +1 left / -1 right) leans at gamma_acker_in,
-        # the outer pair at gamma_acker_out, both toward the turn centre.
+        # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
+        # both toward the turn centre. gamma_acker_dir +1 = lean RIGHT =
+        # RIGHT/CW turn (inner pair B,C); -1 mirrors. Measured, log s88 --
+        # this line originally said "+1 left" and was wrong.
         # Compute the pair offline with ackermann_pair() (LegWheel
         # cambered_return_map.py) -- the node applies, it does not derive.
         # dir 0.0 (default) is EXACTLY off: bit-identical to before the

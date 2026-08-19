@@ -405,7 +405,10 @@ private:
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
     double gamma_acker_out_;
-    double gamma_acker_dir_;    // +1 left turn / -1 right turn / 0 off
+    // +1 = inner pair RIGHT (B,C) = lean RIGHT = CW/right turn (kappa < 0);
+    // -1 mirrors; 0 off. Settled empirically 2026-08-20 (log s88) and by
+    // camber_roll.py's "lambda > 0 leans right" comment.
+    double gamma_acker_dir_;
     double gamma_acker_limit_;  // clamp on the open-loop term alone
     int gamma_acker_ramp_ticks_;
     // Ticks since the stride loop started, for the entry ramp. Counted in
