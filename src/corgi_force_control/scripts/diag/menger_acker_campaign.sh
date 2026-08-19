@@ -234,6 +234,15 @@ for COND in "$@"; do
           echo "  !! label shift requested but never announced -- run INVALID"
         fi ;;
     esac
+    case "$ARGS" in
+      *gamma_yaw_limit:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'GENTLE YAW CLAMP set'; then
+          echo "  CLAMP CONFIRMED:" \
+               "$(grep -o 'GENTLE YAW CLAMP set: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! yaw clamp requested but never announced -- run INVALID"
+        fi ;;
+    esac
   done
 done
 
