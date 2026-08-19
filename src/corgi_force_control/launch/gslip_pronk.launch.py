@@ -192,6 +192,9 @@ def generate_launch_description():
         DeclareLaunchArgument("d_roll", default_value="0.0"),
         DeclareLaunchArgument("d_yaw", default_value="0.0"),
         DeclareLaunchArgument("gamma_limit", default_value="0.0873"),  # 5 deg
+        # Separate clamp on the yaw term of gamma_correction alone (rad).
+        # 0 = off (bit-identical). ~0.0175 (1 deg) is the S89 C2 gentle hold.
+        DeclareLaunchArgument("gamma_yaw_limit", default_value="0.0"),
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
         # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
@@ -264,6 +267,7 @@ def generate_launch_description():
                 'd_roll': LaunchConfiguration('d_roll'),
                 'd_yaw': LaunchConfiguration('d_yaw'),
                 'gamma_limit': LaunchConfiguration('gamma_limit'),
+                'gamma_yaw_limit': LaunchConfiguration('gamma_yaw_limit'),
                 'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
                 'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
                 'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),

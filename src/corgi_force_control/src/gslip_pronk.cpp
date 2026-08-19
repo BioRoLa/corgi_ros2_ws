@@ -401,6 +401,13 @@ private:
     double k_yaw_;
     double d_yaw_;
     double gamma_limit_;   // rad, clamp on the correction
+    // Separate clamp on the YAW part of gamma_correction alone (rad).
+    // 0 = off, code path identical to before the parameter existed. The
+    // default yaw hold saturates the shared 5 deg gamma_limit_ in every
+    // baseline (log s87) and contaminates gamma; a hold clamped to ~1 deg
+    // CANNOT saturate into the commanded lean, and the antisymmetric
+    // Menger headline cancels what it adds (log s89, C2).
+    double gamma_yaw_limit_;
 
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
@@ -506,6 +513,7 @@ GslipPronkNode::GslipPronkNode()
       k_yaw_(0.15),
       d_yaw_(0.02),
       gamma_limit_(5.0 / 180.0 * M_PI),
+      gamma_yaw_limit_(0.0),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
@@ -577,6 +585,8 @@ GslipPronkNode::GslipPronkNode()
     k_yaw_ = this->declare_parameter<double>("k_yaw", k_yaw_);
     d_yaw_ = this->declare_parameter<double>("d_yaw", d_yaw_);
     gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
+    gamma_yaw_limit_ =
+        this->declare_parameter<double>("gamma_yaw_limit", gamma_yaw_limit_);
     gamma_acker_in_ =
         this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
     gamma_acker_out_ =
@@ -970,9 +980,16 @@ double GslipPronkNode::gamma_correction(int leg_index) const {
     const double wx = imu_.angular_velocity.x;  // roll rate
     const double wz = imu_.angular_velocity.z;  // yaw rate
 
+    double yaw_part = yaw_sign[leg_index] * (k_yaw_ * yaw_err + d_yaw_ * wz);
+    if (gamma_yaw_limit_ > 0.0) {
+        // Gentle hold (log s89, C2): the yaw term alone is clamped small
+        // enough that it cannot saturate into a commanded lean. 0 = off,
+        // identical code path to before the parameter existed.
+        yaw_part = std::max(-gamma_yaw_limit_,
+                            std::min(gamma_yaw_limit_, yaw_part));
+    }
     const double correction =
-        roll_sign[leg_index] * (k_roll_ * roll_ + d_roll_ * wx) +
-        yaw_sign[leg_index] * (k_yaw_ * yaw_err + d_yaw_ * wz);
+        roll_sign[leg_index] * (k_roll_ * roll_ + d_roll_ * wx) + yaw_part;
 
     return std::max(-gamma_limit_, std::min(gamma_limit_, correction));
 }
@@ -1310,6 +1327,15 @@ void GslipPronkNode::execute_running_phase() {
                     gamma_acker_dir_,
                     gamma_acker_ramp_ticks_,
                     gamma_acker_limit_ * 180.0 / M_PI);
+    }
+    if (gamma_yaw_limit_ > 0.0) {
+        // Same grep-able engagement pattern as ACKER CAMBER: a clamp that
+        // silently failed to engage looks exactly like "the floor did not
+        // move". Runs are NOT comparable to unclamped campaigns.
+        RCLCPP_WARN(this->get_logger(),
+                    "GENTLE YAW CLAMP set: +-%.2f deg on the yaw term alone "
+                    "(k_yaw=%.2f d_yaw=%.2f)",
+                    gamma_yaw_limit_ * 180.0 / M_PI, k_yaw_, d_yaw_);
     }
     RCLCPP_INFO(this->get_logger(),
                 // f_lateral and settle_ticks are echoed because a parameter
