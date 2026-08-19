@@ -263,6 +263,62 @@ void Leg::PointVelocity(Eigen::Vector3f v, Eigen::Vector3f w, RIM rim, float alp
     }
 }
 
+// ── Closed-wheel contact model (stage15 wheel mode) ─────────────────
+// Validated offline (stage15 analyser, log section 75). The wheel is
+// closed: contact sits on the rim circle of radius r_eff directly below
+// the hip in the leg-local frame, rotated about the ABAD axis by gamma
+// when camber_mode is on. The rolling term is gamma-independent
+// (n̂ × ρ = r_eff·x̂).
+
+void Leg::WheelContact(float beta_cont, float gamma, float gamma_d)
+{
+    // beta_cont: CONTINUOUS wheel angle (unwrapped by the pipeline) —
+    // only used as the ecc phase; never re-wrapped here.
+    this->beta = beta_cont;
+    this->gamma = gamma;
+    this->gamma_d = gamma_d;
+    float r_eff = this->r + this->R;
+    if (this->ecc_enabled)
+        r_eff += this->ecc_e * std::cos(this->beta + this->ecc_phi);
+    if (this->camber_mode) {
+        // offset y = ±hip_y_abad_axis; d_wheel arm + edge offset as in
+        // the leg-mode camber path (rotate_point_with_gamma).
+        this->contact_point = this->offset + rotate_point_with_gamma(0.0f, -r_eff);
+    } else {
+        // Sagittal wheel: offset y = legacy ±0.193, gamma ignored.
+        this->contact_point = this->offset + Eigen::Vector3f(0.0f, 0.0f, -r_eff);
+    }
+}
+
+void Leg::WheelVelocity(Eigen::Vector3f v, Eigen::Vector3f w, float spin)
+{
+    // spin: UNFLIPPED beta_dot (raw (vel_r+vel_l)/2, forward-positive for
+    // all four legs in sim wheel mode — the leg-mode right-side sign flip
+    // is wrong here and must not be applied by the caller).
+    this->beta_d = spin;
+    float r_eff = this->r + this->R;
+    float r_dot = 0.0f;
+    if (this->ecc_enabled) {
+        r_eff += this->ecc_e * std::cos(this->beta + this->ecc_phi);
+        r_dot  = -this->ecc_e * std::sin(this->beta + this->ecc_phi) * spin;
+    }
+    // Rolling term: gamma-independent (n̂ × ρ = r_eff·x̂), so it is added
+    // in the body frame outside the gamma rotation.
+    const Eigen::Vector3f rolling(-spin * r_eff, 0.0f, 0.0f);
+    if (this->camber_mode) {
+        // gamma_dot lever terms + ecc radial rate via the same
+        // value/derivative-consistent helper as the leg-mode camber path
+        // (z_2d = −r_eff, ż_2d = −ṙ).
+        this->contact_velocity = v + w.cross(this->contact_point)
+            + rotate_velocity_with_gamma(0.0f, -r_eff, 0.0f, -r_dot)
+            + rolling;
+    } else {
+        this->contact_velocity = v + w.cross(this->contact_point)
+            + Eigen::Vector3f(0.0f, 0.0f, -r_dot)
+            + rolling;
+    }
+}
+
 // ── Stage 1.5 camber-path implementations ───────────────────────────
 // Same 2-D linkage solution as the legacy paths, but the contact point
 // and velocity are rotated about the ABAD axis by gamma with the full

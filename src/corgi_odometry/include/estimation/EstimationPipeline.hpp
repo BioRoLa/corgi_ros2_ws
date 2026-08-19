@@ -99,6 +99,12 @@ private:
     int32_t prev_esekf_imu_sec_ = 0;
     int32_t prev_esekf_imu_nsec_ = 0;
     bool prev_esekf_time_valid_ = false;
+
+    // Wheel-mode per-leg beta unwrap state (CSV beta is wrapped to
+    // [0, 2π); the ecc phase needs the continuous wheel angle).
+    std::array<double, 4> wheel_beta_prev_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<double, 4> wheel_beta_offset_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<bool, 4>   wheel_beta_init_{{false, false, false, false}};
 };
 
 }  // namespace corgi

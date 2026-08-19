@@ -84,6 +84,11 @@ zupt:
 kinematics:
   camber_enabled: false
   radius_mode: legacy
+  # wheel_mode: closed-wheel contact path when a leg's theta is below
+  # wheel_theta_max_deg (ContactMap's leg-mode domain starts at 17 deg,
+  # above the achieved wheel closure ~16.2 deg). Off = legacy behaviour.
+  wheel_mode: false
+  wheel_theta_max_deg: 20.0
   rolling_radius_calibrated: 0.0
   hip_y_abad_axis: 0.12
   abad_axis_to_wheel_plane: 0.091675

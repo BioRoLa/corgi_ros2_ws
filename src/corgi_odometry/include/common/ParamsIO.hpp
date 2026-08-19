@@ -134,6 +134,9 @@ inline Params load_params(const std::string& yaml_path) {
         p.wheel_half_width         = detail::val(n, "wheel_half_width",
                                                  p.wheel_half_width);
         p.gamma_signs = detail::read_arr4f(n["gamma_signs"], p.gamma_signs);
+        p.wheel_mode          = detail::val(n, "wheel_mode", p.wheel_mode);
+        p.wheel_theta_max_deg = detail::val(n, "wheel_theta_max_deg",
+                                            p.wheel_theta_max_deg);
 
         if (auto e = n["eccentricity"]) {
             p.ecc_enabled = detail::val(e, "enabled", p.ecc_enabled);

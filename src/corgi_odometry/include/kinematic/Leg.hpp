@@ -74,6 +74,21 @@ class Leg : public LinkLegModel
     float ecc_e = 0.0f;    // eccentricity amplitude [m]
     float ecc_phi = 0.0f;  // phase [rad]
 
+    // ── Closed-wheel contact model (stage15 wheel mode) ─────────────
+    // No linkage FK: the closed wheel rolls on its rim of radius
+    // r_eff = r + R (+ ecc term when enabled). Camber on: contact =
+    // offset + rotate_point_with_gamma(0, −r_eff) (ABAD-axis rotation
+    // with the d_wheel arm, offset y = ±hip_y_abad_axis). Camber off:
+    // contact = offset + (0, 0, −r_eff) with legacy offset y (±0.193).
+    // WheelVelocity adds the gamma-independent rolling term
+    // (−spin·r_eff, 0, 0), spin = UNFLIPPED beta_dot (forward-positive
+    // for all four legs, adjudicated on sim wheel-mode data), plus the
+    // gamma_dot lever terms and the ecc radial rate when enabled.
+    // beta_cont must be the CONTINUOUS (unwrapped) wheel angle.
+    // Call WheelContact first, then WheelVelocity (uses contact_point).
+    void WheelContact(float beta_cont, float gamma, float gamma_d);
+    void WheelVelocity(Eigen::Vector3f v, Eigen::Vector3f w, float spin);
+
     private:
     /// d_wheel: lateral arm from ABAD axis to the contact edge [m].
     float wheel_offset_by_gamma() const;

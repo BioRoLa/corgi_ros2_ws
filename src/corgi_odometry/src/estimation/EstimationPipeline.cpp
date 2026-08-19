@@ -185,10 +185,51 @@ StepResult EstimationPipeline::step(
     observations.reserve(4);
     std::array<bool, 4> exclude_flags{};
 
+    const float wheel_theta_max_rad =
+        params_.wheel_theta_max_deg * static_cast<float>(M_PI) / 180.0f;
+
     for (int j = 0; j < 4; ++j) {
         bool is_right_side = (j == 1 || j == 2);
 
         float theta   = static_cast<float>(thetas[j]);
+
+        // ── Wheel mode (closed wheel below the closure threshold) ──
+        // ContactMap's leg-mode domain starts at theta = 17 deg — below
+        // the achieved wheel closure (~16.2 deg) every lookup returns
+        // NO_CONTACT and all leg updates die. Treat the leg as a closed
+        // wheel instead: contact from the GMO Schmitt state alone,
+        // continuous (unwrapped) beta for the ecc phase, UNFLIPPED spin
+        // (raw beta_dot is forward-positive for all four legs in sim
+        // wheel mode — the leg-mode right-side flip is wrong here).
+        if (params_.wheel_mode && theta < wheel_theta_max_rad) {
+            double b_raw = betas[j];
+            if (!wheel_beta_init_[j]) {
+                wheel_beta_init_[j] = true;
+                wheel_beta_offset_[j] = 0.0;
+            } else {
+                double db = b_raw - wheel_beta_prev_[j];
+                if (db < -M_PI)      wheel_beta_offset_[j] += 2.0 * M_PI;
+                else if (db > M_PI)  wheel_beta_offset_[j] -= 2.0 * M_PI;
+            }
+            wheel_beta_prev_[j] = b_raw;
+            float beta_cont = static_cast<float>(b_raw + wheel_beta_offset_[j]);
+
+            float spin    = static_cast<float>(( vel_r[j] + vel_l[j]) / 2.0);  // UNFLIPPED
+            float theta_d = static_cast<float>((-vel_r[j] + vel_l[j]) / 2.0);
+
+            float gamma = 0.0f, gamma_d = 0.0f;
+            if (params_.camber_enabled) {
+                gamma   = params_.gamma_signs[j] * static_cast<float>(gammas[j]);
+                gamma_d = params_.gamma_signs[j] * static_cast<float>(vel_h[j]);
+            }
+
+            bool in_contact = result.contacts[j];  // GMO Schmitt only, no ContactMap
+            observations.push_back(
+                {legs_[j], theta, theta_d, beta_cont, spin, G_POINT, 0.0f,
+                 in_contact, gamma, gamma_d, /*wheel=*/true});
+            exclude_flags[j] = !in_contact;
+            continue;
+        }
         float beta    = is_right_side
             ? -static_cast<float>(betas[j])
             :  static_cast<float>(betas[j]);
@@ -235,12 +276,18 @@ StepResult EstimationPipeline::step(
         for (int j = 0; j < 4; ++j) {
             if (!exclude_flags[j]) {
                 auto& o = observations[j];
-                // 9-arg call — keeps the diagnostic recomputation
-                // consistent with the actual ESEKF update (same gamma).
-                o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0,
-                                 o.gamma, o.gamma_d, 0);
-                o.leg->PointContact(o.rim, o.alpha);
-                o.leg->PointVelocity(v_zero, w_m, o.rim, o.alpha, true);
+                if (o.wheel) {
+                    // Closed-wheel diagnostic — same model as update_leg.
+                    o.leg->WheelContact(o.beta, o.gamma, o.gamma_d);
+                    o.leg->WheelVelocity(v_zero, w_m, o.beta_d);
+                } else {
+                    // 9-arg call — keeps the diagnostic recomputation
+                    // consistent with the actual ESEKF update (same gamma).
+                    o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0,
+                                     o.gamma, o.gamma_d, 0);
+                    o.leg->PointContact(o.rim, o.alpha);
+                    o.leg->PointVelocity(v_zero, w_m, o.rim, o.alpha, true);
+                }
                 result.z_avg += -o.leg->contact_velocity;
                 n_contact++;
             }

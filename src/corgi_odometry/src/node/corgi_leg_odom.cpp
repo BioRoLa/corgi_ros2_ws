@@ -535,6 +535,45 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     // --- Extract theta (opening angle) ---
     float theta   = static_cast<float>(module.theta);
 
+    // ── Wheel mode (closed wheel below the closure threshold) ──
+    // ContactMap's leg-mode domain starts at theta = 17 deg — below the
+    // achieved wheel closure (~16.2 deg) every lookup returns NO_CONTACT
+    // and all leg updates die. Treat the leg as a closed wheel instead:
+    // contact from the GMO Schmitt state alone, continuous (unwrapped)
+    // beta for the ecc phase, UNFLIPPED spin (raw beta_dot is forward-
+    // positive for all four legs in sim wheel mode — the leg-mode
+    // right-side flip is wrong here).
+    const float wheel_theta_max_rad =
+        params_.wheel_theta_max_deg * static_cast<float>(M_PI) / 180.0f;
+    if (params_.wheel_mode && theta < wheel_theta_max_rad) {
+        double b_raw = module.beta;
+        if (!wheel_beta_init_[leg_idx]) {
+            wheel_beta_init_[leg_idx] = true;
+            wheel_beta_offset_[leg_idx] = 0.0;
+        } else {
+            double db = b_raw - wheel_beta_prev_[leg_idx];
+            if (db < -M_PI)      wheel_beta_offset_[leg_idx] += 2.0 * M_PI;
+            else if (db > M_PI)  wheel_beta_offset_[leg_idx] -= 2.0 * M_PI;
+        }
+        wheel_beta_prev_[leg_idx] = b_raw;
+        float beta_cont = static_cast<float>(b_raw + wheel_beta_offset_[leg_idx]);
+
+        float spin    = static_cast<float>(( module.velocity_r + module.velocity_l) / 2.0);  // UNFLIPPED
+        float theta_d = static_cast<float>((-module.velocity_r + module.velocity_l) / 2.0);
+
+        float gamma = 0.0f, gamma_d = 0.0f;
+        if (params_.camber_enabled) {
+            gamma   = params_.gamma_signs[leg_idx] * static_cast<float>(module.gamma);
+            gamma_d = params_.gamma_signs[leg_idx] * static_cast<float>(module.velocity_h);
+        }
+
+        bool in_contact = leg_contact_state_[leg_idx];  // GMO Schmitt only
+        return estimation_model::LegObservation{
+            leg, theta, theta_d, beta_cont, spin, G_POINT, 0.0f, in_contact,
+            gamma, gamma_d, /*wheel=*/true
+        };
+    }
+
     // --- Extract beta (rotation angle) with sign convention ---
     // Right-side legs (RF=1, RH=2) have negated beta
     bool is_right_side = (leg_idx == 1 || leg_idx == 2);

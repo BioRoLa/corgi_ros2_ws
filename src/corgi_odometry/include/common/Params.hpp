@@ -107,6 +107,16 @@ struct Params {
     // local tilt for every leg → all +1.
     std::array<float, 4> gamma_signs = {1.0f, 1.0f, 1.0f, 1.0f};
 
+    // Wheel mode (closed wheel, stage15): when true AND a leg's measured
+    // theta < wheel_theta_max_deg, that leg is treated as a closed wheel:
+    // ContactMap is skipped (its domain starts at theta = 17 deg, below
+    // the achieved wheel closure ~16.2 deg), contact comes from the GMO
+    // Schmitt state alone, and the contact point/velocity use the rim
+    // model (offset + R_x(gamma)·(0, sy·d_wheel, −r_eff), rolling term
+    // −spin·r_eff·x̂ with spin = UNFLIPPED beta_dot).
+    bool  wheel_mode = false;
+    float wheel_theta_max_deg = 20.0f;
+
     // k=1 rolling-radius modulation r(β) = r0 + e·cos(β + φ), per leg.
     // Only active when ecc_enabled AND camber_enabled.
     bool ecc_enabled = false;

@@ -188,6 +188,12 @@ private:
     /// contact_beta += (beta_d + omega_y) * dt
     std::array<float, 4> contact_beta_{{0.f, 0.f, 0.f, 0.f}};
 
+    // Wheel-mode per-leg beta unwrap state (measured beta is wrapped;
+    // the ecc phase needs the continuous wheel angle).
+    std::array<double, 4> wheel_beta_prev_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<double, 4> wheel_beta_offset_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<bool, 4>   wheel_beta_init_{{false, false, false, false}};
+
     /// Whether the ESEKF has been initialized (on first triggered tick)
     bool esekf_initialized_ = false;
 

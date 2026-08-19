@@ -168,12 +168,6 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     //    "observed body velocity" from encoder data alone.
     // ----------------------------------------------------------
 
-    // Forward kinematics + contact point (9-arg: gamma is zero unless
-    // camber is enabled; H is generic in r_c so it needs no change)
-    obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0,
-                       obs.gamma, obs.gamma_d, 0);
-    obs.leg->PointContact(obs.rim, obs.alpha);
-
     // Use full bias-corrected angular velocity for ω×r contact point correction.
     // Previously only w_y was used (pitch-only), which left (ω_x × r_cz) and
     // (ω_z × r_cx) unmodelled in z_leg_y, causing ~50-200 mm/s systematic Vy bias.
@@ -181,7 +175,20 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     // making all three gyro biases observable and keeping the filter consistent.
     Eigen::Vector3f w_corrected = w_m - x_nom_.bw;
     Eigen::Vector3f v_zero = Eigen::Vector3f::Zero();
-    obs.leg->PointVelocity(v_zero, w_corrected, obs.rim, obs.alpha, true);
+
+    if (obs.wheel) {
+        // Closed-wheel model (stage15 wheel mode): no linkage FK. beta is
+        // the continuous wheel angle, beta_d the unflipped spin.
+        obs.leg->WheelContact(obs.beta, obs.gamma, obs.gamma_d);
+        obs.leg->WheelVelocity(v_zero, w_corrected, obs.beta_d);
+    } else {
+        // Forward kinematics + contact point (9-arg: gamma is zero unless
+        // camber is enabled; H is generic in r_c so it needs no change)
+        obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0,
+                           obs.gamma, obs.gamma_d, 0);
+        obs.leg->PointContact(obs.rim, obs.alpha);
+        obs.leg->PointVelocity(v_zero, w_corrected, obs.rim, obs.alpha, true);
+    }
 
     // z_leg = -contact_velocity(v=0) = "observed" body velocity
     Eigen::Vector3f z_leg = -obs.leg->contact_velocity;

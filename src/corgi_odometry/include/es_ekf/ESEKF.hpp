@@ -92,6 +92,12 @@ struct LegObservation {
     // existing positional aggregate inits stay valid.
     float gamma   = 0.0f; // ABAD tilt [rad]
     float gamma_d = 0.0f; // ABAD tilt rate [rad/s]
+    // Closed-wheel observation (kinematics.wheel_mode + theta below the
+    // closure threshold): update_leg uses WheelContact/WheelVelocity
+    // instead of the linkage FK. In this mode beta is the CONTINUOUS
+    // (unwrapped) wheel angle, beta_d the UNFLIPPED spin, and rim/alpha
+    // are ignored (rim set to G_POINT as a non-NO_CONTACT placeholder).
+    bool wheel = false;
 };
 
 // ============================================================

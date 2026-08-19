@@ -1,0 +1,92 @@
+# stage15 replay base (camber corrected): derived from tuned_offline_camber.yaml, max_processed
+# raised to cover the full 32.5 s wheel-mode record -- the
+# 12000-row default replays only the pre-roll standing phase
+# and masks rolling-odometry drift entirely.
+# ─────────────────────────────────────────────────────────────────
+# Stage 1.5 camber-corrected offline config — 2026-08-19
+#   Copy of tuned_offline_example.yaml + `kinematics:` block.
+#
+#   Provenance of calibrated numbers (all SIM, roll contact state,
+#   kp 500, stage15 analyser, uncalibrated closure θ_ach≈16.2°):
+#   - rolling_radius_calibrated = 0.14482 m — effective rolling radius,
+#     lambda- AND kp-independent (the geometric rolling_radius(λ)
+#     formula does NOT apply; no λ-dependent radius is implemented).
+#   - gamma_signs all +1 — adjudicated 2026-08-19: raw motor gamma is
+#     the local tilt for every leg in sim wheel mode.
+#   - eccentricity (e, phi) per leg A/B/C/D = LF/RF/RH/LH, constraint
+#     convention r(β) = r0 + e·cos(β+φ) — stage15 fit, roll, kp 500.
+#     Shipped as values but enabled: false (P5 verdict pending).
+# ─────────────────────────────────────────────────────────────────
+
+# ES-EKF noise tuning
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
+
+# Disturbance observer / encoder filter
+observer:
+  cutoff_freq:         15.0   # Observer LPF [Hz]
+  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+
+# Schmitt-trigger contact thresholds
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+# Logic switches
+simulate_imu_noise: true
+use_dynamic_dt:     true
+use_esekf_state:    true
+quiet:              true
+
+# Offline processing
+offline:
+  csv_filename:   s15_s15imu_lam0_kp500_r1_pl   # stage15 wheel-mode replay record
+  start_index:    0
+  max_processed:  40000
+  rmse_skip:      0
+  enable_logging: false
+  log_details:    false
+  imu_noise_seed: 42
+
+# Ground-truth velocity low-pass filter
+gt_velocity_lpf_cutoff: 10.0
+
+# ZUPT OFF: a rolling robot with a quiet gyro violates ZUPT's
+# stationarity assumption (v=0 injection while GT rolls at ~0.3 m/s).
+zupt:
+  enabled: false
+
+# ─────────────────────────────────────────────────────────────────
+# Kinematics — Stage 1.5 camber correction (ACTIVE here) + wheel mode
+# (closed-wheel contact path; achieved closure ~16.2 deg is below
+# ContactMap's 17 deg leg-mode domain)
+# ─────────────────────────────────────────────────────────────────
+kinematics:
+  camber_enabled: true
+  wheel_mode: true
+  wheel_theta_max_deg: 20.0
+  # calibrated: rim radius = rolling_radius_calibrated (sim, roll, kp 500)
+  radius_mode: calibrated
+  rolling_radius_calibrated: 0.14482
+  # ABAD frame (sim, CorgiRobotABAD.proto): hinge axis |y| = 0.12;
+  # d_wheel = abad_axis_to_wheel_plane ± wheel_half_width (edge offset by
+  # sign of sin γ). Never summed with the legacy 0.193 leg-y offset.
+  hip_y_abad_axis: 0.12
+  abad_axis_to_wheel_plane: 0.091675
+  wheel_half_width: 0.02
+  # Adjudicated 2026-08-19: raw motor gamma = local tilt for every leg (sim)
+  gamma_signs: [1, 1, 1, 1]
+  # k=1 rolling-radius modulation r(β) = r0 + e·cos(β+φ).
+  # Values: stage15 fit (sim, roll, kp 500, uncalibrated closure
+  # θ_ach≈16.2°); leg order A/B/C/D = LF/RF/RH/LH. OFF until P5 verdict.
+  eccentricity:
+    enabled: false
+    e:       [0.00129, 0.00113, 0.00111, 0.00128]   # [m]
+    phi_deg: [-175.9, 168.2, 168.9, -175.5]         # [deg]
