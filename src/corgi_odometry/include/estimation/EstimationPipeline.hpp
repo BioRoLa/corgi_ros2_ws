@@ -66,7 +66,12 @@ public:
     void override_processed_with_esekf(DataProcessor::ProcessedData& processed) const;
 
 private:
-    static Leg createLeg(double x_sign, double y_sign);
+    /// Leg factory. Non-static: reads params_ for the radius switch
+    /// (legacy/design/calibrated) and camber geometry. leg_idx (0..3 =
+    /// LF,RF,RH,LH) selects per-leg calibration values.
+    /// NOTE: params_ is declared before the legs so it is initialized
+    /// first — do not reorder these members.
+    Leg createLeg(double x_sign, double y_sign, int leg_idx) const;
 
     Params params_;
 

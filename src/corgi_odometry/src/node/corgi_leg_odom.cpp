@@ -626,14 +626,18 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd& disturbance) 
 // Leg factory
 // ============================================================
 
-Leg LegOdometryNode::createLeg(double x_sign, double y_sign) {
+Leg LegOdometryNode::createLeg(double x_sign, double y_sign, int leg_idx) const {
     using corgi::Config;
+    (void)leg_idx;  // reserved for per-leg calibration (eccentricity)
+    // R = 0.1 (linkage joint circle) never changes; the radius switch acts
+    // on little-r only. r_skin(): legacy 0.019 / design 0.045 / calibrated
+    // rolling_radius_calibrated − 0.1 (stage15 fit: sim, roll state, kp 500).
     return Leg{
         Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET,
                         y_sign * Config::LEG_Y_OFFSET,
                         Config::LEG_Z_OFFSET),
-        Config::WHEEL_RADIUS,
-        Config::TIRE_SKIN_RADIUS
+        static_cast<float>(Config::WHEEL_RADIUS),
+        params_.r_skin()
     };
 }
 

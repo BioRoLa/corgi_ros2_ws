@@ -79,17 +79,26 @@ private:
         Leg* leg, int leg_idx);
 
     // ============================================================
-    // Leg factory
+    // YAML config (loaded once at startup via yaml-cpp)
+    // NOTE: declared BEFORE the leg models — createLeg() reads params_
+    // during their default member initialization (radius switch + camber
+    // geometry). Do not reorder.
     // ============================================================
-    static Leg createLeg(double x_sign, double y_sign);
+    corgi::Params params_;
+
+    // ============================================================
+    // Leg factory. Non-static: reads params_. leg_idx (0..3 =
+    // LF,RF,RH,LH) selects per-leg calibration values.
+    // ============================================================
+    Leg createLeg(double x_sign, double y_sign, int leg_idx) const;
 
     // ============================================================
     // Leg kinematic models  (order: LF, RF, RH, LH)
     // ============================================================
-    Leg lf_leg_ = createLeg( 1,  1);
-    Leg rf_leg_ = createLeg( 1, -1);
-    Leg rh_leg_ = createLeg(-1, -1);
-    Leg lh_leg_ = createLeg(-1,  1);
+    Leg lf_leg_ = createLeg( 1,  1, 0);
+    Leg rf_leg_ = createLeg( 1, -1, 1);
+    Leg rh_leg_ = createLeg(-1, -1, 2);
+    Leg lh_leg_ = createLeg(-1,  1, 3);
 
     /// Leg pointers in indexed order [LF, RF, RH, LH]
     std::array<Leg*, 4> legs_ = {&lf_leg_, &rf_leg_, &rh_leg_, &lh_leg_};
@@ -160,11 +169,6 @@ private:
     double contact_rm_threshold_low_    = 15.0;
     double contact_beta_threshold_high_ = 10.0;
     double contact_beta_threshold_low_  =  1.0;
-
-    // ============================================================
-    // YAML config (loaded once at startup via yaml-cpp)
-    // ============================================================
-    corgi::Params params_;
 
     // ============================================================
     // Processing components — disturbance observer

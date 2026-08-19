@@ -3,22 +3,26 @@
 
 namespace corgi {
 
-Leg EstimationPipeline::createLeg(double x_sign, double y_sign) {
+Leg EstimationPipeline::createLeg(double x_sign, double y_sign, int leg_idx) const {
+    (void)leg_idx;  // reserved for per-leg calibration (eccentricity)
+    // R = 0.1 (linkage joint circle) never changes; the radius switch acts
+    // on little-r only. r_skin(): legacy 0.019 / design 0.045 / calibrated
+    // rolling_radius_calibrated − 0.1 (stage15 fit: sim, roll state, kp 500).
     return Leg{
         Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET,
                         y_sign * Config::LEG_Y_OFFSET,
                         Config::LEG_Z_OFFSET),
         static_cast<float>(Config::WHEEL_RADIUS),
-        static_cast<float>(Config::TIRE_SKIN_RADIUS)
+        params_.r_skin()
     };
 }
 
 EstimationPipeline::EstimationPipeline(const Params& params)
     : params_(params),
-      lf_leg_(createLeg( 1,  1)),
-      rf_leg_(createLeg( 1, -1)),
-      rh_leg_(createLeg(-1, -1)),
-      lh_leg_(createLeg(-1,  1)),
+      lf_leg_(createLeg( 1,  1, 0)),
+      rf_leg_(createLeg( 1, -1, 1)),
+      rh_leg_(createLeg(-1, -1, 2)),
+      lh_leg_(createLeg(-1,  1, 3)),
       observer_(Config::DT,
                 params.observer_cutoff_freq,
                 Config::DOF,

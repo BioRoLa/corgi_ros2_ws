@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <array>
 #include <string>
 #include <cstddef>
 #include <cstdint>
@@ -71,6 +72,54 @@ struct Params {
     bool   log_details       = false;
     uint64_t imu_noise_seed  = 42;
     bool   use_dynamic_dt    = true;   // use IMU timestamps for ESEKF dt (offline)
+
+    // ── Kinematics (Stage 1.5 camber correction) ───────────────
+    // Defaults preserve legacy behaviour exactly: camber off, legacy
+    // radius, sagittal-only contact model.  Old YAMLs (no `kinematics:`
+    // block) load unchanged.
+    //
+    // camber_enabled: rotate the contact point/velocity about the ABAD
+    //   axis by the measured per-leg gamma (ABAD-axis frame: leg offset
+    //   y becomes ±hip_y_abad_axis and the wheel-plane arm moves into
+    //   d_wheel = abad_axis_to_wheel_plane ± wheel_half_width).
+    //   Never sum the legacy 0.193 with abad_axis_to_wheel_plane.
+    bool camber_enabled = false;
+
+    // radius_mode: "legacy" | "design" | "calibrated"
+    //   legacy     → r_skin = 0.019  (Config::TIRE_SKIN_RADIUS, rim 0.119)
+    //   design     → r_skin = 0.045  (LegWheel design outer 0.145)
+    //   calibrated → r_skin = rolling_radius_calibrated − 0.1
+    // R = 0.1 (Config::WHEEL_RADIUS) is the linkage joint circle and
+    // never changes.
+    std::string radius_mode = "legacy";
+    // Effective rolling radius from offline calibration [m].
+    // 0.14482 = stage15 fit (sim, roll state, kp 500) — set via YAML;
+    // struct default 0 forces an explicit value when mode=calibrated.
+    float rolling_radius_calibrated = 0.0f;
+
+    // ABAD frame geometry [m] (sim, CorgiRobotABAD.proto)
+    float hip_y_abad_axis         = 0.12f;      // |y| of ABAD hinge axis
+    float abad_axis_to_wheel_plane = 0.091675f; // axis → wheel mid-plane arm
+    float wheel_half_width        = 0.02f;      // half wheel width (edge offset)
+
+    // Per-leg gamma sign map, order A/B/C/D = LF/RF/RH/LH.
+    // Adjudicated 2026-08-19 (sim wheel mode): raw motor gamma is the
+    // local tilt for every leg → all +1.
+    std::array<float, 4> gamma_signs = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    // k=1 rolling-radius modulation r(β) = r0 + e·cos(β + φ), per leg.
+    // Only active when ecc_enabled AND camber_enabled.
+    bool ecc_enabled = false;
+    std::array<float, 4> ecc_e       = {0.0f, 0.0f, 0.0f, 0.0f};  // [m]
+    std::array<float, 4> ecc_phi_deg = {0.0f, 0.0f, 0.0f, 0.0f};  // [deg]
+
+    /// Little-r (tire skin radius) for Leg construction per radius_mode.
+    /// Rolling rim radius = r_skin + R (R = 0.1 linkage joint circle).
+    float r_skin() const {
+        if (radius_mode == "design")     return 0.045f;   // → rim 0.145
+        if (radius_mode == "calibrated") return rolling_radius_calibrated - 0.1f;
+        return 0.019f;                                    // legacy → rim 0.119
+    }
 
     // ── GT velocity filter ──────────────────────────────────────
     double gt_velocity_lpf_cutoff = 10.0;  // [Hz]

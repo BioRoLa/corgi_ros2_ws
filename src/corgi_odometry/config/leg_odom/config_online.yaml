@@ -69,3 +69,27 @@ zupt:
   enabled:      true
   sigma_vec:    [0.01, 0.01, 0.01]
   gyro_thresh:  0.3
+
+# ─────────────────────────────────────────────────────────────────
+# Kinematics — Stage 1.5 camber correction (defaults = legacy, all off)
+# camber_enabled: rotate contact point/velocity about the ABAD axis by
+#   measured per-leg gamma. When on, leg y offset uses hip_y_abad_axis
+#   (0.12) and the wheel-plane arm moves into
+#   d_wheel = abad_axis_to_wheel_plane ± wheel_half_width — never summed
+#   with the legacy 0.193.
+# radius_mode: legacy (rim 0.119) | design (0.145) | calibrated
+#   (rolling_radius_calibrated; stage15 offline fit — sim, roll state, kp 500).
+# gamma_signs order A/B/C/D = LF/RF/RH/LH.
+# ─────────────────────────────────────────────────────────────────
+kinematics:
+  camber_enabled: false
+  radius_mode: legacy
+  rolling_radius_calibrated: 0.0
+  hip_y_abad_axis: 0.12
+  abad_axis_to_wheel_plane: 0.091675
+  wheel_half_width: 0.02
+  gamma_signs: [1, 1, 1, 1]
+  eccentricity:
+    enabled: false
+    e:       [0.0, 0.0, 0.0, 0.0]
+    phi_deg: [0.0, 0.0, 0.0, 0.0]

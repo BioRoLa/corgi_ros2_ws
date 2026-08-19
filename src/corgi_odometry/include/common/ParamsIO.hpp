@@ -25,6 +25,15 @@ inline T val(const YAML::Node& node, const std::string& key, T def) {
     return def;
 }
 
+/// Read a 4-element YAML sequence into a std::array<float, 4>.
+inline std::array<float, 4> read_arr4f(const YAML::Node& node,
+                                       const std::array<float, 4>& fallback) {
+    if (!node || !node.IsSequence() || node.size() != 4)
+        return fallback;
+    return {node[0].as<float>(), node[1].as<float>(),
+            node[2].as<float>(), node[3].as<float>()};
+}
+
 }  // namespace detail
 
 /**
@@ -98,6 +107,39 @@ inline Params load_params(const std::string& yaml_path) {
         p.log_details    = detail::val(n, "log_details",    p.log_details);
         p.imu_noise_seed = detail::val(n, "imu_noise_seed", p.imu_noise_seed);
         p.use_dynamic_dt = detail::val(n, "use_dynamic_dt", p.use_dynamic_dt);
+    }
+
+    // ── Kinematics (Stage 1.5 camber correction) ───────────────
+    // Absent block → compiled defaults (legacy behaviour, everything off).
+    if (auto n = root["kinematics"]) {
+        p.camber_enabled = detail::val(n, "camber_enabled", p.camber_enabled);
+        p.radius_mode    = detail::val<std::string>(n, "radius_mode", p.radius_mode);
+        if (p.radius_mode != "legacy" && p.radius_mode != "design" &&
+            p.radius_mode != "calibrated") {
+            throw std::runtime_error(
+                "kinematics.radius_mode must be legacy|design|calibrated, got: " +
+                p.radius_mode);
+        }
+        p.rolling_radius_calibrated = detail::val(n, "rolling_radius_calibrated",
+                                                  p.rolling_radius_calibrated);
+        if (p.radius_mode == "calibrated" && p.rolling_radius_calibrated <= 0.1f) {
+            throw std::runtime_error(
+                "kinematics.radius_mode=calibrated requires "
+                "rolling_radius_calibrated > 0.1 (R of linkage joint circle)");
+        }
+        p.hip_y_abad_axis          = detail::val(n, "hip_y_abad_axis",
+                                                 p.hip_y_abad_axis);
+        p.abad_axis_to_wheel_plane = detail::val(n, "abad_axis_to_wheel_plane",
+                                                 p.abad_axis_to_wheel_plane);
+        p.wheel_half_width         = detail::val(n, "wheel_half_width",
+                                                 p.wheel_half_width);
+        p.gamma_signs = detail::read_arr4f(n["gamma_signs"], p.gamma_signs);
+
+        if (auto e = n["eccentricity"]) {
+            p.ecc_enabled = detail::val(e, "enabled", p.ecc_enabled);
+            p.ecc_e       = detail::read_arr4f(e["e"],       p.ecc_e);
+            p.ecc_phi_deg = detail::read_arr4f(e["phi_deg"], p.ecc_phi_deg);
+        }
     }
 
     // ── GT velocity filter ──────────────────────────────────────
