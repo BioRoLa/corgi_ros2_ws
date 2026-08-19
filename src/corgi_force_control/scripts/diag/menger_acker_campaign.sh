@@ -18,6 +18,11 @@
 # Env:     RUNS (default 3), GAIT_WALL (default 200), SETTLE_WALL (default 45),
 #          RECORD_IMU=1 -> run 1 of lam0 and lam5_pos also records the
 #          Stage 1.5 IMU npz (record_camber_imu.py, trigger-anchored).
+#          EXTRA_ARGS -> appended verbatim to every launch (word-split), e.g.
+#          EXTRA_ARGS='stance_label_shift_s:=0.066' for the S89 C1 phase A/B.
+#          Runs with EXTRA_ARGS are NOT comparable to unmodified campaigns --
+#          use a fresh BASE_OUT. If it contains stance_label_shift_s, the
+#          shift's own WARN is asserted like the ACKER announcement.
 #
 # lam0_default runs the FEEDBACK DEFAULTS (k_yaw 0.15): it is the
 # bit-identity check against s57's banked numbers (chord 0.216-0.253 m/s,
@@ -116,7 +121,7 @@ verify_dead() {
 }
 
 for COND in "$@"; do
-  ARGS=$(cond_args "$COND")
+  ARGS="$(cond_args "$COND")${EXTRA_ARGS:+ $EXTRA_ARGS}"
   OUT="$BASE_OUT/$COND"
   mkdir -p "$OUT"
   echo "################ CONDITION $COND ($ARGS) ################"
@@ -218,6 +223,15 @@ for COND in "$@"; do
       *)
         if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'ACKER CAMBER set'; then
           echo "  !! baseline run logged ACKER engagement -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      *stance_label_shift_s:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'STANCE LABELS SHIFTED'; then
+          echo "  SHIFT CONFIRMED:" \
+               "$(grep -o 'STANCE LABELS SHIFTED by [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! label shift requested but never announced -- run INVALID"
         fi ;;
     esac
   done
