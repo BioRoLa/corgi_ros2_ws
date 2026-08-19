@@ -640,7 +640,6 @@ void LegOdometryNode::publish_contact_state(const Eigen::VectorXd& disturbance) 
 
 Leg LegOdometryNode::createLeg(double x_sign, double y_sign, int leg_idx) const {
     using corgi::Config;
-    (void)leg_idx;  // reserved for per-leg calibration (eccentricity)
     // R = 0.1 (linkage joint circle) never changes; the radius switch acts
     // on little-r only. r_skin(): legacy 0.019 / design 0.045 / calibrated
     // rolling_radius_calibrated − 0.1 (stage15 fit: sim, roll state, kp 500).
@@ -662,6 +661,15 @@ Leg LegOdometryNode::createLeg(double x_sign, double y_sign, int leg_idx) const 
         leg.set_camber_mode(true);
         leg.set_abad_geometry(params_.abad_axis_to_wheel_plane,
                               params_.wheel_half_width);
+        // k=1 eccentricity (config-gated: requires camber_enabled too).
+        // Per-leg values, order A/B/C/D = LF/RF/RH/LH (stage15 fit: sim,
+        // roll state, kp 500).
+        if (params_.ecc_enabled) {
+            leg.set_eccentricity(
+                true,
+                params_.ecc_e[leg_idx],
+                params_.ecc_phi_deg[leg_idx] * static_cast<float>(M_PI) / 180.0f);
+        }
     }
     return leg;
 }

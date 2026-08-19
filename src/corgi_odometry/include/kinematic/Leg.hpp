@@ -60,6 +60,20 @@ class Leg : public LinkLegModel
     float d_axis_to_wheel_plane = 0.091675f;  // ABAD axis → wheel mid-plane [m]
     float wheel_half_width = 0.02f;           // edge offset magnitude [m]
 
+    // k=1 rolling-radius modulation r(β) = r_base + e·cos(β + φ), with the
+    // matching radial rate ṙ = −e·sin(β + φ)·β̇ in the contact velocity.
+    // β is the continuous beta passed to Calculate (never re-wrapped).
+    // Only applied on the camber path when ecc enabled (config-gated:
+    // requires kinematics.eccentricity.enabled AND camber_enabled).
+    void set_eccentricity(bool enabled, float e, float phi_rad) {
+        ecc_enabled = enabled;
+        ecc_e = e;
+        ecc_phi = phi_rad;
+    }
+    bool ecc_enabled = false;
+    float ecc_e = 0.0f;    // eccentricity amplitude [m]
+    float ecc_phi = 0.0f;  // phase [rad]
+
     private:
     /// d_wheel: lateral arm from ABAD axis to the contact edge [m].
     float wheel_offset_by_gamma() const;

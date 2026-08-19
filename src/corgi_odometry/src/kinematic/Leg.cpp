@@ -271,6 +271,10 @@ void Leg::PointVelocity(Eigen::Vector3f v, Eigen::Vector3f w, RIM rim, float alp
 
 void Leg::PointContactCamber(RIM rim, float alpha) {
     float rim_radius = rim == G_POINT? this->r : this->r + this->R;
+    // k=1 eccentricity: r(β) = r_base + e·cos(β + φ), β continuous (as
+    // passed to Calculate, no re-wrap). Config-gated, off by default.
+    if (this->ecc_enabled)
+        rim_radius += this->ecc_e * std::cos(this->beta + this->ecc_phi);
     std::complex<float> rim_pc = std::polar((float) rim_radius, (float)(M_PI_F + alpha));
     float x_2d = 0.0f;
     float z_2d = 0.0f;
@@ -318,6 +322,10 @@ void Leg::PointContactCamber(RIM rim, float alpha) {
 void Leg::PointVelocityCamber(Eigen::Vector3f v, Eigen::Vector3f w, RIM rim,
                               float alpha, bool inbody_coord) {
     float rim_radius = rim == G_POINT? this->r : this->r + this->R;
+    // k=1 eccentricity: same r(β) modulation as PointContactCamber so the
+    // value/derivative pair stays consistent (radial rate added below).
+    if (this->ecc_enabled)
+        rim_radius += this->ecc_e * std::cos(this->beta + this->ecc_phi);
     if (this->offset(1) < 0) link_w = O2_w_; // right side leg, left side lower rim
     else link_w = O2_w;
     rim_p = std::polar((float) rim_radius, (float)(M_PI_F + alpha));
@@ -382,6 +390,16 @@ void Leg::PointVelocityCamber(Eigen::Vector3f v, Eigen::Vector3f w, RIM rim,
             return;
         }
         break;
+    }
+    // k=1 eccentricity radial rate: ṙ = −e·sin(β + φ)·β̇ along the radial
+    // contact direction (matches the r(β) modulation above).
+    if (this->ecc_enabled) {
+        const float r_rate = -this->ecc_e
+            * std::sin(this->beta + this->ecc_phi) * this->beta_d;
+        const std::complex<float> radial_unit =
+            std::polar(1.f, (float)(M_PI_F + alpha));
+        x_2d_d += r_rate * radial_unit.imag();
+        z_2d_d += r_rate * radial_unit.real();
     }
     this->contact_velocity = v + w.cross(this->contact_point)
         + rotate_velocity_with_gamma(x_2d, z_2d, x_2d_d, z_2d_d);
