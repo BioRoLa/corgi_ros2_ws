@@ -168,8 +168,10 @@ void ESEKF::update_leg(LegObservation& obs, const Eigen::Vector3f& w_m,
     //    "observed body velocity" from encoder data alone.
     // ----------------------------------------------------------
 
-    // Forward kinematics + contact point
-    obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0);
+    // Forward kinematics + contact point (9-arg: gamma is zero unless
+    // camber is enabled; H is generic in r_c so it needs no change)
+    obs.leg->Calculate(obs.theta, obs.theta_d, 0, obs.beta, obs.beta_d, 0,
+                       obs.gamma, obs.gamma_d, 0);
     obs.leg->PointContact(obs.rim, obs.alpha);
 
     // Use full bias-corrected angular velocity for ω×r contact point correction.

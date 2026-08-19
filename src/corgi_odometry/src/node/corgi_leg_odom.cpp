@@ -573,8 +573,20 @@ estimation_model::LegObservation LegOdometryNode::build_leg_observation(
     // --- Contact flag from Schmitt trigger ---
     bool in_contact = leg_contact_state_[leg_idx] && (rim != NO_CONTACT);
 
+    // --- Stage 1.5 camber: measured ABAD tilt gamma and rate ---
+    // Raw motor gamma is the local tilt for every leg (adjudicated
+    // 2026-08-19, sim wheel mode → gamma_signs all +1, configurable).
+    // gamma_d comes from the hip motor velocity (velocity_h).
+    // Zeroed unless camber_enabled so the legacy path is untouched.
+    float gamma = 0.0f, gamma_d = 0.0f;
+    if (params_.camber_enabled) {
+        gamma   = params_.gamma_signs[leg_idx] * static_cast<float>(module.gamma);
+        gamma_d = params_.gamma_signs[leg_idx] * static_cast<float>(module.velocity_h);
+    }
+
     return estimation_model::LegObservation{
-        leg, theta, theta_d, beta, beta_d, rim, alpha, in_contact
+        leg, theta, theta_d, beta, beta_d, rim, alpha, in_contact,
+        gamma, gamma_d
     };
 }
 
@@ -632,13 +644,26 @@ Leg LegOdometryNode::createLeg(double x_sign, double y_sign, int leg_idx) const 
     // R = 0.1 (linkage joint circle) never changes; the radius switch acts
     // on little-r only. r_skin(): legacy 0.019 / design 0.045 / calibrated
     // rolling_radius_calibrated − 0.1 (stage15 fit: sim, roll state, kp 500).
-    return Leg{
+    //
+    // Camber on: leg y offset is the ABAD hinge axis (±hip_y_abad_axis,
+    // 0.12) and the wheel-plane arm moves into Leg's d_wheel — the legacy
+    // 0.193 and the 0.0917 arm are never summed. Camber off: legacy 0.193.
+    const double y_off = params_.camber_enabled
+        ? static_cast<double>(params_.hip_y_abad_axis)
+        : Config::LEG_Y_OFFSET;
+    Leg leg{
         Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET,
-                        y_sign * Config::LEG_Y_OFFSET,
+                        y_sign * y_off,
                         Config::LEG_Z_OFFSET),
         static_cast<float>(Config::WHEEL_RADIUS),
         params_.r_skin()
     };
+    if (params_.camber_enabled) {
+        leg.set_camber_mode(true);
+        leg.set_abad_geometry(params_.abad_axis_to_wheel_plane,
+                              params_.wheel_half_width);
+    }
+    return leg;
 }
 
 // ============================================================

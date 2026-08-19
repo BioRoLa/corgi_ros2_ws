@@ -87,6 +87,11 @@ struct LegObservation {
     RIM rim;              // which rim section is in contact
     float alpha;          // contact angle relative to body frame (contact_beta - beta)
     bool in_contact;      // whether this leg is in ground contact
+    // Stage 1.5 camber: measured ABAD tilt (sign-corrected per leg) and
+    // its rate. Zero unless kinematics.camber_enabled — appended last so
+    // existing positional aggregate inits stay valid.
+    float gamma   = 0.0f; // ABAD tilt [rad]
+    float gamma_d = 0.0f; // ABAD tilt rate [rad/s]
 };
 
 // ============================================================

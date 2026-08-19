@@ -39,6 +39,10 @@ RawRecord OfflineTestNode::to_raw(const CSVReader::RobotData& d) {
     r.state_theta_d = d.state_theta_d; r.state_beta_d = d.state_beta_d;
     r.state_vel_r_d = d.state_vel_r_d; r.state_vel_l_d = d.state_vel_l_d;
     r.state_trq_r_d = d.state_trq_r_d; r.state_trq_l_d = d.state_trq_l_d;
+    r.state_gamma_a = d.state_gamma_a; r.state_gamma_b = d.state_gamma_b;
+    r.state_gamma_c = d.state_gamma_c; r.state_gamma_d = d.state_gamma_d;
+    r.state_vel_h_a = d.state_vel_h_a; r.state_vel_h_b = d.state_vel_h_b;
+    r.state_vel_h_c = d.state_vel_h_c; r.state_vel_h_d = d.state_vel_h_d;
     return r;
 }
 

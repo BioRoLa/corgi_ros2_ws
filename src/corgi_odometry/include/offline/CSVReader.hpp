@@ -35,6 +35,11 @@ public:
         double state_theta_b = 0, state_beta_b = 0, state_vel_r_b = 0, state_vel_l_b = 0, state_trq_r_b = 0, state_trq_l_b = 0;
         double state_theta_c = 0, state_beta_c = 0, state_vel_r_c = 0, state_vel_l_c = 0, state_trq_r_c = 0, state_trq_l_c = 0;
         double state_theta_d = 0, state_beta_d = 0, state_vel_r_d = 0, state_vel_l_d = 0, state_trq_r_d = 0, state_trq_l_d = 0;
+
+        // Stage 1.5 camber: ABAD tilt gamma [rad] and hip motor velocity
+        // (gamma rate) [rad/s]. Optional columns — default 0 when absent.
+        double state_gamma_a = 0, state_gamma_b = 0, state_gamma_c = 0, state_gamma_d = 0;
+        double state_vel_h_a = 0, state_vel_h_b = 0, state_vel_h_c = 0, state_vel_h_d = 0;
     };
 
     std::vector<RobotData> read_csv(const std::string& filename) {
@@ -127,6 +132,21 @@ public:
             row.state_vel_l_d = values[column_indices.at("state_vel_l_d")];
             row.state_trq_r_d = values[column_indices.at("state_trq_r_d")];
             row.state_trq_l_d = values[column_indices.at("state_trq_l_d")];
+
+            // Stage 1.5 camber columns (optional — absent in legacy CSVs)
+            auto opt = [&](const char* name, double& dst) {
+                auto it = column_indices.find(name);
+                if (it != column_indices.end() && it->second < values.size())
+                    dst = values[it->second];
+            };
+            opt("state_gamma_a", row.state_gamma_a);
+            opt("state_gamma_b", row.state_gamma_b);
+            opt("state_gamma_c", row.state_gamma_c);
+            opt("state_gamma_d", row.state_gamma_d);
+            opt("state_vel_h_a", row.state_vel_h_a);
+            opt("state_vel_h_b", row.state_vel_h_b);
+            opt("state_vel_h_c", row.state_vel_h_c);
+            opt("state_vel_h_d", row.state_vel_h_d);
 
             data.push_back(row);
         }

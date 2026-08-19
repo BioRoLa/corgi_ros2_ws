@@ -32,6 +32,11 @@ struct RawRecord {
     double state_theta_b = 0, state_beta_b = 0, state_vel_r_b = 0, state_vel_l_b = 0, state_trq_r_b = 0, state_trq_l_b = 0;
     double state_theta_c = 0, state_beta_c = 0, state_vel_r_c = 0, state_vel_l_c = 0, state_trq_r_c = 0, state_trq_l_c = 0;
     double state_theta_d = 0, state_beta_d = 0, state_vel_r_d = 0, state_vel_l_d = 0, state_trq_r_d = 0, state_trq_l_d = 0;
+
+    // Stage 1.5 camber: ABAD tilt gamma [rad] and hip motor velocity
+    // (gamma rate) [rad/s]. Optional CSV columns — 0 when absent.
+    double state_gamma_a = 0, state_gamma_b = 0, state_gamma_c = 0, state_gamma_d = 0;
+    double state_vel_h_a = 0, state_vel_h_b = 0, state_vel_h_c = 0, state_vel_h_d = 0;
 };
 
 /**

@@ -8,13 +8,26 @@ Leg EstimationPipeline::createLeg(double x_sign, double y_sign, int leg_idx) con
     // R = 0.1 (linkage joint circle) never changes; the radius switch acts
     // on little-r only. r_skin(): legacy 0.019 / design 0.045 / calibrated
     // rolling_radius_calibrated − 0.1 (stage15 fit: sim, roll state, kp 500).
-    return Leg{
+    //
+    // Camber on: leg y offset is the ABAD hinge axis (±hip_y_abad_axis,
+    // 0.12) and the wheel-plane arm moves into Leg's d_wheel — the legacy
+    // 0.193 and the 0.0917 arm are never summed. Camber off: legacy 0.193.
+    const double y_off = params_.camber_enabled
+        ? static_cast<double>(params_.hip_y_abad_axis)
+        : Config::LEG_Y_OFFSET;
+    Leg leg{
         Eigen::Vector3f(x_sign * Config::LEG_X_OFFSET,
-                        y_sign * Config::LEG_Y_OFFSET,
+                        y_sign * y_off,
                         Config::LEG_Z_OFFSET),
         static_cast<float>(Config::WHEEL_RADIUS),
         params_.r_skin()
     };
+    if (params_.camber_enabled) {
+        leg.set_camber_mode(true);
+        leg.set_abad_geometry(params_.abad_axis_to_wheel_plane,
+                              params_.wheel_half_width);
+    }
+    return leg;
 }
 
 EstimationPipeline::EstimationPipeline(const Params& params)
@@ -155,6 +168,10 @@ StepResult EstimationPipeline::step(
                         raw.state_vel_r_c, raw.state_vel_r_d};
     double vel_l[4]  = {raw.state_vel_l_a, raw.state_vel_l_b,
                         raw.state_vel_l_c, raw.state_vel_l_d};
+    double gammas[4] = {raw.state_gamma_a, raw.state_gamma_b,
+                        raw.state_gamma_c, raw.state_gamma_d};
+    double vel_h[4]  = {raw.state_vel_h_a, raw.state_vel_h_b,
+                        raw.state_vel_h_c, raw.state_vel_h_d};
 
     std::vector<estimation_model::LegObservation> observations;
     observations.reserve(4);
@@ -187,8 +204,18 @@ StepResult EstimationPipeline::step(
 
         bool in_contact = result.contacts[j] && (rim != NO_CONTACT);
 
+        // Stage 1.5 camber: measured ABAD tilt gamma (sign-corrected per
+        // leg; adjudicated all +1 in sim wheel mode) and its rate from the
+        // hip motor velocity. Zeroed unless camber_enabled.
+        float gamma = 0.0f, gamma_d = 0.0f;
+        if (params_.camber_enabled) {
+            gamma   = params_.gamma_signs[j] * static_cast<float>(gammas[j]);
+            gamma_d = params_.gamma_signs[j] * static_cast<float>(vel_h[j]);
+        }
+
         observations.push_back(
-            {legs_[j], theta, theta_d, beta, beta_d, rim, alpha, in_contact});
+            {legs_[j], theta, theta_d, beta, beta_d, rim, alpha, in_contact,
+             gamma, gamma_d});
         exclude_flags[j] = !in_contact;
     }
 
@@ -200,7 +227,10 @@ StepResult EstimationPipeline::step(
         for (int j = 0; j < 4; ++j) {
             if (!exclude_flags[j]) {
                 auto& o = observations[j];
-                o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0);
+                // 9-arg call — keeps the diagnostic recomputation
+                // consistent with the actual ESEKF update (same gamma).
+                o.leg->Calculate(o.theta, o.theta_d, 0, o.beta, o.beta_d, 0,
+                                 o.gamma, o.gamma_d, 0);
                 o.leg->PointContact(o.rim, o.alpha);
                 o.leg->PointVelocity(v_zero, w_m, o.rim, o.alpha, true);
                 result.z_avg += -o.leg->contact_velocity;
