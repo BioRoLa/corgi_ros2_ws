@@ -77,9 +77,16 @@ def main(npz_path, csv_path):
     ot, odom = d["odom_t"], d["odom"]
     _health(mt, "motor_t"), _health(it, "imu_t"), _health(ot, "odom_t")
 
-    a_norm = float(np.linalg.norm(ia, axis=1).mean())
+    # MEDIAN, not mean (changed 2026-08-20): the mean assumes a smooth roll.
+    # A hopping gait's specific force is bimodal -- ~0.9-5 in flight, ~17 in
+    # stance (measured, s3 pronk dumps) -- which pushed the mean to 13.1 on a
+    # perfectly healthy record (gravity clean on +z, median exactly 9.8).
+    # The median passes both the smooth rolls this was written for and
+    # legged gaits, and still catches what the gate exists to catch:
+    # wrong-unit or cross-wired axes shift the median too.
+    a_norm = float(np.median(np.linalg.norm(ia, axis=1)))
     if not (G_BAND[0] < a_norm < G_BAND[1]):
-        raise SystemExit(f"REFUSED: |accel| mean {a_norm:.2f} not ~g "
+        raise SystemExit(f"REFUSED: |accel| median {a_norm:.2f} not ~g "
                          f"(driver device cross-wiring suspect)")
     qn = float(np.linalg.norm(iq, axis=1).mean())
     if abs(qn - 1.0) > 0.05:
