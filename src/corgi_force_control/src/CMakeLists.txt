@@ -37,6 +37,7 @@ ament_target_dependencies(gslip_pronk_node
   rclcpp
   corgi_msgs
   ament_index_cpp
+  nav_msgs
   Eigen3
 )
 

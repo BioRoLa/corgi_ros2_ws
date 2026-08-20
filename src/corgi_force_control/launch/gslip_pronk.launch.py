@@ -195,6 +195,17 @@ def generate_launch_description():
         # Separate clamp on the yaw term of gamma_correction alone (rad).
         # 0 = off (bit-identical). ~0.0175 (1 deg) is the S89 C2 gentle hold.
         DeclareLaunchArgument("gamma_yaw_limit", default_value="0.0"),
+        # --- Added 2026-08-20: body PITCH channel (log S115) ------------------
+        # Differential leg length (front A/B extend, rear C/D retract) driven
+        # by measured pitch. The attitude loop previously had roll and yaw
+        # channels only; pitch was computed and discarded because it was once
+        # < 1.5 deg. It now runs 18-34 deg peak-to-peak, and landing pitched
+        # degrades that stance (rho -0.32/-0.36). Stance-gated, clamped.
+        # 0.0/0.0 = EXACTLY off, bit-identical. SIGN is empirical: negate if
+        # the correction makes things worse (same rule as k_roll/k_yaw).
+        DeclareLaunchArgument("k_pitch", default_value="0.0"),
+        DeclareLaunchArgument("d_pitch", default_value="0.0"),
+        DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
         # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
@@ -212,6 +223,50 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_acker_dir", default_value="0.0"),
         DeclareLaunchArgument("gamma_acker_limit", default_value="0.3491"),  # 20 deg
         DeclareLaunchArgument("gamma_acker_ramp_ticks", default_value="500"),
+        # --- Added 2026-08-20: event-driven per-leg gait scheduler (Tier 1) ---
+        # Each leg replays the template on its own clock, snapped to the
+        # stance-onset row by its own debounced touchdown (blended, clamped,
+        # latched once per stride). false = EXACTLY off, bit-identical.
+        # Engagement requires ~1 kHz contact (CORGI_CONTACT_INTERVAL=1) and
+        # is announced with an "EVENT SCHED ENGAGED" WARN; a run that
+        # requested the scheduler and did not log that line is INVALID.
+        # Refused combinations: contact_gated_gains (the failed half-fix it
+        # replaces), stance_label_shift_s != 0 (double correction).
+        # Defaults are the constructor's; no pre-2026-08-20 result changes.
+        DeclareLaunchArgument("event_sched", default_value="false"),
+        DeclareLaunchArgument("event_snap_limit_s", default_value="0.030"),
+        DeclareLaunchArgument("event_blend_ticks", default_value="20"),
+        DeclareLaunchArgument("event_snap_per_stride", default_value="1"),
+        # Tier 0's decision output (log S92): arm at each leg's first
+        # debounced touchdown.
+        DeclareLaunchArgument("event_arm_strides", default_value="0"),
+        DeclareLaunchArgument("stance_max_overrun_ratio", default_value="1.5"),
+        # Advance-only snapping (log S95): large backward corrections are
+        # replaced by the complementary forward one -- a backward freeze
+        # lengthens the physical stride 1:1 and regenerates the error.
+        DeclareLaunchArgument("event_forward_only", default_value="false"),
+        # --- Added 2026-08-20: Tier 3 velocity-slaved stance (log S96) --------
+        # On touchdown the leg integrates beta-dot = v / L(theta) from its
+        # current commanded beta (state-continuous, no reference jump);
+        # flight stays clocked. Requires event_sched. Engagement announces
+        # "SLAVE STANCE ENGAGED"; absence on a run that asked = INVALID.
+        # Tier 2 gentle cross-leg phase coupling (log S97): flight-row-only
+        # nudge toward the four-leg mean phase. 0.0 = off, bit-identical.
+        DeclareLaunchArgument("couple_gain", default_value="0.0"),
+        DeclareLaunchArgument("couple_clamp", default_value="0.05"),
+        DeclareLaunchArgument("slave_stance", default_value="false"),
+        DeclareLaunchArgument("slave_v_source", default_value="fixed"),
+        DeclareLaunchArgument("slave_v_fixed", default_value="1.187"),
+        DeclareLaunchArgument("ekf_timeout_s", default_value="0.05"),
+        # Push-timing pair synchronisation (log S100): an early leg holds
+        # beta at its entry value under stance gains until `quorum` legs
+        # are down, then all waiting legs release together. Requires
+        # slave_stance. false = off, bit-identical.
+        DeclareLaunchArgument("push_sync", default_value="false"),
+        DeclareLaunchArgument("push_sync_quorum", default_value="4"),
+        DeclareLaunchArgument("push_sync_max_hold_s", default_value="0.080"),
+        DeclareLaunchArgument("push_sync_arm_strides", default_value="5"),
+        DeclareLaunchArgument("ltheta_lut_path", default_value=""),
         DeclareLaunchArgument('template_path', default_value=''),
 
         Node(
@@ -268,12 +323,38 @@ def generate_launch_description():
                 'd_yaw': LaunchConfiguration('d_yaw'),
                 'gamma_limit': LaunchConfiguration('gamma_limit'),
                 'gamma_yaw_limit': LaunchConfiguration('gamma_yaw_limit'),
+                'k_pitch': LaunchConfiguration('k_pitch'),
+                'd_pitch': LaunchConfiguration('d_pitch'),
+                'pitch_limit': LaunchConfiguration('pitch_limit'),
                 'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
                 'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
                 'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),
                 'gamma_acker_limit': LaunchConfiguration('gamma_acker_limit'),
                 'gamma_acker_ramp_ticks':
                     LaunchConfiguration('gamma_acker_ramp_ticks'),
+                'event_sched': LaunchConfiguration('event_sched'),
+                'event_snap_limit_s': LaunchConfiguration('event_snap_limit_s'),
+                'event_blend_ticks': LaunchConfiguration('event_blend_ticks'),
+                'event_snap_per_stride':
+                    LaunchConfiguration('event_snap_per_stride'),
+                'event_arm_strides': LaunchConfiguration('event_arm_strides'),
+                'stance_max_overrun_ratio':
+                    LaunchConfiguration('stance_max_overrun_ratio'),
+                'event_forward_only':
+                    LaunchConfiguration('event_forward_only'),
+                'couple_gain': LaunchConfiguration('couple_gain'),
+                'couple_clamp': LaunchConfiguration('couple_clamp'),
+                'slave_stance': LaunchConfiguration('slave_stance'),
+                'slave_v_source': LaunchConfiguration('slave_v_source'),
+                'slave_v_fixed': LaunchConfiguration('slave_v_fixed'),
+                'ekf_timeout_s': LaunchConfiguration('ekf_timeout_s'),
+                'push_sync': LaunchConfiguration('push_sync'),
+                'push_sync_quorum': LaunchConfiguration('push_sync_quorum'),
+                'push_sync_max_hold_s':
+                    LaunchConfiguration('push_sync_max_hold_s'),
+                'push_sync_arm_strides':
+                    LaunchConfiguration('push_sync_arm_strides'),
+                'ltheta_lut_path': LaunchConfiguration('ltheta_lut_path'),
                 'template_path': template_path,
             }],
             output='screen',

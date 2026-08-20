@@ -24,8 +24,11 @@
 // grows ~15% per stride, doubling in about 5 strides -- so this loop has
 // ample authority, but without it the gait does not persist.
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -42,6 +45,7 @@
 #include "corgi_msgs/msg/trigger_stamped.hpp"
 #include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "corgi_msgs/msg/imu_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
 struct TemplateRow {
     double t;
@@ -129,6 +133,17 @@ private:
     // and reference stay consistent within a leg. That is a real gait
     // scheduler, not a flag. Kept here, off by default, as the record of what
     // was tried and why it failed.
+    //
+    // 2026-08-20: that scheduler now EXISTS -- event_sched + slave_stance +
+    // couple_gain below (log S91-S98, event-scheduler thread). Its own
+    // journey recorded three MORE ways to break a loaded leg (backward
+    // clock freezes feed the stride period; forward advances command the
+    // backswing under load; so does exiting to flight rows before real
+    // liftoff), which is why the shipped design never phase-corrects a
+    // loaded foot at all: stance is entered on the touchdown event,
+    // integrated as rolling (beta-dot = v/L), HELD at beta_LO until
+    // measured liftoff, and only flight is clocked. It holds gain honesty
+    // at ~0.55-0.6 where every global-clock config decays to ~0.2-0.4.
     bool contact_gated_gains_;          // off by default -- opt in
     int contact_debounce_;              // consecutive samples before switching
     double contact_timeout_s_;          // stale topic -> fall back to template
@@ -140,6 +155,225 @@ private:
     // leg_in_stance(). A gate falling back silently is exactly the class of
     // fault this session kept finding.
     mutable bool contact_stale_warned_;
+
+    // --- Event-driven per-leg gait scheduler (fix-order step 4, Tier 1) ----
+    //
+    // The principled successor to contact_gated_gains_ (see the post-mortem
+    // above): each leg runs the SAME template on ITS OWN clock, advanced by
+    // its own debounced touchdown, so gains and reference stay consistent
+    // within a leg by construction. Tier 0 (log S92, event-scheduler thread)
+    // measured why this is the right shape: the legs are locally coherent
+    // (5-stride-window touchdown spread 0.16-0.33) but the shared clock
+    // walks away from the feet at ~5-15 ms per stride, so gain honesty
+    // decays from ~0.7 toward ~0.3 as the error accumulates. A touchdown
+    // snap re-zeros that error once per stride.
+    //
+    // Snap mechanics: on a debounced rising edge of leg_contact_stable_,
+    // the leg clock's error to the stance-onset row is computed, clamped to
+    // +-event_snap_limit_s, and consumed by MODULATING THE CLOCK RATE over
+    // event_blend_ticks -- never an index jump (a hard snap steps beta_ref
+    // by up to snap x max template beta-dot; that bound is computed and
+    // logged at load). The per-tick rate is clamped to [0, 2.5] rows/tick:
+    // a backward correction FREEZES the clock rather than reversing it,
+    // because beta_ref running backwards mid-stance is a torque transient
+    // with no upside; a -30-row correction therefore takes ~30 ticks. At
+    // most event_snap_per_stride snaps per leg per stride -- the
+    // scrape-contact defence (linkage scrapes count as contact in the sim's
+    // geometric detector). LIFTOFF IS FREE-RUNNING, deliberately: liftoff
+    // is an outcome of stance energetics, falling edges are the
+    // scrape-noisier direction, and a late switch to soft flight gains is
+    // benign while a late switch to stance gains is the 71% mismatch being
+    // fixed. Overrun (row in stance far past template stance duration with
+    // no contact) is a diagnostic WARN only.
+    //
+    // With spring_rest_reference_ on (the config of record) theta_ref is
+    // CONSTANT, so per-leg theta divergence only appears via flight rows.
+    //
+    // event_sched=false is EXACTLY off: the stride loop calls the same
+    // apply_row(template_[index]) as before this existed (the gamma_openloop
+    // dir==0 pattern). Engagement needs ~1 kHz contact
+    // (CORGI_CONTACT_INTERVAL=1): the message rate is measured over the
+    // settle window and engagement is REFUSED below ~500 Hz, falling back
+    // to the global clock. Contact staleness (contact_timeout_s_ machinery)
+    // stops snapping and SLEWS each leg clock back to the master through
+    // the same rate-modulation path -- a dead sensor degrades to the old
+    // controller, never a frozen per-leg state.
+    bool event_sched_;
+    double event_snap_limit_s_;
+    int event_blend_ticks_;
+    int event_snap_per_stride_;
+    int event_arm_strides_;
+    double stance_max_overrun_ratio_;
+    // Advance-only snapping (log S95). A backward correction is executed
+    // as a clock FREEZE, and on a clocked-trajectory plant the freeze
+    // lengthens the physical stride 1:1 (held beta_ref prolongs stance),
+    // so the phase error regenerates every stride -- both the 30 ms and
+    // 120 ms budgets parked in the same e ~ +100-row attractor (S94/S95
+    // traces). Advancing instead shortens the commanded cycle: negative
+    // feedback. With this on, a correction more backward than
+    // EVENT_BACKWARD_TOL_ROWS is replaced by the complementary FORWARD
+    // correction to the next onset (corr += n_rows). false = S94
+    // behaviour, bit-identical.
+    bool event_forward_only_;
+    bool event_engaged_{false};       // rate check + label check passed
+    bool sched_labels_ok_{false};     // one contiguous circular stance segment
+    size_t stance_onset_row_{0};
+    size_t stance_rows_{0};
+    double template_dt_{0.001};       // row duration, s
+    double sched_hard_snap_beta_deg_{0.0};  // logged bound, computed at load
+    std::array<size_t, 4> leg_index_{{0, 0, 0, 0}};
+    std::array<double, 4> leg_frac_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<double, 4> snap_rows_pending_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<int, 4> blend_ticks_left_{{0, 0, 0, 0}};
+    std::array<int, 4> snaps_this_stride_{{0, 0, 0, 0}};
+    std::array<bool, 4> leg_prev_contact_{{false, false, false, false}};
+    std::array<bool, 4> leg_armed_{{false, false, false, false}};
+    std::array<long, 4> arm_at_stride_{{-1, -1, -1, -1}};
+    std::array<int, 4> stance_run_ticks_{{0, 0, 0, 0}};
+    std::array<bool, 4> overrun_flagged_{{false, false, false, false}};
+    long contact_msg_count_{0};
+    bool sched_stale_active_{false};
+    std::ofstream sched_csv_;
+    long sched_tick_count_{0};
+    void sched_reset(size_t master);
+    void sched_tick(size_t master, size_t master_stride, double t_now);
+    void sched_advance();
+
+    // --- Tier 3: velocity-slaved stance sweep (log S96) --------------------
+    //
+    // The no-jump-by-construction successor to touchdown snapping. Three
+    // ways of correcting phase on a loaded foot all failed mechanically
+    // (S94/S95: backward blend = period-feeding freeze; hard snap = a
+    // ~30 deg reference kick; forward advance = a commanded backswing
+    // that walks the robot BACKWARDS -- caught on the render). So during
+    // stance the absolute clocked beta(t) is abandoned entirely: on a
+    // debounced touchdown the leg enters SLAVED STANCE -- beta_ref
+    // integrates beta_dot = v / L(theta_measured) from the beta the leg
+    // was commanded that very tick (state-continuous), gains take the
+    // stance regime, the row pins at the stance onset (labels/gamma).
+    // Exit on the FIRST of: relative sweep complete (the template's
+    // stance sweep length), measured liftoff, or timeout
+    // (stance_max_overrun_ratio x template stance rows). At exit the
+    // clock jumps to the liftoff row and the residual beta offset blends
+    // to zero across the flight rows (the stance_sweep_scale precedent),
+    // so the next touchdown meets the template's beta again. Flight
+    // stays clocked; stance duration adapts to the actual speed, which
+    // is the period-mismatch fix the snap could never be.
+    //
+    // L(theta) comes from config/gslip_ltheta_lut.csv, generated from
+    // LegWheel's own LegLengthMap (export_ltheta_lut.py) so the length
+    // convention matches the template generator BY CONSTRUCTION
+    // (L(100 deg) = 0.2931 m = the template l0). v comes staged:
+    // slave_v_source=fixed first (mechanism validation, no estimator in
+    // the loop), then =ekf (/ekf body twist). ekf staleness > timeout ->
+    // 0.1 s hold -> fall back to plain clocked replay (no snapping) with
+    // a one-shot WARN; absent at start -> refuse engagement.
+    bool slave_stance_;
+    std::string slave_v_source_;
+    double slave_v_fixed_;
+    double ekf_timeout_s_;
+    bool slave_engaged_{false};     // param on + LUT ok + source ok
+    bool slave_active_{false};      // false while ekf-stale fallback holds
+    bool lut_ok_{false};
+    std::vector<double> lut_theta_, lut_L_;
+    size_t liftoff_row_{0};
+    double stance_sweep_rad_{0.0};  // signed, template beta_LO - beta_onset
+    double beta_lo_abs_{0.0};       // template's absolute liftoff beta
+    std::array<bool, 4> leg_slaved_{{false, false, false, false}};
+    // Sweep-complete-but-foot-still-loaded: HOLD beta_LO with stance
+    // gains until the measured falling edge (or the timeout). The
+    // handover guarded liftoff-before-sweep; the fixed-v probe exposed
+    // the mirror case -- exiting to flight rows under load plays the
+    // swing-back against the ground and drives the robot BACKWARDS
+    // (render, 2026-08-20, third backward signature). The stance
+    // reference must never command the backswing while loaded.
+    std::array<bool, 4> slave_hold_{{false, false, false, false}};
+    // --- Push-timing pair synchronisation (log S100) -----------------------
+    //
+    // Slaved stance fixed WITHIN-leg consistency; coupling could not fix
+    // BETWEEN-leg phase, because the S17 pitch seesaw regenerates the
+    // front/rear split during stance and flight-row nudging cannot outrun
+    // it (S99: coupling saturates at ~50 rows, flight ceilings ~0.15).
+    // So synchronise the PUSH instead of the clock: a leg entering stance
+    // waits (beta_ref pinned at entry beta, stance gains, no integration)
+    // until `push_sync_quorum` legs are simultaneously slaved AND in
+    // contact; all waiting legs then release on the same tick.
+    //
+    // This delays a leg, which S94's freeze also did -- but there the
+    // delay corrected phase BACKWARDS and lengthened the stride, so the
+    // error regenerated (positive feedback). Here the early leg waits for
+    // the LATE leg's touchdown, so its period stretches toward the late
+    // leg's arrival and they land together next stride: the delay is the
+    // entrainment. And it honours the S1 invariant -- beta_ref never
+    // moves on a loaded foot while waiting.
+    //
+    // Escapes: per-leg timeout (release alone), own falling edge (normal
+    // exit), staleness fallback. push_sync=false is bit-identical off.
+    // SOLE-SUPPORT GUARD (added after the first probe run, log S100): a
+    // held foot does not roll, so a leg holding while it is the ONLY foot
+    // down is a PIVOT under a descending body -- the first probe run
+    // nose-dived onto the front-right foot on hop 1 and never recovered
+    // its symmetry. A leg that is sole support therefore always releases
+    // immediately and sweeps. Fourth entry in the loaded-foot catalogue:
+    // you may not freeze a lone stance leg's roll either.
+    //
+    // ARM DELAY: the settle leaves all four feet down, so no rising edge
+    // exists until after hop 1 -- exactly the worst moment to start
+    // holding legs. push_sync_arm_strides master strides must pass before
+    // any leg waits, so sync engages on a cycling gait, not on entry.
+    bool push_sync_;
+    int push_sync_quorum_;
+    double push_sync_max_hold_s_;
+    int push_sync_arm_strides_;
+    std::array<bool, 4> slave_wait_{{false, false, false, false}};
+    std::array<int, 4> wait_ticks_{{0, 0, 0, 0}};
+    long push_rel_quorum_{0}, push_rel_timeout_{0}, push_rel_sole_{0};
+    std::array<double, 4> slave_beta_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<double, 4> slave_entry_beta_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<int, 4> slave_ticks_{{0, 0, 0, 0}};
+    std::array<double, 4> flight_off_{{0.0, 0.0, 0.0, 0.0}};
+    std::array<double, 4> last_beta_base_{{0.0, 0.0, 0.0, 0.0}};
+    // Scrape/bounce defence for slave entries -- the analogue of the snap
+    // path's 1-per-stride latch, which the first Tier 3 probe was missing:
+    // a contact bounce right after a sweep completed re-entered stance and
+    // re-swept from the current beta, ratcheting the reference forward
+    // past vertical (backwards walking, caught on the render 2026-08-20).
+    // A leg may re-enter slaved stance only after its clock has replayed
+    // at least half the flight rows since the last exit (first entry after
+    // arming is exempt -- the clock position is inherited from the master
+    // and means nothing yet).
+    std::array<bool, 4> slave_ever_{{false, false, false, false}};
+    // Defensive depth: the integrated beta may never leave the template's
+    // own beta range by more than this margin; hitting the clamp forces an
+    // exit and WARNs (a runaway reference must not be able to exist).
+    double tpl_beta_min_{0.0}, tpl_beta_max_{0.0};
+    // --- Tier 2: gentle cross-leg phase coupling (log S97) -----------------
+    //
+    // With stance slaved to each leg's own touchdown, nothing couples the
+    // four clocks: each leg runs a private hop cycle, touchdowns never
+    // cluster, and the pronk degenerates to uncoordinated bouncing in
+    // place (render, 2026-08-20). Each tick, every armed FREE-RUNNING leg
+    // in its FLIGHT rows is nudged toward the four-leg mean phase by
+    // clamp(couple_gain * circ_err_rows, +-couple_clamp) rows/tick -- the
+    // S89 gentle-hold pattern: small gain, hard clamp, cannot saturate,
+    // and it never fights the ground (stance legs are never nudged; a
+    // slaved leg contributes its phase but is not nudged). couple_gain
+    // 0.0 = off, bit-identical.
+    double couple_gain_;
+    double couple_clamp_;
+    double leg_phase_rows(int i) const;  // clock position incl. slave progress
+    double ekf_v_{0.0};
+    double ekf_stamp_{-1.0};
+    bool ekf_fallback_warned_{false};
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ekf_sub_;
+    void ekf_cb(const nav_msgs::msg::Odometry::SharedPtr msg);
+    bool load_ltheta_lut(const std::string& path);
+    double lut_L(double theta) const;
+    double meas_theta(int leg) const;
+    void slave_exit(int leg, size_t master, double t_now, const char* why);
+    void sched_event(double t, int leg, size_t master, const char* ev);
+    double circ_rows(double a, double b) const;  // signed shortest a-b, rows
+    void apply_rows(const std::array<const TemplateRow*, 4>& rows);
 
     // Constant rotation of the template's in_stance labels, seconds; positive
     // delays the gain switch. See load_template for the measurement and the
@@ -305,6 +539,55 @@ private:
     void update_attitude(double& roll, double& pitch, double& yaw) const;
     double gamma_correction(int leg_index) const;
 
+    // --- Body PITCH through differential leg length (log S115) --------------
+    //
+    // gamma_correction has a roll channel and a yaw channel and no pitch
+    // channel: pitch_ was computed every tick and never read. The reason
+    // is in the comment above -- "the measured pronk stayed level in roll
+    // and pitch (< 1.5 deg) but yawed 14.8 deg in 10 s" -- so pitch was
+    // dropped because it was small.
+    //
+    // It is no longer small. Measured 2026-08-20 on every flying config:
+    // pitch 18-34 deg PEAK-TO-PEAK, RMS 3.5-4.8 deg, while roll stayed
+    // under 2 deg exactly as that comment predicted. And landing pitched
+    // measurably degrades that stance: rho(|pitch at touchdown|, beta
+    // swept) = -0.32/-0.36 on the recommended k7150 config. This is the
+    // S17 pitch seesaw seen on the BODY -- the same mode the per-leg
+    // scheduler ladder (S91-S102) failed to fix from the leg-timing side,
+    // because the legs were never the free variable.
+    //
+    // gamma cannot make pitch: it tilts legs laterally. Pitch needs
+    // fore/aft asymmetry, and the direct actuator is LEG LENGTH -- extend
+    // the front pair while retracting the rear and the body pitches nose
+    // up. So this adds to theta, with the front/rear partition yaw_sign
+    // already uses:
+    //
+    //     theta_i += pitch_sign[i] * clamp(k_pitch*pitch + d_pitch*wy)
+    //     pitch_sign = {+1, +1, -1, -1}   (A,B front;  C,D rear)
+    //
+    // SIGN is not derivable from the geometry (it depends on which way
+    // the linkage opens against the body frame) -- take it from an
+    // open-loop pair and negate if the correction makes things worse,
+    // the same rule k_roll/k_yaw carry.
+    //
+    // STANCE-GATED. A leg only pitches the body when it has ground to
+    // push against; applying this in flight would just wave the leg and
+    // corrupt the touchdown pose, which is the fault this is meant to
+    // reduce. Same gate as lateral_force, and gated on yaw_ref_set_ so
+    // the settle is untouched.
+    //
+    // theta is the LINKAGE-CONSTRAINED axis (17-160 deg, a five-bar fold
+    // that is not a per-joint stop and so is unmodelled), so the clamp
+    // matters more here than it does for gamma. pitch_limit_ defaults to
+    // 3 deg, an order of magnitude inside the fold from the ~90-100 deg
+    // operating range, and CORGI_THETA_STOP remains the backstop -- but
+    // the clamp must not RELY on the stop.
+    //
+    // k_pitch = 0.0 is EXACTLY off: returns literal 0.0 before touching
+    // anything, so every run recorded before this existed is reproducible
+    // (the gamma_openloop dir==0 pattern).
+    double pitch_correction(int leg_index, bool in_stance) const;
+
     // --- Open-loop Ackermann camber pair (Stage 3 mechanism demo) -----------
     //
     // A held left/right camber differential: the pair on the turn side leans
@@ -409,6 +692,11 @@ private:
     // Menger headline cancels what it adds (log s89, C2).
     double gamma_yaw_limit_;
 
+    // Pitch channel; see pitch_correction(). rad and rad/(rad/s).
+    double k_pitch_;
+    double d_pitch_;
+    double pitch_limit_;   // rad, clamp on the theta perturbation
+
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
     double gamma_acker_out_;
@@ -469,6 +757,26 @@ GslipPronkNode::GslipPronkNode()
       contact_timeout_s_(0.25),
       last_contact_stamp_(0.0),
       contact_stale_warned_(false),
+      event_sched_(false),
+      event_snap_limit_s_(0.030),
+      event_blend_ticks_(20),
+      event_snap_per_stride_(1),
+      event_arm_strides_(0),  // Tier 0's decision output (log S92)
+      stance_max_overrun_ratio_(1.5),
+      event_forward_only_(false),
+      slave_stance_(false),
+      slave_v_source_("fixed"),
+      // v-tilde 0.70 * sqrt(g * l0), the v070 template's own design
+      // point: slaving at the template's design speed should reproduce
+      // template-like rolling, which is the mechanism-validation arm.
+      slave_v_fixed_(1.187),
+      ekf_timeout_s_(0.05),
+      push_sync_(false),
+      push_sync_quorum_(4),
+      push_sync_max_hold_s_(0.080),
+      push_sync_arm_strides_(5),
+      couple_gain_(0.0),
+      couple_clamp_(0.05),
       stance_label_shift_s_(0.0),
       stance_label_duty_(0.0),
       stance_sweep_scale_(1.0),
@@ -514,6 +822,13 @@ GslipPronkNode::GslipPronkNode()
       d_yaw_(0.02),
       gamma_limit_(5.0 / 180.0 * M_PI),
       gamma_yaw_limit_(0.0),
+      k_pitch_(0.0),
+      d_pitch_(0.0),
+      // 3 deg. The operating theta is ~90-100 deg and the five-bar folds
+      // at 17; 3 deg of differential leg length is a large body-pitch
+      // authority (the pairs are 0.51 m apart) while staying an order of
+      // magnitude clear of anything the linkage cares about.
+      pitch_limit_(3.0 / 180.0 * M_PI),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
@@ -587,6 +902,9 @@ GslipPronkNode::GslipPronkNode()
     gamma_limit_ = this->declare_parameter<double>("gamma_limit", gamma_limit_);
     gamma_yaw_limit_ =
         this->declare_parameter<double>("gamma_yaw_limit", gamma_yaw_limit_);
+    k_pitch_ = this->declare_parameter<double>("k_pitch", k_pitch_);
+    d_pitch_ = this->declare_parameter<double>("d_pitch", d_pitch_);
+    pitch_limit_ = this->declare_parameter<double>("pitch_limit", pitch_limit_);
     gamma_acker_in_ =
         this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
     gamma_acker_out_ =
@@ -608,6 +926,127 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<double>("turn_err_limit", turn_err_limit_);
     spring_rest_reference_ =
         this->declare_parameter<bool>("spring_rest_reference", spring_rest_reference_);
+    event_sched_ = this->declare_parameter<bool>("event_sched", event_sched_);
+    event_snap_limit_s_ = this->declare_parameter<double>(
+        "event_snap_limit_s", event_snap_limit_s_);
+    event_blend_ticks_ = this->declare_parameter<int>(
+        "event_blend_ticks", event_blend_ticks_);
+    event_snap_per_stride_ = this->declare_parameter<int>(
+        "event_snap_per_stride", event_snap_per_stride_);
+    event_arm_strides_ = this->declare_parameter<int>(
+        "event_arm_strides", event_arm_strides_);
+    stance_max_overrun_ratio_ = this->declare_parameter<double>(
+        "stance_max_overrun_ratio", stance_max_overrun_ratio_);
+    event_forward_only_ = this->declare_parameter<bool>(
+        "event_forward_only", event_forward_only_);
+    slave_stance_ = this->declare_parameter<bool>("slave_stance", slave_stance_);
+    slave_v_source_ = this->declare_parameter<std::string>(
+        "slave_v_source", slave_v_source_);
+    slave_v_fixed_ = this->declare_parameter<double>(
+        "slave_v_fixed", slave_v_fixed_);
+    ekf_timeout_s_ = this->declare_parameter<double>(
+        "ekf_timeout_s", ekf_timeout_s_);
+    push_sync_ = this->declare_parameter<bool>("push_sync", push_sync_);
+    push_sync_quorum_ = this->declare_parameter<int>(
+        "push_sync_quorum", push_sync_quorum_);
+    push_sync_max_hold_s_ = this->declare_parameter<double>(
+        "push_sync_max_hold_s", push_sync_max_hold_s_);
+    push_sync_arm_strides_ = this->declare_parameter<int>(
+        "push_sync_arm_strides", push_sync_arm_strides_);
+    if (push_sync_ && !slave_stance_) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "PUSH SYNC REFUSED: requires slave_stance (it gates "
+                     "the slaved sweep's start). Forced OFF.");
+        push_sync_ = false;
+    }
+    if (push_sync_ && (push_sync_quorum_ < 2 || push_sync_quorum_ > 4)) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "PUSH SYNC REFUSED: quorum %d outside 2..4. Forced "
+                     "OFF.", push_sync_quorum_);
+        push_sync_ = false;
+    }
+    couple_gain_ = this->declare_parameter<double>("couple_gain", couple_gain_);
+    couple_clamp_ =
+        this->declare_parameter<double>("couple_clamp", couple_clamp_);
+    if (couple_gain_ != 0.0 && !event_sched_) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "PHASE COUPLING REFUSED: couple_gain=%.4f requires "
+                     "event_sched. Forced OFF.", couple_gain_);
+        couple_gain_ = 0.0;
+    }
+    std::string lut_path = this->declare_parameter<std::string>(
+        "ltheta_lut_path", std::string(""));
+    // Launch files pass an empty string to mean "the installed default",
+    // same idiom as template_path.
+    if (lut_path.empty())
+        lut_path =
+            ament_index_cpp::get_package_share_directory("corgi_force_control")
+            + "/config/gslip_ltheta_lut.csv";
+
+    if (slave_stance_ && !event_sched_) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "SLAVE STANCE REFUSED: requires event_sched (per-leg "
+                     "clocks + touchdown events are its substrate). Forced "
+                     "OFF.");
+        slave_stance_ = false;
+    }
+    if (slave_stance_ && stance_sweep_scale_ != 1.0) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "SLAVE STANCE REFUSED: stance_sweep_scale=%.3f is the "
+                     "superseded open-loop version of the same idea. Forced "
+                     "OFF.", stance_sweep_scale_);
+        slave_stance_ = false;
+    }
+    if (slave_stance_) {
+        lut_ok_ = load_ltheta_lut(lut_path);
+        if (!lut_ok_)
+            RCLCPP_ERROR(this->get_logger(),
+                         "SLAVE STANCE REFUSED: L(theta) LUT unusable at "
+                         "'%s'.", lut_path.c_str());
+        if (slave_v_source_ != "fixed" && slave_v_source_ != "ekf") {
+            RCLCPP_ERROR(this->get_logger(),
+                         "SLAVE STANCE REFUSED: slave_v_source='%s' (need "
+                         "fixed|ekf).", slave_v_source_.c_str());
+            lut_ok_ = false;
+        }
+        if (slave_v_source_ == "ekf") {
+            ekf_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+                "ekf", 100,
+                std::bind(&GslipPronkNode::ekf_cb, this,
+                          std::placeholders::_1));
+        }
+    }
+
+    // Refusal matrix (handover, Tier 1). Refuse = disable + grep-able ERROR,
+    // the stance_label_duty pattern: the robot stays runnable on the global
+    // clock, and the harness's engagement assert catches the absence.
+    if (event_sched_ && contact_gated_gains_) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "EVENT SCHED REFUSED: mutually exclusive with "
+                     "contact_gated_gains (that design gates half of one "
+                     "phase description -- see the post-mortem above; the "
+                     "scheduler is its principled replacement, not a "
+                     "companion). event_sched forced OFF.");
+        event_sched_ = false;
+    }
+    if (event_sched_ && stance_label_shift_s_ != 0.0) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "EVENT SCHED REFUSED: stance_label_shift_s=%.3f is a "
+                     "global open-loop correction of the same phase error "
+                     "the snap corrects per leg -- running both "
+                     "double-corrects. event_sched forced OFF.",
+                     stance_label_shift_s_);
+        event_sched_ = false;
+    }
+    if (event_sched_ && stance_label_duty_ != 0.0) {
+        // Orthogonal (duty reshapes the table the scheduler plays), allowed;
+        // logged so no capture is ever puzzled over.
+        RCLCPP_WARN(this->get_logger(),
+                    "EVENT SCHED + stance_label_duty=%.3f: allowed "
+                    "(orthogonal -- duty reshapes the table, the scheduler "
+                    "re-times it), recording the combination.",
+                    stance_label_duty_);
+    }
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");
@@ -703,6 +1142,7 @@ void GslipPronkNode::contact_cb(
             leg_contact_stable_[i] = leg_contact_[i];
         }
     }
+    contact_msg_count_++;
     last_contact_stamp_ = this->now().seconds();
 }
 
@@ -939,7 +1379,462 @@ bool GslipPronkNode::load_template(const std::string& path) {
                         f, sweep_orig, f * sweep_orig, nf, f * 100.0);
         }
     }
+    // --- Event-scheduler load-time geometry (after ALL label transforms) ---
+    //
+    // The snap target is the stance-onset row of the labels AS PLAYED, so
+    // this must run after duty/shift have had their say. The scheduler
+    // needs exactly one contiguous circular stance segment for "the onset"
+    // to be well-defined -- same precondition, same refusal shape as duty.
+    if (template_.size() > 1) {
+        const size_t n = template_.size();
+        template_dt_ = template_.back().t / static_cast<double>(n - 1);
+        size_t onset = n, transitions = 0, m = 0;
+        double max_step = 0.0;
+        for (size_t i = 0; i < n; i++) {
+            const bool prev = template_[(i + n - 1) % n].in_stance;
+            const bool cur = template_[i].in_stance;
+            if (prev != cur) transitions++;
+            if (!prev && cur) onset = i;
+            if (cur) m++;
+            max_step = std::max(max_step,
+                                std::abs(template_[i].beta -
+                                         template_[(i + n - 1) % n].beta));
+        }
+        sched_labels_ok_ = (transitions == 2 && onset < n && m > 0 && m < n);
+        stance_onset_row_ = sched_labels_ok_ ? onset : 0;
+        stance_rows_ = m;
+        if (sched_labels_ok_) {
+            liftoff_row_ = (onset + m) % n;
+            stance_sweep_rad_ =
+                template_[(onset + m - 1) % n].beta - template_[onset].beta;
+            beta_lo_abs_ = template_[(onset + m - 1) % n].beta;
+        }
+        tpl_beta_min_ = template_[0].beta;
+        tpl_beta_max_ = template_[0].beta;
+        for (const auto& r : template_) {
+            tpl_beta_min_ = std::min(tpl_beta_min_, r.beta);
+            tpl_beta_max_ = std::max(tpl_beta_max_, r.beta);
+        }
+        // What a HARD snap would have cost: the bound that justifies the
+        // blend. Logged, not acted on.
+        sched_hard_snap_beta_deg_ =
+            (event_snap_limit_s_ / template_dt_) * max_step * 180.0 / M_PI;
+        if (event_sched_) {
+            if (!sched_labels_ok_) {
+                RCLCPP_ERROR(this->get_logger(),
+                             "EVENT SCHED REFUSED: labels have %zu "
+                             "transitions (need exactly 2, one stance "
+                             "segment). Falling back to the global clock.",
+                             transitions);
+            } else {
+                RCLCPP_INFO(this->get_logger(),
+                            "Event scheduler geometry: onset row %zu, "
+                            "stance %zu of %zu rows, dt %.4f s; a HARD "
+                            "%.0f ms snap would step beta_ref by up to "
+                            "%.2f deg -- hence the %d-tick blend.",
+                            stance_onset_row_, stance_rows_, n,
+                            template_dt_, event_snap_limit_s_ * 1e3,
+                            sched_hard_snap_beta_deg_, event_blend_ticks_);
+            }
+        }
+    }
     return template_.size() > 1;
+}
+
+// Signed shortest distance a - b around the circular template, in rows.
+double GslipPronkNode::circ_rows(double a, double b) const {
+    const double n = static_cast<double>(template_.size());
+    double d = std::fmod(a - b, n);
+    if (d < 0.0) d += n;
+    if (d >= 0.5 * n) d -= n;
+    return d;
+}
+
+void GslipPronkNode::sched_event(double t, int leg, size_t master,
+                                 const char* ev) {
+    if (!sched_csv_.is_open()) return;
+    static const char* names = "ABCD";
+    sched_csv_ << t << ',' << names[leg] << ',' << leg_index_[leg] << ','
+               << master << ','
+               << circ_rows(static_cast<double>(leg_index_[leg]) +
+                            leg_frac_[leg],
+                            static_cast<double>(master)) << ','
+               << snap_rows_pending_[leg] << ','
+               << (template_[leg_index_[leg]].in_stance ? 1 : 0) << ','
+               << (leg_contact_stable_[leg] ? 1 : 0) << ',' << ev << '\n';
+}
+
+void GslipPronkNode::sched_reset(size_t master) {
+    for (int i = 0; i < 4; i++) {
+        leg_index_[i] = master;
+        leg_frac_[i] = 0.0;
+        snap_rows_pending_[i] = 0.0;
+        blend_ticks_left_[i] = 0;
+        snaps_this_stride_[i] = 0;
+        leg_prev_contact_[i] = leg_contact_stable_[i];
+        leg_armed_[i] = false;
+        arm_at_stride_[i] = -1;
+        stance_run_ticks_[i] = 0;
+        overrun_flagged_[i] = false;
+    }
+    sched_stale_active_ = false;
+    sched_tick_count_ = 0;
+    for (int i = 0; i < 4; i++) {
+        leg_slaved_[i] = false;
+        slave_hold_[i] = false;
+        slave_wait_[i] = false;
+        wait_ticks_[i] = 0;
+        slave_ever_[i] = false;
+        slave_beta_[i] = 0.0;
+        slave_entry_beta_[i] = 0.0;
+        slave_ticks_[i] = 0;
+        flight_off_[i] = 0.0;
+        last_beta_base_[i] = template_[master].beta;
+    }
+    ekf_fallback_warned_ = false;
+    push_rel_quorum_ = 0;
+    push_rel_timeout_ = 0;
+    push_rel_sole_ = 0;
+}
+
+// One scheduler tick, called BEFORE the rows are applied: edge detection
+// and snap initiation on this tick's contact state, then clock advance for
+// the NEXT tick (mirroring the master's use-then-increment order).
+void GslipPronkNode::sched_tick(size_t master, size_t master_stride,
+                                double t_now) {
+    const double snap_lim_rows = event_snap_limit_s_ / template_dt_;
+
+    // Staleness: degrade to the global clock, never freeze per-leg state.
+    const double age = t_now - last_contact_stamp_;
+    const bool stale =
+        (last_contact_stamp_ <= 0.0 || age > contact_timeout_s_);
+    if (stale && !sched_stale_active_) {
+        sched_stale_active_ = true;
+        RCLCPP_ERROR(this->get_logger(),
+                     "EVENT SCHED contact STALE (age %.2fs) -- snapping "
+                     "stopped, slewing leg clocks back to the master.",
+                     age);
+        for (int i = 0; i < 4; i++)
+            sched_event(t_now, i, master, "STALE_FALLBACK");
+    } else if (!stale && sched_stale_active_) {
+        sched_stale_active_ = false;
+        RCLCPP_WARN(this->get_logger(),
+                    "EVENT SCHED contact fresh again -- resuming snaps.");
+    }
+
+    sched_tick_count_++;
+    const bool periodic = (sched_tick_count_ % 10 == 0);
+
+    for (int i = 0; i < 4; i++) {
+        const bool c = leg_contact_stable_[i];
+        const bool rising = c && !leg_prev_contact_[i];
+        const bool falling = !c && leg_prev_contact_[i];
+        leg_prev_contact_[i] = c;
+
+        if (rising) {
+            sched_event(t_now, i, master, "TD");
+            if (arm_at_stride_[i] < 0)
+                arm_at_stride_[i] = static_cast<long>(master_stride) +
+                                    event_arm_strides_;
+            if (!leg_armed_[i] && arm_at_stride_[i] >= 0 &&
+                static_cast<long>(master_stride) >= arm_at_stride_[i])
+                leg_armed_[i] = true;
+        }
+        if (falling) sched_event(t_now, i, master, "LO");
+
+        // --- Tier 3 slaved stance (replaces snapping entirely) ----------
+        if (slave_engaged_) {
+            if (!leg_armed_[i] && !leg_slaved_[i]) {
+                // Track the master until armed -- same rule as snap mode.
+                leg_index_[i] = master;
+                leg_frac_[i] = 0.0;
+                if (periodic) sched_event(t_now, i, master, "");
+                continue;
+            }
+            // Robot-wide v-source health, evaluated per tick.
+            if (slave_v_source_ == "ekf") {
+                const double age = t_now - ekf_stamp_;
+                if (ekf_stamp_ < 0.0 || age > ekf_timeout_s_ + 0.1) {
+                    if (slave_active_) {
+                        slave_active_ = false;
+                        if (!ekf_fallback_warned_) {
+                            ekf_fallback_warned_ = true;
+                            RCLCPP_ERROR(this->get_logger(),
+                                         "SLAVE STANCE /ekf STALE (age "
+                                         "%.2fs) -- falling back to clocked "
+                                         "replay.", age);
+                        }
+                        sched_event(t_now, i, master, "EKF_STALE");
+                    }
+                } else if (!slave_active_) {
+                    slave_active_ = true;
+                    ekf_fallback_warned_ = false;
+                    RCLCPP_WARN(this->get_logger(),
+                                "SLAVE STANCE /ekf fresh -- resuming.");
+                }
+            }
+            if (leg_slaved_[i]) {
+                if (!slave_active_) {
+                    slave_exit(i, master, t_now, "SLAVE_EXIT_FALLBACK");
+                } else if (falling) {
+                    slave_exit(i, master, t_now, "SLAVE_EXIT_LIFTOFF");
+                } else if (slave_wait_[i]) {
+                    // PUSH_WAIT: beta_ref pinned at entry beta under
+                    // stance gains, no integration, no clock motion.
+                    // Release when the quorum of legs are simultaneously
+                    // slaved AND in contact -- every waiting leg on the
+                    // SAME tick, which is what makes the push synchronous
+                    // -- or alone on this leg's own timeout.
+                    wait_ticks_[i]++;
+                    int down = 0, down_any = 0;
+                    for (int k = 0; k < 4; k++) {
+                        if (leg_contact_stable_[k]) down_any++;
+                        if (leg_slaved_[k] && leg_contact_stable_[k]) down++;
+                    }
+                    if (down_any <= 1) {
+                        // Sole support: a held foot is a pivot. Roll.
+                        slave_wait_[i] = false;
+                        push_rel_sole_++;
+                        sched_event(t_now, i, master, "PUSH_RELEASE_SOLE");
+                    } else if (down >= push_sync_quorum_) {
+                        for (int k = 0; k < 4; k++) {
+                            if (!slave_wait_[k]) continue;
+                            slave_wait_[k] = false;
+                            push_rel_quorum_++;
+                            sched_event(t_now, k, master,
+                                        "PUSH_RELEASE_QUORUM");
+                        }
+                    } else if (wait_ticks_[i] * template_dt_ >
+                               push_sync_max_hold_s_) {
+                        slave_wait_[i] = false;
+                        push_rel_timeout_++;
+                        sched_event(t_now, i, master,
+                                    "PUSH_RELEASE_TIMEOUT");
+                    }
+                } else {
+                    slave_ticks_[i]++;
+                    if (!slave_hold_[i]) {
+                        const double v = slave_v_source_ == "fixed"
+                                             ? slave_v_fixed_ : ekf_v_;
+                        const double L = lut_L(meas_theta(i));
+                        const double dir =
+                            stance_sweep_rad_ >= 0.0 ? 1.0 : -1.0;
+                        slave_beta_[i] += dir * (v / L) * template_dt_;
+                        if ((stance_sweep_rad_ >= 0.0
+                                 ? slave_beta_[i] >= beta_lo_abs_
+                                 : slave_beta_[i] <= beta_lo_abs_)
+                            || std::abs(slave_beta_[i] -
+                                        slave_entry_beta_[i]) >=
+                                   std::abs(stance_sweep_rad_)) {
+                            // ABSOLUTE liftoff angle (handover spec): a
+                            // foot landing further along the arc gets a
+                            // shorter roll. Sweep done + foot still down
+                            // -> HOLD, never the backswing under load.
+                            slave_beta_[i] = beta_lo_abs_;
+                            slave_hold_[i] = true;
+                            sched_event(t_now, i, master, "SLAVE_HOLD");
+                        }
+                    }
+                    if (leg_slaved_[i] && slave_ticks_[i] >
+                            static_cast<int>(stance_max_overrun_ratio_ *
+                                             static_cast<double>(
+                                                 stance_rows_))) {
+                        // The timeout may NOT dump a loaded leg into the
+                        // flight rows: stiff (12000) flight gains
+                        // commanding retract + swing-back against the
+                        // ground throw that end of the body up (the rear
+                        // "bucking", render 2026-08-20 -- the same
+                        // loaded-foot violation as S95/S97, reached
+                        // through the one exit path still unguarded, and
+                        // push_sync makes legs hold longer so more of
+                        // them arrive here still loaded). A stuck stance
+                        // degrades to STANDING, which is benign; only a
+                        // measured liftoff (or staleness) leaves stance.
+                        if (!c) {
+                            slave_exit(i, master, t_now,
+                                       "SLAVE_EXIT_TIMEOUT");
+                        } else if (!slave_hold_[i]) {
+                            slave_hold_[i] = true;
+                            sched_event(t_now, i, master,
+                                        "SLAVE_OVERRUN_HOLD");
+                            RCLCPP_WARN(this->get_logger(),
+                                        "SLAVE OVERRUN leg %c: stance %d "
+                                        "ticks, foot still down -- "
+                                        "holding beta (will not enter "
+                                        "flight under load).",
+                                        "ABCD"[i], slave_ticks_[i]);
+                        }
+                    }
+                }
+            } else if (rising && slave_active_) {
+                // Scrape/bounce latch: re-entry only after the clock has
+                // replayed >= half the flight rows since the last exit.
+                const size_t n_rows = template_.size();
+                const size_t fl_rows = n_rows - stance_rows_;
+                const size_t since =
+                    (leg_index_[i] + n_rows - liftoff_row_) % n_rows;
+                if (!slave_ever_[i] || since >= fl_rows / 2) {
+                    // State-continuous entry: integrate from the beta
+                    // this leg was commanded LAST tick -- no jump.
+                    leg_slaved_[i] = true;
+                    slave_ever_[i] = true;
+                    slave_hold_[i] = false;
+                    slave_wait_[i] =
+                        push_sync_ && static_cast<long>(master_stride) >=
+                                          push_sync_arm_strides_;
+                    wait_ticks_[i] = 0;
+                    slave_beta_[i] = last_beta_base_[i];
+                    slave_entry_beta_[i] = last_beta_base_[i];
+                    slave_ticks_[i] = 0;
+                    flight_off_[i] = 0.0;
+                    leg_index_[i] = stance_onset_row_;
+                    leg_frac_[i] = 0.0;
+                    sched_event(t_now, i, master,
+                                slave_wait_[i] ? "PUSH_WAIT"
+                                               : "SLAVE_ENTER");
+                } else {
+                    sched_event(t_now, i, master, "SLAVE_BOUNCE_IGNORED");
+                }
+            }
+            if (periodic) sched_event(t_now, i, master, "");
+            continue;  // no snap machinery in slave mode
+        }
+
+        if (!leg_armed_[i]) {
+            // Track the master until armed -- bit-identical behaviour.
+            leg_index_[i] = master;
+            leg_frac_[i] = 0.0;
+            continue;
+        }
+
+        if (stale) {
+            // Retarget the blend at the master every tick while stale; the
+            // rate clamp below turns this into a bounded slew.
+            snap_rows_pending_[i] =
+                circ_rows(static_cast<double>(master),
+                          static_cast<double>(leg_index_[i]) + leg_frac_[i]);
+            if (std::abs(snap_rows_pending_[i]) > 1e-9)
+                blend_ticks_left_[i] = std::max(1, event_blend_ticks_);
+        } else if (rising && snaps_this_stride_[i] < event_snap_per_stride_) {
+            double corr =
+                circ_rows(static_cast<double>(stance_onset_row_),
+                          static_cast<double>(leg_index_[i]) + leg_frac_[i]);
+            // Advance-only: replace a large backward correction (a freeze
+            // that would lengthen the stride and regenerate the error)
+            // with the complementary forward one. Small backward
+            // corrections (<= 10 rows) stay -- a 10 ms freeze is benign
+            // and cheaper than a near-full-cycle advance.
+            if (event_forward_only_ && corr < -10.0)
+                corr += static_cast<double>(template_.size());
+            const char* ev = "SNAP_START";
+            if (corr > snap_lim_rows) { corr = snap_lim_rows; ev = "SNAP_CLAMPED"; }
+            if (corr < -snap_lim_rows) { corr = -snap_lim_rows; ev = "SNAP_CLAMPED"; }
+            snap_rows_pending_[i] += corr;
+            blend_ticks_left_[i] = std::max(1, event_blend_ticks_);
+            snaps_this_stride_[i]++;
+            sched_event(t_now, i, master, ev);
+        }
+
+        // Overrun diagnostic: row says stance, foot says air, for far
+        // longer than the template's stance lasts. WARN only -- liftoff
+        // stays free-running by design.
+        if (template_[leg_index_[i]].in_stance && !c) {
+            stance_run_ticks_[i]++;
+            if (!overrun_flagged_[i] &&
+                stance_run_ticks_[i] >
+                    static_cast<int>(stance_max_overrun_ratio_ *
+                                     static_cast<double>(stance_rows_))) {
+                overrun_flagged_[i] = true;
+                RCLCPP_WARN(this->get_logger(),
+                            "SCHED OVERRUN leg %c: row in stance %d ticks "
+                            "without contact (template stance %zu rows).",
+                            "ABCD"[i], stance_run_ticks_[i], stance_rows_);
+                sched_event(t_now, i, master, "OVERRUN");
+            }
+        } else {
+            stance_run_ticks_[i] = 0;
+            overrun_flagged_[i] = false;
+        }
+
+        if (periodic) sched_event(t_now, i, master, "");
+    }
+    if (sched_csv_.is_open() && periodic) sched_csv_.flush();
+}
+
+// Advance the per-leg clocks for the NEXT tick. Called after the rows are
+// applied, mirroring the master's use-then-increment order -- advancing
+// inside sched_tick would put every armed leg one row ahead of the master
+// it was supposed to be tracking at the arming boundary.
+void GslipPronkNode::sched_advance() {
+    const size_t n = template_.size();
+
+    // Tier 2 coupling target: the circular mean phase of all four legs
+    // (slaved legs contribute their stance progress but are never
+    // nudged). Computed once per tick.
+    double mean_rows = 0.0;
+    bool couple = false;
+    if (couple_gain_ != 0.0) {
+        double re = 0.0, im = 0.0;
+        int cnt = 0;
+        for (int i = 0; i < 4; i++) {
+            if (!leg_armed_[i]) continue;
+            const double a =
+                2.0 * M_PI * leg_phase_rows(i) / static_cast<double>(n);
+            re += std::cos(a);
+            im += std::sin(a);
+            cnt++;
+        }
+        if (cnt == 4 && (re != 0.0 || im != 0.0)) {
+            double ang = std::atan2(im, re);
+            if (ang < 0.0) ang += 2.0 * M_PI;
+            mean_rows = ang * static_cast<double>(n) / (2.0 * M_PI);
+            couple = true;
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        if (!leg_armed_[i]) continue;  // tracking the master until armed
+        if (leg_slaved_[i]) continue;  // row pinned during slaved stance
+
+        // Nominal 1 row/tick, modulated by the pending correction, total
+        // rate clamped to [0, 2.5] rows/tick (backward corrections freeze
+        // the clock, never reverse it).
+        double step = 0.0;
+        if (blend_ticks_left_[i] > 0) {
+            step = snap_rows_pending_[i] /
+                   static_cast<double>(blend_ticks_left_[i]);
+            if (step > 1.5) step = 1.5;
+            if (step < -1.0) step = -1.0;
+            snap_rows_pending_[i] -= step;
+            blend_ticks_left_[i]--;
+            if (blend_ticks_left_[i] == 0) {
+                if (std::abs(snap_rows_pending_[i]) > 1e-6)
+                    blend_ticks_left_[i] = 1;  // rate clamp stretched it
+                else
+                    snap_rows_pending_[i] = 0.0;
+            }
+        }
+        // Tier 2 nudge: flight rows only, never fights the ground.
+        if (couple && !template_[leg_index_[i]].in_stance) {
+            double nudge = couple_gain_ *
+                           circ_rows(mean_rows,
+                                     static_cast<double>(leg_index_[i]) +
+                                         leg_frac_[i]);
+            if (nudge > couple_clamp_) nudge = couple_clamp_;
+            if (nudge < -couple_clamp_) nudge = -couple_clamp_;
+            step += nudge;
+        }
+
+        leg_frac_[i] += 1.0 + step;
+        while (leg_frac_[i] >= 1.0) {
+            leg_frac_[i] -= 1.0;
+            leg_index_[i]++;
+            if (leg_index_[i] >= n) {
+                leg_index_[i] = 0;
+                snaps_this_stride_[i] = 0;  // per-stride snap latch
+            }
+        }
+    }
 }
 
 void GslipPronkNode::update_attitude(double& roll, double& pitch, double& yaw) const {
@@ -992,6 +1887,23 @@ double GslipPronkNode::gamma_correction(int leg_index) const {
         roll_sign[leg_index] * (k_roll_ * roll_ + d_roll_ * wx) + yaw_part;
 
     return std::max(-gamma_limit_, std::min(gamma_limit_, correction));
+}
+
+double GslipPronkNode::pitch_correction(int leg_index, bool in_stance) const {
+    // Off is EXACTLY off, so every pre-2026-08-20 run is reproducible.
+    if (k_pitch_ == 0.0 && d_pitch_ == 0.0) return 0.0;
+    // Stance only (a leg needs ground to pitch the body) and only once
+    // the stride loop is running, the same two gates lateral_force uses.
+    if (!in_stance || !yaw_ref_set_) return 0.0;
+
+    // A,B front; C,D rear -- the partition yaw_sign already uses, applied
+    // to leg length instead of camber.
+    static const double pitch_sign[4] = {+1.0, +1.0, -1.0, -1.0};
+
+    const double wy = imu_.angular_velocity.y;   // pitch rate
+    const double u = k_pitch_ * pitch_ + d_pitch_ * wy;
+    const double clamped = std::max(-pitch_limit_, std::min(pitch_limit_, u));
+    return pitch_sign[leg_index] * clamped;
 }
 
 double GslipPronkNode::gamma_openloop(int leg_index) const {
@@ -1113,7 +2025,92 @@ void GslipPronkNode::advance_yaw_ref(double dt) {
     }
 }
 
+double GslipPronkNode::leg_phase_rows(int i) const {
+    if (leg_slaved_[i]) {
+        const double prog =
+            std::min(1.0, std::abs(slave_beta_[i] - slave_entry_beta_[i]) /
+                              std::max(1e-6, std::abs(stance_sweep_rad_)));
+        return static_cast<double>(stance_onset_row_) +
+               prog * static_cast<double>(stance_rows_);
+    }
+    return static_cast<double>(leg_index_[i]) + leg_frac_[i];
+}
+
+void GslipPronkNode::ekf_cb(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    // Body-frame forward speed; corgi_leg_odom publishes twist in
+    // base_link, so linear.x is the rolling-relevant component.
+    ekf_v_ = msg->twist.twist.linear.x;
+    ekf_stamp_ = this->now().seconds();
+}
+
+bool GslipPronkNode::load_ltheta_lut(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+    std::string line;
+    if (!std::getline(f, line)) return false;  // header
+    lut_theta_.clear();
+    lut_L_.clear();
+    while (std::getline(f, line)) {
+        if (line.empty()) continue;
+        const auto comma = line.find(',');
+        if (comma == std::string::npos) return false;
+        const double th = std::stod(line.substr(0, comma)) * M_PI / 180.0;
+        const double L = std::stod(line.substr(comma + 1));
+        if (!lut_theta_.empty() && th <= lut_theta_.back()) return false;
+        if (L <= 0.05 || L > 1.0) return false;
+        lut_theta_.push_back(th);
+        lut_L_.push_back(L);
+    }
+    return lut_theta_.size() >= 50;
+}
+
+double GslipPronkNode::lut_L(double theta) const {
+    if (theta <= lut_theta_.front()) return lut_L_.front();
+    if (theta >= lut_theta_.back()) return lut_L_.back();
+    const auto it = std::lower_bound(lut_theta_.begin(), lut_theta_.end(),
+                                     theta);
+    const size_t j = static_cast<size_t>(it - lut_theta_.begin());
+    const double f = (theta - lut_theta_[j - 1]) /
+                     (lut_theta_[j] - lut_theta_[j - 1]);
+    return lut_L_[j - 1] + f * (lut_L_[j] - lut_L_[j - 1]);
+}
+
+double GslipPronkNode::meas_theta(int leg) const {
+    switch (leg) {
+        case 0: return motor_state_.module_a.theta;
+        case 1: return motor_state_.module_b.theta;
+        case 2: return motor_state_.module_c.theta;
+        default: return motor_state_.module_d.theta;
+    }
+}
+
+void GslipPronkNode::slave_exit(int leg, size_t master, double t_now,
+                                const char* why) {
+    leg_slaved_[leg] = false;
+    slave_hold_[leg] = false;
+    slave_wait_[leg] = false;
+    leg_index_[leg] = liftoff_row_;
+    leg_frac_[leg] = 0.0;
+    // Residual offset blends to zero across the flight rows so the next
+    // touchdown meets the template's beta (the stance_sweep_scale
+    // precedent: continuity at both boundaries).
+    flight_off_[leg] = slave_beta_[leg] - template_[liftoff_row_].beta;
+    sched_event(t_now, leg, master, why);
+}
+
+// All four legs on one row: standup, settle, hold, and the global-clock
+// stride loop. Byte-for-byte the historical behaviour -- apply_rows with
+// four identical rows performs the same per-leg computations in the same
+// order as the old single-row body did.
 void GslipPronkNode::apply_row(const TemplateRow& row) {
+    apply_rows({&row, &row, &row, &row});
+}
+
+// Per-leg rows: the event scheduler's path. Leg i's reference AND gain
+// regime both come from rows[i] -- the one-phase-description-per-leg
+// consistency the 2026-08-17 failure demands (see the post-mortem above).
+// steer_command() stays once per tick: one yaw error per robot.
+void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
     update_attitude(roll_, pitch_, yaw_);
 
     // One tick of the open-loop camber entry ramp. Counted here, gated on
@@ -1140,7 +2137,10 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
     //
     // beta still follows the template: that is the clocked-torque part, the
     // leg angle the controller genuinely has to drive.
-    const double theta_ref = spring_rest_reference_ ? theta_rest_ : row.theta;
+    //
+    // (theta_ref moved into the per-leg loop: with spring_rest_reference_
+    // on -- the config of record -- it is CONSTANT and per-leg rows change
+    // nothing here; off, each leg tracks its own row's theta.)
 
     // Left/right selector, same partition as gamma_correction's roll_sign.
     // A=FL, B=FR, C=RR, D=RL.
@@ -1160,13 +2160,41 @@ void GslipPronkNode::apply_row(const TemplateRow& row) {
     // doubles the swept differential for free, at the cost of a bigger step at
     // the stance/flight boundaries. Off by default: try it only if the plain
     // gate turns out to be short on authority.
-    const double gate = row.in_stance ? 1.0 : (steer_prepose_ ? -1.0 : 0.0);
+    //
+    // (The stance gate is now per leg -- rows[i].in_stance -- so a steered
+    // leg sweeps when ITS row is in stance, consistent with its gains.)
 
     for (size_t i = 0; i < imp_cmd_modules_.size(); i++) {
+        const TemplateRow& row = *rows[i];
         auto* cmd = imp_cmd_modules_[i];
         const double s = steer_sign[i];
-        cmd->theta = theta_ref;
-        cmd->beta = row.beta * (1.0 + s * k_steer_) + s * u * gate;
+        const double gate =
+            row.in_stance ? 1.0 : (steer_prepose_ ? -1.0 : 0.0);
+        // Differential leg length for body pitch; identically 0.0 unless
+        // the channel is on (log S115).
+        cmd->theta = (spring_rest_reference_ ? theta_rest_ : row.theta)
+                     + pitch_correction(static_cast<int>(i), row.in_stance);
+        // beta base: slaved stance integrates its own reference; after a
+        // slave exit the residual offset blends to zero across the
+        // flight rows. Both are identically inert unless the Tier 3
+        // machinery set them (flight_off_ stays 0.0 otherwise).
+        double beta_base = row.beta;
+        if (leg_slaved_[i]) {
+            beta_base = slave_beta_[i];
+        } else if (flight_off_[i] != 0.0) {
+            const size_t n = template_.size();
+            const size_t since =
+                (leg_index_[i] + n - liftoff_row_) % n;
+            const size_t fl_rows = n - stance_rows_;
+            const double prog = fl_rows > 0
+                ? std::min(1.0, static_cast<double>(since) /
+                                    static_cast<double>(fl_rows))
+                : 1.0;
+            if (prog >= 1.0) flight_off_[i] = 0.0;
+            beta_base = row.beta + flight_off_[i] * (1.0 - prog);
+        }
+        last_beta_base_[i] = beta_base;
+        cmd->beta = beta_base * (1.0 + s * k_steer_) + s * u * gate;
         cmd->gamma = row.gamma + gamma_openloop(static_cast<int>(i))
                      + gamma_correction(static_cast<int>(i));
 
@@ -1294,6 +2322,12 @@ void GslipPronkNode::execute_running_phase() {
 
     // Let the robot settle onto its legs before striding. In experiment mode
     // the trigger that got us here also removed the support box.
+    //
+    // The settle doubles as the event scheduler's contact-rate measurement
+    // window: message count and sim time are sampled across it, so the
+    // precondition check costs no extra wall time.
+    const long rate_count0 = contact_msg_count_;
+    const double rate_t0 = this->now().seconds();
     if (settle_ticks_ > 0) {
         RCLCPP_INFO(this->get_logger(), "Settling for %d ms before the first stride",
                     settle_ticks_);
@@ -1307,6 +2341,106 @@ void GslipPronkNode::execute_running_phase() {
             next_time = next_time + period;
             rclcpp::sleep_for(std::chrono::nanoseconds(
                 std::max<int64_t>(0, (next_time - this->now()).nanoseconds())));
+        }
+    }
+
+    // Event-scheduler engagement decision, once per running phase. Refusal
+    // is grep-able and falls back to the global clock -- the harness
+    // asserts ENGAGED on scheduler runs the same way it asserts ACKER.
+    event_engaged_ = false;
+    if (event_sched_) {
+        const double rate_dt = this->now().seconds() - rate_t0;
+        const double rate =
+            rate_dt > 0.1
+                ? static_cast<double>(contact_msg_count_ - rate_count0) /
+                      rate_dt
+                : 0.0;
+        if (!sched_labels_ok_) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "EVENT SCHED REFUSED: template labels unusable "
+                         "(see load_template). Global clock.");
+        } else if (settle_ticks_ <= 0) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "EVENT SCHED REFUSED: settle_ticks=0 leaves no "
+                         "window to verify the contact rate. Global clock.");
+        } else if (rate < 500.0) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "EVENT SCHED REFUSED: contact rate %.0f Hz < 500 "
+                         "(trigger latency would be several strides' worth "
+                         "of rows). Set CORGI_CONTACT_INTERVAL=1. Global "
+                         "clock.", rate);
+        } else {
+            event_engaged_ = true;
+            sched_reset(0);
+            if (std::getenv("CORGI_SCHED_DEBUG") &&
+                std::string(std::getenv("CORGI_SCHED_DEBUG")) == "1") {
+                sched_csv_.open("/tmp/corgi_sched_events.csv",
+                                std::ios::trunc);
+                if (sched_csv_.is_open())
+                    sched_csv_ << "t_node,leg,leg_index,master_index,"
+                                  "phase_err_rows,snap_rows_pending,"
+                                  "in_stance_row,contact_stable,event\n";
+            }
+            RCLCPP_WARN(this->get_logger(),
+                        "EVENT SCHED ENGAGED: snap_limit=%.3fs blend=%d "
+                        "arm=%d snap/stride=%d fwd_only=%s "
+                        "contact_rate=%.0fHz (onset row %zu, hard-snap "
+                        "bound %.2f deg, sched csv %s)",
+                        event_snap_limit_s_, event_blend_ticks_,
+                        event_arm_strides_, event_snap_per_stride_,
+                        event_forward_only_ ? "YES" : "no", rate,
+                        stance_onset_row_,
+                        sched_hard_snap_beta_deg_,
+                        sched_csv_.is_open() ? "ON" : "off");
+        }
+    }
+
+    if (event_engaged_ && couple_gain_ != 0.0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "PHASE COUPLING ENGAGED: gain=%.4f clamp=%.3f "
+                    "rows/tick (flight rows only)",
+                    couple_gain_, couple_clamp_);
+    }
+
+    // Tier 3 slaved-stance engagement, once per running phase.
+    slave_engaged_ = false;
+    slave_active_ = false;
+    if (slave_stance_) {
+        if (!event_engaged_) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "SLAVE STANCE REFUSED: event scheduler did not "
+                         "engage. Clocked replay.");
+        } else if (!lut_ok_) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "SLAVE STANCE REFUSED: no usable L(theta) LUT. "
+                         "Clocked replay.");
+        } else if (slave_v_source_ == "ekf" && ekf_stamp_ < 0.0) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "SLAVE STANCE REFUSED: slave_v_source=ekf and no "
+                         "/ekf message has arrived. Clocked replay.");
+        } else {
+            slave_engaged_ = true;
+            slave_active_ = true;
+            if (push_sync_) {
+                RCLCPP_WARN(this->get_logger(),
+                            "PUSH SYNC ENGAGED: quorum=%d max_hold=%.3fs "
+                            "arm=%d strides (early legs hold beta at "
+                            "entry under stance gains until the quorum "
+                            "lands, then all release together; a sole "
+                            "support leg never holds)",
+                            push_sync_quorum_, push_sync_max_hold_s_,
+                            push_sync_arm_strides_);
+            }
+            RCLCPP_WARN(this->get_logger(),
+                        "SLAVE STANCE ENGAGED: v_source=%s v_fixed=%.3f "
+                        "m/s sweep=%.4f rad over <=%.0f ticks, LUT %zu "
+                        "rows, L(onset theta)=%.4f m",
+                        slave_v_source_.c_str(), slave_v_fixed_,
+                        stance_sweep_rad_,
+                        stance_max_overrun_ratio_ *
+                            static_cast<double>(stance_rows_),
+                        lut_theta_.size(),
+                        lut_L(template_[stance_onset_row_].theta));
         }
     }
 
@@ -1369,6 +2503,26 @@ void GslipPronkNode::execute_running_phase() {
                 turn_rate_, turn_rate_ * 180.0 / M_PI,
                 turn_err_limit_ * 180.0 / M_PI,
                 turn_rate_ == 0.0 ? "  -- HEADING HOLD, no turn commanded" : "");
+    // Grep-able, and WARN so it survives the harness's log level -- same
+    // pattern as ACKER CAMBER / GENTLE YAW CLAMP. The swing gains were the
+    // last experiment-varied parameters NOT on an announcement line, which
+    // is exactly the hole the f_lateral sweep fell through (a whole matrix
+    // ran at 0.0 with nothing in the logs to say so). The k_flight campaign
+    // (log S103) varies these, so they belong here.
+    RCLCPP_WARN(this->get_logger(),
+                "FLIGHT GAINS set: k_flight=%.1f b_flight=%.1f "
+                "(default 12000.0/150.0)",
+                k_flight_, b_flight_);
+    if (k_pitch_ != 0.0 || d_pitch_ != 0.0) {
+        // Grep-able engagement announcement, same contract as ACKER
+        // CAMBER / GENTLE YAW CLAMP / FLIGHT GAINS: a run that asked for
+        // the pitch channel and did not log this line is INVALID.
+        RCLCPP_WARN(this->get_logger(),
+                    "PITCH CHANNEL set: k_pitch=%.3f d_pitch=%.3f "
+                    "clamp %.2f deg (differential theta, front A/B vs "
+                    "rear C/D, stance-gated)",
+                    k_pitch_, d_pitch_, pitch_limit_ * 180.0 / M_PI);
+    }
     size_t index = 0;
     size_t stride_count = 0;
 
@@ -1380,16 +2534,44 @@ void GslipPronkNode::execute_running_phase() {
         // a second place to change the tick rate.
         advance_yaw_ref(period.nanoseconds() * 1e-9);
 
-        apply_row(template_[index]);
+        if (event_engaged_) {
+            // Edge detection + snap on this tick's contact, rows selected
+            // from the per-leg clocks, clocks advanced for the next tick.
+            sched_tick(index, stride_count, this->now().seconds());
+            apply_rows({&template_[leg_index_[0]],
+                        &template_[leg_index_[1]],
+                        &template_[leg_index_[2]],
+                        &template_[leg_index_[3]]});
+        } else {
+            // event_sched off (or refused): EXACTLY the historical path.
+            apply_row(template_[index]);
+        }
         imp_cmd_.header.stamp = this->now();
         imp_cmd_pub_->publish(imp_cmd_);
 
+        if (event_engaged_) sched_advance();
         index++;
         if (index >= template_.size()) {
             index = 0;
             stride_count++;
             if (stride_count % 10 == 0) {
                 RCLCPP_INFO(this->get_logger(), "%zu strides", stride_count);
+                // Push-sync telemetry rides the stride line, NOT the end
+                // of the running phase: a campaign run is killed by
+                // teardown and never exits the loop, so an end-of-run
+                // summary is never printed (empty assert, 2026-08-20).
+                const long tot = push_rel_quorum_ + push_rel_timeout_ +
+                                 push_rel_sole_;
+                if (push_sync_ && tot > 0) {
+                    RCLCPP_WARN(this->get_logger(),
+                                "PUSH SYNC RELEASES: quorum %ld (%.0f%%) "
+                                "timeout %ld sole %ld",
+                                push_rel_quorum_,
+                                100.0 * static_cast<double>(
+                                            push_rel_quorum_) /
+                                    static_cast<double>(tot),
+                                push_rel_timeout_, push_rel_sole_);
+                }
             }
         }
 
@@ -1398,6 +2580,7 @@ void GslipPronkNode::execute_running_phase() {
             std::max<int64_t>(0, (next_time - this->now()).nanoseconds())));
     }
 
+    if (sched_csv_.is_open()) sched_csv_.close();
     RCLCPP_INFO(this->get_logger(), "Stopped after %zu strides", stride_count);
 }
 

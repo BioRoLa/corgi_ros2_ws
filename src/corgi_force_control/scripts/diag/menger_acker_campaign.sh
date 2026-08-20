@@ -83,7 +83,11 @@ KILL_PATTERNS=("gslip_pron[k]_node" "force_contro[l]_node"
     "force_estimatio[n]_node" "topi[c] pub" "topi[c] echo"
     "record_camber_im[u]" "corgi_control_pane[l]"
     "webots_ros2_drive[r]" "webots-controlle[r]" "Corgi_launc[h]"
-    "webots\.ex[e]")
+    "webots\.ex[e]"
+    # Corgi_launch.py spawns a corgi_data_recorder that outlives the run;
+    # 48 of them had accumulated by 2026-08-20 and their DDS discovery
+    # load was wedging `topic echo` (dead 1-row odom captures).
+    "corgi_data_recorde[r]")
 
 teardown_all() {
   for p in "${KILL_PATTERNS[@]}"; do pkill -9 -f "$p" 2>/dev/null; done
@@ -140,7 +144,7 @@ for COND in "$@"; do
       teardown_all
       verify_dead || { echo "TEARDOWN FAILED TWICE -- aborting."; exit 3; }
     fi
-    rm -f /tmp/corgi_torque_terms.csv
+    rm -f /tmp/corgi_torque_terms.csv /tmp/corgi_sched_events.csv
 
     setsid ros2 launch corgi_sim Corgi_launch.py \
         > "/tmp/ma_sim_${COND}_$RUN.log" 2>&1 < /dev/null &
@@ -151,6 +155,11 @@ for COND in "$@"; do
     done
     [ "$ok" = 1 ] || { echo "  !! driver never connected, skipping run"; continue; }
     echo "  driver up"
+    # Pre-warm CLI discovery against the fresh sim before anything relies
+    # on it: the daemon restarted by the first CLI call can cache a stale
+    # graph and starve `topic echo` (the 1-row odom failure mode).
+    timeout 15 ros2 topic list > /dev/null 2>&1
+    sleep 2
 
     # shellcheck disable=SC2086  -- ARGS is intentionally word-split
     setsid ros2 launch corgi_force_control gslip_pronk.launch.py $ARGS \
@@ -206,6 +215,11 @@ for COND in "$@"; do
     [ -n "$IMU_PID" ] && kill "$IMU_PID" 2>/dev/null
     cp /tmp/corgi_torque_terms.csv "$OUT/run$RUN.csv"
     cp "/tmp/ma_ctl_${COND}_$RUN.log" "$OUT/ctl_run$RUN.log" 2>/dev/null
+    # Scheduler event CSV (present only on event_sched runs with
+    # CORGI_SCHED_DEBUG=1; the controller flushes as it writes, so a
+    # teardown kill loses at most the last block).
+    [ -f /tmp/corgi_sched_events.csv ] \
+        && cp /tmp/corgi_sched_events.csv "$OUT/sched_run$RUN.csv"
     SIMT=$(tail -1 "$OUT/run$RUN.csv" | cut -d, -f1)
     echo "  saved: torque $(wc -l < "$OUT/run$RUN.csv") rows (sim t=$SIMT), " \
          "odom $(wc -l < "$OUT/odom_run$RUN.csv") rows"
@@ -232,6 +246,73 @@ for COND in "$@"; do
                "$(grep -o 'STANCE LABELS SHIFTED by [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
         else
           echo "  !! label shift requested but never announced -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      *event_sched:=true*|*event_sched:=True*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'EVENT SCHED ENGAGED'; then
+          echo "  SCHED CONFIRMED:" \
+               "$(grep -o 'EVENT SCHED ENGAGED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! event_sched requested but never ENGAGED -- run INVALID"
+          grep -o 'EVENT SCHED REFUSED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -2
+        fi ;;
+      *)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'EVENT SCHED ENGAGED'; then
+          echo "  !! non-scheduler run logged EVENT SCHED engagement -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      # NOTE: an explicit couple_gain:=0.0 would false-negative here; pass
+      # no couple_gain at all for coupling-off runs. (The first pattern
+      # attempt, couple_gain:=0.0*, glob-matched 0.002 and silently
+      # SKIPPED the assert -- caught 2026-08-20.)
+      *couple_gain:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'PHASE COUPLING ENGAGED'; then
+          echo "  COUPLING CONFIRMED:" \
+               "$(grep -o 'PHASE COUPLING ENGAGED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! couple_gain requested but never ENGAGED -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      *k_pitch:=*|*d_pitch:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'PITCH CHANNEL set'; then
+          echo "  PITCH CHANNEL CONFIRMED:" \
+               "$(grep -o 'PITCH CHANNEL set: [^\"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! pitch channel requested but never announced -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      *k_flight:=*|*b_flight:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'FLIGHT GAINS set'; then
+          echo "  FLIGHT GAINS CONFIRMED:" \
+               "$(grep -o 'FLIGHT GAINS set: [^\"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! k_flight/b_flight requested but never announced -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
+      *push_sync:=true*|*push_sync:=True*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'PUSH SYNC ENGAGED'; then
+          echo "  PUSHSYNC CONFIRMED:" \
+               "$(grep -o 'PUSH SYNC ENGAGED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+          echo "  PUSHSYNC RELEASES:" \
+               "$(grep -o 'PUSH SYNC RELEASES: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! push_sync requested but never ENGAGED -- run INVALID"
+          grep -o 'PUSH SYNC REFUSED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -2
+        fi ;;
+    esac
+    case "$ARGS" in
+      *slave_stance:=true*|*slave_stance:=True*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'SLAVE STANCE ENGAGED'; then
+          echo "  SLAVE CONFIRMED:" \
+               "$(grep -o 'SLAVE STANCE ENGAGED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! slave_stance requested but never ENGAGED -- run INVALID"
+          grep -o 'SLAVE STANCE REFUSED: [^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -2
         fi ;;
     esac
     case "$ARGS" in
