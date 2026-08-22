@@ -132,6 +132,18 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
     ODOM_PID=$!
   fi
 
+  # CENTRE-OF-MASS ground truth, for alpha (RECORD_COM=1, log S180). Same
+  # column layout as base_odom -- it is the same message type -- so
+  # load_odom_xyzt reads it unchanged. The driver only publishes this when
+  # CORGI_PUBLISH_COM=1, so the caller must set BOTH; if it sets only this one
+  # the echo produces an empty file rather than a wrong one, and the
+  # `COM PUBLISH: ON` line in the driver log is the proof of intent.
+  if [ -n "${RECORD_COM:-}" ]; then
+    setsid ros2 topic echo /sim/com_odom --csv \
+        > "$OUTDIR/com_run${RUN}.csv" 2>/dev/null < /dev/null &
+    COM_PID=$!
+  fi
+
   # ---- CAPTURE WINDOW: sim time, not wall time -----------------------------
   #
   # WHY THIS EXISTS (2026-08-22). GAIT_WALL is WALL clock, and it buys however
@@ -222,6 +234,21 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
     echo "  odom saved: $(wc -l < "$OUTDIR/odom_run${RUN}.csv") rows"
   fi
 
+  if [ -n "${RECORD_COM:-}" ]; then
+    kill "$COM_PID" 2>/dev/null
+    COM_ROWS=$(wc -l < "$OUTDIR/com_run${RUN}.csv" 2>/dev/null || echo 0)
+    echo "  com  saved: $COM_ROWS rows"
+    # An EMPTY com capture is the tell that CORGI_PUBLISH_COM was not set on
+    # the sim side -- the echo succeeds, the topic just never publishes. Say so
+    # loudly here rather than letting an analyser discover it later.
+    if [ "$COM_ROWS" -lt 100 ]; then
+      echo "  !! com_run${RUN}.csv has only $COM_ROWS rows. The driver only"
+      echo "  !! publishes sim/com_odom when CORGI_PUBLISH_COM=1 -- check the"
+      echo "  !! 'COM PUBLISH:' line in the sim log. RECORD_COM alone is not"
+      echo "  !! enough; alpha-on-CoM cannot be computed from this run."
+    fi
+  fi
+
   # WHICH TEMPLATE DID IT ACTUALLY LOAD?
   #
   # S159: omitting template_path does NOT give v070. The controller falls back
@@ -259,6 +286,8 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
     cp /tmp/corgi_torque_terms.csv "$DEST"
     [ -n "${RECORD_ODOM:-}" ] && mv "$OUTDIR/odom_run${RUN}.csv" \
         "$OUTDIR/odom_run${RUN}_short_invalid.csv" 2>/dev/null
+    [ -n "${RECORD_COM:-}" ] && mv "$OUTDIR/com_run${RUN}.csv" \
+        "$OUTDIR/com_run${RUN}_short_invalid.csv" 2>/dev/null
     echo "  !! run $RUN QUARANTINED as ${DEST##*/}: it captured ${SPAN}s of"
     echo "  !! sim against the ${GAIT_SIM}s target, so its 20 s tail would be"
     echo "  !! the whole run including standup. The analysers' run[0-9].csv"

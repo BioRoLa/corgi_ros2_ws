@@ -128,36 +128,73 @@ def alphas(torque_path, odom_path, tail_s=TAIL_S):
     return a, vh, vz[idx], len(tds)
 
 
-def report(dirs, tail_s):
+def _pooled(d, prefix, tail_s):
+    """-> (alpha, v_horiz, vz, n) pooled over a cell, from `prefix`_run<N>.csv.
+
+    prefix is "odom" (body origin) or "com" (centre of mass). Both streams are
+    nav_msgs/Odometry written by the same driver on the SAME tick with the SAME
+    stamp, so load_odom_xyzt reads either unchanged and the two are
+    sample-aligned -- no interpolation between clocks.
+    """
+    A, VH, VZ, n, skipped = [], [], [], 0, []
+    for tp in sorted(glob.glob(os.path.join(d, "run[0-9].csv"))):
+        pp = os.path.join(d, prefix + "_" + os.path.basename(tp))
+        if not os.path.isfile(pp) or os.path.getsize(pp) < 10000:
+            continue
+        try:
+            a, vh, vz, k = alphas(tp, pp, tail_s)
+        except Unfit as e:
+            skipped.append((os.path.basename(tp), str(e)))
+            continue
+        A.append(a); VH.append(vh); VZ.append(vz); n += k
+    if not A:
+        return None, skipped
+    return (np.concatenate(A), np.concatenate(VH), np.concatenate(VZ),
+            n), skipped
+
+
+def report(dirs, tail_s, with_com=False, labels=None):
     print("  alpha = angle between horizontal and the touchdown velocity")
     print("  vector, POSITIVE = descending. Lu & Lin sweep 5-25 deg;")
     print("  Eita's table runs 10-18 deg.")
+    if with_com:
+        print()
+        print("  BODY vs CoM. The model's alpha belongs to a POINT MASS. Ours")
+        print("  has been the body ORIGIN, which carries S115's 17.9-33.8 deg")
+        print("  of peak-to-peak pitch that a point mass does not have. The")
+        print("  MEDIAN is robust to that (pitch is ~zero-mean over a stride);")
+        print("  the SPREAD is not -- and the spread is the half that decides")
+        print("  whether a basin computed around a fixed point means anything")
+        print("  against a distribution. That is what the com rows are for.")
     print()
-    print("  %-16s %8s %8s %8s %9s %9s %6s"
-          % ("cell", "alpha", "p16", "p84", "v_horiz", "vz", "n"))
-    for d in dirs:
+    print("  %-16s %-5s %8s %8s %8s %8s %9s %9s %6s"
+          % ("cell", "src", "alpha", "p16", "p84", "p84-p16",
+             "v_horiz", "vz", "n"))
+    for i, d in enumerate(dirs):
         d = os.path.expanduser(d)
-        A, VH, VZ = [], [], []
-        n = 0
-        for tp in sorted(glob.glob(os.path.join(d, "run[0-9].csv"))):
-            op = os.path.join(d, "odom_" + os.path.basename(tp))
-            if not os.path.isfile(op):
+        name = (labels[i] if labels and i < len(labels)
+                else os.path.basename(os.path.normpath(d)))
+        sources = ["odom"] + (["com"] if with_com else [])
+        got_any = False
+        for src in sources:
+            res, skipped = _pooled(d, src, tail_s)
+            for f, why in skipped:
+                print("      %s [%s]: skipped -- %s" % (f, src, why))
+            if res is None:
+                if src == "com":
+                    print("  %-16s %-5s NO CoM CAPTURE -- the driver only "
+                          "publishes sim/com_odom when CORGI_PUBLISH_COM=1"
+                          % (name, src))
                 continue
-            try:
-                a, vh, vz, k = alphas(tp, op, tail_s)
-            except Unfit as e:
-                print("      %s: skipped -- %s" % (os.path.basename(tp), e))
-                continue
-            A.append(a); VH.append(vh); VZ.append(vz); n += k
-        if not A:
-            print("  %-16s UNFIT -- no usable run/odom pair" % os.path.basename(d))
-            continue
-        A = np.concatenate(A); VH = np.concatenate(VH); VZ = np.concatenate(VZ)
-        print("  %-16s %8.1f %8.1f %8.1f %9.3f %9.3f %6d"
-              % (os.path.basename(os.path.normpath(d)),
-                 float(np.median(A)), float(np.percentile(A, 16)),
-                 float(np.percentile(A, 84)), float(np.median(VH)),
-                 float(np.median(VZ)), n))
+            got_any = True
+            A, VH, VZ, n = res
+            p16 = float(np.percentile(A, 16))
+            p84 = float(np.percentile(A, 84))
+            print("  %-16s %-5s %8.1f %8.1f %8.1f %8.1f %9.3f %9.3f %6d"
+                  % (name, src, float(np.median(A)), p16, p84, p84 - p16,
+                     float(np.median(VH)), float(np.median(VZ)), n))
+        if not got_any:
+            print("  %-16s UNFIT -- no usable run/odom pair" % name)
 
 
 def selftest():
@@ -193,7 +230,18 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", action="append", default=[])
+    # ACCEPTED AND USED, added 2026-08-22. Its siblings (touchdown_phase,
+    # body_attitude) all take --label, and sweep_torque_ceiling_cor.sh builds
+    # ONE $ARGS string of "--dir X --label Y" pairs and passes it to both. This
+    # script did not accept --label, so argparse exited 2 and that campaign's
+    # entire alpha section has never produced a single line -- silently, since
+    # the error went to the log and the campaign carried on. Found when the
+    # campaign finally ran on 2026-08-22 (S181).
+    ap.add_argument("--label", action="append", default=[])
     ap.add_argument("--tail", type=float, default=TAIL_S)
+    ap.add_argument("--com", action="store_true",
+                    help="also report alpha on the CoM (needs com_run<N>.csv, "
+                         "i.e. a run with CORGI_PUBLISH_COM=1 RECORD_COM=1)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
@@ -203,8 +251,8 @@ def main():
         return 0 if ok else 1
     if not a.dir:
         ap.error("need at least one --dir")
-    print("touchdown angle alpha -- the third G-SLIP state, never measured here")
-    report(a.dir, a.tail)
+    print("touchdown angle alpha -- the third G-SLIP state")
+    report(a.dir, a.tail, with_com=a.com, labels=a.label)
     return 0
 
 

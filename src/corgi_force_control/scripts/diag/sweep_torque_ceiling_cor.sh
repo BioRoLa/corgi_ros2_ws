@@ -100,6 +100,28 @@ if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
 fi
 echo "machine clean; load average $LOAD."
 
+# PORTED FROM sweep_camber_pattern.sh 2026-08-22 (S171 S6). Webots here is a
+# WINDOWS binary invoked through /init, so a surviving instance is invisible to
+# every WSL pgrep above. It holds port 1234, the next launch dies with exit 1
+# plus a misleading "[Errno 13] Permission denied" on the temp .wbt, and the run
+# produces no capture at all.
+if command -v powershell.exe > /dev/null 2>&1; then
+  WINWB=$(powershell.exe -NoProfile -Command \
+      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null \
+      | tr -d '\r\n ')
+  case "$WINWB" in
+    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
+    0) echo "windows-side Webots check: none running." ;;
+    *) echo "!! $WINWB WINDOWS-side webots.exe still running. It holds port 1234"
+       echo "!! and no WSL pgrep can see it. REFUSING."
+       powershell.exe -NoProfile -Command \
+         "Get-Process webots* | Select-Object Id,ProcessName,StartTime" 2>/dev/null
+       exit 1 ;;
+  esac
+else
+  echo "windows-side Webots check: powershell.exe not reachable -- continuing."
+fi
+
 # THE GUARD THAT S28 HAD TO LEARN THE HARD WAY. Its first attempt ran all nine
 # runs at 35 N.m regardless of the env var, because the INSTALLED driver still
 # had the ceiling hardcoded and corgi_sim had never been rebuilt. The result
@@ -173,12 +195,30 @@ for REP in $(seq 1 "$NPER"); do
     # SIM_ASSERT greps the DRIVER's own startup line, so the assert confirms the
     # ceiling reached the simulator rather than merely that we set a variable.
     CEIL_FMT=$(awk -v t="$TQ" 'BEGIN{printf "%.2f", t}')
-    CORGI_MAX_TORQUE="$TQ" \
-      SIM_ASSERT="Torque ceilings: leg $CEIL_FMT" \
-      N=1 RUN_START=$REP OUTDIR="$OUT" RECORD_ODOM=1 \
-      GAIT_SIM=$GAIT_SIM GAIT_WALL=$GAIT_WALL \
-      CTL_ARGS="$FLIGHT_ARGS $TPL_ARG" \
-      bash "$DIAG/repeat_gain_regime.sh"
+    # RETRY A COLD START, once. PORTED 2026-08-22 (S171 S6): the first launch
+    # after an idle gap fails and the next succeeds. repeat_gain_regime.sh
+    # prints "skipping" and RETURNS 0, so a campaign silently loses that cell
+    # while the others run and look fine. Here it would quietly reduce n for
+    # one ceiling, which is exactly the comparison P-Q-1..P-Q-3 rest on.
+    for ATTEMPT in 1 2; do
+      CORGI_MAX_TORQUE="$TQ" \
+        SIM_ASSERT="Torque ceilings: leg $CEIL_FMT" \
+        N=1 RUN_START=$REP OUTDIR="$OUT" RECORD_ODOM=1 \
+        GAIT_SIM=$GAIT_SIM GAIT_WALL=$GAIT_WALL \
+        CTL_ARGS="$FLIGHT_ARGS $TPL_ARG" \
+        bash "$DIAG/repeat_gain_regime.sh"
+      if [ -f "$OUT/run$REP.csv" ]; then
+        [ "$ATTEMPT" = 2 ] && echo "  (cell tq$TQ rep $REP succeeded on RETRY -- cold start, S171 S6)"
+        break
+      fi
+      if [ "$ATTEMPT" = 1 ]; then
+        echo "  !! cell tq$TQ rep $REP produced NO CAPTURE. Cold-start failure"
+        echo "  !! mode, not a result. Retrying ONCE before giving up."
+      else
+        echo "  !! cell tq$TQ rep $REP produced NO CAPTURE on either attempt."
+        echo "  !! n is REDUCED for this ceiling -- say so when scoring P-Q-*."
+      fi
+    done
   done
 done
 
