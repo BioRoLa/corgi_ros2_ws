@@ -7,6 +7,61 @@ ForceControlNode::ForceControlNode()
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1))
 {
     RCLCPP_INFO(this->get_logger(), "Force Control Starts");
+
+    // ---- CLOCK FF SIGN CHECK -----------------------------------------------
+    //
+    // PROOF OF SIGN, at startup, from the same LegModel the law uses.
+    //
+    // e_t = (-e_r_z, 0, e_r_x) is a fixed +90 deg rotation of the radial unit
+    // vector. K and B take it as the outer product e_t*e_t^T, so its sign has
+    // never mattered and nothing in the tree ever established it. The clocked
+    // feedforward is LINEAR in e_t: get the sign wrong and the term doubles the
+    // brake instead of cancelling it, which would read as a clean falsification
+    // of a correct hypothesis. So assert it rather than reason about it.
+    //
+    // The assertion: sweeping beta forward must move the contact point along
+    // +e_t. Checked by central difference at three poses across the stance
+    // sweep, at the gait's median theta (85.4 deg, S151).
+    {
+        LegModel& lm = kinematics_.get_leg_model();
+        const double th = 85.4 / 180.0 * M_PI;
+        const double db = 1e-4;
+        const double betas[3] = {-0.1614, 0.0, +0.1609};   // v070 TD, mid, LO
+        double cosines[3] = {0.0, 0.0, 0.0};
+        bool sign_ok = true;
+        for (int i = 0; i < 3; ++i) {
+            lm.contact_map_3d(th, betas[i], 0.0);
+            const double rx = lm.contact_p_3d[0], rz = lm.contact_p_3d[2];
+            const double rn = std::sqrt(rx*rx + rz*rz);
+            const double etx = -rz / rn, etz = rx / rn;
+
+            lm.contact_map_3d(th, betas[i] + db, 0.0);
+            const double px = lm.contact_p_3d[0], pz = lm.contact_p_3d[2];
+            lm.contact_map_3d(th, betas[i] - db, 0.0);
+            const double mx = lm.contact_p_3d[0], mz = lm.contact_p_3d[2];
+
+            const double dx = (px - mx) / (2.0 * db), dz = (pz - mz) / (2.0 * db);
+            const double dn = std::sqrt(dx*dx + dz*dz);
+            cosines[i] = (dn > 1e-12) ? (etx*dx + etz*dz) / dn : 0.0;
+            if (!(cosines[i] > 0.5)) sign_ok = false;
+        }
+        RCLCPP_WARN(this->get_logger(),
+                    "CLOCK FF SIGN CHECK: cos(e_t, d(contact)/dbeta) = "
+                    "%+.4f %+.4f %+.4f at beta = -0.1614 / 0.0 / +0.1609, "
+                    "theta = 85.4 deg -- %s (need all > +0.5)",
+                    cosines[0], cosines[1], cosines[2],
+                    sign_ok ? "PASS" : "FAIL");
+        if (!sign_ok) {
+            RCLCPP_FATAL(this->get_logger(),
+                         "CLOCK FF SIGN CHECK FAILED: +dbeta_ref would push the "
+                         "contact point BACKWARD along e_t, so the clocked "
+                         "feedforward would ADD to the brake it is meant to "
+                         "cancel. Refusing to run. Flip the sign of e_t in "
+                         "force_control(), re-run this check, and note it in "
+                         "the log before any campaign.");
+            throw std::runtime_error("clock FF sign check failed");
+        }
+    }
     
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
@@ -137,24 +192,37 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     M(0, 0) = imp_cmd_->mx; M(1, 1) = imp_cmd_->my; M(2, 2) = imp_cmd_->mz;
 
+    // The leg-frame basis, built from the MEASURED contact point:
+    //   e_r  radial, hip -> contact, projected into the sagittal (x-z) plane
+    //   e_t  tangential, perpendicular to e_r in that plane
+    //   e_y  lateral, body y
+    //
+    // Hoisted out of the leg_frame branch (2026-08-22) because the clocked
+    // feedforward below needs e_t in BOTH phases: Lu & Lin eq 11 regulates the
+    // leg in stance and in flight (p5, S2.3), and the flight branch commands
+    // isotropic gains for which the rotation is the identity anyway.
+    Eigen::Vector3d e_r(legmodel.contact_p_3d[0], 0.0, legmodel.contact_p_3d[2]);
+    const double radial_norm = e_r.norm();
+    const bool leg_basis_ok = radial_norm >= 1e-9;
+    Eigen::Vector3d e_t(0.0, 0.0, 0.0);
+    if (leg_basis_ok) {
+        e_r /= radial_norm;
+        e_t = Eigen::Vector3d(-e_r(2), 0.0, e_r(0));
+    }
+
     if (imp_cmd_->leg_frame) {
         // The G-SLIP spring acts along the leg, so the commanded stiffness is
-        // given in the leg frame and rotated here. Build the basis from the
-        // measured contact point rather than from an angle, which keeps this
-        // free of sign conventions:
-        //   e_r  radial, hip -> contact, projected into the sagittal (x-z) plane
-        //   e_t  tangential, perpendicular to e_r in that plane
-        //   e_y  lateral, body y
-        Eigen::Vector3d e_r(legmodel.contact_p_3d[0], 0.0, legmodel.contact_p_3d[2]);
-        const double radial_norm = e_r.norm();
-        if (radial_norm < 1e-9) {
+        // given in the leg frame and rotated here. Building the basis from the
+        // contact point keeps K and B free of sign conventions -- e_t enters as
+        // the outer product e_t*e_t^T, where its sign cancels. NOTE that the
+        // feedforward below is LINEAR in e_t, so its sign does NOT cancel; that
+        // is what the constructor's sign self-check exists to catch.
+        if (!leg_basis_ok) {
             // Degenerate (contact directly under the hip axis): fall back to
             // body-frame axes rather than normalising a zero vector.
             K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
             B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
         } else {
-            e_r /= radial_norm;
-            Eigen::Vector3d e_t(-e_r(2), 0.0, e_r(0));
             Eigen::Vector3d e_y(0.0, 1.0, 0.0);
 
             K = imp_cmd_->kx * (e_r * e_r.transpose())
@@ -169,8 +237,62 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
         K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
     }
 
+    // ---- The clocked-torque feedforward (Lu & Lin 2024 eq 11's D term) -------
+    //
+    // The damper above brakes to ZERO velocity: its torque is -B_joint*phi_dot,
+    // executed as the driver's diagonal kd plus the off-diagonal coupling below.
+    // eq 11 damps to the CLOCK'S rate instead:  k_D*(dtheta_fp - dtheta).
+    // The difference is a constant feedforward +B*v_ref, which is what this is.
+    //
+    // v_ref is the commanded tangential contact velocity: the leg-angle rate
+    // dbeta_ref times the lever |hip -> contact|, which is radial_norm -- the
+    // SAME measured geometry e_t came from, so the lever is never re-derived
+    // anywhere else. Together with the B term above the tangential law is now
+    // bz*(v_ref - v_measured).
+    //
+    // Co-gated with the damping it corrects by construction: same bz, same e_t,
+    // same degeneracy guard. dbeta_ref == 0 reproduces the old behaviour bitwise.
+    Eigen::MatrixXd f_clock = Eigen::MatrixXd::Zero(3, 1);
+    if (leg_basis_ok && imp_cmd_->dbeta_ref != 0.0) {
+        f_clock = imp_cmd_->bz * (imp_cmd_->dbeta_ref * radial_norm) * e_t;
+    }
+
+    // PROOF OF ACTION, from inside the law itself.
+    //
+    // S151 established that a printed PARAMETER proves only that it was
+    // read -- S138's apex channel printed its parameters faithfully for ten
+    // runs and never fired. This line is different: it prints the value the
+    // impedance law just computed, from the live message and the measured
+    // pose. If it reads 0.00 on an arm that commanded a non-zero scale, the
+    // term did not reach the law and the run is void.
+    //
+    // Throttled to 5 s. Which leg wins the throttle is arbitrary and does not
+    // matter -- all four are commanded the same clock.
+    //
+    // Needed because the arm-vs-arm statistical check is confounded: measured
+    // on banked config-of-record captures, the stance median of
+    // (t_ff_L + t_ff_R) moves 3.9 N.m between two cells that BOTH ran with no
+    // feedforward at all, purely from the pose change. That is 60% of the
+    // signal this term is meant to add.
+    // ONLY when the term is actually live. The first version printed on every
+    // throttle window regardless, which sounds harmless and is not: with
+    // clock_ff_phase = "stance", 59.4% of the v070 cycle is flight where
+    // dbeta_ref is 0, so a correctly engaged arm printed "tau_beta=+0.000"
+    // most of the time -- and the harness assert reads ONE line with head -1.
+    // A correct arm would have been marked INVALID roughly 3 times in 5.
+    // Printing only when non-zero makes the LINE ITSELF the evidence.
+    if (leg_basis_ok && imp_cmd_->dbeta_ref != 0.0) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 5000,
+            "CLOCK FF ACTIVE: dbeta_ref=%+.4f rad/s bz=%.1f lever=%.4f m "
+            "-> |f_clock|=%.3f N, tau_beta=%+.3f N.m (%.3f N.m/motor)",
+            imp_cmd_->dbeta_ref, imp_cmd_->bz, radial_norm, f_clock.norm(),
+            imp_cmd_->bz * imp_cmd_->dbeta_ref * radial_norm * radial_norm,
+            0.5 * imp_cmd_->bz * imp_cmd_->dbeta_ref * radial_norm * radial_norm);
+    }
+
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma;
-    trq_cmd_base = J_fb.transpose() * (force_des + M*(-acc_fb));
+    trq_cmd_base = J_fb.transpose() * (force_des + f_clock + M*(-acc_fb));
 
     // calculate phi command
     Eigen::MatrixXd phi_des(3, 1);

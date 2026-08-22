@@ -122,6 +122,13 @@ def analyse(torque_csv, odom_csv, tail_s=TAIL_S):
         "pitch_p2p": float(r_pitch.max() - r_pitch.min()),
         "roll_rms": float(np.sqrt(np.mean(r_roll ** 2))),
         "roll_p2p": float(r_roll.max() - r_roll.min()),
+        # SIGNED roll, added 2026-08-22 for S169's P-R-3. Every roll figure
+        # above is an RMS or an absolute value, so a commanded LEAN -- which is
+        # a signed quantity and whose whole point is its direction -- was not
+        # readable from this tool at all. rpy() above matches the controller's
+        # update_attitude, so these are comparable to k_roll's own input.
+        "roll_med": float(np.median(r_roll)),
+        "roll_TD": float(np.median(rolls_td)),
         "abs_pitch_TD": float(np.median(np.abs(p))),
         "pitch_TD_p90": float(np.percentile(np.abs(p), 90)),
         "abs_roll_TD": float(np.median(np.abs(rolls_td))),
@@ -146,7 +153,15 @@ def main():
     print("body attitude, last 20 s. pitch + = nose DOWN. angles in DEGREES.")
     print("rho = Spearman(|pitch at touchdown|, beta swept that stance).")
     print("Alex's hypothesis predicts rho clearly NEGATIVE.\n")
+    print("rollMED / rollTD are SIGNED (median over the band / at touchdown).")
+    print("SIGN CALIBRATION, from banked menger_acker_final (S169, 2026-08-22):")
+    print("  lam0 +0.14   lam10_pos -2.65   lam10_neg +2.83  (deg, rollMED)")
+    print("gamma_acker_dir +1 is the arm S88 measured turning RIGHT (kappa<0),")
+    print("so NEGATIVE roll here is the lean that accompanies a right turn.")
+    print("Do not infer the frame from the arctan2 alone -- this is the")
+    print("calibration that ties the sign to a measured turn direction.\n")
     print(f"{'cell':26} {'pitchRMS':>9} {'pitchP2P':>9} {'rollRMS':>8} "
+          f"{'rollMED':>8} {'rollTD':>8} "
           f"{'|pitTD|':>8} {'pitTD90':>8} {'rho':>7} {'n':>5}")
     for i, d in enumerate(args.dir):
         lab = args.label[i] if i < len(args.label) else os.path.basename(
@@ -166,7 +181,9 @@ def main():
             continue
         f = lambda k: float(np.median([v[k] for v in vals]))
         print(f"{lab:26} {d2r*f('pitch_rms'):9.2f} {d2r*f('pitch_p2p'):9.2f} "
-              f"{d2r*f('roll_rms'):8.2f} {d2r*f('abs_pitch_TD'):8.2f} "
+              f"{d2r*f('roll_rms'):8.2f} "
+              f"{d2r*f('roll_med'):+8.2f} {d2r*f('roll_TD'):+8.2f} "
+              f"{d2r*f('abs_pitch_TD'):8.2f} "
               f"{d2r*f('pitch_TD_p90'):8.2f} {f('rho_pitch_sweep'):+7.2f} "
               f"{sum(v['n'] for v in vals):5d}")
 

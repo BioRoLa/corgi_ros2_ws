@@ -25,7 +25,18 @@
 WS=~/corgi_ws/corgi_ros2_ws
 OUTDIR=${OUTDIR:-~/corgi_runs/gain_regime}
 N=${N:-3}
-GAIT_WALL=${GAIT_WALL:-200}
+# First run number to write. Lets a sweep call this once per
+# (cell, repetition) and still produce run1..runN per cell, which is
+# what an INTERLEAVED campaign needs. Interleaving costs nothing here
+# because every run already tears down and relaunches the whole stack.
+RUN_START=${RUN_START:-1}
+GAIT_WALL=${GAIT_WALL:-200}   # HARD TIMEOUT only when GAIT_SIM is set
+# Seconds of SIM time to capture per run. 0 = old wall-clock behaviour,
+# bit-identical, so no existing harness changes. New campaigns should set it:
+# wall-clock windows make the capture a property of the machine's load rather
+# than of the experiment, which cost S161 its cross-cell comparability.
+GAIT_SIM=${GAIT_SIM:-0}
+SPAN_REF=""
 SETTLE_WALL=${SETTLE_WALL:-45}
 # Extra launch args for the controller, e.g. CTL_ARGS="contact_gated_gains:=true".
 # Kept as one string so the A/B pair differs in exactly one place and the
@@ -57,7 +68,7 @@ teardown() {
   sleep 3
 }
 
-for RUN in $(seq 1 "$N"); do
+for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
   echo "################ RUN $RUN / $N ################"
   teardown
   rm -f /tmp/corgi_torque_terms.csv
@@ -121,8 +132,90 @@ for RUN in $(seq 1 "$N"); do
     ODOM_PID=$!
   fi
 
-  echo "  gait running; capturing for ${GAIT_WALL}s wall"
-  sleep "$GAIT_WALL"
+  # ---- CAPTURE WINDOW: sim time, not wall time -----------------------------
+  #
+  # WHY THIS EXISTS (2026-08-22). GAIT_WALL is WALL clock, and it buys however
+  # much sim time the machine happens to deliver. Webots here runs ~14x slower
+  # than real time and that factor is not constant: it collapses under any
+  # concurrent load. In S161 it did, and the campaign captured 27-31 s of sim
+  # in its FIRST cell and only 10-13 s in the other three.
+  #
+  # That is not a small blemish. Every shipped analyser uses TAIL_S = 20 s, so
+  # cell 1 was scored on the settled tail of a 30 s run and cells 2-4 on their
+  # ENTIRE capture including the entry transient -- and the shortfall lands on
+  # the LATER cells, which is exactly where a sweep puts its treatment arms.
+  #
+  # GAIT_SIM (seconds of SIM time) makes the window a property of the
+  # experiment instead of a property of the machine. GAIT_WALL stays as the
+  # hard timeout: a run that cannot reach the target says so loudly rather than
+  # being silently truncated.
+  #
+  # Default GAIT_SIM=0 keeps the old wall-clock behaviour bit-identical, so no
+  # existing harness changes under it. New campaigns should set it.
+  TQ=${CORGI_TORQUE_DEBUG_PATH:-/tmp/corgi_torque_terms.csv}
+  simt() { tail -1 "$TQ" 2>/dev/null | cut -d, -f1; }
+  W0=$(date +%s)
+  S0=$(simt)
+  case "$S0" in ''|*[!0-9.]*) S0=0 ;; esac
+
+  if [ "${GAIT_SIM:-0}" != "0" ]; then
+    echo "  gait running; capturing ${GAIT_SIM}s of SIM time (wall timeout ${GAIT_WALL}s)"
+    SHORT=""
+    while :; do
+      SN=$(simt); case "$SN" in ''|*[!0-9.]*) SN=$S0 ;; esac
+      WN=$(( $(date +%s) - W0 ))
+      if awk -v a="$SN" -v b="$S0" -v g="$GAIT_SIM" 'BEGIN{exit !(a-b >= g)}'; then
+        break
+      fi
+      if [ "$WN" -ge "$GAIT_WALL" ]; then
+        SHORT=1
+        break
+      fi
+      sleep 2
+    done
+  else
+    echo "  gait running; capturing for ${GAIT_WALL}s wall (GAIT_SIM unset)"
+    sleep "$GAIT_WALL"
+    SHORT=""
+  fi
+
+  S1=$(simt); case "$S1" in ''|*[!0-9.]*) S1=$S0 ;; esac
+  W1=$(( $(date +%s) - W0 ))
+  SPAN=$(awk -v a="$S1" -v b="$S0" 'BEGIN{printf "%.2f", a-b}')
+  RTF=$(awk -v s="$SPAN" -v w="$W1" 'BEGIN{printf "%.3f", (w>0)? s/w : 0}')
+  echo "  captured ${SPAN}s sim in ${W1}s wall (real-time factor ${RTF})"
+  if [ -n "$SHORT" ]; then
+    echo "  !! run $RUN hit the WALL TIMEOUT before ${GAIT_SIM}s of sim."
+    echo "  !! Only ${SPAN}s captured. Something is loading the machine."
+  fi
+
+  # Cross-run comparability. A sweep is only a sweep if every cell got the same
+  # window; S161 lost that and nobody noticed, because `sim t = X` was printed
+  # every run and read by no one.
+  # Persisted in FILES, not a shell variable: an interleaved campaign calls
+  # this script once per run, so an in-process SPAN_REF resets every time and
+  # the check silently never fires. Two references are kept -- this cell's own
+  # first run, and the CAMPAIGN's first run, which is the cross-cell drift
+  # S161 actually suffered and which a per-cell reference cannot see.
+  CELL_REF_F="$OUTDIR/.span_ref"
+  CAMP_REF_F="$(dirname "$OUTDIR")/.span_ref"
+  [ -f "$CELL_REF_F" ] && SPAN_REF=$(cat "$CELL_REF_F") || SPAN_REF=""
+  [ -f "$CAMP_REF_F" ] && CAMP_REF=$(cat "$CAMP_REF_F") || CAMP_REF=""
+  if [ -n "$CAMP_REF" ] && awk -v a="$SPAN" -v b="$CAMP_REF" \
+       'BEGIN{d=(a-b)/b; if(d<0)d=-d; exit !(d>0.20)}'; then
+    echo "  !! run $RUN captured ${SPAN}s against the CAMPAIGN's first run"
+    echo "  !! (${CAMP_REF}s) -- more than 20% apart. Cells run at different"
+    echo "  !! throughput are NOT a matched comparison (S166). Find the load."
+  fi
+  [ -z "$CAMP_REF" ] && printf '%s' "$SPAN" > "$CAMP_REF_F"
+  if [ -z "$SPAN_REF" ]; then
+    printf '%s' "$SPAN" > "$CELL_REF_F"
+    echo "  (reference span for this cell: ${SPAN}s)"
+  elif awk -v a="$SPAN" -v b="$SPAN_REF" 'BEGIN{d=(a-b)/b; if(d<0)d=-d; exit !(d>0.20)}'; then
+    echo "  !! run $RUN captured ${SPAN}s against run 1's ${SPAN_REF}s -- more"
+    echo "  !! than 20% apart. These runs are NOT a matched comparison. Find"
+    echo "  !! the load before trusting anything that pools them."
+  fi
 
   if [ -n "${RECORD_ODOM:-}" ]; then
     kill "$ODOM_PID" 2>/dev/null
@@ -147,9 +240,46 @@ for RUN in $(seq 1 "$N"); do
       echo "  ?? v~1.20 template (0.2249 s stride), NOT v070 (0.2662 s)."
       echo "  ?? If this campaign meant v070, its runs are INVALID." ;;
   esac
-  cp /tmp/corgi_torque_terms.csv "$OUTDIR/run${RUN}.csv"
+  # QUARANTINE A SHORT RUN, do not just complain about it.
+  #
+  # A run that hit the wall timeout before reaching GAIT_SIM used to be copied
+  # to run$RUN.csv exactly like a healthy one. Every analyser globs
+  # run[0-9].csv and masks `t >= t.max() - 20.0`, so a 12 s capture is scored
+  # on its ENTIRE file including standup and the pre-trigger hold, and none of
+  # their Unfit guards catch it -- which is precisely how §161 produced four
+  # cells that were not a comparison. Printing "!!" and saving it anyway means
+  # the warning scrolls past and the number still lands in the median.
+  #
+  # Renaming is the established quarantine here (the suspend-invalid pattern):
+  # the run[0-9].csv glob drops it automatically, and the file is still on disk
+  # for anyone who wants to look.
   SIMT=$(tail -1 /tmp/corgi_torque_terms.csv | cut -d, -f1)
-  echo "  run $RUN saved: $(wc -l < "$OUTDIR/run${RUN}.csv") rows, sim t = $SIMT"
+  if [ -n "$SHORT" ]; then
+    DEST="$OUTDIR/run${RUN}_short_invalid.csv"
+    cp /tmp/corgi_torque_terms.csv "$DEST"
+    [ -n "${RECORD_ODOM:-}" ] && mv "$OUTDIR/odom_run${RUN}.csv" \
+        "$OUTDIR/odom_run${RUN}_short_invalid.csv" 2>/dev/null
+    echo "  !! run $RUN QUARANTINED as ${DEST##*/}: it captured ${SPAN}s of"
+    echo "  !! sim against the ${GAIT_SIM}s target, so its 20 s tail would be"
+    echo "  !! the whole run including standup. The analysers' run[0-9].csv"
+    echo "  !! glob will skip it. Re-run this cell on an idle machine."
+  else
+    cp /tmp/corgi_torque_terms.csv "$OUTDIR/run${RUN}.csv"
+    echo "  run $RUN saved: $(wc -l < "$OUTDIR/run${RUN}.csv") rows, sim t = $SIMT"
+  fi
+  # Bank the logs beside the capture. Every engagement banner lives in them
+  # and /tmp/ctl_run$RUN.log is overwritten by the next cell, so evidence for
+  # cell 1 is gone by the time cell 4 is analysed.
+  cp "/tmp/ctl_run$RUN.log" "$OUTDIR/ctl_run${RUN}.log" 2>/dev/null || true
+  cp "/tmp/sim_run$RUN.log" "$OUTDIR/sim_run${RUN}.log" 2>/dev/null || true
+  # Did the plant run at the TEMPLATE's rate? See playback_ratio.py's header.
+  # Reported, not gated: a bad ratio can be controller starvation OR the leg
+  # refusing to follow (S153 / Open Issue #21), and this cannot tell them
+  # apart. Runs between runs, so it competes with nothing.
+  if [ -z "$SHORT" ] && [ -f "$OUTDIR/run${RUN}.csv" ]; then
+    python3 "$(dirname "$0")/playback_ratio.py" "$OUTDIR/run${RUN}.csv" \
+        2>/dev/null | sed -n 's/^      -> /  playback: /p'
+  fi
   # Assert the arm actually ran in the condition it claims. A run whose special
   # condition silently failed to engage looks identical to "the change does
   # nothing", which is the exact shape of wrong answer this session kept
@@ -221,7 +351,7 @@ for RUN in $(seq 1 "$N"); do
       # requests the default (600) produces no line -- and the first version
       # of this check read that absence as failure and fired INVALID on the
       # reference arm. Fixed 2026-08-22 after it did exactly that.
-      WANT=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*//p')
+      WANT=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*/\1/p')
       GOT=$(grep -o 'k_tangential=[0-9.]*' "/tmp/ctl_run$RUN.log" | head -1             | cut -d= -f2)
       if [ -n "$GOT" ] && [ -n "$WANT" ] &&          awk -v a="$WANT" -v b="$GOT" 'BEGIN{exit !(a-b<0.01 && b-a<0.01)}'; then
         echo "  k_tangential read OK in run $RUN: requested $WANT, node reports $GOT"
@@ -232,6 +362,72 @@ for RUN in $(seq 1 "$N"); do
         echo "  ?? run $RUN: no LEG-FRAME GAINS line at all -- controller"
         echo "  ?? binary predates 2026-08-22. Cannot certify from the log;"
         echo "  ?? the data check after the loop still applies."
+      fi
+      ;;
+  esac
+  case "$CTL_ARGS" in
+    *clock_ff_scale:=*)
+      # The clocked-torque feedforward (Lu & Lin eq 11's D term, log S164).
+      # TWO asserts, because they catch different failures and the second is
+      # the one S151 says actually counts.
+      #
+      # 1. PROOF OF INTENT -- gslip_pronk's banner. Compare the node's
+      #    REPORTED scale against the REQUESTED one rather than keying on the
+      #    banner's presence, the same fix the k_tangential assert above needed
+      #    after it fired INVALID on its own reference arm.
+      # 2. PROOF OF ACTION -- force_control's CLOCK FF ACTIVE line, which
+      #    prints the tau_beta the impedance law JUST COMPUTED from the live
+      #    message and the measured pose. A non-zero value there is the
+      #    evidence; the banner is not. S138's apex channel printed its
+      #    parameters faithfully for ten runs and never fired.
+      WANT=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*clock_ff_scale:=\([0-9.]*\).*/\1/p')
+      GOT=$(grep -o 'CLOCK FEEDFORWARD: scale=[0-9.]*' "/tmp/ctl_run$RUN.log" \
+            | head -1 | cut -d= -f2)
+      if [ -n "$GOT" ] && [ -n "$WANT" ] && \
+         awk -v a="$WANT" -v b="$GOT" 'BEGIN{exit !(a-b<0.001 && b-a<0.001)}'; then
+        echo "  clock_ff read OK in run $RUN: requested $WANT, node reports $GOT"
+        echo "    $(grep -o 'CLOCK FEEDFORWARD: .*' "/tmp/ctl_run$RUN.log" | head -1)"
+      elif [ -n "$GOT" ]; then
+        echo "  !! run $RUN: requested clock_ff_scale $WANT but the node reports"
+        echo "  !! $GOT -- the launch argument did not reach it. INVALID."
+      else
+        echo "  ?? run $RUN: no CLOCK FEEDFORWARD line -- controller binary"
+        echo "  ?? predates 2026-08-22. Cannot certify from the log."
+      fi
+      # PROOF OF ACTION. force_control prints this line ONLY when the term is
+      # live (dbeta_ref != 0), so the line's PRESENCE is the evidence and its
+      # ABSENCE on a scale>0 arm is the failure. Take the largest |tau_beta|
+      # seen, not `head -1`:
+      #   - the line is throttled to 5 s of SIM time and lands at an arbitrary
+      #     gait phase, so one sample is a lottery;
+      #   - with clock_ff_phase=stance, 59.4% of the v070 cycle is flight,
+      #     where the term is legitimately absent.
+      # An earlier version read head -1 and would have marked a correctly
+      # engaged arm INVALID about three times in five.
+      TAU=$(grep -o 'tau_beta=[+-][0-9.]*' "/tmp/ctl_run$RUN.log" \
+            | cut -d= -f2 | awk 'function abs(x){return x<0?-x:x}
+                                 {if (abs($1) > m) {m = abs($1); v = $1}}
+                                 END{if (NR) print v}')
+      NTAU=$(grep -c 'CLOCK FF ACTIVE' "/tmp/ctl_run$RUN.log" 2>/dev/null)
+      if awk -v s="$WANT" 'BEGIN{exit !(s <= 0.001)}'; then
+        # The off arm. Silence is the CORRECT result here, and a line would
+        # mean the feedforward fired on an arm that asked for none.
+        if [ "${NTAU:-0}" = "0" ]; then
+          echo "  clock_ff correctly SILENT in run $RUN (scale $WANT, off arm)"
+        else
+          echo "  !! run $RUN: scale $WANT but force_control printed CLOCK FF"
+          echo "  !! ACTIVE $NTAU times -- the off arm is not off. INVALID."
+        fi
+      elif [ -z "$TAU" ]; then
+        echo "  !! run $RUN: scale $WANT but force_control never printed"
+        echo "  !! CLOCK FF ACTIVE. The feedforward did not reach the"
+        echo "  !! impedance law. INVALID."
+      elif awk -v t="$TAU" 'BEGIN{exit !(t > 0.001 || t < -0.001)}'; then
+        echo "  clock_ff ACTION CONFIRMED in run $RUN: peak |tau_beta| = $TAU N.m" \
+             "over $NTAU throttled samples, at scale $WANT"
+      else
+        echo "  !! run $RUN: scale $WANT but every CLOCK FF ACTIVE sample read"
+        echo "  !! tau_beta=$TAU. Intent and action disagree -- arm INVALID."
       fi
       ;;
   esac
@@ -262,7 +458,7 @@ done
 # ---------------------------------------------------------------------------
 case "$CTL_ARGS" in
   *k_tangential:=*)
-    KT_VAL=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*//p')
+    KT_VAL=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*/\1/p')
     if [ -z "$KT_VAL" ]; then
       echo "  ?? k_tangential requested but its value could not be parsed from"
       echo "  ?? CTL_ARGS -- engagement UNCERTIFIABLE, arm NOT invalid."

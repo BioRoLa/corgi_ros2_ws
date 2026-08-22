@@ -162,7 +162,11 @@ def generate_launch_description():
         DeclareLaunchArgument("k_tangential", default_value="600.0"),
         DeclareLaunchArgument("k_flight", default_value="12000.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
-        DeclareLaunchArgument("k_yaw", default_value="0.15"),
+        # Heading hold OFF by default since 2026-08-22 -- see the ctor comment
+        # in gslip_pronk.cpp and log S168. Was 0.15. The ctor default now
+        # AGREES with this one; d_yaw had silently diverged (ctor 0.02 against
+        # this file's 0.0), the same trap as k_tangential's 900-vs-600.
+        DeclareLaunchArgument("k_yaw", default_value="0.0"),
         DeclareLaunchArgument("spring_rest_reference", default_value="false"),
         DeclareLaunchArgument("k_steer", default_value="0.0"),
         DeclareLaunchArgument("steer_offset", default_value="0.0"),
@@ -189,6 +193,18 @@ def generate_launch_description():
         DeclareLaunchArgument("b_tangential", default_value="30.0"),
         DeclareLaunchArgument("b_lateral", default_value="60.0"),
         DeclareLaunchArgument("b_flight", default_value="150.0"),
+        # --- Added 2026-08-22: the clocked-torque feedforward (log S164) ------
+        #
+        # Lu & Lin 2024 eq 11 damps the leg angle to the CLOCK'S rate; this
+        # controller damped to zero, i.e. it carried an unintended brake
+        # proportional to the commanded sweep rate and opposing it
+        # (3.2 N.m/motor at the v070 config of record, 8.3 N.m/motor in
+        # flight). 0.0 = OFF and bit-identical to everything before that date.
+        #
+        # clock_ff_phase: "stance" | "both". The paper regulates the leg in
+        # BOTH phases (p5, S2.3); the registered P-N-1..3 are stance-only.
+        DeclareLaunchArgument("clock_ff_scale", default_value="0.0"),
+        DeclareLaunchArgument("clock_ff_phase", default_value="stance"),
         DeclareLaunchArgument("d_roll", default_value="0.0"),
         DeclareLaunchArgument("d_yaw", default_value="0.0"),
         DeclareLaunchArgument("gamma_limit", default_value="0.0873"),  # 5 deg
@@ -337,6 +353,8 @@ def generate_launch_description():
                 'b_tangential': LaunchConfiguration('b_tangential'),
                 'b_lateral': LaunchConfiguration('b_lateral'),
                 'b_flight': LaunchConfiguration('b_flight'),
+                'clock_ff_scale': LaunchConfiguration('clock_ff_scale'),
+                'clock_ff_phase': LaunchConfiguration('clock_ff_phase'),
                 'd_roll': LaunchConfiguration('d_roll'),
                 'd_yaw': LaunchConfiguration('d_yaw'),
                 'gamma_limit': LaunchConfiguration('gamma_limit'),

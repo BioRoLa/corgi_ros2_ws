@@ -452,6 +452,29 @@ private:
     double b_tangential_;
     double b_lateral_;
 
+    // --- Clocked-torque feedforward: eq 11's D term (log S164) ------------
+    //
+    // Lu & Lin 2024 eq 11 damps the leg angle to the CLOCK'S rate,
+    // k_D*(dtheta_fp - dtheta). This controller damped to zero, i.e. it
+    // carried an unintended brake proportional to the commanded sweep rate.
+    // clock_ff_scale_ 0.0 reproduces that exactly; 1.0 is the paper's law.
+    // clock_ff_phase_ "stance" | "both" -- the paper says BOTH (p5, S2.3),
+    // the registered predictions P-N-1..3 are about stance.
+    double clock_ff_scale_;
+    std::string clock_ff_phase_;
+    double clock_rate_stance_{0.0};   // rad/s, derived from the template
+    double clock_rate_flight_{0.0};   // rad/s, signed opposite
+    // TRUE only inside the stride loop. The clock torque references a clock;
+    // during standup, the pre-trigger hold and the settle there is no clock
+    // running, the commanded beta is FROZEN, and a constant tangential force
+    // against a static pose is just a lean: at equilibrium the lever cancels
+    // and the leg sits at (b_tangential/k_tangential)*dbeta_ref = 0.1505 rad
+    // = 8.6 deg for the whole 2.5 s settle. That is larger than the +0.1382
+    // rad tracking lag the campaign validates against, and it would put the
+    // treated arms into the gait from a different initial condition than the
+    // off arm -- a confound manufactured by the instrument.
+    bool gait_striding_{false};
+
     // --- Commanded lateral force: steering by FORCE, not by lean ------------
     //
     // ImpedanceCmd carries fx/fy/fz straight into
@@ -836,6 +859,8 @@ GslipPronkNode::GslipPronkNode()
       b_radial_(0.0),
       b_tangential_(30.0),
       b_lateral_(60.0),
+      clock_ff_scale_(0.0),
+      clock_ff_phase_("stance"),
       f_lateral_(0.0),
       f_lateral_front_only_(false),
       k_flight_(12000.0),
@@ -866,8 +891,24 @@ GslipPronkNode::GslipPronkNode()
       // stay small enough not to disturb the hop it is stabilising.
       k_roll_(0.25),
       d_roll_(0.03),
-      k_yaw_(0.15),
-      d_yaw_(0.02),
+      // HEADING HOLD OFF BY DEFAULT, 2026-08-22 (S163, S168). The yaw term
+      // steers by differential front/rear camber and was SATURATED at the 5 deg
+      // gamma_limit -- demanding maximum lean and still drifting -5.8 deg/s.
+      // With it off: yaw -0.86 deg/s (6.7x less), straightness 0.865 -> 0.987,
+      // same speed, and the front/rear camber projection goes -5.179 -> +0.005
+      // deg. Adopted on Alex's decision at n = 1 plus S163's banked n = 4.
+      //
+      // ⚠ THIS REMOVES THE HEADING HOLD ENTIRELY. The robot is straighter
+      // because it stopped fighting, not because it is corrected: -0.86 deg/s
+      // is uncorrected and unbounded, ~52 deg over a minute. Commanded turning
+      // is unaffected (steer_offset / k_steer_yaw and the Ackermann camber
+      // channel are separate). Stage 3/4 will need a hold back -- the intended
+      // answer is gamma_yaw_limit ~0.0175 (S89 C2, P-M-2), which is UNTESTED:
+      // its one run failed the gait gate at 24.5%% flight.
+      //
+      // P-M-1..P-M-3 remain REGISTERED AND UNSCORED at n >= 5.
+      k_yaw_(0.0),
+      d_yaw_(0.0),
       gamma_limit_(5.0 / 180.0 * M_PI),
       gamma_yaw_limit_(0.0),
       k_pitch_(0.0),
@@ -943,6 +984,10 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<bool>("f_lateral_front_only", f_lateral_front_only_);
     k_flight_ = this->declare_parameter<double>("k_flight", k_flight_);
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
+    clock_ff_scale_ =
+        this->declare_parameter<double>("clock_ff_scale", clock_ff_scale_);
+    clock_ff_phase_ =
+        this->declare_parameter<std::string>("clock_ff_phase", clock_ff_phase_);
 
     // Announce the leg-frame gains once, at startup.
     //
@@ -1256,6 +1301,41 @@ GslipPronkNode::GslipPronkNode()
                 spring_rest_reference_ ? "SPRING REST (constant)"
                                        : "template trajectory",
                 theta_rest_ * 180.0 / M_PI);
+
+    // The clocked feedforward, announced AFTER the template is loaded because
+    // its rate is derived from that template -- which is the whole point.
+    //
+    // S164 priced the missing term at 8.0 N.m/motor. That number came from the
+    // v~1.20 DEFAULT template (6.556 rad/s); at the v070 config of record the
+    // clock runs at 3.010 rad/s and the term is 3.2 N.m/motor. Printing the
+    // derived N.m here is what makes that visible in run 1 instead of after a
+    // campaign -- same lesson as S159's template_path default.
+    //
+    // PROOF OF INTENT ONLY. It proves the parameter was READ and the rate was
+    // derived, NOT that the term reached the impedance law. Verify the action
+    // with scripts/diag/clock_ff_engagement.py, which regresses the driver's
+    // t_ff against b_tangential*dbeta_ref*L(theta)^2 and wants slope +1.
+    {
+        const double L_gait = 0.265630;   // hip->contact at theta 85.4 deg, S151
+        const double nm_motor =
+            0.5 * b_tangential_ * clock_ff_scale_ * clock_rate_stance_
+            * L_gait * L_gait;
+        RCLCPP_WARN(this->get_logger(),
+                    "CLOCK FEEDFORWARD: scale=%.3f phase=%s "
+                    "rate_stance=%.4f rate_flight=%.4f rad/s -> %.2f N.m/motor "
+                    "stance (%s)",
+                    clock_ff_scale_, clock_ff_phase_.c_str(),
+                    clock_rate_stance_, clock_rate_flight_, nm_motor,
+                    clock_ff_scale_ == 0.0
+                        ? "OFF -- damps to zero, the pre-S164 behaviour"
+                        : "ON -- Lu & Lin eq 11 D term");
+    }
+    if (clock_ff_phase_ != "stance" && clock_ff_phase_ != "both") {
+        RCLCPP_FATAL(this->get_logger(),
+                     "clock_ff_phase must be 'stance' or 'both', got '%s'",
+                     clock_ff_phase_.c_str());
+        throw std::runtime_error("bad clock_ff_phase");
+    }
 }
 
 void GslipPronkNode::contact_cb(
@@ -1544,6 +1624,22 @@ bool GslipPronkNode::load_template(const std::string& path) {
             stance_sweep_rad_ =
                 template_[(onset + m - 1) % n].beta - template_[onset].beta;
             beta_lo_abs_ = template_[(onset + m - 1) % n].beta;
+
+            // The clock rate eq 11 damps to. The stance sweep is linear to
+            // 0.296 deg over v070's 18.5 deg (0.529 deg on the v~1.20
+            // default), so one constant is a fair reference and avoids
+            // differencing rows across the phase edge and the template wrap.
+            // Both rates are derived from whichever template was actually
+            // loaded -- S164 quoted 6.556 rad/s, which is the DEFAULT
+            // template, not the v070 config of record (3.010 rad/s).
+            // INTERVALS, not rows: stance_sweep_rad_ spans rows onset..onset+m-1,
+            // i.e. (m-1) intervals, and the cyclic remainder is (n-m+1).
+            const double stance_dur = static_cast<double>(m - 1) * template_dt_;
+            const double flight_dur = static_cast<double>(n - m + 1) * template_dt_;
+            clock_rate_stance_ = stance_dur > 0.0
+                                     ? stance_sweep_rad_ / stance_dur : 0.0;
+            clock_rate_flight_ = flight_dur > 0.0
+                                     ? -stance_sweep_rad_ / flight_dur : 0.0;
         }
         tpl_beta_min_ = template_[0].beta;
         tpl_beta_max_ = template_[0].beta;
@@ -2013,6 +2109,8 @@ rcl_interfaces::msg::SetParametersResult GslipPronkNode::on_set_params(
         else if (n == "b_tangential") b_tangential_ = p.as_double();
         else if (n == "k_flight") k_flight_ = p.as_double();
         else if (n == "b_flight") b_flight_ = p.as_double();
+        else if (n == "clock_ff_scale") clock_ff_scale_ = p.as_double();
+        else if (n == "clock_ff_phase") clock_ff_phase_ = p.as_string();
         else {
             // IGNORE, do not reject. This callback fires for EVERY parameter
             // set, including the launch file's initial declaration of all 60+
@@ -2441,16 +2539,41 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
         // J^T * [0, fy, 0] and the rest of the law is still a pure (K, B)
         // impedance needing no contact-force estimate. See the f_lateral_
         // block above for frame, sign and gating.
+        //
+        // Since 2026-08-22 trq_cmd_base also carries f_clock, which
+        // force_control builds from dbeta_ref below; it is a leg-frame
+        // tangential force, not a body-frame one, which is why it is not
+        // routed through fx/fz.
         cmd->fx = 0.0;
         cmd->fy = lateral_force(static_cast<int>(i), row.in_stance);
         cmd->fz = 0.0;
         cmd->mx = 0.0; cmd->my = 0.0; cmd->mz = 0.0;
 
+        // The clocked-torque feedforward's rate reference (Lu & Lin eq 11's D
+        // term, log S164). force_control turns this into
+        //     f_clock = bz * (dbeta_ref * |hip->contact|) * e_t
+        // so the tangential law damps to the clock instead of to zero.
+        //
+        // Gated on the SAME predicate as the gain branch below, so the
+        // feedforward and the damper it corrects can never disagree about
+        // which phase the leg is in.
+        //
+        // Flight is included only under clock_ff_phase_ == "both". The paper
+        // regulates the leg in both phases (p5, S2.3) and the flight brake is
+        // the LARGER of the two (b_flight 115.8 against b_tangential 30), but
+        // the registered P-N-1..3 are stance predictions, so "stance" is the
+        // default and "both" is its own arm.
+        const bool ff_stance = leg_in_stance(static_cast<int>(i), row);
+        cmd->dbeta_ref =
+            (gait_striding_ ? clock_ff_scale_ : 0.0) *
+            (ff_stance ? clock_rate_stance_
+                       : (clock_ff_phase_ == "both" ? clock_rate_flight_ : 0.0));
+
         // Per-leg gain regime. With contact_gated_gains off this is exactly
         // row.in_stance for every leg, i.e. unchanged behaviour; with it on,
         // each leg gets the spring when IT is loaded rather than when the
         // template says the virtual leg is.
-        if (leg_in_stance(static_cast<int>(i), row)) {
+        if (ff_stance) {
             cmd->leg_frame = true;
             cmd->kx = k_radial_;      // along the leg: the virtual spring
             cmd->ky = k_lateral_;
@@ -2710,6 +2833,32 @@ void GslipPronkNode::execute_running_phase() {
                     "(k_yaw=%.2f d_yaw=%.2f)",
                     gamma_yaw_limit_ * 180.0 / M_PI, k_yaw_, d_yaw_);
     }
+    // Announce the attitude gains UNCONDITIONALLY.
+    //
+    // WHY. Until 2026-08-22 k_yaw appeared in exactly one log line -- inside
+    // the `gamma_yaw_limit_ > 0` branch above -- so a run with the clamp OFF
+    // printed nothing about the heading loop at all. That is fine until you
+    // run the experiment that turns k_yaw OFF (P-M-1, S163): the arm whose
+    // engagement matters most is then the one arm with nothing to grep, and
+    // `k_yaw:=0.0` silently failing to reach the node is indistinguishable
+    // from "turning the heading controller off changes nothing" -- a
+    // confident wrong answer on a registered gate. S138 and S146 each cost a
+    // campaign to exactly this.
+    //
+    // PROOF OF INTENT ONLY: it proves the parameters were READ, not that they
+    // reached gamma_correction(). The proof of ACTION is the front/rear camber
+    // split itself (S162) -- with k_yaw = 0 it must VANISH, measurable per arm
+    // with scripts/diag/audit_gamma_decomp.py.
+    RCLCPP_WARN(this->get_logger(),
+                "ATTITUDE GAINS: k_yaw=%.4f d_yaw=%.4f | k_roll=%.4f "
+                "d_roll=%.4f | gamma_limit=%.2f deg gamma_yaw_limit=%.2f deg "
+                "(%s)",
+                k_yaw_, d_yaw_, k_roll_, d_roll_,
+                gamma_limit_ * 180.0 / M_PI,
+                gamma_yaw_limit_ * 180.0 / M_PI,
+                gamma_yaw_limit_ > 0.0 ? "yaw term CLAMPED"
+                                       : "yaw clamp OFF -- the yaw term can "
+                                         "saturate into a commanded lean");
     RCLCPP_INFO(this->get_logger(),
                 // f_lateral and settle_ticks are echoed because a parameter
                 // that never reaches the node looks EXACTLY like a parameter
@@ -2777,6 +2926,13 @@ void GslipPronkNode::execute_running_phase() {
     }
     size_t index = 0;
     size_t stride_count = 0;
+
+    // The clock is running from here and only here. See gait_striding_.
+    gait_striding_ = true;
+    struct StrideGuard {
+        bool* f;
+        ~StrideGuard() { *f = false; }
+    } stride_guard{&gait_striding_};
 
     while (rclcpp::ok() && trigger_) {
         rclcpp::spin_some(this->get_node_base_interface());
