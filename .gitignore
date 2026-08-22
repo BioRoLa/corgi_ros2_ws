@@ -27,3 +27,6 @@ output_data/*
 **/COLCON_IGNORE
 # .gitattributes must survive the blanket `.*` rule above.
 !.gitattributes
+
+# Byte-compiled analysers -- created by importing scripts/diag/*.py
+__pycache__/

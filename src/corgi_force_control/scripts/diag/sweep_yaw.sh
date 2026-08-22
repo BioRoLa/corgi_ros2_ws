@@ -103,6 +103,31 @@ if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
 fi
 echo "no foreign Webots; load average $LOAD."
 
+# PORTED FROM sweep_camber_pattern.sh 2026-08-22 (S171 S6 / S176 S6). Webots
+# here is a WINDOWS binary -- /mnt/c/Program Files/Webots/msys64/mingw64/bin/
+# webots.exe, invoked through /init -- so a surviving instance does NOT appear
+# in ANY of the WSL pgrep checks above. It holds port 1234 invisibly, the next
+# launch dies with exit 1 plus a misleading "[Errno 13] Permission denied" on
+# the temp .wbt, and the run produces no capture at all. It killed a run
+# outright on 2026-08-22.
+if command -v powershell.exe > /dev/null 2>&1; then
+  WINWB=$(powershell.exe -NoProfile -Command \
+      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null \
+      | tr -d '\r\n ')
+  case "$WINWB" in
+    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
+    0) echo "windows-side Webots check: none running." ;;
+    *) echo "!! $WINWB WINDOWS-side webots.exe still running. It holds port 1234"
+       echo "!! and no WSL pgrep can see it. The launch will die with exit 1 and"
+       echo "!! the driver will never connect. REFUSING."
+       powershell.exe -NoProfile -Command \
+         "Get-Process webots* | Select-Object Id,ProcessName,StartTime" 2>/dev/null
+       exit 1 ;;
+  esac
+else
+  echo "windows-side Webots check: powershell.exe not reachable -- continuing."
+fi
+
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control"
 [ "$(strings "$BIN/gslip_pronk_node" 2>/dev/null | grep -c 'LEG-FRAME GAINS')" != 0 ] || {
   echo "!! gslip_pronk_node lacks the gain announcement -- rebuild"; exit 1; }
@@ -201,10 +226,31 @@ for REP in $(seq 1 "$NPER"); do
     echo "################################################################"
     OUT="$BASE/$NAME"
     mkdir -p "$OUT"
-    N=1 RUN_START=$REP OUTDIR="$OUT" RECORD_ODOM=1 \
-      GAIT_SIM=$GAIT_SIM GAIT_WALL=$GAIT_WALL \
-      CTL_ARGS="k_yaw:=$KY d_yaw:=$DY gamma_yaw_limit:=$GYL $FLIGHT_ARGS $TPL_ARG" \
-      bash "$DIAG/repeat_gain_regime.sh"
+    # RETRY A COLD START, once. PORTED FROM sweep_camber_pattern.sh 2026-08-22
+    # (S171 S6). The FIRST launch after an idle gap fails -- webots.exe dies
+    # before the driver connects, or the driver never connects -- and the very
+    # next launch succeeds (2 of 2 on 2026-08-22). repeat_gain_regime.sh prints
+    # "skipping" and RETURNS 0, so a campaign SILENTLY LOSES that cell while
+    # every other cell runs and looks fine. That is how a paired control was
+    # lost. For THIS campaign it would silently reduce n for one arm of
+    # P-M-1..P-M-3, which is worse than a crash because nothing announces it.
+    for ATTEMPT in 1 2; do
+      N=1 RUN_START=$REP OUTDIR="$OUT" RECORD_ODOM=1 \
+        GAIT_SIM=$GAIT_SIM GAIT_WALL=$GAIT_WALL \
+        CTL_ARGS="k_yaw:=$KY d_yaw:=$DY gamma_yaw_limit:=$GYL $FLIGHT_ARGS $TPL_ARG" \
+        bash "$DIAG/repeat_gain_regime.sh"
+      if [ -f "$OUT/run$REP.csv" ]; then
+        [ "$ATTEMPT" = 2 ] && echo "  (cell $NAME rep $REP succeeded on RETRY -- cold start, S171 S6)"
+        break
+      fi
+      if [ "$ATTEMPT" = 1 ]; then
+        echo "  !! cell $NAME rep $REP produced NO CAPTURE. Cold-start failure"
+        echo "  !! mode, not a result. Retrying ONCE before giving up."
+      else
+        echo "  !! cell $NAME rep $REP produced NO CAPTURE on either attempt."
+        echo "  !! n is now REDUCED for this cell -- say so when scoring P-M-*."
+      fi
+    done
   done
 done
 # ---- ANALYSIS --------------------------------------------------------------
