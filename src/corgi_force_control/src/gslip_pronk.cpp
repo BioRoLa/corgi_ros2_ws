@@ -46,6 +46,7 @@
 #include "corgi_msgs/msg/sim_leg_contact_stamped.hpp"
 #include "corgi_msgs/msg/imu_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 struct TemplateRow {
     double t;
@@ -697,6 +698,44 @@ private:
     double d_pitch_;
     double pitch_limit_;   // rad, clamp on the theta perturbation
 
+    // --- Apex beta feedback (log S133-S135) --------------------------------
+    // ONE row of the Stage 2b return-map deadbeat, re-solved at the PLANT's
+    // operating point rather than at v~0.70, and reduced to the only input
+    // direction that survives regularisation down here.
+    //
+    // WHAT THIS IS NOT. It is not the full deadbeat. At the plant's point
+    // sigma(beta) = 2.893 against sigma(differential camber) = 0.332, so
+    // rcond = 0.2 cuts the camber rows to ~5e-4 and the rho/rho_dot columns to
+    // zero. The full gain (rcond 1e-2) has max element 53.5, demands 104 N.m
+    // against the ABAD's 44.25 ceiling, clips, and ends up WORSE than passive
+    // (mean 1.0 strides vs 3.6). So the camber channel is deliberately absent:
+    // it is not usable at this speed, and pretending otherwise costs torque
+    // the robot does not have.
+    //
+    // What survives is beta responding to forward speed and apex height --
+    // foot placement, evaluated once per stride at apex and held:
+    //
+    //     d_beta = gain * ( k_vx*(vx - vx*) + k_h*(h - h*) )
+    //
+    // With apex_fb_gain_ = 0.0 (the default) d_beta is identically 0.0 and
+    // cmd->beta is bit-identical to every run recorded before this existed.
+    double apex_fb_gain_;      // scalar on the whole correction; 0 = off
+    double apex_k_vx_;         // K row 0, vx column
+    double apex_k_h_;          // K row 0, h column
+    double apex_vx_star_;      // m/s, the fixed point this regulates to
+    double apex_h_star_;       // m
+    double apex_beta_limit_;   // rad, clamp on d_beta
+    double apex_beta_offset_{0.0};   // held across the stride
+    // Apex detection state: vz crossing + -> - while no leg is down.
+    double ekf_vx_{0.0}, ekf_vz_{0.0}, ekf_z_{0.0};
+    double ekf_vz_prev_{0.0};
+    bool apex_armed_{false};
+    long apex_count_{0};
+    bool apex_starved_warned_{false};
+    std::string apex_odom_topic_;
+    void update_apex_feedback();
+    void apex_vz_prev_guard();
+
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
     double gamma_acker_out_;
@@ -745,6 +784,15 @@ private:
     // impedance rather than the flight gains, so the virtual spring can be
     // probed by pushing the body before anything hops.
     bool hold_stance_;
+
+    // Live gain retuning. The impedance gains are read every tick, so a
+    // callback that updates the members is enough to change them without a
+    // restart -- which is what the k_radial sweep needs (log S146): restarting
+    // between arms folds the legs to the 17 deg stop and the next arm spends
+    // its dwell recovering.
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_;
+    rcl_interfaces::msg::SetParametersResult on_set_params(
+        const std::vector<rclcpp::Parameter>& params);
 };
 
 GslipPronkNode::GslipPronkNode()
@@ -829,6 +877,21 @@ GslipPronkNode::GslipPronkNode()
       // authority (the pairs are 0.51 m apart) while staying an order of
       // magnitude clear of anything the linkage cares about.
       pitch_limit_(3.0 / 180.0 * M_PI),
+      // Apex beta feedback: OFF. The gains are the plant-point deadbeat row
+      // (examples/gslip/stage2b_deadbeat_at_plant.py, rcond 0.2); the star
+      // values are that fixed point. Loading them as defaults costs nothing
+      // while apex_fb_gain_ is 0.0 and means turning the channel on is one
+      // parameter, not five.
+      apex_fb_gain_(0.0),
+      apex_k_vx_(-0.5485),
+      apex_k_h_(0.6119),
+      apex_vx_star_(0.3106),
+      apex_h_star_(0.2886),
+      // 4 deg. The plant-point beta* is 86.24 deg and the template's own
+      // sweep is +-9.5 deg at v070, so a 4 deg correction is a real lever
+      // without being a step the leg cannot track in one flight.
+      apex_beta_limit_(4.0 / 180.0 * M_PI),
+      apex_odom_topic_("/sim/base_odom"),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
@@ -880,8 +943,43 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<bool>("f_lateral_front_only", f_lateral_front_only_);
     k_flight_ = this->declare_parameter<double>("k_flight", k_flight_);
     b_flight_ = this->declare_parameter<double>("b_flight", b_flight_);
+
+    // Announce the leg-frame gains once, at startup.
+    //
+    // WHY. k_tangential had no log line at all: it was declared here and used
+    // at `cmd->kz = k_tangential_` with nothing in between, so
+    // repeat_gain_regime.sh -- whose four engagement asserts are all greps --
+    // had nothing to grep for, and its own comment said the parameter "must be
+    // verified from the DATA instead". S138 and S146 each cost a whole
+    // campaign to an unverified engagement; finding out in run 1 rather than
+    // after ten is the point.
+    //
+    // NOTE the parameter callback is registered BELOW this point, so these
+    // gains never produce a "LIVE GAIN SET" line at startup -- only runtime
+    // `ros2 param set` does. That is why this explicit line is needed.
+    RCLCPP_WARN(this->get_logger(),
+                "LEG-FRAME GAINS: k_radial=%.1f k_tangential=%.1f "
+                "k_lateral=%.1f | b_radial=%.1f b_tangential=%.1f "
+                "b_lateral=%.1f | k_flight=%.1f b_flight=%.1f",
+                k_radial_, k_tangential_, k_lateral_, b_radial_,
+                b_tangential_, b_lateral_, k_flight_, b_flight_);
+    // The launch file's default is 600.0; this class's own ctor default is
+    // 900.0, so a node started WITHOUT the launch file reads differently.
+    // Compare against the launch default, because that is what campaigns use.
+    if (std::fabs(k_tangential_ - 600.0) > 1e-6) {
+        RCLCPP_WARN(this->get_logger(),
+                    "K_TANGENTIAL OVERRIDDEN: %.1f (launch default 600.0). "
+                    "This line is PROOF OF INTENT ONLY -- it proves the "
+                    "parameter was READ, not that it reached the impedance "
+                    "law. S138's apex channel printed its parameters "
+                    "faithfully for ten runs and never fired. Verify the "
+                    "action with scripts/diag/kt_engagement.py.",
+                    k_tangential_);
+    }
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
     hold_stance_ = this->declare_parameter<bool>("hold_stance", hold_stance_);
+    param_cb_ = this->add_on_set_parameters_callback(
+        std::bind(&GslipPronkNode::on_set_params, this, std::placeholders::_1));
     contact_gated_gains_ = this->declare_parameter<bool>(
         "contact_gated_gains", contact_gated_gains_);
     contact_debounce_ = this->declare_parameter<int>(
@@ -905,6 +1003,17 @@ GslipPronkNode::GslipPronkNode()
     k_pitch_ = this->declare_parameter<double>("k_pitch", k_pitch_);
     d_pitch_ = this->declare_parameter<double>("d_pitch", d_pitch_);
     pitch_limit_ = this->declare_parameter<double>("pitch_limit", pitch_limit_);
+    apex_fb_gain_ =
+        this->declare_parameter<double>("apex_fb_gain", apex_fb_gain_);
+    apex_k_vx_ = this->declare_parameter<double>("apex_k_vx", apex_k_vx_);
+    apex_k_h_ = this->declare_parameter<double>("apex_k_h", apex_k_h_);
+    apex_vx_star_ =
+        this->declare_parameter<double>("apex_vx_star", apex_vx_star_);
+    apex_h_star_ = this->declare_parameter<double>("apex_h_star", apex_h_star_);
+    apex_beta_limit_ =
+        this->declare_parameter<double>("apex_beta_limit", apex_beta_limit_);
+    apex_odom_topic_ = this->declare_parameter<std::string>(
+        "apex_odom_topic", apex_odom_topic_);
     gamma_acker_in_ =
         this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
     gamma_acker_out_ =
@@ -1015,6 +1124,33 @@ GslipPronkNode::GslipPronkNode()
                 std::bind(&GslipPronkNode::ekf_cb, this,
                           std::placeholders::_1));
         }
+    }
+    // The apex channel needs the same topic for a different reason, and the
+    // block above only subscribes when Tier 3 slaving is on. Without this it
+    // runs INERT while announcing itself -- which is exactly what happened for
+    // ten Webots runs (log S138).
+    if (apex_fb_gain_ != 0.0 && !ekf_sub_) {
+        // WHICH TOPIC. /ekf is published by corgi_fusion_node, which the
+        // menger_acker campaign harness does NOT launch -- it starts only
+        // Corgi_launch.py and gslip_pronk.launch.py. So on /ekf this channel
+        // starves in every campaign run, which is how it managed ten inert
+        // runs (log S138).
+        //
+        // /sim/base_odom is Webots GROUND TRUTH and is always available in
+        // sim. Using it makes the channel testable, at the cost of feeding the
+        // controller privileged information: any result obtained this way is
+        // an UPPER BOUND on what the channel can do with a real estimator, and
+        // must be reported as such. Hardware runs must set this to /ekf and
+        // launch the estimator.
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX BETA FB source: '%s'%s", apex_odom_topic_.c_str(),
+                    apex_odom_topic_ == "/sim/base_odom"
+                        ? "  <-- GROUND TRUTH. Sim only. Results are an upper "
+                          "bound, not an estimator-in-the-loop result."
+                        : "");
+        ekf_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            apex_odom_topic_, 100,
+            std::bind(&GslipPronkNode::ekf_cb, this, std::placeholders::_1));
     }
 
     // Refusal matrix (handover, Tier 1). Refuse = disable + grep-able ERROR,
@@ -1861,6 +1997,96 @@ double GslipPronkNode::lateral_force(int leg_index, bool in_stance) const {
     return -f_lateral_ * lat_sign[leg_index];
 }
 
+// Apply runtime changes to the impedance gains. Everything else is ignored,
+// NOT rejected -- see the comment in the else branch.
+rcl_interfaces::msg::SetParametersResult GslipPronkNode::on_set_params(
+    const std::vector<rclcpp::Parameter>& params) {
+    rcl_interfaces::msg::SetParametersResult res;
+    res.successful = true;
+    for (const auto& p : params) {
+        const std::string& n = p.get_name();
+        if (n == "k_radial") k_radial_ = p.as_double();
+        else if (n == "k_lateral") k_lateral_ = p.as_double();
+        else if (n == "k_tangential") k_tangential_ = p.as_double();
+        else if (n == "b_radial") b_radial_ = p.as_double();
+        else if (n == "b_lateral") b_lateral_ = p.as_double();
+        else if (n == "b_tangential") b_tangential_ = p.as_double();
+        else if (n == "k_flight") k_flight_ = p.as_double();
+        else if (n == "b_flight") b_flight_ = p.as_double();
+        else {
+            // IGNORE, do not reject. This callback fires for EVERY parameter
+            // set, including the launch file's initial declaration of all 60+
+            // of them -- rejecting one aborts the node at startup with
+            // InvalidParameterValueException (measured: exit -6 on
+            // `contact_gated_gains`, log S146). Typo protection is not this
+            // callback's job; `ros2 param set` on an undeclared name already
+            // fails at the service layer.
+            continue;
+        }
+        RCLCPP_WARN(this->get_logger(), "LIVE GAIN SET: %s = %.4f",
+                    n.c_str(), p.as_double());
+    }
+    return res;
+}
+
+// Once per stride, at apex, recompute the beta correction and hold it.
+//
+// Apex is vz crossing + -> - with no foot down. Requiring airborne matters:
+// the body's vertical velocity also changes sign during stance (at peak
+// compression), and correcting there would fire mid-stance on a loaded foot --
+// which the shipped scheduler forbids for good reason (S102).
+void GslipPronkNode::update_apex_feedback() {
+    if (apex_fb_gain_ == 0.0) {
+        apex_beta_offset_ = 0.0;   // stays bit-identical when off
+        return;
+    }
+    const bool airborne = !(leg_contact_stable_[0] || leg_contact_stable_[1] ||
+                            leg_contact_stable_[2] || leg_contact_stable_[3]);
+    const bool stale =
+        ekf_stamp_ < 0.0 ||
+        (this->now().seconds() - ekf_stamp_) > ekf_timeout_s_;
+    if (stale) {
+        // A channel that is enabled and has NEVER had data is not "stale", it
+        // is not running. Say so, at most once, at ERROR: silence here cost
+        // ten runs that certified a channel doing nothing.
+        if (ekf_stamp_ < 0.0 && !apex_starved_warned_) {
+            apex_starved_warned_ = true;
+            RCLCPP_ERROR(this->get_logger(),
+                         "APEX BETA FB STARVED: gain=%.3f but no message has "
+                         "EVER arrived on '%s'. The channel is INERT and this "
+                         "run is NOT a test of it.",
+                         apex_fb_gain_, apex_odom_topic_.c_str());
+        }
+        // Hold the last correction rather than reverting to zero: a step to
+        // zero mid-flight is a beta transient, and the whole point of holding
+        // per stride is that beta does not move within one.
+        apex_vz_prev_guard();
+        return;
+    }
+    if (airborne && apex_armed_ && ekf_vz_prev_ > 0.0 && ekf_vz_ <= 0.0) {
+        const double d = apex_fb_gain_ *
+                         (apex_k_vx_ * (ekf_vx_ - apex_vx_star_) +
+                          apex_k_h_ * (ekf_z_ - apex_h_star_));
+        apex_beta_offset_ =
+            std::max(-apex_beta_limit_, std::min(apex_beta_limit_, d));
+        apex_count_++;
+        if (apex_count_ == 1 || apex_count_ % 20 == 0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "APEX BETA FB FIRED: n=%ld d_beta=%+.3f deg "
+                        "(vx %.4f vs %.4f, h %.4f vs %.4f)",
+                        apex_count_, apex_beta_offset_ * 180.0 / M_PI,
+                        ekf_vx_, apex_vx_star_, ekf_z_, apex_h_star_);
+        }
+        apex_armed_ = false;       // one correction per flight phase
+    }
+    if (!airborne) apex_armed_ = true;   // re-arm on the next stance
+    ekf_vz_prev_ = ekf_vz_;
+}
+
+// Split out so the stale path cannot forget it and silently latch a stale
+// edge into the next flight phase.
+void GslipPronkNode::apex_vz_prev_guard() { ekf_vz_prev_ = ekf_vz_; }
+
 double GslipPronkNode::gamma_correction(int leg_index) const {
     if (!yaw_ref_set_) return 0.0;
 
@@ -2040,6 +2266,13 @@ void GslipPronkNode::ekf_cb(const nav_msgs::msg::Odometry::SharedPtr msg) {
     // Body-frame forward speed; corgi_leg_odom publishes twist in
     // base_link, so linear.x is the rolling-relevant component.
     ekf_v_ = msg->twist.twist.linear.x;
+    // The apex channel needs vertical velocity (to find apex) and height (a
+    // state it feeds back). Captured unconditionally: they are two field
+    // reads, and gating them on apex_fb_gain_ would mean the first stride
+    // after enabling the channel ran on stale values.
+    ekf_vx_ = msg->twist.twist.linear.x;
+    ekf_vz_ = msg->twist.twist.linear.z;
+    ekf_z_ = msg->pose.pose.position.z;
     ekf_stamp_ = this->now().seconds();
 }
 
@@ -2194,7 +2427,13 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
             beta_base = row.beta + flight_off_[i] * (1.0 - prog);
         }
         last_beta_base_[i] = beta_base;
-        cmd->beta = beta_base * (1.0 + s * k_steer_) + s * u * gate;
+        // apex_beta_offset_ is identically 0.0 unless apex_fb_gain_ != 0,
+        // so this line is bit-identical to its pre-channel form by default.
+        // Applied to all four legs equally: the pronk reduces to one virtual
+        // leg and the correction is a whole-body foot-placement command, not
+        // a per-leg one.
+        cmd->beta = beta_base * (1.0 + s * k_steer_) + s * u * gate
+                    + apex_beta_offset_;
         cmd->gamma = row.gamma + gamma_openloop(static_cast<int>(i))
                      + gamma_correction(static_cast<int>(i));
 
@@ -2523,11 +2762,26 @@ void GslipPronkNode::execute_running_phase() {
                     "rear C/D, stance-gated)",
                     k_pitch_, d_pitch_, pitch_limit_ * 180.0 / M_PI);
     }
+    if (apex_fb_gain_ != 0.0) {
+        // Same contract as ACKER CAMBER / GENTLE YAW CLAMP / FLIGHT GAINS /
+        // PITCH CHANNEL: a run that asked for this channel and did not log
+        // this line is INVALID. NOTE that this line alone is NOT sufficient --
+        // it announces intent, not action. The APEX BETA FB FIRED line at
+        // shutdown is what proves the channel did anything.
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX BETA FB set: gain=%.3f k_vx=%.4f k_h=%.4f "
+                    "vx*=%.4f m/s h*=%.4f m clamp %.2f deg "
+                    "(one correction per flight, held)",
+                    apex_fb_gain_, apex_k_vx_, apex_k_h_, apex_vx_star_,
+                    apex_h_star_, apex_beta_limit_ * 180.0 / M_PI);
+    }
     size_t index = 0;
     size_t stride_count = 0;
 
     while (rclcpp::ok() && trigger_) {
         rclcpp::spin_some(this->get_node_base_interface());
+        // Before apply_row, so a correction found this tick is used this tick.
+        update_apex_feedback();
 
         // Before apply_row, so the row is commanded against this tick's
         // reference. period is 1 ms; hard-coding the same figure here would be

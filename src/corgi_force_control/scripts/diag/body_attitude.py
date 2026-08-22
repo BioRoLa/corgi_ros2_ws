@@ -136,7 +136,14 @@ def main():
     ap.add_argument("--label", action="append", default=[])
     args = ap.parse_args()
     d2r = 180.0 / np.pi
-    print("body attitude, last 20 s. pitch + = nose up. angles in DEGREES.")
+    # SIGN, determined empirically (log S122), not assumed: with no pitch
+    # channel the measured slope d(theta_front - theta_rear)/d(pitch) is
+    # -2.05. A nose-DOWN body compresses the front legs (shorter theta),
+    # which is a negative slope; nose-up would be positive. So positive
+    # pitch = NOSE DOWN here (ROS REP-103 x-fwd/y-left/z-up), not the
+    # aerospace convention. An earlier version of this file said "nose up"
+    # and that error inverted the reading of the pitch-channel sign test.
+    print("body attitude, last 20 s. pitch + = nose DOWN. angles in DEGREES.")
     print("rho = Spearman(|pitch at touchdown|, beta swept that stance).")
     print("Alex's hypothesis predicts rho clearly NEGATIVE.\n")
     print(f"{'cell':26} {'pitchRMS':>9} {'pitchP2P':>9} {'rollRMS':>8} "

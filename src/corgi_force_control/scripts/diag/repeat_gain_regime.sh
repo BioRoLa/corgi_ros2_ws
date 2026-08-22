@@ -31,6 +31,12 @@ SETTLE_WALL=${SETTLE_WALL:-45}
 # Kept as one string so the A/B pair differs in exactly one place and the
 # difference is visible in the captured log.
 CTL_ARGS=${CTL_ARGS:-}
+# k_tangential engagement check (see the block after the RUN loop). KT_REF_DIR
+# is a REFERENCE ARM's OUTDIR -- it must be an arm run at the shipped default,
+# because that is the one arm whose own engagement cannot silently fail
+# ("ignored" and "applied" are the same gains there). Set by the sweep script.
+KT_REF_DIR=${KT_REF_DIR:-}
+KT_REF=${KT_REF:-600.0}
 
 mkdir -p "$OUTDIR"
 source /opt/ros/humble/setup.bash
@@ -59,6 +65,23 @@ for RUN in $(seq 1 "$N"); do
   export TMPDIR=/mnt/c/Users/alexc/AppData/Local/Temp/webots_ws
   export CORGI_EXPERIMENT_MODE=1
   export CORGI_TORQUE_DEBUG=1
+  # THE CONFIG OF RECORD IS TWO ENV VARS, NOT JUST THE LAUNCH GAINS.
+  #
+  # Added 2026-08-22 (S157) after a whole factorial ran without them. Of the 27
+  # harnesses in this directory, ONLY menger_acker_campaign.sh set these -- so
+  # every campaign run through THIS script, including the entire banked
+  # kt_sweep, ran a DIFFERENT PLANT from the one the config of record names.
+  #
+  # CORGI_DIRBETA_TRANSFORM mirrors beta on the right leg pair
+  # (corgi_driver.py:685). Without it two legs sweep the wrong way, and the
+  # measured consequence is severe: the v070 baseline went BACKWARD at
+  # -0.248 m/s here against +0.284 forward on the same template and gains
+  # under menger_acker_campaign.sh.
+  #
+  # Override with CORGI_DIRBETA_TRANSFORM=0 to deliberately run the old plant,
+  # but say so in the campaign's own header if you do.
+  export CORGI_DIRBETA_TRANSFORM=${CORGI_DIRBETA_TRANSFORM:-1}
+  export CORGI_THETA_STOP=${CORGI_THETA_STOP:-1}
   setsid ros2 launch corgi_sim Corgi_launch.py > "/tmp/sim_run$RUN.log" 2>&1 < /dev/null &
 
   ok=0
@@ -106,6 +129,24 @@ for RUN in $(seq 1 "$N"); do
     echo "  odom saved: $(wc -l < "$OUTDIR/odom_run${RUN}.csv") rows"
   fi
 
+  # WHICH TEMPLATE DID IT ACTUALLY LOAD?
+  #
+  # S159: omitting template_path does NOT give v070. The controller falls back
+  # to <share>/config/gslip_pronk_template.csv -- the v~1.20 template, 225 rows,
+  # 0.2249 s stride, beta sweep +0.6357 -- a gait for 1.92 m/s on a plant that
+  # does ~0.28. A whole factorial was invalidated by this before anyone noticed,
+  # because nothing announced it. The controller does print the stride at
+  # startup; this surfaces it, and shouts when no template was named.
+  TPL_LINE=$(grep -o 'template rows ([0-9.]* s stride)' "/tmp/ctl_run$RUN.log"              2>/dev/null | head -1)
+  case "$CTL_ARGS" in
+    *template_path:=*)
+      echo "  template: ${TPL_LINE:-<not announced>} (named explicitly)" ;;
+    *)
+      echo "  ?? run $RUN: NO template_path was passed, so the controller used"
+      echo "  ?? its DEFAULT -- ${TPL_LINE:-<not announced>}. That default is the"
+      echo "  ?? v~1.20 template (0.2249 s stride), NOT v070 (0.2662 s)."
+      echo "  ?? If this campaign meant v070, its runs are INVALID." ;;
+  esac
   cp /tmp/corgi_torque_terms.csv "$OUTDIR/run${RUN}.csv"
   SIMT=$(tail -1 /tmp/corgi_torque_terms.csv | cut -d, -f1)
   echo "  run $RUN saved: $(wc -l < "$OUTDIR/run${RUN}.csv") rows, sim t = $SIMT"
@@ -169,6 +210,32 @@ for RUN in $(seq 1 "$N"); do
       ;;
   esac
   case "$CTL_ARGS" in
+    *k_tangential:=*)
+      # PROOF OF INTENT only. The controller announces its leg-frame gains at
+      # startup (added 2026-08-22) so a launch-plumbing failure shows up in
+      # run 1 instead of after ten. It proves the parameter was READ; the
+      # engagement CHECK after the loop proves it reached the impedance law.
+      # Compare the node's REPORTED gain against the REQUESTED one, rather
+      # than keying on the OVERRIDDEN line. That line only prints when the
+      # value differs from the launch default, so an arm that legitimately
+      # requests the default (600) produces no line -- and the first version
+      # of this check read that absence as failure and fired INVALID on the
+      # reference arm. Fixed 2026-08-22 after it did exactly that.
+      WANT=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*//p')
+      GOT=$(grep -o 'k_tangential=[0-9.]*' "/tmp/ctl_run$RUN.log" | head -1             | cut -d= -f2)
+      if [ -n "$GOT" ] && [ -n "$WANT" ] &&          awk -v a="$WANT" -v b="$GOT" 'BEGIN{exit !(a-b<0.01 && b-a<0.01)}'; then
+        echo "  k_tangential read OK in run $RUN: requested $WANT, node reports $GOT"
+      elif [ -n "$GOT" ]; then
+        echo "  !! run $RUN: requested k_tangential $WANT but the node reports"
+        echo "  !! $GOT -- the launch argument did not reach it. INVALID."
+      else
+        echo "  ?? run $RUN: no LEG-FRAME GAINS line at all -- controller"
+        echo "  ?? binary predates 2026-08-22. Cannot certify from the log;"
+        echo "  ?? the data check after the loop still applies."
+      fi
+      ;;
+  esac
+  case "$CTL_ARGS" in
     *contact_gated_gains:=true*)
       if grep -q 'CONTACT-GATED GAINS ON' "/tmp/ctl_run$RUN.log"; then
         echo "  gate CONFIRMED ON in run $RUN"
@@ -182,6 +249,42 @@ for RUN in $(seq 1 "$N"); do
       ;;
   esac
 done
+
+# ---------------------------------------------------------------------------
+# k_tangential engagement, PROOF OF ACTION. Unlike the four asserts inside the
+# loop this one is per-ARM: k_tangential is constant within a run, so it is
+# perfectly collinear with arm identity and there is no within-run contrast to
+# fit. The check is a DIFFERENCE in stance-mode kp against a reference arm,
+# predicted from the pose-corrected geometry (0.5*L(theta))^2, and it can only
+# run once all N runs are on disk. Validated on the banked kt_sweep: three
+# arms confirm at ratio 1.02-1.05, an arm compared against itself comes back
+# INVALID at 0.000, and an undetectable pair comes back UNCERTIFIABLE.
+# ---------------------------------------------------------------------------
+case "$CTL_ARGS" in
+  *k_tangential:=*)
+    KT_VAL=$(printf '%s' "$CTL_ARGS" | sed -n 's/.*k_tangential:=\([0-9.]*\).*//p')
+    if [ -z "$KT_VAL" ]; then
+      echo "  ?? k_tangential requested but its value could not be parsed from"
+      echo "  ?? CTL_ARGS -- engagement UNCERTIFIABLE, arm NOT invalid."
+    elif [ -z "$KT_REF_DIR" ]; then
+      echo "  ?? no KT_REF_DIR set -- engagement UNCERTIFIABLE, arm NOT invalid."
+      echo "  ?? Set KT_REF_DIR to a reference arm run at the shipped default."
+    elif [ "$KT_REF_DIR" = "$OUTDIR" ]; then
+      echo "  this IS the reference arm (k_tangential $KT_VAL) -- nothing to"
+      echo "  check it against, and nothing that needs checking."
+    else
+      echo
+      echo "--- k_tangential engagement check ---"
+      python3 "$WS/src/corgi_force_control/scripts/diag/kt_engagement.py"           --ref "$KT_REF_DIR" --ref-kt "$KT_REF"           --arm "$OUTDIR" --arm-kt "$KT_VAL"
+      case $? in
+        0) echo "  ENGAGEMENT CONFIRMED -- arm is valid." ;;
+        1) echo "  !! ENGAGEMENT FAILED -- TREAT THIS ARM AS INVALID." ;;
+        *) echo "  ?? ENGAGEMENT UNCERTIFIABLE -- arm NOT invalid, but this" ;
+           echo "  ?? campaign cannot claim the gain was applied." ;;
+      esac
+    fi
+    ;;
+esac
 
 teardown
 echo

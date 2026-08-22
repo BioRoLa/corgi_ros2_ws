@@ -206,6 +206,24 @@ def generate_launch_description():
         DeclareLaunchArgument("k_pitch", default_value="0.0"),
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
+
+        # Apex beta feedback (log SS133-135). ONE row of the Stage 2b
+        # return-map deadbeat, re-solved at the PLANT's operating point and
+        # reduced to the only input direction that survives regularisation
+        # there: beta responding to forward speed and apex height. The camber
+        # rows are deliberately absent -- at this speed sigma(camber)/sigma(beta)
+        # is 0.115, and the full gain demands 104 N.m against a 44.25 ceiling
+        # and performs WORSE than passive.
+        # apex_fb_gain 0.0 is OFF and bit-identical to every prior run.
+        DeclareLaunchArgument("apex_fb_gain", default_value="0.0"),
+        DeclareLaunchArgument("apex_k_vx", default_value="-0.5485"),
+        DeclareLaunchArgument("apex_k_h", default_value="0.6119"),
+        DeclareLaunchArgument("apex_vx_star", default_value="0.3106"),
+        DeclareLaunchArgument("apex_h_star", default_value="0.2886"),
+        DeclareLaunchArgument("apex_beta_limit", default_value="0.06981"),  # 4 deg
+        # /sim/base_odom is GROUND TRUTH -- sim only. /ekf needs corgi_fusion_node,
+        # which the campaign harness does not launch. See log S138.
+        DeclareLaunchArgument("apex_odom_topic", default_value="/sim/base_odom"),
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
         # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
@@ -326,6 +344,13 @@ def generate_launch_description():
                 'k_pitch': LaunchConfiguration('k_pitch'),
                 'd_pitch': LaunchConfiguration('d_pitch'),
                 'pitch_limit': LaunchConfiguration('pitch_limit'),
+                'apex_fb_gain': LaunchConfiguration('apex_fb_gain'),
+                'apex_k_vx': LaunchConfiguration('apex_k_vx'),
+                'apex_k_h': LaunchConfiguration('apex_k_h'),
+                'apex_vx_star': LaunchConfiguration('apex_vx_star'),
+                'apex_h_star': LaunchConfiguration('apex_h_star'),
+                'apex_beta_limit': LaunchConfiguration('apex_beta_limit'),
+                'apex_odom_topic': LaunchConfiguration('apex_odom_topic'),
                 'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
                 'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
                 'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),

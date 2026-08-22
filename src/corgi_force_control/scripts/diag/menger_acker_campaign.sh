@@ -316,6 +316,15 @@ for COND in "$@"; do
         fi ;;
     esac
     case "$ARGS" in
+      *turn_rate:=*|*steer_offset:=*|*k_steer_yaw:=*)
+        if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'Turn: turn_rate'; then
+          echo "  TURN CONFIRMED:"                "$(grep -o 'Turn: turn_rate[^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+          echo "  STEER CONFIRMED:"                "$(grep -o 'Steering: k_steer[^"]*' "/tmp/ma_ctl_${COND}_$RUN.log" | head -1)"
+        else
+          echo "  !! turn/steer requested but never announced -- run INVALID"
+        fi ;;
+    esac
+    case "$ARGS" in
       *gamma_yaw_limit:=*)
         if fresh_grep "/tmp/ma_ctl_${COND}_$RUN.log" 'GENTLE YAW CLAMP set'; then
           echo "  CLAMP CONFIRMED:" \
