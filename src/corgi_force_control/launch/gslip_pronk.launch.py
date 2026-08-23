@@ -160,7 +160,10 @@ def generate_launch_description():
         # NOT comparable to unscaled campaigns.
         DeclareLaunchArgument('stance_sweep_scale', default_value='1.0'),
         DeclareLaunchArgument("k_tangential", default_value="600.0"),
-        DeclareLaunchArgument("k_flight", default_value="12000.0"),
+        # #19 step 2 (2026-08-24): default = config of record 7150/115.8,
+        # was the rejected 12000/150 point. Campaigns keep passing k_flight
+        # explicitly regardless (#19 step 3).
+        DeclareLaunchArgument("k_flight", default_value="7150.0"),
         DeclareLaunchArgument("k_roll", default_value="0.25"),
         # Heading hold OFF by default since 2026-08-22 -- see the ctor comment
         # in gslip_pronk.cpp and log S168. Was 0.15. The ctor default now
@@ -192,7 +195,7 @@ def generate_launch_description():
         DeclareLaunchArgument("standup_ticks", default_value="2000"),
         DeclareLaunchArgument("b_tangential", default_value="30.0"),
         DeclareLaunchArgument("b_lateral", default_value="60.0"),
-        DeclareLaunchArgument("b_flight", default_value="150.0"),
+        DeclareLaunchArgument("b_flight", default_value="115.8"),  # 19 step 2
         # --- Added 2026-08-22: the clocked-torque feedforward (log S164) ------
         #
         # Lu & Lin 2024 eq 11 damps the leg angle to the CLOCK'S rate; this
@@ -266,6 +269,15 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_acker_dip_t1_ms", default_value="60"),
         DeclareLaunchArgument("gamma_acker_dip_rearm_ms", default_value="30"),
         DeclareLaunchArgument("gamma_acker_yield", default_value="0.0"),
+        # --- Added 2026-08-24: closed-loop camber (Stage 3 task 6, S232/S235).
+        # gamma_acker_ff > 0 enables the loop and replaces dir/in/out (both
+        # set is fatal in the node). min/hi bound the magnitude to the
+        # measured proportional region, 5-15 deg.
+        DeclareLaunchArgument("gamma_acker_ff", default_value="0.0"),
+        DeclareLaunchArgument("k_acker_yaw", default_value="0.0"),
+        DeclareLaunchArgument("d_acker_yaw", default_value="0.0"),
+        DeclareLaunchArgument("gamma_acker_min", default_value="0.0872665"),
+        DeclareLaunchArgument("gamma_acker_hi", default_value="0.2617994"),
         # --- Added 2026-08-20: event-driven per-leg gait scheduler (Tier 1) ---
         # Each leg replays the template on its own clock, snapped to the
         # stance-onset row by its own debounced touchdown (blended, clamped,
@@ -389,6 +401,11 @@ def generate_launch_description():
                 'gamma_acker_dip_t1_ms': LaunchConfiguration('gamma_acker_dip_t1_ms'),
                 'gamma_acker_dip_rearm_ms': LaunchConfiguration('gamma_acker_dip_rearm_ms'),
                 'gamma_acker_yield': LaunchConfiguration('gamma_acker_yield'),
+                'gamma_acker_ff': LaunchConfiguration('gamma_acker_ff'),
+                'k_acker_yaw': LaunchConfiguration('k_acker_yaw'),
+                'd_acker_yaw': LaunchConfiguration('d_acker_yaw'),
+                'gamma_acker_min': LaunchConfiguration('gamma_acker_min'),
+                'gamma_acker_hi': LaunchConfiguration('gamma_acker_hi'),
                 'event_sched': LaunchConfiguration('event_sched'),
                 'event_snap_limit_s': LaunchConfiguration('event_snap_limit_s'),
                 'event_blend_ticks': LaunchConfiguration('event_blend_ticks'),

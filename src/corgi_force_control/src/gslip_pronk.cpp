@@ -768,6 +768,19 @@ private:
     double gamma_acker_dir_;
     double gamma_acker_limit_;  // clamp on the open-loop term alone
     int gamma_acker_ramp_ticks_;
+    // Closed-loop camber (Stage 3 task 6; design log S232, numbers S235):
+    // lambda on the SAME L/R pattern, driven by the shared yaw reference.
+    //   lam_cmd = -sign(turn_rate)*ff + k_acker_yaw*yaw_err + d_acker_yaw*wz
+    // ff > 0 ENABLES the loop and replaces dir/in/out (setting both is fatal
+    // at startup). Anti-windup is the reference's own turn_err_limit_. Rad.
+    double gamma_acker_ff_;
+    double k_acker_yaw_;
+    double d_acker_yaw_;
+    // Magnitude range [min, hi]: the measured proportional region, R ~3.0 m
+    // at 5 deg to 2.3 m at 15 deg (S235). gamma_acker_limit_ stays the hard
+    // clamp above.
+    double gamma_acker_min_;
+    double gamma_acker_hi_;
     // Ticks since the stride loop started, for the entry ramp. Counted in
     // apply_row so the settle (yaw_ref_set_ false) never advances it.
     int acker_ramp_count_{0};
@@ -893,8 +906,12 @@ GslipPronkNode::GslipPronkNode()
       clock_ff_phase_("stance"),
       f_lateral_(0.0),
       f_lateral_front_only_(false),
-      k_flight_(12000.0),
-      b_flight_(150.0),
+      // #19 step 2 (2026-08-24): the launch/ctor default IS the config of
+      // record, 7150/115.8 (SS103-109). It was left at the rejected
+      // 12000/150 design point for four days and silently corrupted every
+      // campaign that did not pass the gains explicitly (kt_sweep, S152).
+      k_flight_(7150.0),
+      b_flight_(115.8),
       standup_ticks_(2000),
       // Default OFF. The reasoning is sound for the model -- l0 is the rest
       // length and l(t) is an output -- but in the robot it flipped the
@@ -966,6 +983,11 @@ GslipPronkNode::GslipPronkNode()
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
+      gamma_acker_ff_(0.0),
+      k_acker_yaw_(0.0),
+      d_acker_yaw_(0.0),
+      gamma_acker_min_(5.0 / 180.0 * M_PI),
+      gamma_acker_hi_(15.0 / 180.0 * M_PI),
       // 20 deg: above the 15 deg the Stage 3 sweep tops out at, well under
       // the +-30 deg the model's u_limits allow, and far from folding a leg.
       gamma_acker_limit_(20.0 / 180.0 * M_PI),
@@ -1001,7 +1023,9 @@ GslipPronkNode::GslipPronkNode()
 
     const std::string default_template =
         ament_index_cpp::get_package_share_directory("corgi_force_control")
-        + "/config/gslip_pronk_template.csv";
+        + "/config/gslip_pronk_template_v070.csv";  // #19 step 2: the
+        // default template is the template of record (was the pre-v070 one,
+        // the same silent-default failure mode as the gains above).
     std::string template_path =
         this->declare_parameter<std::string>("template_path", default_template);
     // Launch files pass an empty string to mean "use the installed default"
@@ -1100,6 +1124,23 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<double>("gamma_acker_out", gamma_acker_out_);
     gamma_acker_dir_ =
         this->declare_parameter<double>("gamma_acker_dir", gamma_acker_dir_);
+    gamma_acker_ff_ =
+        this->declare_parameter<double>("gamma_acker_ff", gamma_acker_ff_);
+    k_acker_yaw_ =
+        this->declare_parameter<double>("k_acker_yaw", k_acker_yaw_);
+    d_acker_yaw_ =
+        this->declare_parameter<double>("d_acker_yaw", d_acker_yaw_);
+    gamma_acker_min_ =
+        this->declare_parameter<double>("gamma_acker_min", gamma_acker_min_);
+    gamma_acker_hi_ =
+        this->declare_parameter<double>("gamma_acker_hi", gamma_acker_hi_);
+    if (gamma_acker_ff_ > 0.0 && gamma_acker_dir_ != 0.0) {
+        RCLCPP_FATAL(this->get_logger(),
+                     "gamma_acker_ff (closed-loop) and gamma_acker_dir "
+                     "(open-loop) are both set -- ambiguous camber command, "
+                     "refusing to start (S128's silent-config lesson).");
+        throw std::runtime_error("ambiguous camber configuration");
+    }
     gamma_acker_limit_ =
         this->declare_parameter<double>("gamma_acker_limit", gamma_acker_limit_);
     gamma_acker_ramp_ticks_ = this->declare_parameter<int>(
@@ -2301,9 +2342,10 @@ void GslipPronkNode::dip_tick() {
 }
 
 double GslipPronkNode::gamma_openloop(int leg_index) const {
-    // Off is EXACTLY off: dir 0 adds literal 0.0 in apply_row, keeping every
-    // pre-existing run bit-identical.
-    if (gamma_acker_dir_ == 0.0) return 0.0;
+    // Off is EXACTLY off: dir 0 and ff 0 add literal 0.0 in apply_row,
+    // keeping every pre-existing run bit-identical.
+    const bool closed_loop = gamma_acker_ff_ > 0.0;
+    if (!closed_loop && gamma_acker_dir_ == 0.0) return 0.0;
 
     // Gated like gamma_correction and steer_command, and for steer_command's
     // documented reasons: a held offset during the settle twists the legs
@@ -2315,9 +2357,37 @@ double GslipPronkNode::gamma_openloop(int leg_index) const {
     // the turn centre -- the inner pair, which takes lam_in (it runs the
     // tighter circle; camber_roll.py --acker is the sign-convention source).
     static const double lr_sign[4] = {+1.0, -1.0, -1.0, +1.0};
-    const double s = gamma_acker_dir_ > 0.0 ? 1.0 : -1.0;
+    double s, lam_in, lam_out;
+    if (closed_loop) {
+        // S232/S235: heading error against the SAME reference the
+        // differential arm tracks (advance_yaw_ref); turn_err_limit_ clips
+        // that reference, so a stalled robot cannot wind this loop up
+        // (S223's failure mode).
+        double yaw_err = yaw_ - yaw_ref_;
+        while (yaw_err > M_PI) yaw_err -= 2.0 * M_PI;
+        while (yaw_err < -M_PI) yaw_err += 2.0 * M_PI;
+        const double wz = imu_.angular_velocity.z;
+        // dir +1 (lean right) drives yaw NEGATIVE (S88 sign convention), so
+        // the feedforward for a commanded turn is -sign(turn_rate)*ff, and a
+        // positive yaw error (heading left of the reference) needs MORE
+        // positive lambda: k_acker_yaw > 0 is the stabilising sign.
+        const double s_tr = turn_rate_ < 0.0 ? -1.0 : 1.0;
+        const double lam_cmd = -s_tr * gamma_acker_ff_
+                               + k_acker_yaw_ * yaw_err + d_acker_yaw_ * wz;
+        s = lam_cmd > 0.0 ? 1.0 : -1.0;
+        // Magnitude confined to the measured proportional region [min, hi]
+        // (R ~3.0 m at 5 deg to 2.3 m at 15 deg, S235); in = out, as the
+        // whole R(lambda) map was measured.
+        lam_in = lam_out = std::min(gamma_acker_hi_,
+                                    std::max(gamma_acker_min_,
+                                             std::fabs(lam_cmd)));
+    } else {
+        s = gamma_acker_dir_ > 0.0 ? 1.0 : -1.0;
+        lam_in = gamma_acker_in_;
+        lam_out = gamma_acker_out_;
+    }
     const double signed_unit = s * lr_sign[leg_index];
-    const double mag = signed_unit < 0.0 ? gamma_acker_in_ : gamma_acker_out_;
+    const double mag = signed_unit < 0.0 ? lam_in : lam_out;
 
     const double ramp =
         gamma_acker_ramp_ticks_ > 0
@@ -2935,6 +3005,34 @@ void GslipPronkNode::execute_running_phase() {
         if (gamma_acker_dip_ > 0.0) {
             // Separate line so the ACKER banner above stays byte-identical
             // for every existing harness's grep; absent when the dip is off.
+            RCLCPP_WARN(this->get_logger(),
+                        "ACKER DIP set: %.2f of the camber term over %d-%d ms "
+                        "after debounced touchdown (rearm %d ms)",
+                        gamma_acker_dip_, gamma_acker_dip_t0_ms_,
+                        gamma_acker_dip_t1_ms_, gamma_acker_dip_rearm_ms_);
+        }
+        if (gamma_acker_yield_ > 0.0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "ACKER YIELD set: %.2f toward the MEASURED gamma over %d-%d ms "
+                        "after debounced touchdown (rearm %d ms)",
+                        gamma_acker_yield_, gamma_acker_dip_t0_ms_,
+                        gamma_acker_dip_t1_ms_, gamma_acker_dip_rearm_ms_);
+        }
+    }
+    if (gamma_acker_ff_ > 0.0) {
+        // Closed-loop camber engagement announcement, harness-certified per
+        // run like the ACKER CAMBER line above (which stays byte-identical
+        // and dir-gated -- open-loop harness greps must not match a CL run).
+        RCLCPP_WARN(this->get_logger(),
+                    "ACKER CL set: ff=%.2f deg k_yaw=%.3f d_yaw=%.3f "
+                    "range=[%.2f, %.2f] deg (ramp %d ms, clamp %.1f deg)",
+                    gamma_acker_ff_ * 180.0 / M_PI,
+                    k_acker_yaw_, d_acker_yaw_,
+                    gamma_acker_min_ * 180.0 / M_PI,
+                    gamma_acker_hi_ * 180.0 / M_PI,
+                    gamma_acker_ramp_ticks_,
+                    gamma_acker_limit_ * 180.0 / M_PI);
+        if (gamma_acker_dip_ > 0.0) {
             RCLCPP_WARN(this->get_logger(),
                         "ACKER DIP set: %.2f of the camber term over %d-%d ms "
                         "after debounced touchdown (rearm %d ms)",
