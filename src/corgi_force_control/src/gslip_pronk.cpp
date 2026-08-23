@@ -2496,6 +2496,7 @@ double GslipPronkNode::meas_theta(int leg) const {
         case 2: return motor_state_.module_c.theta;
         default: return motor_state_.module_d.theta;
     }
+}
 
 // Measured ABAD angle, same source as the theta accessor above. Used by the
 // stance-peak yield, which blends the command toward this inside its window.
@@ -2506,7 +2507,6 @@ double GslipPronkNode::measured_gamma(int leg_index) const {
         case 2: return motor_state_.module_c.gamma;
         default: return motor_state_.module_d.gamma;
     }
-}
 }
 
 void GslipPronkNode::slave_exit(int leg, size_t master, double t_now,
