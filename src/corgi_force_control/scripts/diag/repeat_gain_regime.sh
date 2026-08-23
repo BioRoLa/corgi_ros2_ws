@@ -38,6 +38,32 @@ GAIT_WALL=${GAIT_WALL:-200}   # HARD TIMEOUT only when GAIT_SIM is set
 GAIT_SIM=${GAIT_SIM:-0}
 SPAN_REF=""
 SETTLE_WALL=${SETTLE_WALL:-45}
+
+start_captures() {
+  # Optional: record body odometry alongside the torque capture, so speed is
+  # measured in the SAME run the demand is (RECORD_ODOM=1). Exists because the
+  # label-shift conditions change contact duty, and a demand reduction bought
+  # with forward speed is not a reduction. Full --csv keeps the Odometry field
+  # order fixed by the message spec (stamp at cols 0-1, position at 4-6).
+  if [ -n "${RECORD_ODOM:-}" ]; then
+    setsid ros2 topic echo /sim/base_odom --csv \
+        > "$OUTDIR/odom_run${RUN}.csv" 2>/dev/null < /dev/null &
+    ODOM_PID=$!
+  fi
+
+  # CENTRE-OF-MASS ground truth, for alpha (RECORD_COM=1, log S180). Same
+  # column layout as base_odom -- it is the same message type -- so
+  # load_odom_xyzt reads it unchanged. The driver only publishes this when
+  # CORGI_PUBLISH_COM=1, so the caller must set BOTH; if it sets only this one
+  # the echo produces an empty file rather than a wrong one, and the
+  # `COM PUBLISH: ON` line in the driver log is the proof of intent.
+  if [ -n "${RECORD_COM:-}" ]; then
+    setsid ros2 topic echo /sim/com_odom --csv \
+        > "$OUTDIR/com_run${RUN}.csv" 2>/dev/null < /dev/null &
+    COM_PID=$!
+  fi
+}
+
 # Extra launch args for the controller, e.g. CTL_ARGS="contact_gated_gains:=true".
 # Kept as one string so the A/B pair differs in exactly one place and the
 # difference is visible in the captured log.
@@ -119,30 +145,27 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
   setsid ros2 topic pub -r 50 /trigger corgi_msgs/msg/TriggerStamped \
       '{enable: true}' > /dev/null 2>&1 < /dev/null &
 
+  # PRE_SETTLE_ODOM=1 starts the odom capture BEFORE the settle sleep, so the
+  # recording covers the ramp and the first seconds of gait instead of opening
+  # ~7 s of sim time in (log S195/S196). That blind spot is why the yaw
+  # collapse has no mechanism: BOTH collapsed runs on record are already at
+  # v_fwd ~ 0 in the first window of every capture, so nothing observable
+  # precedes the failure and no metric measured over the band can predict it.
+  # Costs ~7 s of extra CSV per run (~0.4 MB) and nothing else.
+  #
+  # Default OFF: existing harnesses stay bit-identical, the same contract
+  # GAIT_SIM=0 keeps above.
+  if [ -n "${PRE_SETTLE_ODOM:-}" ]; then
+    echo "  PRE-SETTLE CAPTURE: odom starts before settle (S196)"
+    start_captures
+  fi
+
   sleep "$SETTLE_WALL"
 
-  # Optional: record body odometry alongside the torque capture, so speed is
-  # measured in the SAME run the demand is (RECORD_ODOM=1). Exists because the
-  # label-shift conditions change contact duty, and a demand reduction bought
-  # with forward speed is not a reduction. Full --csv keeps the Odometry field
-  # order fixed by the message spec (stamp at cols 0-1, position at 4-6).
-  if [ -n "${RECORD_ODOM:-}" ]; then
-    setsid ros2 topic echo /sim/base_odom --csv \
-        > "$OUTDIR/odom_run${RUN}.csv" 2>/dev/null < /dev/null &
-    ODOM_PID=$!
+  if [ -z "${PRE_SETTLE_ODOM:-}" ]; then
+    start_captures
   fi
 
-  # CENTRE-OF-MASS ground truth, for alpha (RECORD_COM=1, log S180). Same
-  # column layout as base_odom -- it is the same message type -- so
-  # load_odom_xyzt reads it unchanged. The driver only publishes this when
-  # CORGI_PUBLISH_COM=1, so the caller must set BOTH; if it sets only this one
-  # the echo produces an empty file rather than a wrong one, and the
-  # `COM PUBLISH: ON` line in the driver log is the proof of intent.
-  if [ -n "${RECORD_COM:-}" ]; then
-    setsid ros2 topic echo /sim/com_odom --csv \
-        > "$OUTDIR/com_run${RUN}.csv" 2>/dev/null < /dev/null &
-    COM_PID=$!
-  fi
 
   # ---- CAPTURE WINDOW: sim time, not wall time -----------------------------
   #
