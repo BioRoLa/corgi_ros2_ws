@@ -4,7 +4,7 @@
 # asks "is this the recorded robot?", this one asks "is the machine in a state
 # where the answer will mean anything?".
 #
-# WHY IT IS ONE FILE AND NOT 25 COPIES (S202). These checks spread by
+# WHY IT IS ONE FILE AND NOT 25 COPIES (S203). These checks spread by
 # copy-paste and drifted badly. Before this file, of the 25 campaign scripts:
 #   stale-launch check        11
 #   Linux-side foreign Webots  6

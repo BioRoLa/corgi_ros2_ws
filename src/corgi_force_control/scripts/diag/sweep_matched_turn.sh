@@ -61,7 +61,7 @@ CFG="$WS/src/corgi_force_control/config"
 # identity into this campaign's own log and refuses a dirty or unbuilt plant.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
-# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# IS THE SIMULATOR FREE, AND QUIET? S203. Same one-file treatment as the plant
 # guard above, for the same reason: these checks spread by copy-paste and only
 # reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
 # stale-launch one), and the variants disagreed about what to grep. This is the
