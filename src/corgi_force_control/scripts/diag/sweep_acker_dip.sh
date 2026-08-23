@@ -119,12 +119,25 @@ for T in abad_torque.py score_acker_dip.py; do
 done
 echo "scorer selftests pass."
 
+# RESUME (2026-08-23): a campaign paused at a run boundary (the sweep shell
+# stopped, the child run allowed to finish) is resumed with REP_START=<next rep>
+# on the SAME base. Only then is a non-empty base accepted, and only if every
+# cell holds exactly REP_START-1 certified runs -- a half-written rep is not a
+# resume point.
+REP_START=${REP_START:-1}
 if [ -d "$BASE" ] && [ -n "$(ls -A "$BASE" 2>/dev/null)" ]; then
-  echo "!! $BASE already has content. A fresh campaign needs a fresh base --"
-  echo "!! set BASE=... or move the old one. REFUSING."; exit 1
+  if [ "$REP_START" -le 1 ]; then
+    echo "!! $BASE already has content. A fresh campaign needs a fresh base --"
+    echo "!! set BASE=... or move the old one, or resume with REP_START=<n>. REFUSING."; exit 1
+  fi
+  for C in $CELLS; do
+    HAVE=$(ls "$BASE/$C"/run[0-9].csv 2>/dev/null | wc -l)
+    [ "$HAVE" = "$((REP_START - 1))" ] || { echo "!! resume: cell $C has $HAVE runs, expected $((REP_START - 1)). REFUSING."; exit 1; }
+  done
+  echo "RESUMING at rep $REP_START on $BASE (each cell has $((REP_START - 1)) runs)."
 fi
 mkdir -p "$BASE"
-{
+[ "$REP_START" -gt 1 ] || {
   echo "campaign  acker_dip  $(date -Iseconds)"
   echo "nodip $CAM_ARGS"
   echo "dip15 $DIP15_ARGS"
@@ -132,6 +145,7 @@ mkdir -p "$BASE"
   echo "both  $ATT_ARGS $FLIGHT_ARGS $TPL_ARG"
   echo "n $NPER  gait_sim $GAIT_SIM"
 } > "$BASE/DESIGN.txt"
+[ "$REP_START" -gt 1 ] && echo "resumed at rep $REP_START  $(date -Iseconds)" >> "$BASE/DESIGN.txt"
 
 # ---- per-run self-certification -------------------------------------------
 certify() {  # certify <cell> <ctl_log> -> 0 ok, 1 INVALID
@@ -201,7 +215,7 @@ run_cell() {  # run_cell <cell> <rep>
 }
 
 # ---- ATTEMPTS, interleaved by repetition ------------------------------------
-for REP in $(seq 1 "$NPER"); do
+for REP in $(seq "$REP_START" "$NPER"); do
   for CELL in $CELLS; do run_cell "$CELL" "$REP"; done
 done
 
