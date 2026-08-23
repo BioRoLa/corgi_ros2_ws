@@ -52,6 +52,13 @@ CFG="$WS/src/corgi_force_control/config"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 NPER=${NPER:-3}
 GAIT_SIM=${GAIT_SIM:-24}
 GAIT_WALL=${GAIT_WALL:-420}
@@ -90,45 +97,6 @@ echo
 
 # ---- PREFLIGHT -------------------------------------------------------------
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! stale sim processes -- REFUSING:"
-  pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' | head
-  exit 1
-fi
-FOREIGN=$(pgrep -f 'usr/local/webots' 2>/dev/null | wc -l)
-if [ "$FOREIGN" != 0 ]; then
-  echo "!! a Linux-side Webots is running that is NOT the Corgi sim -- REFUSING:"
-  pgrep -fa 'usr/local/webots' | head
-  exit 1
-fi
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
-  echo "!! load average $LOAD before the campaign started -- REFUSING"; exit 1
-fi
-echo "machine clean; load average $LOAD."
-
-# PORTED FROM sweep_camber_pattern.sh 2026-08-22 (S171 S6). Webots here is a
-# WINDOWS binary invoked through /init, so a surviving instance is invisible to
-# every WSL pgrep above. It holds port 1234, the next launch dies with exit 1
-# plus a misleading "[Errno 13] Permission denied" on the temp .wbt, and the run
-# produces no capture at all.
-if command -v powershell.exe > /dev/null 2>&1; then
-  WINWB=$(powershell.exe -NoProfile -Command \
-      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null \
-      | tr -d '\r\n ')
-  case "$WINWB" in
-    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
-    0) echo "windows-side Webots check: none running." ;;
-    *) echo "!! $WINWB WINDOWS-side webots.exe still running. It holds port 1234"
-       echo "!! and no WSL pgrep can see it. REFUSING."
-       powershell.exe -NoProfile -Command \
-         "Get-Process webots* | Select-Object Id,ProcessName,StartTime" 2>/dev/null
-       exit 1 ;;
-  esac
-else
-  echo "windows-side Webots check: powershell.exe not reachable -- continuing."
-fi
 
 # THE GUARD THAT S28 HAD TO LEARN THE HARD WAY. Its first attempt ran all nine
 # runs at 35 N.m regardless of the env var, because the INSTALLED driver still

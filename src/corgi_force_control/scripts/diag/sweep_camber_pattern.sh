@@ -57,6 +57,13 @@ CFG="$WS/src/corgi_force_control/config"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 NPER=${NPER:-1}
 GAIT_SIM=${GAIT_SIM:-24}
 GAIT_WALL=${GAIT_WALL:-420}
@@ -126,56 +133,6 @@ echo
 
 # ---- PREFLIGHT. Everything here runs before any sim time is spent. ---------
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! stale sim processes -- REFUSING:"
-  pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' | head
-  echo "!! The simulator is SHARED. Ask before killing anything."
-  exit 1
-fi
-echo "stale-launch check clean."
-
-# A bare `webots` (no world argument) opens the TurtleBot demo, holds port 1234
-# and a third of the CPU, and the stale-launch grep above cannot see it. That
-# is what confounded S161 -- see S166's callout.
-FOREIGN=$(pgrep -f 'usr/local/webots' 2>/dev/null | wc -l)
-if [ "$FOREIGN" != 0 ]; then
-  echo "!! a Linux-side Webots is running that is NOT the Corgi sim:"
-  pgrep -fa 'usr/local/webots' | head
-  echo "!! It will steal CPU and jitter every control loop. REFUSING."
-  exit 1
-fi
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
-  echo "!! 1-minute load average is $LOAD before the campaign has started."
-  echo "!! REFUSING -- find the load first."
-  exit 1
-fi
-echo "no foreign Webots; load average $LOAD."
-
-# THE GAP THAT COST RUN 1 ON 2026-08-22 (S171). Webots here is a WINDOWS
-# binary -- /mnt/c/Program Files/Webots/msys64/mingw64/bin/webots.exe, invoked
-# through /init -- so a surviving instance does NOT appear in any WSL pgrep.
-# Both checks above passed while a Windows-side webots.exe still held port
-# 1234; the new one exited 1, the driver never connected, and the run produced
-# no capture at all. Every sweep in this directory has this blind spot.
-if command -v powershell.exe > /dev/null 2>&1; then
-  WINWB=$(powershell.exe -NoProfile -Command \
-      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null \
-      | tr -d '\r\n ')
-  case "$WINWB" in
-    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
-    0) echo "windows-side Webots check: none running." ;;
-    *) echo "!! $WINWB WINDOWS-side webots.exe still running. It holds port 1234"
-       echo "!! and no WSL pgrep can see it. The launch will die with exit 1 and"
-       echo "!! the driver will never connect. REFUSING."
-       powershell.exe -NoProfile -Command \
-         "Get-Process webots* | Select-Object Id,ProcessName,StartTime" 2>/dev/null
-       exit 1 ;;
-  esac
-else
-  echo "windows-side Webots check: powershell.exe not reachable -- continuing."
-fi
 
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control"
 [ "$(strings "$BIN/gslip_pronk_node" 2>/dev/null | grep -c 'LEG-FRAME GAINS')" != 0 ] || {

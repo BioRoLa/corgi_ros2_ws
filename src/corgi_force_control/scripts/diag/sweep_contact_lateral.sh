@@ -49,6 +49,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$HERE/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$HERE/preflight_sim.sh"
+preflight_sim || exit 1
 
 LAMS=${LAMS:-"0 5 10 15 20 30"}
 KP=${KP:-90}
@@ -95,27 +102,6 @@ echo
 
 # ---- PREFLIGHT -------------------------------------------------------------
 
-FOREIGN=$(pgrep -af 'Corgi_launc[h]|ros2 launc[h]|camber_cycl[e].sh|ramp_cycl[e].sh|sim_cycl[e].sh' \
-          | grep -v sweep_contact_lateral)
-if [ -n "$FOREIGN" ]; then
-  echo "!! sim not free -- REFUSING:"; echo "$FOREIGN"; exit 1
-fi
-echo "stale-launch check clean."
-
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}' && { echo "!! load $LOAD -- REFUSING"; exit 1; }
-echo "load average $LOAD."
-
-# Webots here is a WINDOWS binary, invisible to every pgrep above (S171 S6).
-if command -v powershell.exe > /dev/null 2>&1; then
-  WINWB=$(powershell.exe -NoProfile -Command \
-      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null | tr -d '\r\n ')
-  case "$WINWB" in
-    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
-    0) echo "windows-side Webots check: none running." ;;
-    *) echo "!! $WINWB WINDOWS-side webots.exe holds port 1234. REFUSING."; exit 1 ;;
-  esac
-fi
 
 # The capture is the whole point: refuse if the driver cannot write it.
 INST=$(find /home/alexc/corgi_ws/corgi_ros2_ws/install/corgi_sim -name corgi_driver.py 2>/dev/null | head -1)

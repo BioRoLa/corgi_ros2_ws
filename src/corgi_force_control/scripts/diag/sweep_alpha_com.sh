@@ -41,6 +41,13 @@ CFG="$WS/src/corgi_force_control/config"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 NPER=${NPER:-3}
 GAIT_SIM=${GAIT_SIM:-24}
 GAIT_WALL=${GAIT_WALL:-420}
@@ -81,25 +88,6 @@ echo
 
 # ---- PREFLIGHT -------------------------------------------------------------
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-[ "$STALE" = 0 ] || { echo "!! stale sim processes -- REFUSING"; pgrep -fa 'Corgi_launch.py|gslip_pronk_node' | head; exit 1; }
-echo "stale-launch check clean."
-
-FOREIGN=$(pgrep -f 'usr/local/webots' 2>/dev/null | wc -l)
-[ "$FOREIGN" = 0 ] || { echo "!! a Linux-side Webots is running -- REFUSING"; exit 1; }
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}' && { echo "!! load average $LOAD -- REFUSING"; exit 1; }
-echo "no foreign Webots; load average $LOAD."
-
-if command -v powershell.exe > /dev/null 2>&1; then
-  WINWB=$(powershell.exe -NoProfile -Command \
-      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null | tr -d '\r\n ')
-  case "$WINWB" in
-    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
-    0) echo "windows-side Webots check: none running." ;;
-    *) echo "!! $WINWB WINDOWS-side webots.exe holds port 1234. REFUSING."; exit 1 ;;
-  esac
-fi
 
 # THE DRIVER MUST ACTUALLY HAVE THE CoM PUBLISHER, in the INSTALLED copy.
 # src is not install: S28 ran nine runs against a stale driver and the result

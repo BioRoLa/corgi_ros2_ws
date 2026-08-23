@@ -57,6 +57,13 @@ DIAG="$WS/src/corgi_force_control/scripts/diag"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 ARMS=${ARMS:-"600.0 1200.0 2400.0"}
 REF_KT=${REF_KT:-600.0}
 NPER=${NPER:-5}
@@ -79,16 +86,6 @@ echo " odom          : ON"
 echo " flight gains  : $FLIGHT_ARGS   <- CONFIG OF RECORD, passed explicitly"
 echo
 
-# --- stale-launch check. A leftover sim from another session silently
-# --- correlates every arm, and the harness's teardown only runs per-run.
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! $STALE stale sim/controller process(es) already running:"
-  pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | head
-  echo "!! Another agent may be using the simulator. REFUSING to start."
-  exit 1
-fi
-echo "stale-launch check clean."
 
 # --- the controller must carry the startup announcement, or the per-run
 # --- proof-of-intent assert silently degrades to "cannot certify".

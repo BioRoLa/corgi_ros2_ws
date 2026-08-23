@@ -43,6 +43,13 @@ CFG="$WS/src/corgi_force_control/config"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 NPER=${NPER:-3}
 # Capture window in SIM seconds, not wall seconds. Makes the window a property
 # of the experiment rather than of whatever else the machine is doing, which is
@@ -94,35 +101,7 @@ echo
 
 # ---- PREFLIGHT. Everything here runs before any sim time is spent. ---------
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! stale sim processes -- REFUSING:"
-  pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' | head
-  echo "!! The simulator is SHARED. Another agent's campaign looks exactly"
-  echo "!! like a leftover process from here. Ask before killing anything."
-  exit 1
-fi
-echo "stale-launch check clean."
 
-# The S161 confound was a Webots the stale-launch grep did not look for: a bare
-# `webots` with no world argument, holding port 1234 and a third of the CPU for
-# an hour. That grep only knew about Corgi_launch / gslip_pronk_node /
-# webots_ros2_driver. Widen it, and check the load while we are here.
-FOREIGN=$(pgrep -f 'usr/local/webots' 2>/dev/null | wc -l)
-if [ "$FOREIGN" != 0 ]; then
-  echo "!! a Linux-side Webots is running that is NOT the Corgi sim:"
-  pgrep -fa 'usr/local/webots' | head
-  echo "!! It will steal CPU and shorten every capture. REFUSING."
-  exit 1
-fi
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
-  echo "!! 1-minute load average is $LOAD before the campaign has started."
-  echo "!! Webots throughput scales with this and the harness cannot buy it"
-  echo "!! back. Find the load first. REFUSING."
-  exit 1
-fi
-echo "no foreign Webots; load average $LOAD."
 
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control"
 # The controller half: the parameter was read and the rate derived.

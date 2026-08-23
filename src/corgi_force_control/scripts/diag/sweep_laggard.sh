@@ -33,6 +33,13 @@ CFG="$WS/src/corgi_force_control/config"
 # unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S202. Same one-file treatment as the plant
+# guard above, for the same reason: these checks spread by copy-paste and only
+# reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
+# stale-launch one), and the variants disagreed about what to grep. This is the
+# union. Self-tested: preflight_sim_selftest.sh, 9 faked-probe cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 NPER=${NPER:-3}
 BASE=${BASE:-/home/alexc/corgi_runs/laggard}
 
@@ -52,12 +59,6 @@ echo " flight   : $FLIGHT_ARGS"
 echo " base     : $BASE"
 echo
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! stale sim processes -- REFUSING:"; pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' | head
-  exit 1
-fi
-echo "stale-launch check clean."
 
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control/gslip_pronk_node"
 [ "$(strings "$BIN" 2>/dev/null | grep -c 'LEG-FRAME GAINS')" != 0 ] || {
