@@ -90,5 +90,113 @@ preflight_plant() {
     echo "!! WARN: parent records src/corgi_sim ${recorded:0:7}, checked out ${head:0:7}."
     echo "!! WARN: the campaign is readable, but the parent pointer is stale."
   fi
+
+  # 4. Freeze the installed artifacts, so plant_verify can catch a rebuild that
+  #    lands MID-campaign (S204). Exported, so each run's child process inherits
+  #    it without the campaign script having to pass anything along.
+  plant_freeze "$ws" || return 1
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE MID-CAMPAIGN CASE (S204). preflight_plant runs ONCE, at campaign start.
+# S181 is what that misses: sweep_torque_ceiling_cor.sh was written at 14:19,
+# S168 rebuilt the controller at 14:44, and the campaign's control bar was then
+# scored against a plant that had moved underneath it. P-Q-3 failed and
+# P-Q-1/P-Q-2 went unscored -- a whole campaign, for a change nothing measured.
+#
+# So: FREEZE a fingerprint of the installed artifacts at campaign start, and
+# RE-CHECK it before every run. A campaign that straddles a rebuild now stops
+# at the run where the plant moved, instead of producing a mixed dataset that
+# looks clean.
+#
+# The four artifacts are the ones that actually decide what a run does:
+#   proto       the robot                     (S41/S198's case)
+#   driver      contact, torque, publishing   (installed, not src)
+#   controller  gslip_pronk_node              (S168's case, 2026-08-22 14:44)
+#   force_ctl   force_control_node            (the impedance law)
+#
+# NOT the template CSV: sweep_template_speed.sh legitimately varies it per cell,
+# and it is a launch argument, already covered by open issue #19's discipline.
+#
+# `stat -L`, NOT `stat`. corgi_force_control is a --symlink-install, so the
+# path in install/lib is an 81-byte SYMLINK into build/ whose own mtime is
+# 2026-08-09 and never changes on rebuild. Without -L this check would compare
+# two constants forever and pass through every rebuild it exists to catch.
+# Cost is four stat(2) calls and ZERO file reads, which is deliberate: it runs
+# while a campaign is live, and analysis load starves later cells (S166).
+
+_plant_artifacts() {
+  local ws="${1:-${WS:-$PREFLIGHT_PLANT_WS}}"
+  echo "proto=$ws/install/corgi_sim/share/corgi_sim/protos/CorgiRobotABAD.proto"
+  echo "driver=$ws/install/corgi_sim/local/lib/python3.10/dist-packages/corgi_driver_pkg/corgi_driver.py"
+  echo "controller=$ws/install/corgi_force_control/lib/corgi_force_control/gslip_pronk_node"
+  echo "force_ctl=$ws/install/corgi_force_control/lib/corgi_force_control/force_control_node"
+}
+
+plant_fingerprint() {
+  local ws="${1:-${WS:-$PREFLIGHT_PLANT_WS}}"
+  local out="" name path sig
+  while IFS= read -r spec; do
+    name="${spec%%=*}"; path="${spec#*=}"
+    sig=$(stat -L -c '%s:%Y' "$path" 2>/dev/null) || sig="MISSING"
+    [ -n "$sig" ] || sig="MISSING"
+    out="$out,$name=$sig"
+  done <<< "$(_plant_artifacts "$ws")"
+  # Comma-separated and space-free ON PURPOSE: this value is exported and
+  # read back by child processes, and a fingerprint containing spaces
+  # truncates at the first space anywhere it is passed unquoted.
+  echo "${out#,}"
+}
+
+plant_freeze() {
+  local ws="${1:-${WS:-$PREFLIGHT_PLANT_WS}}"
+  CORGI_PLANT_LOCK=$(plant_fingerprint "$ws")
+  export CORGI_PLANT_LOCK
+  echo "plant lock: $CORGI_PLANT_LOCK"
+  return 0
+}
+
+plant_verify() {
+  local ws="${1:-${WS:-$PREFLIGHT_PLANT_WS}}"
+  local now; now=$(plant_fingerprint "$ws")
+
+  if [ -z "$CORGI_PLANT_LOCK" ]; then
+    # Standalone invocation -- nothing to compare against. Still announce, so
+    # the run's log records which plant it used.
+    echo "plant lock: (none set) $now"
+    return 0
+  fi
+  [ "$now" = "$CORGI_PLANT_LOCK" ] && return 0
+
+  echo "!! ================= THE PLANT MOVED MID-CAMPAIGN ================="
+  echo "!! An installed artifact changed AFTER this campaign started. Runs"
+  echo "!! before and after this point are NOT comparable, and a campaign that"
+  echo "!! straddles a rebuild is exactly how S181 lost P-Q-1/P-Q-2."
+  local f nowv wasv
+  for f in proto driver controller force_ctl; do
+    wasv=$(echo ",$CORGI_PLANT_LOCK" | sed -n "s/.*,$f=\([^,]*\).*/\1/p")
+    nowv=$(echo ",$now"              | sed -n "s/.*,$f=\([^,]*\).*/\1/p")
+    if [ "$wasv" != "$nowv" ]; then
+      echo "!!   $f  CHANGED  size:mtime  $wasv  ->  $nowv"
+    fi
+  done
+  echo "!! at campaign start : $CORGI_PLANT_LOCK"
+  echo "!! now               : $now"
+
+  # Leave the evidence WITH the captures, so this cannot be lost to a harness
+  # that swallows a non-zero exit (repeat_gain_regime.sh returns 0 on a failed
+  # launch -- see its `skipping` path).
+  if [ -n "$OUTDIR" ] && [ -d "$OUTDIR" ]; then
+    {
+      echo "campaign start : $CORGI_PLANT_LOCK"
+      echo "detected at run: $now"
+    } > "$OUTDIR/PLANT_CHANGED_MID_CAMPAIGN.txt" 2>/dev/null \
+      && echo "!! recorded in $OUTDIR/PLANT_CHANGED_MID_CAMPAIGN.txt"
+  fi
+  echo "!! REFUSING. Re-register the campaign against the new plant (S126: a"
+  echo "!! failed gate binds -- re-run, do not rescue), or export"
+  echo "!! CORGI_PLANT_LOCK= to start a fresh lock deliberately."
+  echo "!! ==============================================================="
+  return 1
 }
