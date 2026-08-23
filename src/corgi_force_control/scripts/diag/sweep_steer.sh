@@ -25,6 +25,14 @@ set -o pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS=/home/alexc/corgi_ws/corgi_ros2_ws
+# IS THE SIMULATED ROBOT THE RECORDED ROBOT? S198 / open issue #26. The Webots
+# proto sat modified-and-uncommitted for six days, and every campaign in that
+# window ran on a plant no checkout could rebuild -- `git diff` hid it, because
+# it is a 103 MB LFS object and git diff shows only the pointer. This prints the
+# plant identity into THIS campaign's own log, and refuses on a dirty or
+# unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
+preflight_plant || exit 1
 TPL="$WS/src/corgi_force_control/config/gslip_pronk_template.csv"
 UNTIL="${1:-10}"
 

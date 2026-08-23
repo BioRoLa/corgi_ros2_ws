@@ -36,6 +36,14 @@
 WS=~/corgi_ws/corgi_ros2_ws
 DIAG="$WS/src/corgi_force_control/scripts/diag"
 CFG="$WS/src/corgi_force_control/config"
+# IS THE SIMULATED ROBOT THE RECORDED ROBOT? S198 / open issue #26. The Webots
+# proto sat modified-and-uncommitted for six days, and every campaign in that
+# window ran on a plant no checkout could rebuild -- `git diff` hid it, because
+# it is a 103 MB LFS object and git diff shows only the pointer. This prints the
+# plant identity into THIS campaign's own log, and refuses on a dirty or
+# unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
+preflight_plant || exit 1
 NPER=${NPER:-5}
 GAIT_SIM=${GAIT_SIM:-24}
 GAIT_WALL=${GAIT_WALL:-420}

@@ -41,6 +41,14 @@
 # No `set -u` -- camber_cycle sources ROS setup files.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# IS THE SIMULATED ROBOT THE RECORDED ROBOT? S198 / open issue #26. The Webots
+# proto sat modified-and-uncommitted for six days, and every campaign in that
+# window ran on a plant no checkout could rebuild -- `git diff` hid it, because
+# it is a 103 MB LFS object and git diff shows only the pointer. This prints the
+# plant identity into THIS campaign's own log, and refuses on a dirty or
+# unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
+. "$HERE/preflight_plant.sh"
+preflight_plant || exit 1
 
 LAMS=${LAMS:-"0 5 10 15 20 30"}
 KP=${KP:-90}

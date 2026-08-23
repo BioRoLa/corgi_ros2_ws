@@ -38,6 +38,14 @@
 set -o pipefail
 
 HERE=/home/alexc/corgi_ws/corgi_ros2_ws/src/corgi_force_control/scripts/diag
+# IS THE SIMULATED ROBOT THE RECORDED ROBOT? S198 / open issue #26. The Webots
+# proto sat modified-and-uncommitted for six days, and every campaign in that
+# window ran on a plant no checkout could rebuild -- `git diff` hid it, because
+# it is a 103 MB LFS object and git diff shows only the pointer. This prints the
+# plant identity into THIS campaign's own log, and refuses on a dirty or
+# unbuilt plant. Self-tested: preflight_plant_selftest.sh, 7 planted cases.
+. "$HERE/preflight_plant.sh"
+preflight_plant || exit 1
 export ROLL_TIME=10        # S33 used 20 for a circle fit; the undershoot is a
                            # steady-state hold and does not need the distance.
 
