@@ -34,6 +34,12 @@ CFG="$WS/src/corgi_force_control/config"
 # identity into this campaign's own log and refuses a dirty or unbuilt plant.
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# Does the launch file forward every parameter the node declares? This
+# campaign's first launch passed gamma_acker_dip:=0.15 and the launch file
+# dropped it silently (S128's trap); two cells were quarantined before the
+# certify grep caught it. Reconciled up front now (S210 callout).
+. "$WS/src/corgi_force_control/scripts/diag/preflight_launch_args.sh"
+preflight_launch_args || exit 1
 # IS THE SIMULATOR FREE, AND QUIET? S203. Same one-file treatment as the plant
 # guard above, for the same reason: these checks spread by copy-paste and only
 # reached 7 of 25 campaigns (the WINDOWS-side webots.exe one) to 11 of 25 (the
