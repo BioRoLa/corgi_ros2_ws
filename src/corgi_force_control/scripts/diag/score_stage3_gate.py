@@ -55,6 +55,7 @@ B = {  # the bands, verbatim from the Timeline
     "beta_td": -0.084, "beta_td_tol": 0.006,
     "fwd_lo": 0.70, "fwd_hi": 0.80, "min_td": 8,
     "stride_tol": 0.05,
+    "r_lo": None, "r_hi": None,   # optional RADIUS clause (S217): median R_fit window, m
 }
 NEED = 5
 MAX_ATTEMPTS = 8
@@ -111,6 +112,11 @@ def evaluate(v):
                    and v["min_td"] >= B["min_td"])
     c["stride"] = (not math.isnan(v["stride_s"])
                    and abs(v["stride_s"] / TEMPLATE_PERIOD - 1.0) <= B["stride_tol"])
+    if B["r_lo"] is not None and B["r_hi"] is not None:
+        # S216 met the gate at R 1.8-2.6 m against a NAMED cell of R ~3 m that
+        # was never scored. For a campaign whose point is "the Stage 4 radius
+        # has been run at", the radius is a clause, per run, on the Kasa fit.
+        c["radius"] = B["r_lo"] <= v["R_fit"] <= B["r_hi"]
     v["clauses"] = c
     v["valid"] = all(c.values())
     return v
@@ -175,6 +181,15 @@ def selftest():
         e = evaluate(v)
         chk("%s=%s fails ONLY clause '%s'" % (key, val, clause),
             (not e["valid"]) and [k for k, o in e["clauses"].items() if not o] == [clause])
+    # radius clause: inactive by default, active and independent when set
+    e0 = evaluate(dict(good))
+    chk("no radius clause unless set (clauses: %s)" % ",".join(e0["clauses"]), "radius" not in e0["clauses"])
+    B["r_lo"], B["r_hi"] = 2.5, 3.6
+    e1 = evaluate(dict(good)); v3 = dict(good); v3["R_fit"] = 2.2; e2 = evaluate(v3)
+    chk("R_fit 3.0 passes the [2.5, 3.6] radius clause", e1["clauses"]["radius"] and e1["valid"])
+    chk("R_fit 2.2 fails ONLY the radius clause",
+        (not e2["valid"]) and [k for k, o in e2["clauses"].items() if not o] == ["radius"])
+    B["r_lo"], B["r_hi"] = None, None
     # heading change on a synthetic 200 deg arc, written in load_odom_csv's
     # own column layout (sec, nsec, _, _, x, y, _, qx, qy, qz, qw): the helper
     # must read 200 over the band and IGNORE the 12 s settle before it.
@@ -203,6 +218,8 @@ def main():
     ap.add_argument("--beta-tol", type=float, help="half-width, rad (median +- 3 sd)")
     ap.add_argument("--fwd-lo", type=float)
     ap.add_argument("--fwd-hi", type=float)
+    ap.add_argument("--r-lo", type=float, help="optional radius clause: R_fit >= this (m)")
+    ap.add_argument("--r-hi", type=float, help="optional radius clause: R_fit <= this (m)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     # The screen bands are a REGISTRATION input. The defaults in B are the
@@ -211,7 +228,8 @@ def main():
     # 2 of 5 healthy cambered runs failed the screen for being cambered (#22
     # trap). Set them from S202 cam arm at the gate lambda, in the registration.
     for k, v in (("beta_td", a.beta_td), ("beta_td_tol", a.beta_tol),
-                 ("fwd_lo", a.fwd_lo), ("fwd_hi", a.fwd_hi)):
+                 ("fwd_lo", a.fwd_lo), ("fwd_hi", a.fwd_hi),
+                 ("r_lo", a.r_lo), ("r_hi", a.r_hi)):
         if v is not None:
             B[k] = v
     if a.selftest:
@@ -226,6 +244,8 @@ def main():
         return 1
     print("screen bands in use: beta_TD %.4f +- %.4f, fwd [%.2f, %.2f]"
           % (B["beta_td"], B["beta_td_tol"], B["fwd_lo"], B["fwd_hi"]))
+    if B["r_lo"] is not None:
+        print("radius clause in use: R_fit in [%.2f, %.2f] m" % (B["r_lo"], B["r_hi"]))
     print()
     d = os.path.join(os.path.expanduser(a.base), "cam")
     rows = [r for r in (run_clauses(d, n) for n in range(1, MAX_ATTEMPTS + 3)) if r]

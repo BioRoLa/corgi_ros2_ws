@@ -95,6 +95,7 @@ echo "   screen   beta_TD and fwd fraction within the bands SET AT REGISTRATION"
 echo "            from S202's cam arm at this lambda (SCREEN_BETA_TD, SCREEN_BETA_TOL,"
 echo "            SCREEN_FWD_LO, SCREEN_FWD_HI -> score_stage3_gate.py); >= 8 TD/leg"
 echo "   stride   theta period within +-5% of 0.2642 s (= playback check)"
+[ -n "${R_LO:-}" ] && echo "   radius   R_fit within [$R_LO, $R_HI] m  (S217: the Stage 4 radius is a CLAUSE here)"
 echo " CONSEQUENCES (Timeline, pre-committed): 5-8 -> Stage 3 cambered CLOSES;"
 echo " 3-4 -> not closed, failing clause named, no re-registration; <= 2 -> the"
 echo " off-ramp question is asked NOW."
@@ -190,7 +191,8 @@ echo " SCORE -- score_stage3_gate.py, as registered in S$REGISTERED_SECTION"
 echo "==========================================================="
 python3 "$DIAG/score_stage3_gate.py" --base "$BASE" \
   --beta-td "${SCREEN_BETA_TD:?set from the registration}" --beta-tol "${SCREEN_BETA_TOL:?}" \
-  --fwd-lo "${SCREEN_FWD_LO:?}" --fwd-hi "${SCREEN_FWD_HI:?}"
+  --fwd-lo "${SCREEN_FWD_LO:?}" --fwd-hi "${SCREEN_FWD_HI:?}" \
+  ${R_LO:+--r-lo "$R_LO"} ${R_HI:+--r-hi "$R_HI"}
 echo
 echo "-- reported, not gated: odom-derived ballistic fraction (#22) -------------"
 python3 "$DIAG/flight_vs_camber.py" --ballistic "$OUT" 2>&1 | tail -12
