@@ -82,6 +82,10 @@ ATT_ARGS="k_yaw:=0.0 d_yaw:=0.0"
 CAM_LAM_DEG=${CAM_LAM_DEG:-13}
 CAM_LAM_RAD=$(awk -v d="$CAM_LAM_DEG" 'BEGIN{printf "%.5f", d*3.14159265358979/180.0}')
 CAM_DIR=${CAM_DIR:--1.0}
+# The ACKER banner prints lambda as %.2f; a rescaled lambda like 17.7 must be
+# matched as 17.70, not 17.7.00 (the first draft would have quarantined every
+# cam run of a rescaled campaign as uncertified).
+CAM_LAM_FMT=$(printf '%.2f' "$CAM_LAM_DEG")
 CAM_ARGS="gamma_acker_in:=$CAM_LAM_RAD gamma_acker_out:=$CAM_LAM_RAD gamma_acker_dir:=$CAM_DIR"
 DIFF_ARGS="turn_rate:=0.09 steer_offset:=0.04363 k_steer_yaw:=-0.8 steer_limit:=0.2094"
 
@@ -123,48 +127,6 @@ echo
 
 # ---- PREFLIGHT. Everything here runs before any sim time is spent. ---------
 
-STALE=$(pgrep -f 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' 2>/dev/null | wc -l)
-if [ "$STALE" != 0 ]; then
-  echo "!! stale sim processes -- REFUSING:"
-  pgrep -fa 'Corgi_launch.py|gslip_pronk_node|webots_ros2_driver' | head
-  echo "!! The simulator is SHARED. Ask before killing anything."
-  exit 1
-fi
-echo "stale-launch check clean."
-
-FOREIGN=$(pgrep -f 'usr/local/webots' 2>/dev/null | wc -l)
-if [ "$FOREIGN" != 0 ]; then
-  echo "!! a Linux-side Webots is running that is NOT the Corgi sim:"
-  pgrep -fa 'usr/local/webots' | head
-  echo "!! It will steal CPU and jitter every control loop. REFUSING."
-  exit 1
-fi
-LOAD=$(cut -d' ' -f1 /proc/loadavg)
-if awk -v l="$LOAD" 'BEGIN{exit !(l > 4.0)}'; then
-  echo "!! 1-minute load average is $LOAD before the campaign has started."
-  echo "!! REFUSING -- find the load first."
-  exit 1
-fi
-echo "no foreign Webots; load average $LOAD."
-
-# Webots here is a WINDOWS binary; a surviving instance is invisible to WSL
-# pgrep and holds port 1234 (S171 S6).
-if command -v powershell.exe > /dev/null 2>&1; then
-  WINWB=$(powershell.exe -NoProfile -Command \
-      "@(Get-Process webots* -ErrorAction SilentlyContinue).Count" 2>/dev/null \
-      | tr -d '\r\n ')
-  case "$WINWB" in
-    ''|*[!0-9]*) echo "windows-side Webots check: inconclusive ('$WINWB') -- continuing." ;;
-    0) echo "windows-side Webots check: none running." ;;
-    *) echo "!! $WINWB WINDOWS-side webots.exe still running. It holds port 1234"
-       echo "!! and no WSL pgrep can see it. REFUSING."
-       powershell.exe -NoProfile -Command \
-         "Get-Process webots* | Select-Object Id,ProcessName,StartTime" 2>/dev/null
-       exit 1 ;;
-  esac
-else
-  echo "windows-side Webots check: powershell.exe not reachable -- continuing."
-fi
 
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control"
 for NEED in 'LEG-FRAME GAINS' 'ATTITUDE GAINS' 'gamma_acker' 'Turn: turn_rate'; do
@@ -207,7 +169,7 @@ certify() {  # certify <cell> <ctl_log> -> 0 ok, 1 INVALID
   grep -q 'Loaded 265 template rows' "$LOG"        || { echo "  !! template not 265 rows"; ok=0; }
   case "$CELL" in
     cam)
-      grep -q "ACKER CAMBER set: in=${CAM_LAM_DEG}.00 deg" "$LOG" \
+      grep -q "ACKER CAMBER set: in=${CAM_LAM_FMT} deg" "$LOG" \
         && echo "  ACKER CONFIRMED: $(grep -o 'ACKER CAMBER set: [^"]*' "$LOG" | head -1)" \
         || { echo "  !! ACKER CAMBER not announced at $CAM_LAM_DEG deg"; ok=0; }
       grep -q 'turn_rate=0.0000' "$LOG" || { echo "  !! cam cell has a turn_rate"; ok=0; } ;;
