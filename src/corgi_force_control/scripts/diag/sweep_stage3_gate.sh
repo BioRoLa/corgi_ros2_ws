@@ -7,8 +7,14 @@
 # REFUSES to run unless REGISTERED_SECTION is set to the log S-number of the
 # registration entry, so an unregistered campaign cannot be started by
 # accident. Two parameters are deliberately left without defaults and must
-# come from S202's matched-turn result (S203): CAM_LAM_DEG and CAM_DIR -- the
-# lambda and direction that hit kappa ~0.33 (R ~3 m) on this plant.
+# come from the measured lambda -> kappa map (S214) and the registration that
+# chose them (S215): CAM_LAM_DEG and CAM_DIR. NOTE, corrected 2026-08-23: this
+# comment originally cited "S202's matched-turn result (S203) -- the lambda
+# and direction that hit kappa ~0.33". That was a forward reference written
+# while S202 was still running; S202 then FAILED its matching bar (the result
+# is S208, and it recommends the OPPOSITE direction), and the map (S214) showed
+# kappa(lambda) is a step, so no fixed lambda hits 0.33 at all (S218). The gate
+# ran at lambda 14, dir +1, from S214.
 # ###########################################################################
 #
 # WHAT IT ASKS. >= 5 VALID arcs of <= 8 attempts at ONE cell. An arc is a run
@@ -49,11 +55,11 @@ esac
   echo "!! REFUSING: the S152-screen bands (SCREEN_BETA_TD/_TOL, SCREEN_FWD_LO/_HI) have"
   echo "!! NO defaults. A dry run on banked lambda=15 showed the lambda=10 band"
   echo "!! (-0.084 +- 0.006) fails 2 of 5 cambered runs FOR BEING CAMBERED (#22's"
-  echo "!! trap). Derive them from S202's cam arm at this lambda (median +- 3 sd)"
+  echo "!! trap). Derive them from the +1 cells bracketing this lambda (S215 used"
   echo "!! in the registration entry, then pass them."; exit 1; }
 [ -n "${CAM_LAM_DEG:-}" ] && [ -n "${CAM_DIR:-}" ] || {
   echo "!! REFUSING: CAM_LAM_DEG and CAM_DIR have NO defaults. They come from"
-  echo "!! S202/S203 -- the lambda and direction that deliver kappa ~0.33 on"
+  echo "!! the S214 map and the S215 registration -- the lambda and direction on"
   echo "!! this plant. Set both explicitly."; exit 1; }
 
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
@@ -97,7 +103,7 @@ echo "   arc      >= 180 deg heading change over [t0+12, end]; Kasa fit arc >= 9
 echo "   collapse v_fwd >= 0.10 m/s in EVERY 4 s window of the band"
 echo "   speed    band v_fwd >= 0.235 m/s"
 echo "   screen   beta_TD and fwd fraction within the bands SET AT REGISTRATION"
-echo "            from S202's cam arm at this lambda (SCREEN_BETA_TD, SCREEN_BETA_TOL,"
+echo "            from the +1 cells bracketing this lambda (SCREEN_BETA_TD, SCREEN_BETA_TOL,"
 echo "            SCREEN_FWD_LO, SCREEN_FWD_HI -> score_stage3_gate.py); >= 8 TD/leg"
 echo "   stride   theta period within +-5% of 0.2642 s (= playback check)"
 [ -n "${R_LO:-}" ] && echo "   radius   R_fit within [$R_LO, $R_HI] m  (S217: the Stage 4 radius is a CLAUSE here)"
