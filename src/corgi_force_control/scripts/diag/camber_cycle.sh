@@ -26,6 +26,14 @@
 # No `set -u`: the ROS setup scripts reference unbound variables.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# DID THE PLANT MOVE SINCE THE CAMPAIGN STARTED? (S204) preflight_plant runs
+# once, at campaign start, and exports CORGI_PLANT_LOCK. This re-checks it
+# before every run, so a rebuild landing MID-campaign stops at the run where it
+# happened instead of silently splitting the dataset in two -- S181, where S168
+# rebuilt the controller 25 minutes after the control bar was written. With no
+# lock exported (a standalone run) it announces the plant and continues.
+. "$HERE/preflight_plant.sh"
+plant_verify || exit 1
 LAM="${1:?usage: camber_cycle.sh <lam_deg> <pattern> [tag]}"
 PAT="${2:?usage: camber_cycle.sh <lam_deg> <pattern> [tag]}"
 TAG="${3:-raw}"

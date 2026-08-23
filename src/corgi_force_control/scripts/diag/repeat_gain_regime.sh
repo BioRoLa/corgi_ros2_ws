@@ -95,6 +95,14 @@ teardown() {
 }
 
 for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
+  # DID THE PLANT MOVE SINCE THE CAMPAIGN STARTED? (S204) preflight_plant runs
+  # once, at campaign start, and exports CORGI_PLANT_LOCK. This re-checks it
+  # before every run, so a rebuild landing MID-campaign stops at the run where it
+  # happened instead of silently splitting the dataset in two -- S181, where S168
+  # rebuilt the controller 25 minutes after the control bar was written. With no
+  # lock exported (a standalone run) it announces the plant and continues.
+  . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
+  plant_verify || exit 1
   echo "################ RUN $RUN / $N ################"
   teardown
   rm -f /tmp/corgi_torque_terms.csv
