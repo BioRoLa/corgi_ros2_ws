@@ -772,6 +772,25 @@ private:
     // apply_row so the settle (yaw_ref_set_ false) never advances it.
     int acker_ramp_count_{0};
 
+    // STANCE-PEAK DIP on the open-loop camber term (log S205/S206, Open
+    // Issue #15). The ABAD demand peaks 30-40 ms after touchdown and crosses
+    // its 44.25 N.m ceiling there on the loaded leg -- a ~10 ms spike, clipped
+    // SILENTLY, on 40-50% of stance events at lambda 15. This scales the
+    // commanded camber toward zero inside a raised-cosine window
+    // [dip_t0, dip_t1] ms after a DEBOUNCED touchdown, so the ABAD yields at
+    // the load peak by command instead of by clip. 0.0 = off, bit-identical.
+    // Re-arms only after >= dip_rearm_ms of stable flight, because the raw
+    // contact flag fragments stance into ~60 ms pieces (#22) and a window that
+    // re-fired on every fragment would dip the whole stance.
+    double gamma_acker_dip_;          // fraction of the camber term removed at the window centre
+    int gamma_acker_dip_t0_ms_;       // window start, ms after debounced touchdown
+    int gamma_acker_dip_t1_ms_;       // window end
+    int gamma_acker_dip_rearm_ms_;    // stable flight required before the next touchdown counts
+    std::array<int, 4> dip_since_td_ticks_{{-1, -1, -1, -1}};   // -1 = not in an armed stance
+    std::array<int, 4> dip_flight_ticks_{{0, 0, 0, 0}};
+    std::array<bool, 4> dip_prev_stable_{{false, false, false, false}};
+    void dip_tick();                  // one 1 ms tick of the per-leg touchdown clocks
+
     // Steering; see the block comment above steer_command().
     double k_steer_;
     double steer_offset_;   // rad
@@ -942,6 +961,10 @@ GslipPronkNode::GslipPronkNode()
       // 500 ms entry ramp, mirroring camber_roll.py's lean window: a step
       // into a stiff position loop at 1 kHz is a torque spike.
       gamma_acker_ramp_ticks_(500),
+      gamma_acker_dip_(0.0),
+      gamma_acker_dip_t0_ms_(20),
+      gamma_acker_dip_t1_ms_(60),
+      gamma_acker_dip_rearm_ms_(30),
       k_steer_(0.0),
       steer_offset_(0.0),
       // 8 deg. Sized above the 5 deg the authority estimate calls for, so the
@@ -1069,6 +1092,15 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<double>("gamma_acker_limit", gamma_acker_limit_);
     gamma_acker_ramp_ticks_ = this->declare_parameter<int>(
         "gamma_acker_ramp_ticks", gamma_acker_ramp_ticks_);
+    gamma_acker_dip_ =
+        this->declare_parameter<double>("gamma_acker_dip", gamma_acker_dip_);
+    gamma_acker_dip_t0_ms_ = this->declare_parameter<int>(
+        "gamma_acker_dip_t0_ms", gamma_acker_dip_t0_ms_);
+    gamma_acker_dip_t1_ms_ = this->declare_parameter<int>(
+        "gamma_acker_dip_t1_ms", gamma_acker_dip_t1_ms_);
+    gamma_acker_dip_rearm_ms_ = this->declare_parameter<int>(
+        "gamma_acker_dip_rearm_ms", gamma_acker_dip_rearm_ms_);
+    gamma_acker_dip_ = std::max(0.0, std::min(1.0, gamma_acker_dip_));
     k_steer_ = this->declare_parameter<double>("k_steer", k_steer_);
     steer_offset_ = this->declare_parameter<double>("steer_offset", steer_offset_);
     steer_limit_ = this->declare_parameter<double>("steer_limit", steer_limit_);
@@ -2230,6 +2262,29 @@ double GslipPronkNode::pitch_correction(int leg_index, bool in_stance) const {
     return pitch_sign[leg_index] * clamped;
 }
 
+// One 1 ms tick of the per-leg touchdown clocks behind the stance-peak dip.
+// A touchdown ARMS a leg only if it follows >= dip_rearm_ms of stable flight;
+// leaving contact disarms it. Uses leg_contact_stable_ (the 3-sample
+// debounce contact_cb already applies), never the raw flag.
+void GslipPronkNode::dip_tick() {
+    for (int i = 0; i < 4; i++) {
+        const bool st = leg_contact_stable_[i];
+        if (st) {
+            if (!dip_prev_stable_[i]) {
+                dip_since_td_ticks_[i] =
+                    (dip_flight_ticks_[i] >= gamma_acker_dip_rearm_ms_) ? 0 : -1;
+            } else if (dip_since_td_ticks_[i] >= 0) {
+                dip_since_td_ticks_[i]++;
+            }
+            dip_flight_ticks_[i] = 0;
+        } else {
+            dip_since_td_ticks_[i] = -1;
+            dip_flight_ticks_[i]++;
+        }
+        dip_prev_stable_[i] = st;
+    }
+}
+
 double GslipPronkNode::gamma_openloop(int leg_index) const {
     // Off is EXACTLY off: dir 0 adds literal 0.0 in apply_row, keeping every
     // pre-existing run bit-identical.
@@ -2255,7 +2310,20 @@ double GslipPronkNode::gamma_openloop(int leg_index) const {
                                 gamma_acker_ramp_ticks_)
             : 1.0;
 
-    const double u = signed_unit * mag * ramp;
+    double u = signed_unit * mag * ramp;
+
+    // Stance-peak dip: raised-cosine relief inside [t0, t1] ms after an armed
+    // touchdown. Scales the TERM, so it is still clamped below and still
+    // exactly zero when dir is 0. Identically off at dip 0.0.
+    if (gamma_acker_dip_ > 0.0) {
+        const int tau = dip_since_td_ticks_[leg_index];
+        const int t0 = gamma_acker_dip_t0_ms_, t1 = gamma_acker_dip_t1_ms_;
+        if (tau >= t0 && tau <= t1 && t1 > t0) {
+            const double x = static_cast<double>(tau - t0) / (t1 - t0);
+            const double w = 0.5 * (1.0 - std::cos(2.0 * M_PI * x));
+            u *= (1.0 - gamma_acker_dip_ * w);
+        }
+    }
     return std::max(-gamma_acker_limit_, std::min(gamma_acker_limit_, u));
 }
 
@@ -2449,6 +2517,9 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
     // with the first stride tick.
     if (yaw_ref_set_ && acker_ramp_count_ < gamma_acker_ramp_ticks_)
         acker_ramp_count_++;
+    // Off is exactly off: no state is touched unless the dip is enabled, so
+    // the hot path of every existing campaign is unchanged.
+    if (gamma_acker_dip_ > 0.0 && yaw_ref_set_) dip_tick();
 
     // The radial reference is the spring's REST length, not the template's
     // compressed trajectory.
@@ -2823,6 +2894,15 @@ void GslipPronkNode::execute_running_phase() {
                     gamma_acker_dir_,
                     gamma_acker_ramp_ticks_,
                     gamma_acker_limit_ * 180.0 / M_PI);
+        if (gamma_acker_dip_ > 0.0) {
+            // Separate line so the ACKER banner above stays byte-identical
+            // for every existing harness's grep; absent when the dip is off.
+            RCLCPP_WARN(this->get_logger(),
+                        "ACKER DIP set: %.2f of the camber term over %d-%d ms "
+                        "after debounced touchdown (rearm %d ms)",
+                        gamma_acker_dip_, gamma_acker_dip_t0_ms_,
+                        gamma_acker_dip_t1_ms_, gamma_acker_dip_rearm_ms_);
+        }
     }
     if (gamma_yaw_limit_ > 0.0) {
         // Same grep-able engagement pattern as ACKER CAMBER: a clamp that
