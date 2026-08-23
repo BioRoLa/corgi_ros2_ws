@@ -67,6 +67,9 @@ DIP_T0=${DIP_T0:-20}; DIP_T1=${DIP_T1:-60}; DIP_REARM=${DIP_REARM:-30}
 DIP_WIN="gamma_acker_dip_t0_ms:=$DIP_T0 gamma_acker_dip_t1_ms:=$DIP_T1 gamma_acker_dip_rearm_ms:=$DIP_REARM"
 DIP15_ARGS="$CAM_ARGS gamma_acker_dip:=0.15 $DIP_WIN"
 DIP30_ARGS="$CAM_ARGS gamma_acker_dip:=0.30 $DIP_WIN"
+# S220: the yield -- same window, blends toward the MEASURED angle instead
+YLD50_ARGS="$CAM_ARGS gamma_acker_yield:=0.5 $DIP_WIN"
+YLD100_ARGS="$CAM_ARGS gamma_acker_yield:=1.0 $DIP_WIN"
 
 CELLS=${CELLS:-"nodip dip15 dip30"}
 
@@ -97,7 +100,7 @@ echo
 
 
 BIN="$WS/install/corgi_force_control/lib/corgi_force_control"
-for NEED in 'LEG-FRAME GAINS' 'ATTITUDE GAINS' 'gamma_acker' 'ACKER DIP set'; do
+for NEED in 'LEG-FRAME GAINS' 'ATTITUDE GAINS' 'gamma_acker' 'ACKER DIP set' 'ACKER YIELD set'; do
   [ "$(strings "$BIN/gslip_pronk_node" 2>/dev/null | grep -c "$NEED")" != 0 ] || {
     echo "!! INSTALLED gslip_pronk_node lacks '$NEED' -- a cell could not be"
     echo "!! certified from its own log. Rebuild. REFUSING."; exit 1; }
@@ -142,7 +145,14 @@ certify() {  # certify <cell> <ctl_log> -> 0 ok, 1 INVALID
   grep -q 'turn_rate=0.0000' "$LOG" || { echo "  !! a turn_rate is set"; ok=0; }
   case "$CELL" in
     nodip)
-      grep -q 'ACKER DIP set' "$LOG" && { echo "  !! nodip cell announces a DIP"; ok=0; } ;;
+      grep -q 'ACKER DIP set' "$LOG" && { echo "  !! nodip cell announces a DIP"; ok=0; }
+      grep -q 'ACKER YIELD set' "$LOG" && { echo "  !! nodip cell announces a YIELD"; ok=0; } ;;
+    yld50|yld100)
+      WANT=$([ "$CELL" = yld50 ] && echo 0.50 || echo 1.00)
+      grep -q "ACKER YIELD set: $WANT toward the MEASURED gamma over ${DIP_T0}-${DIP_T1} ms" "$LOG" \
+        && echo "  YIELD CONFIRMED: $(grep -o 'ACKER YIELD set: [^"]*' "$LOG" | head -1)" \
+        || { echo "  !! ACKER YIELD $WANT not announced"; ok=0; }
+      grep -q 'ACKER DIP set' "$LOG" && { echo "  !! yield cell also announces a DIP"; ok=0; } ;;
     dip15|dip30)
       WANT=$([ "$CELL" = dip15 ] && echo 0.15 || echo 0.30)
       grep -q "ACKER DIP set: $WANT of the camber term over ${DIP_T0}-${DIP_T1} ms" "$LOG" \
@@ -154,7 +164,8 @@ certify() {  # certify <cell> <ctl_log> -> 0 ok, 1 INVALID
 
 run_cell() {  # run_cell <cell> <rep>
   local NAME=$1 REP=$2 OUT="$BASE/$1" ARGS
-  case "$NAME" in nodip) ARGS="$CAM_ARGS";; dip15) ARGS="$DIP15_ARGS";; dip30) ARGS="$DIP30_ARGS";; esac
+  case "$NAME" in nodip) ARGS="$CAM_ARGS";; dip15) ARGS="$DIP15_ARGS";; dip30) ARGS="$DIP30_ARGS";;
+                  yld50) ARGS="$YLD50_ARGS";; yld100) ARGS="$YLD100_ARGS";; esac
   mkdir -p "$OUT"
   echo
   echo "################################################################"
@@ -199,9 +210,9 @@ echo
 echo "==========================================================="
 echo " SCORE -- score_acker_dip.py, as registered in S210"
 echo "==========================================================="
-python3 "$DIAG/score_acker_dip.py" --base "$BASE"
+python3 "$DIAG/score_acker_dip.py" --base "$BASE" --cells "$(echo $CELLS | tr ' ' ',')"
 echo
 echo "-- per-leg ABAD torque detail (abad_torque.py) ---------------------------"
-python3 "$DIAG/abad_torque.py" --dir "$BASE/nodip" --label nodip --dir "$BASE/dip15" --label dip15 --dir "$BASE/dip30" --label dip30
+python3 "$DIAG/abad_torque.py" $(for C in $CELLS; do printf -- '--dir %s --label %s ' "$BASE/$C" "$C"; done)
 echo
 echo "Done. Captures in $BASE. Record the verdicts in the log as they stand."

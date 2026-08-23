@@ -33,6 +33,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from abad_torque import stats as abad_stats, START            # noqa: E402
+from abad_peak_error import load_abad, stance_events            # noqa: E402
 from aggregate_menger import run_kappa                          # noqa: E402
 import speed_from_odom as sfo                                   # noqa: E402
 
@@ -59,6 +60,20 @@ def time_above(tq, leg, thr):
     return float(np.mean(st[:, 2] > thr)) if len(st) else float("nan")
 
 
+def signed_peak_error(tq, leg=LEG):
+    """median SIGNED ABAD pos_error at the stance-load peak, deg (S213's
+    instrument, S220's P-W-7). Negative = the leg sits past its command."""
+    a = load_abad(tq).get(leg)
+    if a is None:
+        return float("nan")
+    a = a[a[:, 0] >= a[0, 0] + START]
+    if len(a) < 200:
+        return float("nan")
+    t, c, d, ap, pe = a.T
+    pk = [np.degrees(pe[i0 + int(np.argmax(np.abs(d[i0:i1])))]) for i0, i1 in stance_events(t, c)]
+    return float(np.median(pk)) if len(pk) >= 8 else float("nan")
+
+
 def cell_rows(d):
     out = []
     for tq in sorted(glob.glob(os.path.join(d, "run[0-9].csv"))):
@@ -78,6 +93,7 @@ def cell_rows(d):
         out.append({"run": n, "clip": s["per_leg"][LEG]["clip_pct"],
                     "tau": s["per_leg"][LEG]["d_p995"], "kappa": kap, "v": v,
                     "above37": 100.0 * time_above(tq, LEG, USABLE),
+                    "pe_peak": signed_peak_error(tq),
                     "collapsed": (not np.isnan(v)) and v < 0.10})
     return out
 
@@ -86,16 +102,16 @@ def med(rows, k):
     return float(np.median([r[k] for r in rows]))
 
 
-def score(cells, verbose=True):
-    nd, d15, d30 = cells.get("nodip", []), cells.get("dip15", []), cells.get("dip30", [])
+def score(cells, verbose=True, names=("nodip", "dip15", "dip30")):
+    nd, d15, d30 = (cells.get(k, []) for k in names)
     out = {}
     if verbose:
-        for name, rows in (("nodip", nd), ("dip15", d15), ("dip30", d30)):
+        for name, rows in zip(names, (nd, d15, d30)):
             print("  == %s (n=%d) ==" % (name, len(rows)))
             for r in rows:
-                print("    run%d  clipA %5.2f%%  tauA %6.2f  >37: %5.1f%%  |kappa| %.3f  v %+.3f%s"
+                print("    run%d  clipA %5.2f%%  tauA %6.2f  >37: %5.1f%%  |kappa| %.3f  v %+.3f  pe_peak %+.2f%s"
                       % (r["run"], r["clip"], r["tau"], r["above37"], abs(r["kappa"]), r["v"],
-                         "  COLLAPSED" if r["collapsed"] else ""))
+                         r.get("pe_peak", float("nan")), "  COLLAPSED" if r["collapsed"] else ""))
         print()
     if len(nd) < 3 or len(d30) < 3:
         print("  UNSCORED: fewer than 3 runs in nodip or dip30."); return {"scored": False}
@@ -123,6 +139,11 @@ def score(cells, verbose=True):
     a0 = med(nd, "above37")
     v("P-D-6", med(d30, "above37") <= 0.5 * a0,
       "leg-A stance time > 37 N.m: nodip %.1f%% -> dip30 %.1f%%  (bar <= half)" % (a0, med(d30, "above37")))
+    if all("pe_peak" in r for r in nd + d30):
+        pe0, pe1 = med(nd, "pe_peak"), med(d30, "pe_peak")
+        v("P-W-7", abs(pe1) <= 0.5,
+          "signed ABAD error at the load peak, leg A: control %+.2f -> full %+.2f deg  (bar |full| <= 0.5; mechanism check)"
+          % (pe0, pe1))
     out["scored"] = True
     return out
 
@@ -139,13 +160,18 @@ def selftest():
 
     def mk(clips, taus, ks, vs, ab):
         return [{"run": i + 1, "clip": c, "tau": t, "kappa": k, "v": v, "above37": a,
-                 "collapsed": v < 0.10} for i, (c, t, k, v, a) in enumerate(zip(clips, taus, ks, vs, ab))]
+                 "collapsed": v < 0.10, "pe_peak": -1.3 if c > 5 else -0.2}
+                for i, (c, t, k, v, a) in enumerate(zip(clips, taus, ks, vs, ab))]
     nd = mk([8, 9, 7, 10, 8], [57, 58, 55, 59, 56], [.44, .46, .43, .45, .44], [.35] * 5, [30, 32, 28, 31, 30])
     d15 = mk([4, 3, 5, 4, 3], [48, 47, 49, 46, 48], [.43, .44, .42, .45, .43], [.34] * 5, [18, 17, 19, 18, 17])
     d30 = mk([1, 2, 1, 0, 1], [41, 43, 40, 42, 41], [.41, .42, .40, .43, .41], [.34] * 5, [10, 12, 9, 11, 10])
     with contextlib.redirect_stdout(io.StringIO()):
         r = score({"nodip": nd, "dip15": d15, "dip30": d30}, verbose=False)
-    chk("a textbook relief passes P-D-2..6", r["scored"] and all(r[k] for k in ("P-D-2", "P-D-3", "P-D-4", "P-D-5", "P-D-6")))
+    chk("a textbook relief passes P-D-2..6 and P-W-7", r["scored"] and all(r[k] for k in ("P-D-2", "P-D-3", "P-D-4", "P-D-5", "P-D-6", "P-W-7")))
+    bad = [dict(x, pe_peak=-3.0) for x in d30]
+    with contextlib.redirect_stdout(io.StringIO()):
+        r7 = score({"nodip": nd, "dip15": d15, "dip30": bad}, verbose=False)
+    chk("a treatment that leaves -3 deg at the peak fails P-W-7 (the S213 signature)", not r7["P-W-7"])
     lost = mk([1] * 5, [41] * 5, [.30] * 5, [.34] * 5, [10] * 5)   # kappa down 32%
     with contextlib.redirect_stdout(io.StringIO()):
         r2 = score({"nodip": nd, "dip15": d15, "dip30": lost}, verbose=False)
@@ -163,6 +189,8 @@ def selftest():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default=os.path.expanduser("~/corgi_runs/acker_dip"))
+    ap.add_argument("--cells", default="nodip,dip15,dip30",
+                    help="control,mid,full cell names (S220 yield: nodip,yld50,yld100)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
@@ -171,9 +199,10 @@ def main():
         print("\n  SELFTEST %s" % ("PASS" if g else "FAIL"))
         return 0 if g else 1
     base = os.path.expanduser(a.base)
-    cells = {c: cell_rows(os.path.join(base, c)) for c in ("nodip", "dip15", "dip30")}
-    print("stance-peak dip campaign -- S210 bars, scored as registered. Leg %s (loaded, dir +1).\n" % LEG)
-    r = score(cells)
+    names = tuple(a.cells.split(","))
+    cells = {c: cell_rows(os.path.join(base, c)) for c in names}
+    print("stance-peak campaign %s -- bars as registered (S210 dip / S220 yield). Leg %s (loaded, dir +1).\n" % (names, LEG))
+    r = score(cells, names=names)
     if r.get("scored"):
         print("\n  Scored. Every FAIL above STANDS (S126).")
     return 0

@@ -791,6 +791,17 @@ private:
     std::array<bool, 4> dip_prev_stable_{{false, false, false, false}};
     void dip_tick();                  // one 1 ms tick of the per-leg touchdown clocks
 
+    // STANCE-PEAK YIELD (log S213 S4 / S220). The dip (above) scaled the
+    // command toward ZERO lean and made everything worse, because at the load
+    // peak the loaded leg already sits PAST its command (signed error -1.3
+    // deg, n = 441): the dip moved the command further from where the leg
+    // was. The yield blends the commanded gamma toward the MEASURED gamma
+    // inside the same window, so the proportional term relaxes toward zero
+    // regardless of which side of the command the leg is on. No sign to get
+    // wrong. Shares the dip's window and touchdown clocks. 0.0 = off.
+    double gamma_acker_yield_;
+    double measured_gamma(int leg_index) const;
+
     // Steering; see the block comment above steer_command().
     double k_steer_;
     double steer_offset_;   // rad
@@ -965,6 +976,7 @@ GslipPronkNode::GslipPronkNode()
       gamma_acker_dip_t0_ms_(20),
       gamma_acker_dip_t1_ms_(60),
       gamma_acker_dip_rearm_ms_(30),
+      gamma_acker_yield_(0.0),
       k_steer_(0.0),
       steer_offset_(0.0),
       // 8 deg. Sized above the 5 deg the authority estimate calls for, so the
@@ -1101,6 +1113,9 @@ GslipPronkNode::GslipPronkNode()
     gamma_acker_dip_rearm_ms_ = this->declare_parameter<int>(
         "gamma_acker_dip_rearm_ms", gamma_acker_dip_rearm_ms_);
     gamma_acker_dip_ = std::max(0.0, std::min(1.0, gamma_acker_dip_));
+    gamma_acker_yield_ =
+        this->declare_parameter<double>("gamma_acker_yield", gamma_acker_yield_);
+    gamma_acker_yield_ = std::max(0.0, std::min(1.0, gamma_acker_yield_));
     k_steer_ = this->declare_parameter<double>("k_steer", k_steer_);
     steer_offset_ = this->declare_parameter<double>("steer_offset", steer_offset_);
     steer_limit_ = this->declare_parameter<double>("steer_limit", steer_limit_);
@@ -2481,6 +2496,17 @@ double GslipPronkNode::meas_theta(int leg) const {
         case 2: return motor_state_.module_c.theta;
         default: return motor_state_.module_d.theta;
     }
+
+// Measured ABAD angle, same source as the theta accessor above. Used by the
+// stance-peak yield, which blends the command toward this inside its window.
+double GslipPronkNode::measured_gamma(int leg_index) const {
+    switch (leg_index) {
+        case 0: return motor_state_.module_a.gamma;
+        case 1: return motor_state_.module_b.gamma;
+        case 2: return motor_state_.module_c.gamma;
+        default: return motor_state_.module_d.gamma;
+    }
+}
 }
 
 void GslipPronkNode::slave_exit(int leg, size_t master, double t_now,
@@ -2519,7 +2545,7 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
         acker_ramp_count_++;
     // Off is exactly off: no state is touched unless the dip is enabled, so
     // the hot path of every existing campaign is unchanged.
-    if (gamma_acker_dip_ > 0.0 && yaw_ref_set_) dip_tick();
+    if ((gamma_acker_dip_ > 0.0 || gamma_acker_yield_ > 0.0) && yaw_ref_set_) dip_tick();
 
     // The radial reference is the spring's REST length, not the template's
     // compressed trajectory.
@@ -2605,6 +2631,18 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
                     + apex_beta_offset_;
         cmd->gamma = row.gamma + gamma_openloop(static_cast<int>(i))
                      + gamma_correction(static_cast<int>(i));
+        // Stance-peak YIELD: inside the window after an armed touchdown, blend
+        // the assembled command toward the measured angle. Identically off at
+        // yield 0.0; no state touched unless enabled (the clocks are gated).
+        if (gamma_acker_yield_ > 0.0) {
+            const int tau = dip_since_td_ticks_[i];
+            const int t0 = gamma_acker_dip_t0_ms_, t1 = gamma_acker_dip_t1_ms_;
+            if (tau >= t0 && tau <= t1 && t1 > t0) {
+                const double x = static_cast<double>(tau - t0) / (t1 - t0);
+                const double w = gamma_acker_yield_ * 0.5 * (1.0 - std::cos(2.0 * M_PI * x));
+                cmd->gamma = (1.0 - w) * cmd->gamma + w * measured_gamma(static_cast<int>(i));
+            }
+        }
 
         // fx/fz and the inertia terms stay zero, so trq_cmd_base reduces to
         // J^T * [0, fy, 0] and the rest of the law is still a pure (K, B)
@@ -2901,6 +2939,13 @@ void GslipPronkNode::execute_running_phase() {
                         "ACKER DIP set: %.2f of the camber term over %d-%d ms "
                         "after debounced touchdown (rearm %d ms)",
                         gamma_acker_dip_, gamma_acker_dip_t0_ms_,
+                        gamma_acker_dip_t1_ms_, gamma_acker_dip_rearm_ms_);
+        }
+        if (gamma_acker_yield_ > 0.0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "ACKER YIELD set: %.2f toward the MEASURED gamma over %d-%d ms "
+                        "after debounced touchdown (rearm %d ms)",
+                        gamma_acker_yield_, gamma_acker_dip_t0_ms_,
                         gamma_acker_dip_t1_ms_, gamma_acker_dip_rearm_ms_);
         }
     }

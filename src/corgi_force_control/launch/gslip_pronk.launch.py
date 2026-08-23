@@ -265,6 +265,7 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_acker_dip_t0_ms", default_value="20"),
         DeclareLaunchArgument("gamma_acker_dip_t1_ms", default_value="60"),
         DeclareLaunchArgument("gamma_acker_dip_rearm_ms", default_value="30"),
+        DeclareLaunchArgument("gamma_acker_yield", default_value="0.0"),
         # --- Added 2026-08-20: event-driven per-leg gait scheduler (Tier 1) ---
         # Each leg replays the template on its own clock, snapped to the
         # stance-onset row by its own debounced touchdown (blended, clamped,
@@ -387,6 +388,7 @@ def generate_launch_description():
                 'gamma_acker_dip_t0_ms': LaunchConfiguration('gamma_acker_dip_t0_ms'),
                 'gamma_acker_dip_t1_ms': LaunchConfiguration('gamma_acker_dip_t1_ms'),
                 'gamma_acker_dip_rearm_ms': LaunchConfiguration('gamma_acker_dip_rearm_ms'),
+                'gamma_acker_yield': LaunchConfiguration('gamma_acker_yield'),
                 'event_sched': LaunchConfiguration('event_sched'),
                 'event_snap_limit_s': LaunchConfiguration('event_snap_limit_s'),
                 'event_blend_ticks': LaunchConfiguration('event_blend_ticks'),
