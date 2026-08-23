@@ -58,6 +58,13 @@ esac
 
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# Does the launch file forward every parameter the node declares? The first
+# dip campaign passed gamma_acker_dip:=0.15 and the launch file dropped it
+# silently (S128's trap, again); two cells were quarantined before the
+# certify grep caught it. Reconciled up front now, for every harness that
+# passes node parameters.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_launch_args.sh"
+preflight_launch_args || exit 1
 NPER=${NPER:-8}
 GAIT_SIM=${GAIT_SIM:-50}
 GAIT_WALL=${GAIT_WALL:-800}

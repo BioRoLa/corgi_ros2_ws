@@ -257,6 +257,14 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_acker_dir", default_value="0.0"),
         DeclareLaunchArgument("gamma_acker_limit", default_value="0.3491"),  # 20 deg
         DeclareLaunchArgument("gamma_acker_ramp_ticks", default_value="500"),
+        # Stance-peak DIP on the camber term (log S210). Declared here because the
+        # launch file forwards ONLY declared arguments: the first dip campaign
+        # passed these, the launch file dropped them silently, every dip run
+        # was quarantined by its own certify check -- S128's trap, again.
+        DeclareLaunchArgument("gamma_acker_dip", default_value="0.0"),
+        DeclareLaunchArgument("gamma_acker_dip_t0_ms", default_value="20"),
+        DeclareLaunchArgument("gamma_acker_dip_t1_ms", default_value="60"),
+        DeclareLaunchArgument("gamma_acker_dip_rearm_ms", default_value="30"),
         # --- Added 2026-08-20: event-driven per-leg gait scheduler (Tier 1) ---
         # Each leg replays the template on its own clock, snapped to the
         # stance-onset row by its own debounced touchdown (blended, clamped,
@@ -375,6 +383,10 @@ def generate_launch_description():
                 'gamma_acker_limit': LaunchConfiguration('gamma_acker_limit'),
                 'gamma_acker_ramp_ticks':
                     LaunchConfiguration('gamma_acker_ramp_ticks'),
+                'gamma_acker_dip': LaunchConfiguration('gamma_acker_dip'),
+                'gamma_acker_dip_t0_ms': LaunchConfiguration('gamma_acker_dip_t0_ms'),
+                'gamma_acker_dip_t1_ms': LaunchConfiguration('gamma_acker_dip_t1_ms'),
+                'gamma_acker_dip_rearm_ms': LaunchConfiguration('gamma_acker_dip_rearm_ms'),
                 'event_sched': LaunchConfiguration('event_sched'),
                 'event_snap_limit_s': LaunchConfiguration('event_snap_limit_s'),
                 'event_blend_ticks': LaunchConfiguration('event_blend_ticks'),
