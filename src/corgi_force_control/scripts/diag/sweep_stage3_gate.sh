@@ -188,7 +188,9 @@ echo
 echo "==========================================================="
 echo " SCORE -- score_stage3_gate.py, as registered in S$REGISTERED_SECTION"
 echo "==========================================================="
-python3 "$DIAG/score_stage3_gate.py" --base "$BASE" \n  --beta-td "${SCREEN_BETA_TD:?set from the registration}" --beta-tol "${SCREEN_BETA_TOL:?}" \n  --fwd-lo "${SCREEN_FWD_LO:?}" --fwd-hi "${SCREEN_FWD_HI:?}"
+python3 "$DIAG/score_stage3_gate.py" --base "$BASE" \
+  --beta-td "${SCREEN_BETA_TD:?set from the registration}" --beta-tol "${SCREEN_BETA_TOL:?}" \
+  --fwd-lo "${SCREEN_FWD_LO:?}" --fwd-hi "${SCREEN_FWD_HI:?}"
 echo
 echo "-- reported, not gated: odom-derived ballistic fraction (#22) -------------"
 python3 "$DIAG/flight_vs_camber.py" --ballistic "$OUT" 2>&1 | tail -12
