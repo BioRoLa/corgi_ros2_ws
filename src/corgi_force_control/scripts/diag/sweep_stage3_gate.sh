@@ -58,6 +58,11 @@ esac
 
 . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
 preflight_plant || exit 1
+# IS THE SIMULATOR FREE, AND QUIET? S203. This script was written after the
+# sweep that wired the other 25, so it inherited the plant guard from its
+# template but not this one -- the same copy-inheritance gap S203 closed.
+. "$WS/src/corgi_force_control/scripts/diag/preflight_sim.sh"
+preflight_sim || exit 1
 # Does the launch file forward every parameter the node declares? The first
 # dip campaign passed gamma_acker_dip:=0.15 and the launch file dropped it
 # silently (S128's trap, again); two cells were quarantined before the
