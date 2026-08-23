@@ -983,17 +983,17 @@ GslipPronkNode::GslipPronkNode()
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
-      gamma_acker_ff_(0.0),
-      k_acker_yaw_(0.0),
-      d_acker_yaw_(0.0),
-      gamma_acker_min_(5.0 / 180.0 * M_PI),
-      gamma_acker_hi_(15.0 / 180.0 * M_PI),
       // 20 deg: above the 15 deg the Stage 3 sweep tops out at, well under
       // the +-30 deg the model's u_limits allow, and far from folding a leg.
       gamma_acker_limit_(20.0 / 180.0 * M_PI),
       // 500 ms entry ramp, mirroring camber_roll.py's lean window: a step
       // into a stiff position loop at 1 kHz is a torque spike.
       gamma_acker_ramp_ticks_(500),
+      gamma_acker_ff_(0.0),
+      k_acker_yaw_(0.0),
+      d_acker_yaw_(0.0),
+      gamma_acker_min_(5.0 / 180.0 * M_PI),
+      gamma_acker_hi_(15.0 / 180.0 * M_PI),
       gamma_acker_dip_(0.0),
       gamma_acker_dip_t0_ms_(20),
       gamma_acker_dip_t1_ms_(60),
