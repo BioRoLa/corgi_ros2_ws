@@ -4,6 +4,8 @@
 #   cl:NAME:RATE:FF_DEG:HI_DEG   closed-loop camber at turn_rate RATE
 #   drift:NAME                   everything off (the lambda = 0 matrix cell)
 #   diff:NAME:RATE               differential arm, S128's steer parameters
+#   combo:NAME:RATE:FF_DEG:HI_DEG  CL camber AND differential together (S253):
+#                                over-actuated, the loop resolves the split
 #
 # WHY (S239). The channel built in S237 has never closed a loop. Its authority
 # at v ~ 0.35 m/s is R ~ 2.3-3.0 m = yaw rates 0.117-0.152 rad/s, so the
@@ -104,6 +106,16 @@ certify() {  # certify <type> <ctl_log>  (uses CELL_RATE CELL_FF CELL_HI)
       grep -q "Turn: turn_rate=${RF} rad/s" "$LOG" || { echo "  !! turn_rate ${RF}"; ok=0; }
       grep -q 'k_steer_yaw=-0.800' "$LOG" || { echo "  !! k_steer_yaw -0.8"; ok=0; }
       grep -qE 'ACKER (CL|CAMBER) set' "$LOG" && { echo "  !! diff cell cambered"; ok=0; } ;;
+    combo)
+      local FFF KF DF RF
+      FFF=$(printf '%.2f' "$CELL_FF"); RF=$(printf '%.4f' "$CELL_RATE")
+      KF=$(printf '%.3f' "$K_ACKER"); DF=$(printf '%.3f' "$D_ACKER")
+      grep -q "ACKER CL set: ff=${FFF} deg k_yaw=${KF} d_yaw=${DF}" "$LOG" \
+        && echo "  CL CONFIRMED: $(grep -o 'ACKER CL set: [^"]*' "$LOG" | head -1)" \
+        || { echo "  !! ACKER CL not announced at ff=${FFF}"; ok=0; }
+      grep -q "Turn: turn_rate=${RF} rad/s" "$LOG" || { echo "  !! turn_rate ${RF}"; ok=0; }
+      grep -q 'k_steer_yaw=-0.800' "$LOG" || { echo "  !! combo steer arm NOT engaged"; ok=0; }
+      grep -q 'ACKER CAMBER set' "$LOG" && { echo "  !! open-loop CAMBER in a combo cell"; ok=0; } ;;
   esac
   [ "$ok" = 1 ]
 }
@@ -122,6 +134,11 @@ run_cell() {  # run_cell <spec> <rep>
     diff)
       CELL_RATE=$(echo "$REST" | cut -d: -f2)
       ARGS="turn_rate:=$CELL_RATE $STEER_ARGS" ;;
+    combo)
+      CELL_RATE=$(echo "$REST" | cut -d: -f2)
+      CELL_FF=$(echo "$REST" | cut -d: -f3)
+      CELL_HI=$(echo "$REST" | cut -d: -f4)
+      ARGS="gamma_acker_ff:=$(rad "$CELL_FF") k_acker_yaw:=$K_ACKER d_acker_yaw:=$D_ACKER gamma_acker_hi:=$(rad "$CELL_HI") turn_rate:=$CELL_RATE $STEER_ARGS" ;;
     *) echo "!! unknown cell type $TYPE"; exit 1 ;;
   esac
   OUT="$BASE/$NAME"; mkdir -p "$OUT"
@@ -133,6 +150,8 @@ run_cell() {  # run_cell <spec> <rep>
            echo "###  heading error (this is the new thing). Stall = counted." ;;
     drift) echo "###  ON THE RENDER: straight pronk drifting with kappa -0.067." ;;
     diff)  echo "###  ON THE RENDER: legs vertical, differential turn." ;;
+    combo) echo "###  ON THE RENDER: cambered L/R AND differential steer together;"
+           echo "###  the loop decides the split. Watch for the arms fighting." ;;
   esac
   echo "################################################################"
   for ATTEMPT in 1 2; do
