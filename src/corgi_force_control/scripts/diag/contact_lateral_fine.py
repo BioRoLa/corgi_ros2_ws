@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score P-C-1..P-C-3 (log S223): does the CONTACT POSITION step across the
+"""Score P-C-1..P-C-3 (log S226): does the CONTACT POSITION step across the
 kappa step? 1-deg static holds at the running leg angle.
 
 Reuses contact_lateral.load_contact / measure (static tail, body-frame by per

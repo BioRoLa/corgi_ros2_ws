@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CONTACT POSITION AT THE RUNNING LEG ANGLE, 1 deg in lambda across the kappa
-# step -- P-C-1..P-C-4 (log S223).
+# step -- P-C-1..P-C-4 (log S226).
 #
 # sweep_contact_lateral.sh's rig (camber_cycle -> camber_roll --beta-rate 0,
 # CORGI_CONTACT_DEBUG per-lambda CSV) with ONE change: --theta-wheel 100, so
@@ -10,7 +10,7 @@
 # kappa(lambda) steps between 10 and 12 deg on the running pronk. This asks
 # whether the CONTACT steps there, at 1 deg, on the right rim.
 #
-#   REGISTERED_SECTION=223 bash sweep_contact_lateral_theta100.sh
+#   REGISTERED_SECTION=226 bash sweep_contact_lateral_theta100.sh
 #   WAIT_PID=<pid>   block until that process exits before touching the sim
 #                    (camber_cycle's teardown kills ANY running campaign)
 #
