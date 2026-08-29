@@ -735,6 +735,13 @@ private:
     // it is not usable at this speed, and pretending otherwise costs torque
     // the robot does not have.
     //
+    // ^ CORRECTED 2026-08-29: those sigma/torque numbers were the broken
+    // crown coefficient talking (R_CORNER 0.015 for the rolling radius
+    // 0.14482 -- log S183, LegWheel 18bee69). Post-fix, differential camber
+    // is a genuine second actuator (J_u SVs 3.06 / 2.89 at the re-solved
+    // plant orbit, S263) and the channel now exists as the apex
+    // differential-camber block below -- still default off.
+    //
     // What survives is beta responding to forward speed and apex height --
     // foot placement, evaluated once per stride at apex and held:
     //
@@ -758,6 +765,45 @@ private:
     std::string apex_odom_topic_;
     void update_apex_feedback();
     void apex_vz_prev_guard();
+
+    // --- Apex differential camber: the deadbeat's SECOND input --------------
+    //
+    // K's lam_l row at the plant orbit of record (S263: "measured" radius
+    // law, v_td 0.410, x* = [vx 0.3106, vy 0, h 0.2886, rho 0, drho 0]),
+    // extracted 2026-08-29 from cambered_return_map.deadbeat_gain(rcond 1e-2)
+    // with the orbit self-checked against S263's printed SVs (3.06, 2.89,
+    // 4.3e-6). The lam_r row is the exact mirror at this symmetric orbit,
+    // and the vx/h columns (~0.004) are dropped: symmetric camber is the
+    // model's null direction (third J_u SV). vy*/rho*/drho* are 0 at this
+    // orbit, so no star parameters exist; gains are per-orbit facts (S57) --
+    // re-extract before running any other orbit.
+    //
+    //     d_lam = gain * ( k_vy*vy + k_rho*rho + k_drho*drho )
+    //
+    // evaluated at the same apex event as the beta row, held across the
+    // stride, applied as gamma += lr_sign * d_lam (A,D = +d_lam,
+    // B,C = -d_lam). Mapping: model lambda > 0 leans the wheel OUTBOARD for
+    // its side and grows the hip->contact offset d_out (side_geometry
+    // docstring), which is exactly gamma > 0 = abduct outboard, so gamma is
+    // lambda sign-for-sign per side. Sanity: rho > 0 (lean right) moves both
+    // contacts rightward -- foot placement under the fall.
+    //
+    // SIGN CHECK BEFORE ANY SCORING RUN (the S88 lesson): tip the plant and
+    // verify the commanded gamma move matches the direction above. vy enters
+    // from the same odom topic as the beta row and shares its ground-truth
+    // caveat; rho/drho are IMU (roll_ is one tick stale at the apex event,
+    // negligible against the clamp).
+    //
+    // With apex_dc_gain_ = 0.0 (the default) d_lam is identically 0.0 and
+    // cmd->gamma is bit-identical to every run recorded before this existed.
+    double apex_dc_gain_;      // scalar on the whole correction; 0 = off
+    double apex_dc_k_vy_;      // K lam_l row, vy column
+    double apex_dc_k_rho_;     // K lam_l row, rho column
+    double apex_dc_k_drho_;    // K lam_l row, drho column
+    double apex_dc_limit_;     // rad, clamp on d_lam
+    double apex_dc_offset_{0.0};   // held lam_l offset; B,C get the mirror
+    double ekf_vy_{0.0};
+    double apex_diffcamber(int leg_index) const;
 
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
@@ -980,6 +1026,18 @@ GslipPronkNode::GslipPronkNode()
       // without being a step the leg cannot track in one flight.
       apex_beta_limit_(4.0 / 180.0 * M_PI),
       apex_odom_topic_("/sim/base_odom"),
+      // Apex differential camber: OFF. Gains are K's lam_l row at the S263
+      // plant orbit (see the header block); loaded as defaults for the same
+      // reason as the beta row's -- enabling is one parameter, not four.
+      apex_dc_gain_(0.0),
+      apex_dc_k_vy_(-1.054120),
+      apex_dc_k_rho_(-5.769254),
+      apex_dc_k_drho_(-0.168636),
+      // 4 deg, the beta row's discipline. Note k_rho alone reaches it at
+      // 0.7 deg of roll, so the clamp IS the working regime, not a backstop;
+      // the per-orbit gain sweep (the S57 rerun this channel awaits) owns
+      // the final value.
+      apex_dc_limit_(4.0 / 180.0 * M_PI),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
@@ -1118,6 +1176,16 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<double>("apex_beta_limit", apex_beta_limit_);
     apex_odom_topic_ = this->declare_parameter<std::string>(
         "apex_odom_topic", apex_odom_topic_);
+    apex_dc_gain_ =
+        this->declare_parameter<double>("apex_dc_gain", apex_dc_gain_);
+    apex_dc_k_vy_ =
+        this->declare_parameter<double>("apex_dc_k_vy", apex_dc_k_vy_);
+    apex_dc_k_rho_ =
+        this->declare_parameter<double>("apex_dc_k_rho", apex_dc_k_rho_);
+    apex_dc_k_drho_ =
+        this->declare_parameter<double>("apex_dc_k_drho", apex_dc_k_drho_);
+    apex_dc_limit_ =
+        this->declare_parameter<double>("apex_dc_limit", apex_dc_limit_);
     gamma_acker_in_ =
         this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
     gamma_acker_out_ =
@@ -1262,7 +1330,7 @@ GslipPronkNode::GslipPronkNode()
     // block above only subscribes when Tier 3 slaving is on. Without this it
     // runs INERT while announcing itself -- which is exactly what happened for
     // ten Webots runs (log S138).
-    if (apex_fb_gain_ != 0.0 && !ekf_sub_) {
+    if ((apex_fb_gain_ != 0.0 || apex_dc_gain_ != 0.0) && !ekf_sub_) {
         // WHICH TOPIC. /ekf is published by corgi_fusion_node, which the
         // menger_acker campaign harness does NOT launch -- it starts only
         // Corgi_launch.py and gslip_pronk.launch.py. So on /ekf this channel
@@ -2222,10 +2290,15 @@ rcl_interfaces::msg::SetParametersResult GslipPronkNode::on_set_params(
 // compression), and correcting there would fire mid-stance on a loaded foot --
 // which the shipped scheduler forbids for good reason (S102).
 void GslipPronkNode::update_apex_feedback() {
-    if (apex_fb_gain_ == 0.0) {
+    if (apex_fb_gain_ == 0.0 && apex_dc_gain_ == 0.0) {
         apex_beta_offset_ = 0.0;   // stays bit-identical when off
+        apex_dc_offset_ = 0.0;
         return;
     }
+    // Each row zeroes its own offset when individually off, so enabling one
+    // channel never resurrects a held value from the other.
+    if (apex_fb_gain_ == 0.0) apex_beta_offset_ = 0.0;
+    if (apex_dc_gain_ == 0.0) apex_dc_offset_ = 0.0;
     const bool airborne = !(leg_contact_stable_[0] || leg_contact_stable_[1] ||
                             leg_contact_stable_[2] || leg_contact_stable_[3]);
     const bool stale =
@@ -2238,10 +2311,11 @@ void GslipPronkNode::update_apex_feedback() {
         if (ekf_stamp_ < 0.0 && !apex_starved_warned_) {
             apex_starved_warned_ = true;
             RCLCPP_ERROR(this->get_logger(),
-                         "APEX BETA FB STARVED: gain=%.3f but no message has "
-                         "EVER arrived on '%s'. The channel is INERT and this "
-                         "run is NOT a test of it.",
-                         apex_fb_gain_, apex_odom_topic_.c_str());
+                         "APEX BETA FB STARVED: gain=%.3f dc_gain=%.3f but no "
+                         "message has EVER arrived on '%s'. The channel is "
+                         "INERT and this run is NOT a test of it.",
+                         apex_fb_gain_, apex_dc_gain_,
+                         apex_odom_topic_.c_str());
         }
         // Hold the last correction rather than reverting to zero: a step to
         // zero mid-flight is a beta transient, and the whole point of holding
@@ -2250,18 +2324,39 @@ void GslipPronkNode::update_apex_feedback() {
         return;
     }
     if (airborne && apex_armed_ && ekf_vz_prev_ > 0.0 && ekf_vz_ <= 0.0) {
-        const double d = apex_fb_gain_ *
-                         (apex_k_vx_ * (ekf_vx_ - apex_vx_star_) +
-                          apex_k_h_ * (ekf_z_ - apex_h_star_));
-        apex_beta_offset_ =
-            std::max(-apex_beta_limit_, std::min(apex_beta_limit_, d));
         apex_count_++;
-        if (apex_count_ == 1 || apex_count_ % 20 == 0) {
-            RCLCPP_WARN(this->get_logger(),
-                        "APEX BETA FB FIRED: n=%ld d_beta=%+.3f deg "
-                        "(vx %.4f vs %.4f, h %.4f vs %.4f)",
-                        apex_count_, apex_beta_offset_ * 180.0 / M_PI,
-                        ekf_vx_, apex_vx_star_, ekf_z_, apex_h_star_);
+        if (apex_fb_gain_ != 0.0) {
+            const double d = apex_fb_gain_ *
+                             (apex_k_vx_ * (ekf_vx_ - apex_vx_star_) +
+                              apex_k_h_ * (ekf_z_ - apex_h_star_));
+            apex_beta_offset_ =
+                std::max(-apex_beta_limit_, std::min(apex_beta_limit_, d));
+            if (apex_count_ == 1 || apex_count_ % 20 == 0) {
+                RCLCPP_WARN(this->get_logger(),
+                            "APEX BETA FB FIRED: n=%ld d_beta=%+.3f deg "
+                            "(vx %.4f vs %.4f, h %.4f vs %.4f)",
+                            apex_count_, apex_beta_offset_ * 180.0 / M_PI,
+                            ekf_vx_, apex_vx_star_, ekf_z_, apex_h_star_);
+            }
+        }
+        if (apex_dc_gain_ != 0.0) {
+            // Stars are all 0 at the S263 orbit (see the header block), so
+            // the error IS the state. wx is the IMU roll rate, the same
+            // signal gamma_correction damps.
+            const double wx = imu_.angular_velocity.x;
+            const double d = apex_dc_gain_ *
+                             (apex_dc_k_vy_ * ekf_vy_ +
+                              apex_dc_k_rho_ * roll_ +
+                              apex_dc_k_drho_ * wx);
+            apex_dc_offset_ =
+                std::max(-apex_dc_limit_, std::min(apex_dc_limit_, d));
+            if (apex_count_ == 1 || apex_count_ % 20 == 0) {
+                RCLCPP_WARN(this->get_logger(),
+                            "APEX DIFF CAMBER FIRED: n=%ld d_lam=%+.3f deg "
+                            "(vy %+.4f rho %+.3f deg drho %+.3f rad/s)",
+                            apex_count_, apex_dc_offset_ * 180.0 / M_PI,
+                            ekf_vy_, roll_ * 180.0 / M_PI, wx);
+            }
         }
         apex_armed_ = false;       // one correction per flight phase
     }
@@ -2339,6 +2434,18 @@ void GslipPronkNode::dip_tick() {
         }
         dip_prev_stable_[i] = st;
     }
+}
+
+double GslipPronkNode::apex_diffcamber(int leg_index) const {
+    // Identically zero unless the apex channel is on -- update_apex_feedback
+    // zeroes the offset whenever apex_dc_gain_ is 0.0, the S135 bit-identity
+    // posture. Partition: model lam_l applies to the LEFT pair (A=FL, D=RL),
+    // lam_r = -lam_l to the RIGHT pair (B=FR, C=RR) -- the same left/right
+    // array as gamma_correction's roll_sign. No settle gate needed: the
+    // offset can only become nonzero at a detected apex, which requires
+    // airborne, which the settle never is.
+    static const double lr_sign[4] = {+1.0, -1.0, -1.0, +1.0};
+    return lr_sign[leg_index] * apex_dc_offset_;
 }
 
 double GslipPronkNode::gamma_openloop(int leg_index) const {
@@ -2522,6 +2629,7 @@ void GslipPronkNode::ekf_cb(const nav_msgs::msg::Odometry::SharedPtr msg) {
     // reads, and gating them on apex_fb_gain_ would mean the first stride
     // after enabling the channel ran on stale values.
     ekf_vx_ = msg->twist.twist.linear.x;
+    ekf_vy_ = msg->twist.twist.linear.y;   // apex diff-camber row (y = left)
     ekf_vz_ = msg->twist.twist.linear.z;
     ekf_z_ = msg->pose.pose.position.z;
     ekf_stamp_ = this->now().seconds();
@@ -2700,7 +2808,8 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
         cmd->beta = beta_base * (1.0 + s * k_steer_) + s * u * gate
                     + apex_beta_offset_;
         cmd->gamma = row.gamma + gamma_openloop(static_cast<int>(i))
-                     + gamma_correction(static_cast<int>(i));
+                     + gamma_correction(static_cast<int>(i))
+                     + apex_diffcamber(static_cast<int>(i));
         // Stance-peak YIELD: inside the window after an armed touchdown, blend
         // the assembled command toward the measured angle. Identically off at
         // yield 0.0; no state touched unless enabled (the clocks are gated).
@@ -3146,6 +3255,17 @@ void GslipPronkNode::execute_running_phase() {
                     "(one correction per flight, held)",
                     apex_fb_gain_, apex_k_vx_, apex_k_h_, apex_vx_star_,
                     apex_h_star_, apex_beta_limit_ * 180.0 / M_PI);
+    }
+    if (apex_dc_gain_ != 0.0) {
+        // Same contract as APEX BETA FB above: this line announces intent;
+        // the APEX DIFF CAMBER FIRED line proves action. A run that asked
+        // for this channel and did not log this line is INVALID.
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX DIFF CAMBER set: gain=%.3f k_vy=%.4f k_rho=%.4f "
+                    "k_drho=%.4f clamp %.2f deg (lam_l on A/D, mirrored on "
+                    "B/C; one correction per flight, held)",
+                    apex_dc_gain_, apex_dc_k_vy_, apex_dc_k_rho_,
+                    apex_dc_k_drho_, apex_dc_limit_ * 180.0 / M_PI);
     }
     size_t index = 0;
     size_t stride_count = 0;
