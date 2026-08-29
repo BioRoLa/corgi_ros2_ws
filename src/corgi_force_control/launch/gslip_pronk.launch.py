@@ -256,6 +256,11 @@ def generate_launch_description():
         DeclareLaunchArgument("apex_dc_k_rho", default_value="-5.769254"),
         DeclareLaunchArgument("apex_dc_k_drho", default_value="-0.168636"),
         DeclareLaunchArgument("apex_dc_limit", default_value="0.06981"),  # 4 deg
+        # Latch-up guard (log S268/S269): no apex for grace_s -> both held
+        # offsets bleed linearly to zero over decay_s. decay 0.0 = never
+        # (the pre-S269 behaviour, which latched at full scale in S268).
+        DeclareLaunchArgument("apex_hold_grace_s", default_value="0.8"),
+        DeclareLaunchArgument("apex_hold_decay_s", default_value="0.5"),
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
         # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
@@ -408,6 +413,8 @@ def generate_launch_description():
                 'apex_dc_k_rho': LaunchConfiguration('apex_dc_k_rho'),
                 'apex_dc_k_drho': LaunchConfiguration('apex_dc_k_drho'),
                 'apex_dc_limit': LaunchConfiguration('apex_dc_limit'),
+                'apex_hold_grace_s': LaunchConfiguration('apex_hold_grace_s'),
+                'apex_hold_decay_s': LaunchConfiguration('apex_hold_decay_s'),
                 'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
                 'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
                 'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),

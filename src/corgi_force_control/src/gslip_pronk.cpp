@@ -805,6 +805,23 @@ private:
     double ekf_vy_{0.0};
     double apex_diffcamber(int leg_index) const;
 
+    // Hold decay -- the S268 latch-up fix. A correction bad enough to kill
+    // flight also kills the apex events that would replace it, so a held
+    // offset can freeze at full scale with no path back: watched happening
+    // in the S268 sign check (clamp pegged at apex #1, ~18 s latched, gait
+    // dead). If no apex has fired for apex_hold_grace_s, BOTH held offsets
+    // bleed linearly to zero over apex_hold_decay_s (per-row rate = that
+    // row's clamp / decay_s, so a full-scale offset dies in decay_s). A
+    // ramp, not a reset -- the stale-data branch's "no step transients"
+    // intent is kept. apex_hold_decay_s = 0.0 disables (the pre-decay
+    // behaviour). Runs only when a channel is enabled and an offset is
+    // nonzero, so the default path stays bit-identical.
+    double apex_hold_grace_s_;
+    double apex_hold_decay_s_;
+    double apex_last_fire_s_{-1.0};
+    double apex_decay_prev_s_{-1.0};
+    bool apex_decay_warned_{false};
+
     // Open-loop Ackermann pair; see gamma_openloop(). All rad except dir.
     double gamma_acker_in_;
     double gamma_acker_out_;
@@ -1038,6 +1055,11 @@ GslipPronkNode::GslipPronkNode()
       // the per-orbit gain sweep (the S57 rerun this channel awaits) owns
       // the final value.
       apex_dc_limit_(4.0 / 180.0 * M_PI),
+      // Grace 0.8 s ~ 3 strides at v070's 0.2662 s: a healthy pronk apexes
+      // every stride, so three missed strides means flight is GONE, not
+      // late. Decay 0.5 s ~ 2 strides from full scale to zero.
+      apex_hold_grace_s_(0.8),
+      apex_hold_decay_s_(0.5),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
       gamma_acker_dir_(0.0),
@@ -1186,6 +1208,10 @@ GslipPronkNode::GslipPronkNode()
         this->declare_parameter<double>("apex_dc_k_drho", apex_dc_k_drho_);
     apex_dc_limit_ =
         this->declare_parameter<double>("apex_dc_limit", apex_dc_limit_);
+    apex_hold_grace_s_ = this->declare_parameter<double>(
+        "apex_hold_grace_s", apex_hold_grace_s_);
+    apex_hold_decay_s_ = this->declare_parameter<double>(
+        "apex_hold_decay_s", apex_hold_decay_s_);
     gamma_acker_in_ =
         this->declare_parameter<double>("gamma_acker_in", gamma_acker_in_);
     gamma_acker_out_ =
@@ -2299,6 +2325,40 @@ void GslipPronkNode::update_apex_feedback() {
     // channel never resurrects a held value from the other.
     if (apex_fb_gain_ == 0.0) apex_beta_offset_ = 0.0;
     if (apex_dc_gain_ == 0.0) apex_dc_offset_ = 0.0;
+
+    // Latch-up guard (S268 S3): when apexes stop, bleed the held offsets to
+    // zero. BEFORE the stale-data return below, deliberately -- a channel
+    // that has gone blind AND stopped apexing is exactly the case that
+    // latched. Linear ramp at (row clamp)/decay_s per second, so it is
+    // gentle (no step transients, the stale branch's stated intent) and
+    // terminates at exactly 0.0.
+    const double now_s = this->now().seconds();
+    if (apex_hold_decay_s_ > 0.0 && apex_last_fire_s_ >= 0.0 &&
+        (apex_beta_offset_ != 0.0 || apex_dc_offset_ != 0.0) &&
+        (now_s - apex_last_fire_s_) > apex_hold_grace_s_) {
+        double dt = apex_decay_prev_s_ >= 0.0 ? now_s - apex_decay_prev_s_
+                                              : 0.0;
+        if (dt < 0.0) dt = 0.0;
+        if (dt > 0.05) dt = 0.05;   // clock-jump guard
+        if (!apex_decay_warned_) {
+            apex_decay_warned_ = true;
+            RCLCPP_WARN(this->get_logger(),
+                        "APEX HOLD DECAY: no apex for %.2f s (grace %.2f), "
+                        "bleeding held offsets to zero over %.2f s "
+                        "(beta %+.3f deg, d_lam %+.3f deg)",
+                        now_s - apex_last_fire_s_, apex_hold_grace_s_,
+                        apex_hold_decay_s_,
+                        apex_beta_offset_ * 180.0 / M_PI,
+                        apex_dc_offset_ * 180.0 / M_PI);
+        }
+        const double sb = apex_beta_limit_ / apex_hold_decay_s_ * dt;
+        const double sd = apex_dc_limit_ / apex_hold_decay_s_ * dt;
+        apex_beta_offset_ -= std::copysign(
+            std::min(sb, std::fabs(apex_beta_offset_)), apex_beta_offset_);
+        apex_dc_offset_ -= std::copysign(
+            std::min(sd, std::fabs(apex_dc_offset_)), apex_dc_offset_);
+    }
+    apex_decay_prev_s_ = now_s;
     const bool airborne = !(leg_contact_stable_[0] || leg_contact_stable_[1] ||
                             leg_contact_stable_[2] || leg_contact_stable_[3]);
     const bool stale =
@@ -2325,6 +2385,8 @@ void GslipPronkNode::update_apex_feedback() {
     }
     if (airborne && apex_armed_ && ekf_vz_prev_ > 0.0 && ekf_vz_ <= 0.0) {
         apex_count_++;
+        apex_last_fire_s_ = now_s;    // resets the S268 latch-up guard
+        apex_decay_warned_ = false;
         if (apex_fb_gain_ != 0.0) {
             const double d = apex_fb_gain_ *
                              (apex_k_vx_ * (ekf_vx_ - apex_vx_star_) +
@@ -3266,6 +3328,18 @@ void GslipPronkNode::execute_running_phase() {
                     "B/C; one correction per flight, held)",
                     apex_dc_gain_, apex_dc_k_vy_, apex_dc_k_rho_,
                     apex_dc_k_drho_, apex_dc_limit_ * 180.0 / M_PI);
+    }
+    if (apex_fb_gain_ != 0.0 || apex_dc_gain_ != 0.0) {
+        // The latch-up guard's announcement, same contract as the channel
+        // banners above. Grep for the 'APEX HOLD DECAY:' action line to
+        // know whether it ever actually fired in a run.
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX HOLD DECAY set: grace=%.2f s decay=%.2f s%s",
+                    apex_hold_grace_s_, apex_hold_decay_s_,
+                    apex_hold_decay_s_ == 0.0
+                        ? "  <-- DISABLED: held offsets can latch at full "
+                          "scale if the gait loses flight (the S268 mode)"
+                        : "");
     }
     size_t index = 0;
     size_t stride_count = 0;
