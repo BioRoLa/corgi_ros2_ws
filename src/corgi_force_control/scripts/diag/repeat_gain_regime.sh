@@ -104,6 +104,18 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
   . "$WS/src/corgi_force_control/scripts/diag/preflight_plant.sh"
   plant_verify || exit 1
   echo "################ RUN $RUN / $N ################"
+  # SEAT GATE (#33 / log S277, 2026-08-30). The launch is a LOTTERY: some
+  # launches seat the stance ~6 mm low (hold z 48-50 mm vs the healthy
+  # 54-56) and that seat NEVER propels -- v_fwd ~0 for the whole run.
+  # Present at low odds since at least S137 ("2 of 5 OFF runs barely
+  # locomoted"); the odds jumped to ~95% sick after the 2026-08-27 host
+  # reboot with every in-repo suspect exonerated (S276). The seat is
+  # readable BEFORE the trigger: median /sim/base_odom z at hold.
+  # SEAT_GATE=1 enables check-and-relaunch (up to SEAT_TRIES); unset, the
+  # inner loop runs exactly once and no new code path executes.
+  SEAT_ATTEMPTS=1
+  [ -n "${SEAT_GATE:-}" ] && SEAT_ATTEMPTS=${SEAT_TRIES:-6}
+  for SEAT_ATTEMPT in $(seq 1 "$SEAT_ATTEMPTS"); do
   teardown
   rm -f /tmp/corgi_torque_terms.csv
 
@@ -134,7 +146,7 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
     [ -f /tmp/corgi_torque_terms.csv ] && { ok=1; break; }
     sleep 3
   done
-  [ "$ok" = 1 ] || { echo "  run $RUN: driver never connected, skipping"; continue; }
+  [ "$ok" = 1 ] || { echo "  run $RUN: driver never connected, skipping"; continue 2; }
   echo "  driver up"
 
   # shellcheck disable=SC2086  -- CTL_ARGS is intentionally word-split
@@ -147,8 +159,28 @@ for RUN in $(seq "$RUN_START" "$((RUN_START + N - 1))"); do
     grep -q 'waiting for trigger' "/tmp/ctl_run$RUN.log" 2>/dev/null && { ok=1; break; }
     sleep 3
   done
-  [ "$ok" = 1 ] || { echo "  run $RUN: controller never reached hold, skipping"; continue; }
-  echo "  controller holding; triggering"
+  [ "$ok" = 1 ] || { echo "  run $RUN: controller never reached hold, skipping"; continue 2; }
+  echo "  controller holding"
+
+  if [ -n "${SEAT_GATE:-}" ]; then
+    # Median hold z from ~1.5 s of odom. Healthy 54-56 mm; sick 48-50.
+    SEAT_Z=$(timeout 10 ros2 topic echo /sim/base_odom --csv 2>/dev/null \
+      | head -150 | awk -F, '{print $7}' | sort -n \
+      | awk '{a[NR]=$1} END{if (NR) print a[int((NR+1)/2)]; else print 0}')
+    if awk -v z="$SEAT_Z" -v m="${SEAT_MIN_Z:-0.052}" 'BEGIN{exit !(z+0 >= m+0)}'; then
+      echo "  SEAT GATE PASS: hold z $SEAT_Z >= ${SEAT_MIN_Z:-0.052} (attempt $SEAT_ATTEMPT/$SEAT_ATTEMPTS)"
+    else
+      echo "  !! SEAT GATE: hold z $SEAT_Z < ${SEAT_MIN_Z:-0.052} -- BAD SEAT (attempt $SEAT_ATTEMPT/$SEAT_ATTEMPTS)"
+      if [ "$SEAT_ATTEMPT" -lt "$SEAT_ATTEMPTS" ]; then
+        echo "  !! relaunching"
+        continue
+      fi
+      echo "  !! SEAT GATE EXHAUSTED -- proceeding on a BAD SEAT; run INVALID"
+    fi
+  fi
+  break
+  done   # SEAT_ATTEMPT
+  echo "  triggering"
 
   setsid ros2 topic pub -r 50 /trigger corgi_msgs/msg/TriggerStamped \
       '{enable: true}' > /dev/null 2>&1 < /dev/null &
