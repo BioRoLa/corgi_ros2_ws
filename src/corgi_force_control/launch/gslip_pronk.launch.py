@@ -233,6 +233,9 @@ def generate_launch_description():
         # rows are deliberately absent -- at this speed sigma(camber)/sigma(beta)
         # is 0.115, and the full gain demands 104 N.m against a 44.25 ceiling
         # and performs WORSE than passive.
+        # ^ CORRECTED 2026-08-29: pre-crown-fix numbers (log S183). Post-fix
+        # the camber direction is a real second actuator (S263) and exists as
+        # the apex_dc_* block below (log S267) -- still default off.
         # apex_fb_gain 0.0 is OFF and bit-identical to every prior run.
         DeclareLaunchArgument("apex_fb_gain", default_value="0.0"),
         DeclareLaunchArgument("apex_k_vx", default_value="-0.5485"),
@@ -243,6 +246,16 @@ def generate_launch_description():
         # /sim/base_odom is GROUND TRUTH -- sim only. /ekf needs corgi_fusion_node,
         # which the campaign harness does not launch. See log S138.
         DeclareLaunchArgument("apex_odom_topic", default_value="/sim/base_odom"),
+        # Apex differential camber (log S267): the deadbeat's SECOND input,
+        # K's lam_l row at the S263 plant orbit, held per stride, applied
+        # gamma += lr_sign * d_lam. apex_dc_gain 0.0 is OFF and bit-identical
+        # to every prior run. Gains are per-orbit facts (S57): re-extract
+        # before running any other orbit.
+        DeclareLaunchArgument("apex_dc_gain", default_value="0.0"),
+        DeclareLaunchArgument("apex_dc_k_vy", default_value="-1.054120"),
+        DeclareLaunchArgument("apex_dc_k_rho", default_value="-5.769254"),
+        DeclareLaunchArgument("apex_dc_k_drho", default_value="-0.168636"),
+        DeclareLaunchArgument("apex_dc_limit", default_value="0.06981"),  # 4 deg
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn
         # side leans at gamma_acker_in, the outer pair at gamma_acker_out,
@@ -390,6 +403,11 @@ def generate_launch_description():
                 'apex_h_star': LaunchConfiguration('apex_h_star'),
                 'apex_beta_limit': LaunchConfiguration('apex_beta_limit'),
                 'apex_odom_topic': LaunchConfiguration('apex_odom_topic'),
+                'apex_dc_gain': LaunchConfiguration('apex_dc_gain'),
+                'apex_dc_k_vy': LaunchConfiguration('apex_dc_k_vy'),
+                'apex_dc_k_rho': LaunchConfiguration('apex_dc_k_rho'),
+                'apex_dc_k_drho': LaunchConfiguration('apex_dc_k_drho'),
+                'apex_dc_limit': LaunchConfiguration('apex_dc_limit'),
                 'gamma_acker_in': LaunchConfiguration('gamma_acker_in'),
                 'gamma_acker_out': LaunchConfiguration('gamma_acker_out'),
                 'gamma_acker_dir': LaunchConfiguration('gamma_acker_dir'),
