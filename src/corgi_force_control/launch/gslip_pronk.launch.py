@@ -160,6 +160,13 @@ def generate_launch_description():
         # is unchanged. 1.0 = off, shipped behaviour. Runs with it set are
         # NOT comparable to unscaled campaigns.
         DeclareLaunchArgument('stance_sweep_scale', default_value='1.0'),
+        # contact_align (S309, #20): dwell -> roll-matched sweep -> return,
+        # touchdown beta pinned. rows=0 = off, bit-identical. Runs with it
+        # set are NOT comparable to unaligned campaigns.
+        DeclareLaunchArgument('contact_align_rows', default_value='0'),
+        DeclareLaunchArgument('contact_sweep_rows', default_value='0'),
+        DeclareLaunchArgument('contact_sweep_scale', default_value='1.0'),
+        DeclareLaunchArgument('contact_ramp_rows', default_value='0'),
         # ADOPTED 2026-08-30 (log S300, Alex's decision on S297's data):
         # config of record is the 'both' cell -- k_tangential 1200 +
         # k_pitch -0.30. Was 600/0.0. Paired gain +0.032 at no torque
@@ -381,6 +388,10 @@ def generate_launch_description():
                 'stance_label_shift_s': LaunchConfiguration('stance_label_shift_s'),
                 'stance_label_duty': LaunchConfiguration('stance_label_duty'),
                 'stance_sweep_scale': LaunchConfiguration('stance_sweep_scale'),
+                'contact_align_rows': LaunchConfiguration('contact_align_rows'),
+                'contact_sweep_rows': LaunchConfiguration('contact_sweep_rows'),
+                'contact_sweep_scale': LaunchConfiguration('contact_sweep_scale'),
+                'contact_ramp_rows': LaunchConfiguration('contact_ramp_rows'),
                 'k_tangential': k_tangential,
                 'k_flight': LaunchConfiguration('k_flight'),
                 'k_roll': LaunchConfiguration('k_roll'),

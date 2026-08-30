@@ -392,6 +392,23 @@ private:
     // design speed. See load_template. 1.0 = off, bit-identical.
     double stance_sweep_scale_;
 
+    // contact_align (S309, Open Issue #20): load-time COMMON-MODE rewrite
+    // of the beta column into DWELL (D rows at the touchdown beta) ->
+    // ROLL-MATCHED SWEEP (the template's own normalised sweep shape
+    // resampled onto S rows at amplitude f*A) -> linear RETURN, so the
+    // commanded sweep occupies where feet are MEASURED to be down
+    // (per-leg phi_TD table: TD ~row 72-75 of the 0-107 label stance,
+    // common-mode within 3 rows). Touchdown-row beta is PINNED -- the
+    // S112/S113 rotation class moved it and was falsified; this changes
+    // only the reference's velocity profile. theta/gamma/labels/row 0
+    // untouched; no runtime state, no trigger -- desync is inexpressible
+    // (S101) and the loaded-foot invariant is vacuous. rows=0 = off,
+    // bit-identical (early return before any table write).
+    int contact_align_rows_;      // D; 0 = off
+    int contact_sweep_rows_;      // S; 0 -> label stance length m
+    double contact_sweep_scale_;  // f in (0,1]
+    int contact_ramp_rows_;       // R pre-sweep retraction ramp; 0 = none
+
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules_;
     std::vector<TemplateRow> template_;
 
@@ -971,6 +988,10 @@ GslipPronkNode::GslipPronkNode()
       stance_label_shift_s_(0.0),
       stance_label_duty_(0.0),
       stance_sweep_scale_(1.0),
+      contact_align_rows_(0),
+      contact_sweep_rows_(0),
+      contact_sweep_scale_(1.0),
+      contact_ramp_rows_(0),
       trigger_(false),
       sim_(false),
       k_radial_(8941.0),
@@ -1193,6 +1214,14 @@ GslipPronkNode::GslipPronkNode()
         "stance_label_duty", stance_label_duty_);
     stance_sweep_scale_ = this->declare_parameter<double>(
         "stance_sweep_scale", stance_sweep_scale_);
+    contact_align_rows_ = this->declare_parameter<int>(
+        "contact_align_rows", contact_align_rows_);
+    contact_sweep_rows_ = this->declare_parameter<int>(
+        "contact_sweep_rows", contact_sweep_rows_);
+    contact_sweep_scale_ = this->declare_parameter<double>(
+        "contact_sweep_scale", contact_sweep_scale_);
+    contact_ramp_rows_ = this->declare_parameter<int>(
+        "contact_ramp_rows", contact_ramp_rows_);
     settle_ticks_ = this->declare_parameter<int>("settle_ticks", settle_ticks_);
     k_roll_ = this->declare_parameter<double>("k_roll", k_roll_);
     d_roll_ = this->declare_parameter<double>("d_roll", d_roll_);
@@ -1792,6 +1821,121 @@ bool GslipPronkNode::load_template(const std::string& path) {
                         "%.0f%% of the template's design speed; runs are NOT "
                         "comparable to unscaled campaigns.",
                         f, sweep_orig, f * sweep_orig, nf, f * 100.0);
+        }
+    }
+    // --- contact_align (S309, #20): dwell -> roll-matched sweep -> return.
+    //
+    // Runs AFTER every other beta/label transform and BEFORE the derived
+    // geometry below, so onset/liftoff/derived rates see the table as
+    // played. Refusals fall back to the untouched table (the duty
+    // pattern): this transform must never half-apply.
+    if (contact_align_rows_ > 0 && template_.size() > 8) {
+        const size_t n = template_.size();
+        const size_t D = static_cast<size_t>(contact_align_rows_);
+        // Label geometry (pre-derivation, local): one contiguous segment.
+        size_t onset = n, transitions = 0, m = 0;
+        for (size_t i = 0; i < n; i++) {
+            const bool prev = template_[(i + n - 1) % n].in_stance;
+            const bool cur = template_[i].in_stance;
+            if (prev != cur) transitions++;
+            if (!prev && cur) onset = i;
+            if (cur) m++;
+        }
+        const size_t S = contact_sweep_rows_ > 0
+                             ? static_cast<size_t>(contact_sweep_rows_) : m;
+        const double f = contact_sweep_scale_;
+        const size_t R = static_cast<size_t>(std::max(0, contact_ramp_rows_));
+        const double dt = template_.back().t / static_cast<double>(n - 1);
+        bool ok = true;
+        const char* why = "";
+        if (transitions != 2 || onset >= n || m == 0 || m >= n) {
+            ok = false; why = "labels not one contiguous segment";
+        } else if (D + S > n - 8) {
+            ok = false; why = "D+S leaves fewer than 8 return rows";
+        } else if (!(f > 0.0 && f <= 1.0)) {
+            ok = false; why = "contact_sweep_scale outside (0,1]";
+        } else if (R >= D) {
+            ok = false; why = "contact_ramp_rows >= contact_align_rows";
+        } else if (stance_sweep_scale_ != 1.0) {
+            ok = false; why = "stance_sweep_scale also set (same idea, "
+                              "lower resolution -- pick one)";
+        } else if (slave_stance_ || event_sched_) {
+            ok = false; why = "slave_stance/event_sched per-leg machinery "
+                              "(re-derive geometry before composing)";
+        } else if (clock_ff_scale_ != 0.0) {
+            ok = false; why = "clock_ff rates derive from the LABEL window, "
+                              "which no longer matches the sweep";
+        }
+        double A = 0.0, ret_rate = 0.0;
+        if (ok) {
+            const double b0 = template_[onset].beta;
+            A = f * (template_[(onset + m - 1) % n].beta - b0);
+            const size_t ret_rows = n - D - S;
+            ret_rate = std::abs(A) / (static_cast<double>(ret_rows) * dt);
+            if (ret_rate > 1.5 * 3.283) {   // S249 pricing guard
+                ok = false; why = "return rate exceeds 1.5x template peak";
+            } else {
+                // The template's own normalised sweep shape g(u), sampled
+                // from the ORIGINAL stance rows so the ease profile is
+                // preserved rather than a new shape invented.
+                std::vector<double> orig(m);
+                for (size_t j = 0; j < m; j++)
+                    orig[j] = template_[(onset + j) % n].beta;
+                const double denom = orig[m - 1] - orig[0];
+                auto g = [&](double u) {
+                    const double x = u * static_cast<double>(m - 1);
+                    const size_t j0 = static_cast<size_t>(x);
+                    const size_t j1 = std::min(j0 + 1, m - 1);
+                    const double w = x - static_cast<double>(j0);
+                    const double b = orig[j0] * (1.0 - w) + orig[j1] * w;
+                    return denom != 0.0 ? (b - orig[0]) / denom : 0.0;
+                };
+                const double per_row = A / static_cast<double>(S);
+                for (size_t k = 0; k < n; k++) {
+                    const size_t idx = (onset + k) % n;
+                    double b;
+                    if (k < D) {
+                        b = b0;
+                        // Optional retraction ramp into the dwell's tail:
+                        // approach b0 from below at the sweep's mean rate.
+                        if (R > 0 && k >= D - R)
+                            b = b0 - static_cast<double>(D - k) * per_row;
+                    } else if (k < D + S) {
+                        b = b0 + A * g(static_cast<double>(k - D) /
+                                       static_cast<double>(S - 1));
+                    } else {
+                        const double frac =
+                            static_cast<double>(k - (D + S) + 1) /
+                            static_cast<double>(n - D - S);
+                        b = b0 + A * (1.0 - frac);
+                    }
+                    template_[idx].beta = b;
+                }
+                // Grep-able engagement + a checksum of the emitted column.
+                uint32_t h = 2166136261u;
+                for (size_t i = 0; i < n; i++) {
+                    const double bv = template_[i].beta;
+                    const unsigned char* p =
+                        reinterpret_cast<const unsigned char*>(&bv);
+                    for (size_t b8 = 0; b8 < sizeof(double); b8++) {
+                        h ^= p[b8];
+                        h *= 16777619u;
+                    }
+                }
+                RCLCPP_WARN(this->get_logger(),
+                            "CONTACT ALIGN set: D=%zu S=%zu f=%.3f R=%zu "
+                            "(dwell %.0f ms, sweep %.3f rad at %.3f rad/s, "
+                            "return %.3f rad/s) beta-checksum=%08x. Runs "
+                            "are NOT comparable to unaligned campaigns.",
+                            D, S, f, R,
+                            static_cast<double>(D) * dt * 1e3, A,
+                            A / (static_cast<double>(S) * dt), ret_rate, h);
+            }
+        }
+        if (!ok) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "CONTACT ALIGN REFUSED (%s) -- table left "
+                         "untouched, running the shipped template.", why);
         }
     }
     // --- Event-scheduler load-time geometry (after ALL label transforms) ---
