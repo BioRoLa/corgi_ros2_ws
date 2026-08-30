@@ -24,7 +24,8 @@ Arguments:
     k_lateral      stance ABAD stiffness per leg, N/m. Must not be zero --
                    with leg_frame this axis is the hip roll, and a zero here
                    leaves kp_h near zero and the ABAD floppy.
-    k_tangential   stance tangential stiffness per leg, N/m. Default 600,
+    k_tangential   stance tangential stiffness per leg, N/m. Default 1200
+                   (config of record since 2026-08-30, log S300; was 600),
                    lowered from 1200 on 2026-08-08. The tangential force acts
                    perpendicular to the leg, so unlike the axial spring it does
                    NOT pass through the hip: it carries a pitch moment on the
@@ -159,7 +160,11 @@ def generate_launch_description():
         # is unchanged. 1.0 = off, shipped behaviour. Runs with it set are
         # NOT comparable to unscaled campaigns.
         DeclareLaunchArgument('stance_sweep_scale', default_value='1.0'),
-        DeclareLaunchArgument("k_tangential", default_value="600.0"),
+        # ADOPTED 2026-08-30 (log S300, Alex's decision on S297's data):
+        # config of record is the 'both' cell -- k_tangential 1200 +
+        # k_pitch -0.30. Was 600/0.0. Paired gain +0.032 at no torque
+        # cost, laggard raised 0.168->0.198 (S294/S297).
+        DeclareLaunchArgument("k_tangential", default_value="1200.0"),
         # #19 step 2 (2026-08-24): default = config of record 7150/115.8,
         # was the rejected 12000/150 point. Campaigns keep passing k_flight
         # explicitly regardless (#19 step 3).
@@ -222,7 +227,8 @@ def generate_launch_description():
         # degrades that stance (rho -0.32/-0.36). Stance-gated, clamped.
         # 0.0/0.0 = EXACTLY off, bit-identical. SIGN is empirical: negate if
         # the correction makes things worse (same rule as k_roll/k_yaw).
-        DeclareLaunchArgument("k_pitch", default_value="0.0"),
+        # ADOPTED 2026-08-30 with k_tangential above (log S300). Was 0.0.
+        DeclareLaunchArgument("k_pitch", default_value="-0.30"),
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
 

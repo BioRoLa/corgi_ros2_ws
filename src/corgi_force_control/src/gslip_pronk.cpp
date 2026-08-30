@@ -974,7 +974,9 @@ GslipPronkNode::GslipPronkNode()
       trigger_(false),
       sim_(false),
       k_radial_(8941.0),
-      k_tangential_(900.0),
+      k_tangential_(1200.0),   // ADOPTED S300; aligned with the launch
+                               // default (was 900 vs launch 600 -- the
+                               // documented divergence trap, now closed)
       k_lateral_(7500.0),
       b_radial_(0.0),
       b_tangential_(30.0),
@@ -1035,7 +1037,7 @@ GslipPronkNode::GslipPronkNode()
       d_yaw_(0.0),
       gamma_limit_(5.0 / 180.0 * M_PI),
       gamma_yaw_limit_(0.0),
-      k_pitch_(0.0),
+      k_pitch_(-0.30),   // ADOPTED S300 with k_tangential (was 0.0)
       d_pitch_(0.0),
       // 3 deg. The operating theta is ~90-100 deg and the five-bar folds
       // at 17; 3 deg of differential leg length is a large body-pitch
@@ -1161,17 +1163,16 @@ GslipPronkNode::GslipPronkNode()
                 "b_lateral=%.1f | k_flight=%.1f b_flight=%.1f",
                 k_radial_, k_tangential_, k_lateral_, b_radial_,
                 b_tangential_, b_lateral_, k_flight_, b_flight_);
-    // The launch file's default is 600.0; this class's own ctor default is
-    // 900.0, so a node started WITHOUT the launch file reads differently.
-    // Compare against the launch default, because that is what campaigns use.
-    if (std::fabs(k_tangential_ - 600.0) > 1e-6) {
+    // Config of record since 2026-08-30 (S300): 1200.0. Ctor and launch
+    // defaults now AGREE (the 900-vs-600 divergence trap is closed).
+    if (std::fabs(k_tangential_ - 1200.0) > 1e-6) {
         RCLCPP_WARN(this->get_logger(),
-                    "K_TANGENTIAL OVERRIDDEN: %.1f (launch default 600.0). "
-                    "This line is PROOF OF INTENT ONLY -- it proves the "
-                    "parameter was READ, not that it reached the impedance "
-                    "law. S138's apex channel printed its parameters "
-                    "faithfully for ten runs and never fired. Verify the "
-                    "action with scripts/diag/kt_engagement.py.",
+                    "K_TANGENTIAL OVERRIDDEN: %.1f (config of record "
+                    "1200.0, S300). This line is PROOF OF INTENT ONLY -- "
+                    "it proves the parameter was READ, not that it reached "
+                    "the impedance law. S138's apex channel printed its "
+                    "parameters faithfully for ten runs and never fired. "
+                    "Verify the action with scripts/diag/kt_engagement.py.",
                     k_tangential_);
     }
     standup_ticks_ = this->declare_parameter<int>("standup_ticks", standup_ticks_);
