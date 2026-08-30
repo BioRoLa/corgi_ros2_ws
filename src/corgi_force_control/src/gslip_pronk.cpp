@@ -763,7 +763,21 @@ private:
     long apex_count_{0};
     bool apex_starved_warned_{false};
     std::string apex_odom_topic_;
+    // S296 latch-and-defer: ~half of true apexes pass while a foot is
+    // still down (rear-pair flights are 60-70 ms and fragmented), and
+    // the old single-tick predicate consumed those edges for the whole
+    // stride. A grounded crossing now latches here, with the K-row
+    // inputs sampled AT the crossing, and applies at the first stable-
+    // airborne tick (>= 2 contact samples old). Expires after 0.30 s.
+    bool apex_pending_{false};
+    double apex_pending_s_{-1.0};
+    double apex_pending_vx_{0.0}, apex_pending_z_{0.0};
+    double apex_pending_vy_{0.0}, apex_pending_roll_{0.0};
+    double apex_pending_wx_{0.0};
+    int apex_airborne_ticks_{0};
     void update_apex_feedback();
+    void apex_fire(double now_s, double vx, double z, double vy,
+                   double roll_v, double wx);
     void apex_vz_prev_guard();
 
     // --- Apex differential camber: the deadbeat's SECOND input --------------
@@ -2383,47 +2397,99 @@ void GslipPronkNode::update_apex_feedback() {
         apex_vz_prev_guard();
         return;
     }
-    if (airborne && apex_armed_ && ekf_vz_prev_ > 0.0 && ekf_vz_ <= 0.0) {
-        apex_count_++;
-        apex_last_fire_s_ = now_s;    // resets the S268 latch-up guard
-        apex_decay_warned_ = false;
-        if (apex_fb_gain_ != 0.0) {
-            const double d = apex_fb_gain_ *
-                             (apex_k_vx_ * (ekf_vx_ - apex_vx_star_) +
-                              apex_k_h_ * (ekf_z_ - apex_h_star_));
-            apex_beta_offset_ =
-                std::max(-apex_beta_limit_, std::min(apex_beta_limit_, d));
-            if (apex_count_ == 1 || apex_count_ % 20 == 0) {
-                RCLCPP_WARN(this->get_logger(),
-                            "APEX BETA FB FIRED: n=%ld d_beta=%+.3f deg "
-                            "(vx %.4f vs %.4f, h %.4f vs %.4f)",
-                            apex_count_, apex_beta_offset_ * 180.0 / M_PI,
-                            ekf_vx_, apex_vx_star_, ekf_z_, apex_h_star_);
-            }
+    if (airborne) apex_airborne_ticks_++; else apex_airborne_ticks_ = 0;
+    const bool crossing = ekf_vz_prev_ > 0.0 && ekf_vz_ <= 0.0;
+    // S296 verification step 1: per-crossing diagnostic, env-gated and
+    // default-off (expect ~90 crossings / 24 s, ~45 with legs_down=0).
+    static const bool xdebug = std::getenv("CORGI_APEX_XDEBUG") != nullptr;
+    if (xdebug && crossing) {
+        const int down = (leg_contact_stable_[0] ? 1 : 0) +
+                         (leg_contact_stable_[1] ? 1 : 0) +
+                         (leg_contact_stable_[2] ? 1 : 0) +
+                         (leg_contact_stable_[3] ? 1 : 0);
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX XDEBUG: crossing t=%.3f legs_down=%d armed=%d "
+                    "airborne_ticks=%d", now_s, down, apex_armed_ ? 1 : 0,
+                    apex_airborne_ticks_);
+    }
+    if (airborne && apex_armed_ && crossing) {
+        apex_fire(now_s, ekf_vx_, ekf_z_, ekf_vy_, roll_,
+                  imu_.angular_velocity.x);
+    } else if (!airborne && apex_armed_ && crossing) {
+        // S296 latch-and-defer: the apex passed with a foot still down
+        // (about half of them on the healthy pronk, S296). Correcting a
+        // loaded foot stays forbidden (S102) -- latch the crossing with
+        // the K-row inputs sampled NOW (vy is ballistic-constant and
+        // rho/drho barely move in flight) and apply at the first stable-
+        // airborne tick. A newer crossing overwrites an unconsumed
+        // latch: the freshest apex is the one worth correcting from.
+        apex_pending_ = true;
+        apex_pending_s_ = now_s;
+        apex_pending_vx_ = ekf_vx_;
+        apex_pending_z_ = ekf_z_;
+        apex_pending_vy_ = ekf_vy_;
+        apex_pending_roll_ = roll_;
+        apex_pending_wx_ = imu_.angular_velocity.x;
+    }
+    if (apex_pending_) {
+        if (now_s - apex_pending_s_ > 0.30) {
+            apex_pending_ = false;   // flight never came; drop the latch
+        } else if (airborne && apex_armed_ && apex_airborne_ticks_ >= 20) {
+            // >= 20 ms of continuous airborne (two contact samples of
+            // age): a mid-flight contact blip that survives the 3-sample
+            // debounce cannot host this apply.
+            apex_fire(now_s, apex_pending_vx_, apex_pending_z_,
+                      apex_pending_vy_, apex_pending_roll_,
+                      apex_pending_wx_);
         }
-        if (apex_dc_gain_ != 0.0) {
-            // Stars are all 0 at the S263 orbit (see the header block), so
-            // the error IS the state. wx is the IMU roll rate, the same
-            // signal gamma_correction damps.
-            const double wx = imu_.angular_velocity.x;
-            const double d = apex_dc_gain_ *
-                             (apex_dc_k_vy_ * ekf_vy_ +
-                              apex_dc_k_rho_ * roll_ +
-                              apex_dc_k_drho_ * wx);
-            apex_dc_offset_ =
-                std::max(-apex_dc_limit_, std::min(apex_dc_limit_, d));
-            if (apex_count_ == 1 || apex_count_ % 20 == 0) {
-                RCLCPP_WARN(this->get_logger(),
-                            "APEX DIFF CAMBER FIRED: n=%ld d_lam=%+.3f deg "
-                            "(vy %+.4f rho %+.3f deg drho %+.3f rad/s)",
-                            apex_count_, apex_dc_offset_ * 180.0 / M_PI,
-                            ekf_vy_, roll_ * 180.0 / M_PI, wx);
-            }
-        }
-        apex_armed_ = false;       // one correction per flight phase
     }
     if (!airborne) apex_armed_ = true;   // re-arm on the next stance
     ekf_vz_prev_ = ekf_vz_;
+}
+
+// One apex: apply both enabled rows from the given inputs (immediate
+// path passes the live state; the S296 deferred path passes the state
+// sampled at the crossing), throttled print, disarm, and clear any
+// pending latch so a stale one cannot fire later in the same flight.
+void GslipPronkNode::apex_fire(double now_s, double vx, double z,
+                               double vy, double roll_v, double wx) {
+    apex_count_++;
+    apex_last_fire_s_ = now_s;    // resets the S268 latch-up guard
+    apex_decay_warned_ = false;
+    if (apex_fb_gain_ != 0.0) {
+        const double d = apex_fb_gain_ *
+                         (apex_k_vx_ * (vx - apex_vx_star_) +
+                          apex_k_h_ * (z - apex_h_star_));
+        apex_beta_offset_ =
+            std::max(-apex_beta_limit_, std::min(apex_beta_limit_, d));
+        if (apex_count_ == 1 || apex_count_ % 20 == 0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "APEX BETA FB FIRED: n=%ld d_beta=%+.3f deg "
+                        "(vx %.4f vs %.4f, h %.4f vs %.4f)",
+                        apex_count_, apex_beta_offset_ * 180.0 / M_PI,
+                        vx, apex_vx_star_, z, apex_h_star_);
+        }
+    }
+    if (apex_dc_gain_ != 0.0) {
+        // Stars are all 0 at the S263 orbit (see the header block), so
+        // the error IS the state. wx is the IMU roll rate, the same
+        // signal gamma_correction damps.
+        const double d = apex_dc_gain_ *
+                         (apex_dc_k_vy_ * vy +
+                          apex_dc_k_rho_ * roll_v +
+                          apex_dc_k_drho_ * wx);
+        apex_dc_offset_ =
+            std::max(-apex_dc_limit_, std::min(apex_dc_limit_, d));
+        if (apex_count_ == 1 || apex_count_ % 20 == 0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "APEX DIFF CAMBER FIRED: n=%ld d_lam=%+.3f deg "
+                        "(vy %+.4f rho %+.3f deg drho %+.3f rad/s)",
+                        apex_count_, apex_dc_offset_ * 180.0 / M_PI,
+                        vy, roll_v * 180.0 / M_PI, wx);
+        }
+    }
+    apex_armed_ = false;       // one correction per flight phase
+    apex_pending_ = false;
 }
 
 // Split out so the stale path cannot forget it and silently latch a stale
@@ -3434,6 +3500,15 @@ void GslipPronkNode::run() {
         next_time = next_time + period;
         rclcpp::sleep_for(std::chrono::nanoseconds(
             std::max<int64_t>(0, (next_time - this->now()).nanoseconds())));
+    }
+
+    // S296: engagement is scored on COUNTS, never on the 1-in-20
+    // throttled FIRED lines (that conflation mis-read S292 by ~15x).
+    // Printed only when an apex channel was on, so off runs stay
+    // log-identical.
+    if (apex_fb_gain_ != 0.0 || apex_dc_gain_ != 0.0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "APEX ENGAGEMENT: final apex_count_=%ld", apex_count_);
     }
 }
 
