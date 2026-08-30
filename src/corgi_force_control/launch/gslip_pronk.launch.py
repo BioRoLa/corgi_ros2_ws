@@ -265,7 +265,10 @@ def generate_launch_description():
         # Latch-up guard (log S268/S269): no apex for grace_s -> both held
         # offsets bleed linearly to zero over decay_s. decay 0.0 = never
         # (the pre-S269 behaviour, which latched at full scale in S268).
-        DeclareLaunchArgument("apex_hold_grace_s", default_value="0.8"),
+        # S304: 1.3 s (was 0.8) -- the old grace assumed per-stride firing;
+        # the fixed detector (S296) keeps 0-4 genuine >0.8 s gaps per
+        # healthy run, which are texture, not stumbles.
+        DeclareLaunchArgument("apex_hold_grace_s", default_value="1.3"),
         DeclareLaunchArgument("apex_hold_decay_s", default_value="0.5"),
         # --- Added 2026-08-19: open-loop Ackermann camber pair (Stage 3) ------
         # Held left/right camber differential, RADIANS: the pair on the turn

@@ -1074,7 +1074,9 @@ GslipPronkNode::GslipPronkNode()
       // Grace 0.8 s ~ 3 strides at v070's 0.2662 s: a healthy pronk apexes
       // every stride, so three missed strides means flight is GONE, not
       // late. Decay 0.5 s ~ 2 strides from full scale to zero.
-      apex_hold_grace_s_(0.8),
+      apex_hold_grace_s_(1.3),   // S304 (was 0.8): the fixed detector's
+                                 // healthy gap texture rides through;
+                                 // a true S268 stall still bleeds in 1.8 s
       apex_hold_decay_s_(0.5),
       gamma_acker_in_(0.0),
       gamma_acker_out_(0.0),
