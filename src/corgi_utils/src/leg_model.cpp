@@ -19,6 +19,17 @@ LegModel::LegModel(bool sim) :
     R(0.1), // 10 cm
     r(sim? 0.019 : 0.019), // No tire 0.0125: With tire 0.019// they are now the same in webots
     radius(R + r),
+    // Foot design parameters.
+    // These were the archived pre-tyre values (22.25 / 12.25 mm, giving
+    // foot_radius 0.1345), which the LegWheel package keeps only under
+    // OLD_Design. The current design is TIRE_TREAD_RADIUS 0.130 and
+    // TIRE_CORNER_RADIUS 0.015, so foot_offset = 0.130 - R and
+    // foot_radius = 0.145 (WHEEL_RADIUS_OUTER).
+    foot_offset(0.030),        // 30 mm  (TIRE_TREAD_RADIUS - R)
+    tyre_thickness(0.015),     // 15 mm  (TIRE_CORNER_RADIUS)
+    foot_radius(R + foot_offset + tyre_thickness),   // 0.145 m
+    wheel_thickness(0.04),
+    abad_axis_to_wheel_plane(0.091675),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
     arc_BC(M_PI * 101.0 / 180.0),
@@ -81,6 +92,14 @@ void LegModel::calculate() {
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
+    
+    // Foot characteristics
+    O_r_c = G_c.real() + R;
+    I_l_c = O_r_c + (R + foot_offset) * std::exp(1i * (M_PI * 140.0 / 180.0));
+    ang_OC = std::arg(C_l_c);
+    J_l_c = U_l_c + (R + foot_offset) * std::exp(1i * (M_PI * 140.0 / 180.0 + std::arg(H_l_c - U_l_c)));
+    H_extend_l_c = U_l_c + (R + foot_offset) * std::exp(1i * std::arg(H_l_c - U_l_c));
+    
     this->symmetry();
 }
 
@@ -94,6 +113,11 @@ void LegModel::symmetry() {
     H_r_c = std::conj(H_l_c);
     U_r_c = std::conj(U_l_c);
     L_r_c = std::conj(L_l_c);
+    
+    // Foot characteristics symmetry
+    I_r_c = std::conj(I_l_c);
+    J_r_c = std::conj(J_l_c);
+    H_extend_r_c = std::conj(H_extend_l_c);
 }
 
 void LegModel::rotate() {
@@ -118,6 +142,15 @@ void LegModel::rotate() {
     U_r_c *= rot_ang;
     L_l_c *= rot_ang;
     L_r_c *= rot_ang;
+    
+    // Rotate foot characteristics
+    O_r_c *= rot_ang;
+    I_l_c *= rot_ang;
+    I_r_c *= rot_ang;
+    J_l_c *= rot_ang;
+    J_r_c *= rot_ang;
+    H_extend_l_c *= rot_ang;
+    H_extend_r_c *= rot_ang;
 }
 
 void LegModel::to_vector() {
@@ -139,8 +172,71 @@ void LegModel::to_vector() {
     U_r = {U_r_c.real(), U_r_c.imag()};
     L_l = {L_l_c.real(), L_l_c.imag()};
     L_r = {L_r_c.real(), L_r_c.imag()};
+    
+    // Foot characteristics
+    O_r = {O_r_c.real(), O_r_c.imag()};
+    I_l = {I_l_c.real(), I_l_c.imag()};
+    I_r = {I_r_c.real(), I_r_c.imag()};
+    J_l = {J_l_c.real(), J_l_c.imag()};
+    J_r = {J_r_c.real(), J_r_c.imag()};
+    H_extend_l = {H_extend_l_c.real(), H_extend_l_c.imag()};
+    H_extend_r = {H_extend_r_c.real(), H_extend_r_c.imag()};
 }
 
+std::array<std::array<double, 2>, 2> LegModel::rot(double ang) {
+    // Returns 2D rotation matrix for given angle.
+    double cos_ang = std::cos(ang);
+    double sin_ang = std::sin(ang);
+    return {{{cos_ang, -sin_ang}, {sin_ang, cos_ang}}};
+}
+
+std::array<double, 2> LegModel::rim_point(double alpha) {
+    // Calculates point on the wheel rim for given alpha angle (degrees).
+    // Alpha: Angle in degrees, where 0 degrees is directly in front of the wheel,
+    //        and positive angles rotate counterclockwise.
+    
+    this->forward(theta, beta, true);
+    double alpha_rad = alpha * M_PI / 180.0;
+    double a_mod = std::fmod((alpha + 180.0), 360.0) - 180.0;
+    
+    // Select rim segment and center point
+    std::array<double, 2> center;
+    std::array<double, 2> direction_point;
+    double angle = 0.0;
+    
+    if (a_mod >= -40.0 && a_mod <= 40.0) {
+        // Foot rim
+        center = O_r;
+        direction_point = G;
+        angle = alpha_rad;
+    } else if (a_mod > 40.0 && a_mod <= 180.0) {
+        // Upper rim RHS
+        center = U_r;
+        direction_point = J_r;
+        angle = (a_mod - 40.0) * M_PI / 180.0;
+    } else {
+        // Upper rim LHS
+        center = U_l;
+        direction_point = J_l;
+        angle = (a_mod + 40.0) * M_PI / 180.0;
+    }
+    
+    // Compute unit direction vector
+    double dx = direction_point[0] - center[0];
+    double dy = direction_point[1] - center[1];
+    double norm = std::sqrt(dx*dx + dy*dy);
+    norm = (norm < 1e-10) ? 1.0 : norm;
+    dx /= norm;
+    dy /= norm;
+    
+    // Apply rotation
+    auto rot_mat = rot(angle);
+    double rotated_x = rot_mat[0][0] * dx + rot_mat[0][1] * dy;
+    double rotated_y = rot_mat[1][0] * dx + rot_mat[1][1] * dy;
+    
+    return {{center[0] + foot_radius * rotated_x, center[1] + foot_radius * rotated_y}};
+}
+// TODO: remove contact_map after contact_map_3d is fully tested and validated in simulation　
 void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {
         using namespace std::complex_literals;
         double beta_adjusted = beta_in - slope;
@@ -190,7 +286,41 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             double y_new = contact_p[0]*sin(slope) + contact_p[1]*cos(slope);
             contact_p = {x_new, y_new};
         }//end if
-}//end contact_map
+}//end contact_mapcontact_map_3d
+// TODO: Consider the other two rims
+void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope, bool contact_upper, bool contact_lower) {
+    // Step 1: Forward kinematics in Leg Frame
+    this->forward(theta_in, beta_in, false);
+    this->gamma = gamma_in;
+    
+    // Step 2: Calculate alpha from ground slope (in degrees)
+    alpha = (slope - beta_in) * 180.0 / M_PI;
+    
+    // Step 3: Calculate sin(γ) and cos(γ)
+    double sin_g = std::sin(gamma);
+    double cos_g = std::cos(gamma);
+    
+    // Step 4: Determine contact lateral distance from the ABAD axis.
+    // The fixed offset is from the ABAD axis to the wheel/leg plane; the
+    // edge offset selects the lower wheel edge when gamma tilts the wheel.
+    double half_wheel_width = wheel_thickness / 2.0;
+    double contact_edge_offset = 0.0;
+    if (std::abs(sin_g) >= 1e-4) {
+        contact_edge_offset = (sin_g > 0) ? -half_wheel_width : half_wheel_width;
+    }
+    d_wheel = abad_axis_to_wheel_plane + contact_edge_offset;
+    
+    // Step 5: Get 2D contact point from rim_point (Leg Frame)
+    auto contact_2d = rim_point(alpha);
+    
+    // Step 6: Apply axis rotation matrix
+    // [X]   [1   0        0    ] [x_2D  ]
+    // [Y] = [0  cos(γ) -sin(γ)] [d_wheel ]
+    // [Z]   [0  sin(γ)  cos(γ)] [z_2D  ]
+    contact_p_3d[0] = contact_2d[0];                            // X
+    contact_p_3d[1] = d_wheel * cos_g - contact_2d[1] * sin_g;  // Y
+    contact_p_3d[2] = d_wheel * sin_g + contact_2d[1] * cos_g;  // Z
+}//end contact_map_3d
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
         using namespace std::complex_literals;
@@ -339,6 +469,48 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, std::array
     return {theta, beta};
 }//end move
 
+std::array<double, 3> LegModel::move_3d(double theta_in, double beta_in, double gamma_in, std::array<double, 3> move_vec, double slope, double tol, size_t max_iter) {
+    std::array<double, 3> current_q = {theta_in, beta_in, gamma_in};
+    std::array<double, 3> guess_dq = {0.0, 0.0, 0.0};
+
+    for (size_t iter = 0; iter < max_iter; ++iter) {
+        std::array<double, 3> cost = this->objective_3d(guess_dq, current_q, move_vec, slope);
+        Eigen::Vector3d cost_vec(cost[0], cost[1], cost[2]);
+
+        if (cost_vec.norm() < tol) {
+            break;
+        }
+
+        double epsilon = 1e-6;
+        Eigen::Matrix3d Jac;
+        for (size_t i = 0; i < 3; ++i) {
+            std::array<double, 3> dq_eps = guess_dq;
+            dq_eps[i] += epsilon;
+            std::array<double, 3> cost_eps = this->objective_3d(dq_eps, current_q, move_vec, slope);
+            Eigen::Vector3d cost_eps_vec(cost_eps[0], cost_eps[1], cost_eps[2]);
+            Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;
+        }
+
+        Eigen::Vector3d dq = Jac.partialPivLu().solve(-cost_vec);
+        if (dq.norm() < tol) {
+            break;
+        }
+
+        guess_dq[0] += dq[0];
+        guess_dq[1] += dq[1];
+        guess_dq[2] += dq[2];
+
+        if (iter == max_iter - 1) {
+            std::cout << "LegModel::move_3d: Newton solver cost " << cost_vec.norm() << std::endl;
+        }
+    }
+
+    theta = current_q[0] + guess_dq[0];
+    beta  = current_q[1] + guess_dq[1];
+    gamma = current_q[2] + guess_dq[2];
+    return {theta, beta, gamma};
+}//end move_3d
+
 std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, const std::array<double, 2>& move_vec, int contact_rim) {
     using namespace std::complex_literals;
     std::array<double, 2> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1]};
@@ -403,5 +575,38 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     // Return the result of the objective function
     return {guessed_hip[0] - move_vec[0], guessed_hip[1] - move_vec[1]};
 }//end objective
+
+std::array<double, 3> LegModel::objective_3d(const std::array<double, 3> &d_q, const std::array<double, 3> &current_q, const std::array<double, 3> &move_vec, double slope) {
+    using namespace std::complex_literals;
+
+    std::array<double, 3> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1], current_q[2] + d_q[2]};
+
+    std::complex<double> current_J_exp = (J_r_poly[0](current_q[0]) + 1i * J_r_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> current_O_exp = (O_r_poly[0](current_q[0]) + 1i * O_r_poly[1](current_q[0])) * std::exp(std::complex<double>(0.0, current_q[1]));
+    std::complex<double> guessed_J_exp = (J_r_poly[0](guessed_q[0]) + 1i * J_r_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+    std::complex<double> guessed_O_exp = (O_r_poly[0](guessed_q[0]) + 1i * O_r_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
+
+    double d_alpha = std::arg(-1i / (guessed_J_exp - guessed_O_exp)) - std::arg(-1i / (current_J_exp - current_O_exp));
+    double roll_d = d_alpha * foot_radius;
+
+    this->contact_map_3d(current_q[0], current_q[1], current_q[2], slope, true, true);
+    std::array<double, 3> current_contact = contact_p_3d;
+
+    this->contact_map_3d(guessed_q[0], guessed_q[1], guessed_q[2], slope, true, true);
+    std::array<double, 3> guessed_contact = contact_p_3d;
+
+    std::array<double, 3> next_contact = {current_contact[0] + roll_d, current_contact[1], current_contact[2]};
+    std::array<double, 3> guessed_hip = {
+        next_contact[0] - guessed_contact[0],
+        next_contact[1] - guessed_contact[1],
+        next_contact[2] - guessed_contact[2]
+    };
+
+    return {
+        guessed_hip[0] - move_vec[0],
+        guessed_hip[1] - move_vec[1],
+        guessed_hip[2] - move_vec[2]
+    };
+}
 
 // 

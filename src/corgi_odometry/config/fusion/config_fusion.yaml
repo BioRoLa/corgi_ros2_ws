@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────
+# Outer Fusion EKF parameters — corgi_odometry
+# Loaded by corgi_fusion_node at startup via yaml-cpp.
+# Also used by OfflineTestNode when use_bv_feedback=true.
+# ─────────────────────────────────────────────────────────────────
+
+fusion:
+  # Process noise (random-walk variance per second)
+  q_p:   1.0e-4   # position drift         [m²/s]
+  q_th:  1.0e-5   # orientation drift      [rad²/s]
+  q_bv:  1.0e-5   # velocity-bias walk     [(m/s)²/s]  ← tuned 2026-05-01
+
+  # LiDAR measurement noise (fixed, isotropic)
+  r_p:   4.0e-4   # position noise variance  [m²]   (σ = 0.02 m)
+  r_th:  2.5e-5   # rotation noise variance  [rad²] (σ = 0.005 rad)
+
+  # TF frame identifiers
+  map_frame:  "map"
+  odom_frame: "odom"

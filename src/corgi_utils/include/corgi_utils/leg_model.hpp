@@ -13,6 +13,12 @@ public:
     // Forward kinematics
     void forward(double theta, double beta, bool vector = true);
 
+    // Rotation matrix helper
+    std::array<std::array<double, 2>, 2> rot(double ang);
+
+    // Rim point calculation
+    std::array<double, 2> rim_point(double alpha = 0.0);
+
     // Inverse kinematics
     std::array<double, 2> inverse(const std::array<double, 2> &pos, const std::string &joint = "G");
     std::array<double, 2> inverse(const double pos[2], const std::string &joint = "G")
@@ -22,15 +28,23 @@ public:
 
     // Contact map
     void contact_map(double theta_in, double beta_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
+    void contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
 
     // Move
     std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper = true, bool contact_lower = true, double tol = 1e-14, size_t max_iter = 100);
+    std::array<double, 3> move_3d(double theta_in, double beta_in, double gamma_in, std::array<double, 3> move_vec, double slope = 0.0, double tol = 1e-12, size_t max_iter = 100);
 
     // Joint Positions
     std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
 
+    // Foot design joint positions
+    std::array<double, 2> O_r, I_l, I_r, J_l, J_r, H_extend_l, H_extend_r;
+
     // Joint Positions in complex
     std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
+
+    // Foot design joint positions in complex
+    std::complex<double> O_r_c, I_l_c, I_r_c, J_l_c, J_r_c, H_extend_l_c, H_extend_r_c;
 
     // Constants (public - match initialization order)
     const double max_theta;
@@ -41,15 +55,25 @@ public:
     const double r;      // Tire radius
     const double radius; // Wheel radius + Tire radius
 
+    // Foot design parameters
+    const double foot_offset;      // 22.25 mm
+    const double tyre_thickness;   // 12.25 mm
+    const double foot_radius;      // R + foot_offset + tyre_thickness
+    const double wheel_thickness;
+    const double abad_axis_to_wheel_plane;
+
     // Current theta and beta
     double theta;
     double beta;
+    double gamma;
+    double d_wheel;
 
     // Contact map variable
     int rim = 3; // 1 -> 2 -> 3 -> 4 -> 5 -> 0:
                  // U_l -> L_l -> G -> L_r -> U_r -> None
     double alpha;
     std::array<double, 2> contact_p;
+    std::array<double, 3> contact_p_3d;
     // Eigen::Vector2d pointOnRimByGamma(
     //     double theta, double beta,
     //     int rim,     // 1=left upper,2=left lower,3=G,4=right lower,5=right upper
@@ -67,6 +91,7 @@ private:
     double ang_OEA;
     double ang_DBC;
     double ang_OGF;
+    double ang_OC;
 
     // Helper functions
     void calculate();
@@ -75,6 +100,7 @@ private:
     void to_vector();
     std::array<double, 3> arc_min(const std::complex<double> &p1, const std::complex<double> &p2, const std::complex<double> &O, const std::string &rim);
     std::array<double, 2> objective(const std::array<double, 2> &d_q, const std::array<double, 2> &current_q, const std::array<double, 2> &move_vec, int contact_rim);
+    std::array<double, 3> objective_3d(const std::array<double, 3> &d_q, const std::array<double, 3> &current_q, const std::array<double, 3> &move_vec, double slope = 0.0);
 
 }; // end class LegModel
 

@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>corgi_force_control</name>
+  <version>0.0.0</version>
+  <description>The force control node for Corgi robot</description>
+  <maintainer email="r13522820@ntu.edu.tw">anne</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>corgi_msgs</depend>
+  <depend>corgi_force_estimation</depend>
+  <depend>corgi_utils</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>ament_index_cpp</depend>
+
+  <!-- launch-only: gslip_sim.launch.py brings up Webots directly -->
+  <exec_depend>webots_ros2_driver</exec_depend>
+  <exec_depend>corgi_sim</exec_depend>
+  <exec_depend>corgi_panel</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <depend>eigen3_cmake_module</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

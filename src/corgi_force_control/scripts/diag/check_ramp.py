@@ -1,0 +1,379 @@
+"""Per-segment flight measurement for the G-SLIP speed-ramp template.
+
+Why this exists: sim_cycle.sh samples once, on a fixed 20 s WALL delay, and
+reports a single averaged flight fraction. That is wrong for the ramp in two
+separate ways.
+
+  1. The ramp changes speed across 9.58 s, so one average over the whole thing
+     cannot show whether the ladder worked. Each rung needs its own number.
+
+  2. Webots runs well below real time (measured ~14x slower), and the factor
+     varies between runs. A fixed wall delay therefore lands at a different
+     *gait age* every run -- which is what produced 68.2% and 9.3% flight from
+     two identical hop invocations. Everything here is keyed to SIM time.
+
+Anchoring. gslip_pronk plays the CSV one row per 1 ms tick and wraps at the
+end, so template time must be recovered, not assumed. Commanded beta is exactly
+zero through the hop segment and steps to +-7 deg when the first forward
+segment starts, which is an unambiguous fiducial at a known template time. We
+latch that instant and derive t_template from it. If beta never leaves zero
+(e.g. a hop-only template, or a robot that never got that far) we fall back to
+the trigger instant plus the controller's settle_ticks.
+
+Only the FIRST pass is reported. At the wrap the template snaps from v~1.20
+back to the in-place hop while the robot is still carrying 2.035 m/s, so
+anything after that is measuring a different experiment.
+
+Usage:
+    python3 check_ramp.py <template.csv> [--settle 2.5] [--timeout 400]
+                          [--dump raw.npz] [--until 2.6]
+"""
+import argparse
+import os
+import sys
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Odometry
+
+from corgi_msgs.msg import (ImpedanceCmdStamped, ImuStamped, MotorStateStamped,
+                            SimLegContactStamped, TriggerStamped)
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ramp_segments import segment_template, stride_boundaries  # noqa: E402
+
+# Template time at which the first forward segment begins, i.e. the first row
+# with non-zero commanded beta. Recovered from the CSV, not hard-coded.
+BETA_FIDUCIAL_RAD = np.deg2rad(0.5)
+
+
+def common_mode_beta(mods):
+    """-> the template's beta, with any steering differential removed.
+
+    The fiducial has to track the TEMPLATE, and the template's beta is the
+    common mode of the four commanded betas. gslip_pronk's steering channel is
+    antisymmetric left/right -- signs {+1,-1,-1,+1} on A,B,C,D for both the
+    stance-gated offset and the amplitude scaling -- so it sums to zero and the
+    mean is exactly row.beta either way.
+
+    Taking max|beta| across the modules instead, which is what this did
+    originally, breaks the moment anything steers: a stance-gated offset makes
+    beta non-zero during the SETTLE, the fiducial fires ~4.6 s early, and every
+    segment boundary shifts by that much. The symptom is a "hop" segment
+    showing 0% flight, 100% all-down and theta pinned below command -- i.e. the
+    standing settle wearing the hop's label. With steering off the two
+    definitions agree, so old dumps read the same.
+    """
+    return sum(m[1] for m in mods) / len(mods)
+
+
+class Rec(Node):
+    def __init__(self):
+        super().__init__("gslip_ramp_check",
+                         parameter_overrides=[
+                             rclpy.parameter.Parameter(
+                                 "use_sim_time",
+                                 rclpy.Parameter.Type.BOOL, True)])
+        self.contact, self.motor, self.cmd, self.imu = [], [], [], []
+        self.odom = []
+        # Torque, kept in its own list rather than appended to `motor`.
+        # `motor` is converted wholesale with np.rad2deg() downstream, which
+        # would silently multiply every torque by 57.3 -- a wrong answer that
+        # looks like a plausible one. Separate list, separate npz key, so no
+        # existing analysis changes behaviour and old dumps still load.
+        self.torque = []
+        self.t_trigger = None
+        # Spin with timeout_sec=0.0 (see README): with a timeout, three 1 kHz
+        # subscriptions round-robin down to ~67 Hz and alias the stride.
+        self.create_subscription(SimLegContactStamped, "sim/leg_contact",
+                                 self.c_cb, 100)
+        self.create_subscription(MotorStateStamped, "motor/state",
+                                 self.m_cb, 100)
+        self.create_subscription(ImpedanceCmdStamped, "impedance/command",
+                                 self.k_cb, 100)
+        self.create_subscription(ImuStamped, "imu", self.i_cb, 100)
+        self.create_subscription(Odometry, "sim/base_odom", self.o_cb, 100)
+        self.create_subscription(TriggerStamped, "trigger", self.t_cb, 10)
+
+    def _now(self):
+        return self.get_clock().now().nanoseconds * 1e-9
+
+    def c_cb(self, msg):
+        self.contact.append((self._now(), [
+            msg.module_a.contact, msg.module_b.contact,
+            msg.module_c.contact, msg.module_d.contact]))
+
+    def m_cb(self, msg):
+        now = self._now()
+        self.motor.append((now, [
+            [m.theta, m.beta, m.gamma] for m in
+            (msg.module_a, msg.module_b, msg.module_c, msg.module_d)]))
+        # Applied motor torque, N.m. The 35 N.m limit is what bounds the trot
+        # (implementation log section 14) and the pronk has been recorded pegged
+        # against it, so the margin is worth capturing on every run rather than
+        # re-instrumenting when the question comes up.
+        self.torque.append((now, [
+            [m.torque_r, m.torque_l, m.torque_h] for m in
+            (msg.module_a, msg.module_b, msg.module_c, msg.module_d)]))
+
+    def k_cb(self, msg):
+        self.cmd.append((self._now(), [
+            [m.theta, m.beta] for m in
+            (msg.module_a, msg.module_b, msg.module_c, msg.module_d)]))
+
+    def i_cb(self, msg):
+        q = msg.orientation
+        self.imu.append((self._now(), [q.x, q.y, q.z, q.w]))
+
+    def o_cb(self, msg):
+        p = msg.pose.pose.position
+        v = msg.twist.twist.linear
+        # Orientation too: this is Supervisor GROUND TRUTH, and the only way to
+        # check the IMU-derived yaw the controller actually steers on. The
+        # controller's yaw_ has never been validated against truth.
+        q = msg.pose.pose.orientation
+        self.odom.append((self._now(),
+                          [p.x, p.y, p.z, v.x, v.y, v.z, q.x, q.y, q.z, q.w]))
+
+    def t_cb(self, msg):
+        if msg.enable and self.t_trigger is None:
+            self.t_trigger = self._now()
+
+
+def segment_speed(ot, ov, t0, t1):
+    """-> (speed from pose, mean forward speed from twist), m/s.
+
+    The pose figure is the headline: planar displacement over elapsed sim time,
+    which is about as unprocessed as a measurement gets and cannot be wrong
+    about a body-frame rotation. The twist figure comes through the driver's
+    world -> body rotation, so a disagreement between the two is the tell for a
+    convention mistake rather than a gait result. They differ legitimately when
+    the robot veers -- twist.x is forward, pose displacement is straight-line.
+    """
+    m = (ot >= t0) & (ot <= t1)
+    if int(m.sum()) < 5:
+        return float("nan"), float("nan")
+    seg, ts = ov[m], ot[m]
+    dt = ts[-1] - ts[0]
+    if dt <= 0:
+        return float("nan"), float("nan")
+    v_pose = float(np.hypot(seg[-1, 0] - seg[0, 0],
+                            seg[-1, 1] - seg[0, 1]) / dt)
+    return v_pose, float(np.mean(seg[:, 3]))
+
+
+def fiducial_anchor(cmd, fiducial_t):
+    """-> t_sim of template t=0 from the commanded-beta fiducial, else None.
+
+    Split out from find_anchor deliberately. The polling loop below must latch
+    ONLY on the fiducial: during the controller's settle, commanded beta is
+    still zero, so a combined lookup returns the trigger+settle FALLBACK, that
+    value gets latched, and it is never revisited once anchor is non-None.
+
+    That bug was invisible while the controller's settle_ticks (1000 ms) and
+    this script's --settle default (1.0 s) happened to agree. Raising
+    settle_ticks to 2500 made every segment boundary wrong by exactly 1.5 s --
+    and the run still PRINTED "commanded beta fiducial", because the final
+    call recomputed the description without recomputing the anchor.
+    """
+    for t, mods in cmd:
+        if abs(common_mode_beta(mods)) > BETA_FIDUCIAL_RAD:
+            return t - fiducial_t
+    return None
+
+
+def find_anchor(cmd, fiducial_t, settle, t_trigger):
+    """-> (t_sim of template t=0, how it was found). Fiducial preferred."""
+    a = fiducial_anchor(cmd, fiducial_t)
+    if a is not None:
+        return a, f"commanded beta fiducial at t={fiducial_t:.3f}s"
+    if t_trigger is not None:
+        return (t_trigger + settle,
+                f"trigger + settle={settle:.2f}s (beta fiducial never seen) "
+                f"-- MUST match the controller's settle_ticks or every segment "
+                f"boundary is offset")
+    return None, "no anchor"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("template")
+    ap.add_argument("--settle", type=float, default=2.5,
+                    help="controller settle_ticks, in seconds. Only used as a "
+                         "FALLBACK when the commanded-beta fiducial is never "
+                         "seen; must match gslip_pronk's settle_ticks or every "
+                         "segment boundary is offset by the difference.")
+    ap.add_argument("--timeout", type=float, default=400.0,
+                    help="wall-clock give-up, seconds")
+    ap.add_argument("--dump", default=None,
+                    help="write raw samples to this .npz for offline analysis")
+    ap.add_argument("--until", type=float, default=None,
+                    help="stop recording this many seconds into the template "
+                         "instead of after a full pass. ramp_cycle.sh waits on "
+                         "this process and drops the trigger when it exits, so "
+                         "this ends the whole run: --until 2.6 covers the hop "
+                         "segment (0.00-2.14 s) for about a quarter of the "
+                         "cost of the 9.58 s pass. Leave unset for a full "
+                         "ramp.")
+    args = ap.parse_args()
+
+    segs = segment_template(args.template)
+    duration = segs[-1]["t_end"]
+    # The fiducial is the start of the first segment with non-zero beta.
+    fiducial_t = next((s["t_start"] for s in segs
+                       if max(abs(v) for v in s["beta_deg"]) > 0.5), None)
+
+    rclpy.init()
+    n = Rec()
+    import time
+    wall_end = time.time() + args.timeout
+    anchor = None
+    stop_at = args.until if args.until is not None else duration
+    while rclpy.ok() and time.time() < wall_end:
+        rclpy.spin_once(n, timeout_sec=0.0)
+        # Latch ONLY on the fiducial. Latching the fallback here is what made
+        # the reported anchor and the used anchor disagree; see fiducial_anchor.
+        if anchor is None and fiducial_t is not None and len(n.cmd) > 50:
+            anchor = fiducial_anchor(n.cmd, fiducial_t)
+        # Stopping and REPORTING use different anchors on purpose. The fiducial
+        # is the first non-zero commanded beta, at t = 2.14 s, so it cannot be
+        # what decides whether to stop before then -- a --until inside the hop
+        # would wait forever for a fiducial the run is about to end before
+        # reaching. Fall back to trigger + settle for the stopping decision
+        # only; everything printed below still re-anchors on the fiducial once
+        # it has been seen, which is the accurate one.
+        stop_anchor = anchor
+        if (stop_anchor is None and args.until is not None
+                and n.t_trigger is not None):
+            stop_anchor = n.t_trigger + args.settle
+        if (stop_anchor is not None and n.contact
+                and n.contact[-1][0] - stop_anchor > stop_at):
+            break
+
+    if anchor is not None:
+        how = f"commanded beta fiducial at t={fiducial_t:.3f}s"
+    else:
+        anchor, how = find_anchor(n.cmd, fiducial_t or 0.0, args.settle,
+                                  n.t_trigger)
+
+    print(f"samples: contact={len(n.contact)} motor={len(n.motor)} "
+          f"cmd={len(n.cmd)} imu={len(n.imu)} odom={len(n.odom)}")
+    if not n.odom:
+        print("  NOTE: no sim/base_odom -- speed columns will be blank. Is "
+              "corgi_sim built from a revision that publishes it?")
+    if anchor is None:
+        print("NO ANCHOR -- never saw the trigger or a non-zero commanded beta.")
+        print("Is the gait running? Was this recorder started before the trigger?")
+        rclpy.shutdown()
+        return
+    print(f"anchor: {how}")
+
+    ct = np.array([t for t, _ in n.contact]) - anchor
+    cv = np.array([v for _, v in n.contact], dtype=bool)
+    mt = np.array([t for t, _ in n.motor]) - anchor
+    mv = np.rad2deg(np.array([v for _, v in n.motor]))
+    ot = np.array([t for t, _ in n.odom]) - anchor
+    ov = np.array([v for _, v in n.odom]) if n.odom else np.empty((0, 10))
+    it = np.array([t for t, _ in n.imu]) - anchor
+    iv = np.array([v for _, v in n.imu]) if n.imu else np.empty((0, 4))
+
+    covered = ct.max() if len(ct) else -1
+    print(f"template time covered: {ct.min():.2f} .. {covered:.2f} s "
+          f"(one pass is {duration:.2f} s)")
+    if args.until is not None:
+        print(f"  --until {args.until:.2f} s: stopped deliberately inside the "
+              f"pass. Segments past that point are expected to be blank.")
+        if covered < args.until - 0.05:
+            print(f"  WARNING: only reached {covered:.2f} s, short even of "
+                  f"--until; the run ended early or the gait never started")
+    elif covered < duration:
+        print(f"  WARNING: recording ended {duration-covered:.2f} s short of a "
+              f"full pass; late segments are missing or partial")
+
+    print()
+    print(f"{'segment':<12} {'t range':>14} {'flight':>8} {'design':>8} "
+          f"{'v pose':>8} {'v twist':>8} {'v des':>7} "
+          f"{'all-down':>9} {'theta max':>10} {'|beta| max':>11} {'n':>6}")
+    for s in segs:
+        m = (ct >= s["t_start"]) & (ct <= s["t_end"])
+        mm = (mt >= s["t_start"]) & (mt <= s["t_end"])
+        n_c = int(m.sum())
+        vp, vt = segment_speed(ot, ov, s["t_start"], s["t_end"])
+        vps = f"{vp:8.3f}" if np.isfinite(vp) else f"{'--':>8}"
+        vts = f"{vt:8.3f}" if np.isfinite(vt) else f"{'--':>8}"
+        vds = (f"{s['design_v']:7.3f}" if s.get("design_v") is not None
+               else f"{'--':>7}")
+        if n_c < 20:
+            print(f"{s['name']:<12} {s['t_start']:6.2f}..{s['t_end']:<6.2f} "
+                  f"{'--':>8} {100*(1-s['duty']):7.1f}% "
+                  f"{vps} {vts} {vds} {'--':>9} "
+                  f"{'--':>10} {'--':>11} {n_c:6d}")
+            continue
+        seg = cv[m]
+        air = 100.0 * float((~seg.any(axis=1)).sum()) / n_c
+        alld = 100.0 * float(seg.all(axis=1).sum()) / n_c
+        th = f"{mv[mm][:, :, 0].max():10.2f}" if mm.sum() else f"{'--':>10}"
+        be = f"{np.abs(mv[mm][:, :, 1]).max():11.2f}" if mm.sum() else f"{'--':>11}"
+        print(f"{s['name']:<12} {s['t_start']:6.2f}..{s['t_end']:<6.2f} "
+              f"{air:7.1f}% {100*(1-s['duty']):7.1f}% "
+              f"{vps} {vts} {vds} {alld:8.1f}% "
+              f"{th} {be} {n_c:6d}")
+
+    print()
+    print("flight is the fraction of samples with no leg in contact; design is")
+    print("1 - duty from the template. A working ramp holds flight near design")
+    print("on every rung, not just the hop.")
+    print()
+    print("v pose is planar displacement over elapsed sim time -- the headline")
+    print("speed number. v twist is the driver's body-frame forward velocity;")
+    print("it should agree with v pose while the robot runs straight. Until")
+    print("these columns existed, flight fraction was only a proxy and whether")
+    print("the top rung actually reached 2.035 m/s was unanswerable.")
+
+    # Per stride. A rung that starts poor and climbs is an unconverged
+    # transient (the rung is too short); a rung that is flat and poor is a
+    # broken rung. The segment average cannot tell those apart.
+    print()
+    print("per stride (flight %, theta max in deg, speed in m/s)")
+    strides = stride_boundaries(args.template)
+    row = []
+    for k, (t0, t1, name) in enumerate(strides):
+        m = (ct >= t0) & (ct <= t1)
+        mm = (mt >= t0) & (mt <= t1)
+        n_c = int(m.sum())
+        vp, _ = segment_speed(ot, ov, t0, t1)
+        vps = f"{vp:6.3f}" if np.isfinite(vp) else f"{'--':>6}"
+        if n_c < 10:
+            row.append(f"{k:>3} {name:<9}    --      --  {vps}")
+            continue
+        seg = cv[m]
+        air = 100.0 * float((~seg.any(axis=1)).sum()) / n_c
+        th = mv[mm][:, :, 0].max() if mm.sum() else float("nan")
+        row.append(f"{k:>3} {name:<9} {air:5.1f}%  {th:6.2f}  {vps}")
+    for line in row:
+        print("  " + line)
+
+    if args.dump:
+        qt = np.array([t for t, _ in n.torque]) - anchor if n.torque \
+            else np.empty(0)
+        qv = np.array([v for _, v in n.torque]) if n.torque \
+            else np.empty((0, 4, 3))
+        np.savez_compressed(args.dump, contact_t=ct, contact=cv,
+                            motor_t=mt, motor_deg=mv, odom_t=ot, odom=ov,
+                            imu_t=it, imu_quat=iv,
+                            torque_t=qt, torque_nm=qv,
+                            anchor=anchor, template=args.template)
+        if len(qv):
+            print(f"peak |torque| over the run: "
+                  f"r {np.abs(qv[:, :, 0]).max():5.1f}  "
+                  f"l {np.abs(qv[:, :, 1]).max():5.1f}  "
+                  f"h {np.abs(qv[:, :, 2]).max():5.1f} N.m  "
+                  f"(limit 35)")
+        print(f"\nraw samples written to {args.dump}")
+
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

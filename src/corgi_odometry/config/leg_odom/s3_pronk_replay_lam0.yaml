@@ -1,0 +1,42 @@
+# Stage 3 free-ride replay (impl log s87/s88): the first LEGGED gait record
+# through the offline estimator -- closes Stage 1.5's leg-mode linkage-FK
+# loose end. Derived from tuned_offline_example.yaml (the leg-mode parent,
+# tuned on walk_2m_01); only the offline block differs. No kinematics block
+# on purpose: leg-mode defaults, exactly what the pronk runs in.
+#
+# Record: menger_acker campaign lam0 run5 (v070 pronk, zero camber,
+# k_yaw/d_yaw zeroed), record_camber_imu.py --until 22, trigger-anchored.
+
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27
+
+observer:
+  cutoff_freq:         15.0
+  encoder_cutoff_freq: 30.0
+
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+simulate_imu_noise: true
+use_dynamic_dt:     true
+use_esekf_state:    true
+quiet:              true
+
+offline:
+  csv_filename:   s3_pronk_lam0_r5
+  start_index:    0
+  max_processed:  40000
+  rmse_skip:      0
+  enable_logging: false
+  log_details:    false
+  imu_noise_seed: 42
+
+gt_velocity_lpf_cutoff: 10.0

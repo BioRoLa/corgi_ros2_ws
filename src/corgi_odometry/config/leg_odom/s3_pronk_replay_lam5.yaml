@@ -1,0 +1,41 @@
+# Stage 3 free-ride replay, CAMBERED leg-mode record: menger_acker lam5_pos
+# run5 (Ackermann pair held: pairs at +4.4/-5.0 deg gamma while pronking).
+# Same as s3_pronk_replay_lam0.yaml except the record and camber_enabled --
+# the leg-mode FK must consume the nonzero gamma states.
+
+esekf:
+  sigma_a:       [5.0, 3.0, 2.0]
+  sigma_w:       [0.001, 0.01, 0.001]
+  sigma_ba:      [1.0e-5, 1.0e-4, 5.0e-6]
+  sigma_bw:      [1.0e-8, 1.0e-8, 1.0e-8]
+  sigma_leg_vec: [0.02, 0.10, 0.8]
+  mahalanobis_threshold: 16.27
+
+observer:
+  cutoff_freq:         15.0
+  encoder_cutoff_freq: 30.0
+
+contact:
+  rm_threshold_high:   25.0
+  rm_threshold_low:    15.0
+  beta_threshold_high: 10.0
+  beta_threshold_low:   1.0
+
+simulate_imu_noise: true
+use_dynamic_dt:     true
+use_esekf_state:    true
+quiet:              true
+
+offline:
+  csv_filename:   s3_pronk_lam5pos_r5
+  start_index:    0
+  max_processed:  40000
+  rmse_skip:      0
+  enable_logging: false
+  log_details:    false
+  imu_noise_seed: 42
+
+gt_velocity_lpf_cutoff: 10.0
+
+kinematics:
+  camber_enabled: true
