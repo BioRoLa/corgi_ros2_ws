@@ -115,6 +115,11 @@ class CorgiControlPanel(QWidget):
         # None = not yet known (the panel does not ssh at startup just to
         # find out); True/False only ever set from what the sbRIO reported.
         self._fpga_running = None
+        # Power badges: accumulate at 1 kHz, paint the mean at 5 Hz. Defined
+        # here, before _connect_ros_signals, so a message arriving early
+        # cannot hit an attribute that does not exist yet.
+        self._power_accum = {'n': 0, 'pb1_v': 0.0, 'pb1_i': 0.0,
+                             'pb2_v': 0.0, 'pb2_i': 0.0}
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
@@ -144,6 +149,10 @@ class CorgiControlPanel(QWidget):
 
         # Ask the sbRIO what is actually running, rather than assuming the
         # driver is down because this panel has not started one.
+        self._power_paint_timer = QTimer(self)
+        self._power_paint_timer.timeout.connect(self._repaint_power_badges)
+        self._power_paint_timer.start(200)
+
         self._fpga_busy = False
         self.fpga_status_ready.connect(self._on_fpga_status)
         if not self.use_sim_time:
@@ -1585,30 +1594,24 @@ class CorgiControlPanel(QWidget):
     # ========================================================================
     
     def _handle_power_state_update(self, state):
-        """Handle power state update from ROS"""
+        """Accumulate power state. The badges are painted on a timer.
+
+        This arrives at the bridge's 1 kHz. Repainting four labels per board
+        per message churns the digits far faster than anyone can read them,
+        and makes Qt re-lay-out the row a thousand times a second to serve
+        an eye that manages about five. Sum here; average and paint in
+        _repaint_power_badges().
+        """
         self.power_state = state
         
-        pb1_voltage = self._get_float_field(state, 'pb1_v_0')
-        pb1_current = self._sum_powerboard_current(state, 'pb1')
-        pb2_voltage = self._get_float_field(state, 'pb2_v_0')
-        pb2_current = self._sum_powerboard_current(state, 'pb2')
+        a = self._power_accum
+        a['n'] += 1
+        a['pb1_v'] += self._get_float_field(state, 'pb1_v_0')
+        a['pb1_i'] += self._sum_powerboard_current(state, 'pb1')
+        a['pb2_v'] += self._get_float_field(state, 'pb2_v_0')
+        a['pb2_i'] += self._sum_powerboard_current(state, 'pb2')
 
-        self._update_power_badges(
-            pb1_voltage,
-            pb1_current,
-            self.lbl_pb1_voltage,
-            self.lbl_pb1_soc,
-            self.lbl_pb1_current,
-            self.lbl_pb1_power,
-        )
-        self._update_power_badges(
-            pb2_voltage,
-            pb2_current,
-            self.lbl_pb2_voltage,
-            self.lbl_pb2_soc,
-            self.lbl_pb2_current,
-            self.lbl_pb2_power,
-        )
+        # painted by _repaint_power_badges on a 5 Hz timer
         
         self._update_button_states()
     
@@ -1782,9 +1785,23 @@ class CorgiControlPanel(QWidget):
         power = voltage * current
 
         voltage_label.setText(f"{voltage:.1f} V")
-        soc_label.setText(f"{soc:.0f} %")
+        # NOT a state of charge -- see _calculate_soc. Named on the badge so
+        # it cannot be read as "the battery is 70% full".
+        soc_label.setText(f"{soc:.0f}% Vspan")
         current_label.setText(f"{current:.2f} A")
         power_label.setText(f"{power:.1f} W")
+
+        soc_label.setToolTip(
+            "NOT a battery state of charge.\n"
+            "Bus voltage on a fixed 42.0-50.4 V scale:  (V - 42.0) / 8.4 x 100\n"
+            "Sessions run on the BENCH SUPPLY at 48 V with the battery "
+            "installed but DISCONNECTED, so this reads ~70% because 47.9 V is "
+            "70% of the way up that window -- not because anything is 70% "
+            "charged.\n"
+            "Even on the battery a linear voltage-to-SOC map is poor: the "
+            "Li-ion curve is flat through the middle and sags under load.\n"
+            "Useful as a normalised voltage readout; useless as a fuel gauge.")
+        voltage_label.setToolTip('Bus voltage (channel v_0), 200 ms mean.')
 
         note = ('Sum of i_1..i_7. Channel 0 is excluded: it sits at a near '
                 'constant ~13.5 A, does not move with the gait, and '
@@ -1793,8 +1810,38 @@ class CorgiControlPanel(QWidget):
         current_label.setToolTip(note)
         power_label.setToolTip(note)
     
+    def _repaint_power_badges(self):
+        """Paint the 200 ms mean, at 5 Hz. Readable, and steadier than
+        whichever single sample happened to land on the repaint."""
+        a = self._power_accum
+        if not a['n']:
+            return
+        n = float(a['n'])
+        pb1_v, pb1_i = a['pb1_v'] / n, a['pb1_i'] / n
+        pb2_v, pb2_i = a['pb2_v'] / n, a['pb2_i'] / n
+        for k in a:
+            a[k] = 0
+
+        self._update_power_badges(
+            pb1_v, pb1_i,
+            self.lbl_pb1_voltage, self.lbl_pb1_soc,
+            self.lbl_pb1_current, self.lbl_pb1_power,
+        )
+        self._update_power_badges(
+            pb2_v, pb2_i,
+            self.lbl_pb2_voltage, self.lbl_pb2_soc,
+            self.lbl_pb2_current, self.lbl_pb2_power,
+        )
+
     def _calculate_soc(self, v_total: float) -> float:
-        """Calculate state of charge from voltage"""
+        """Bus voltage as a fraction of a fixed 42.0-50.4 V window.
+
+        Called SOC historically, and it is not one: a straight linear
+        rescale of voltage, with no current, no coulomb counting and no cell
+        model. On the bench supply it is a constant restated as a
+        percentage. Kept because a normalised voltage is worth a glance, but
+        labelled "Vspan" on the badge so nobody reads it as a fuel gauge.
+        """
         V_MIN = 42.0  # 3.5V * 12
         V_MAX = 50.4  # 4.2V * 12
         
