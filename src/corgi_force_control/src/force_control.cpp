@@ -1,3 +1,7 @@
+#include <sched.h>
+#include <cerrno>
+#include <cstring>
+#include <cstdlib>
 #include "corgi_force_control/force_control.hpp"
 
 ForceControlNode::ForceControlNode()
@@ -473,9 +477,41 @@ void ForceControlNode::run() {
 }
 
 
+
+// S313: real-time scheduling for the 1 kHz loop. Two of three hardware
+// air runs on 2026-08-31 published motor commands whose VALUES changed at
+// ~15 Hz while every timestamp still said 1 kHz -- this loop was
+// publishing on schedule but consuming STALE imp_cmd, i.e. spin_some was
+// starved of CPU. The robot is then step-commanded in ~50x jumps (the
+// observed "spazzing"). SCHED_FIFO makes the loop immune to that load.
+// Needs CAP_SYS_NICE or root; without it we warn and continue at normal
+// priority rather than refusing to start. Off with CORGI_RT_PRIORITY=0.
+static void corgi_try_realtime(const rclcpp::Logger& log) {
+    const char* env = std::getenv("CORGI_RT_PRIORITY");
+    int prio = env ? std::atoi(env) : 80;
+    if (prio <= 0) {
+        RCLCPP_WARN(log, "REALTIME: disabled (CORGI_RT_PRIORITY=%d)", prio);
+        return;
+    }
+    struct sched_param sp;
+    sp.sched_priority = prio;
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) == 0) {
+        RCLCPP_WARN(log, "REALTIME: SCHED_FIFO priority %d ACQUIRED -- the "
+                         "1 kHz loop is protected from desktop/encoder load",
+                    prio);
+    } else {
+        RCLCPP_WARN(log, "REALTIME: could NOT set SCHED_FIFO %d (%s). Running "
+                         "at normal priority: commands may degrade to ~15 Hz "
+                         "under CPU load (S313). Fix: sudo setcap "
+                         "cap_sys_nice+ep on the binary, or 'chrt -f %d'.",
+                    prio, std::strerror(errno), prio);
+    }
+}
+
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<ForceControlNode>();
+    corgi_try_realtime(node->get_logger());
     node->run();
     rclcpp::shutdown();
     return 0;

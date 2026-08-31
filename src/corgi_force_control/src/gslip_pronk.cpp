@@ -39,6 +39,10 @@
 #include <Eigen/Dense>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include <sched.h>
+#include <cerrno>
+#include <cstring>
+#include <cstdlib>
 #include "rclcpp/rclcpp.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
@@ -3659,9 +3663,52 @@ void GslipPronkNode::run() {
     }
 }
 
+
+// ---------------------------------------------------------------------
+// S313: real-time scheduling for the 1 kHz control loops.
+//
+// On 2026-08-31 two of three hardware air runs published motor commands
+// whose VALUES changed at ~15 Hz while every timestamp still said 1 kHz:
+// force_control was publishing on schedule but consuming stale imp_cmd,
+// i.e. its single-threaded spin_some loop was being starved of CPU
+// (desktop/remote-desktop encoding is the leading suspect). The robot is
+// then step-commanded in ~50x jumps -- the observed "spazzing".
+//
+// SCHED_FIFO makes these loops immune to that class of load. It needs
+// privilege (CAP_SYS_NICE or root); WITHOUT it we warn and continue at
+// normal priority rather than refusing to start -- a controller that
+// will not launch is worse than one that is merely not real-time.
+//
+// Off with CORGI_RT_PRIORITY=0. Grant the privilege with:
+//   sudo setcap cap_sys_nice+ep <binary>      (per binary, survives runs)
+//   or launch under: chrt -f 80 <command>
+static void corgi_try_realtime(const rclcpp::Logger& log) {
+    const char* env = std::getenv("CORGI_RT_PRIORITY");
+    int prio = env ? std::atoi(env) : 80;
+    if (prio <= 0) {
+        RCLCPP_WARN(log, "REALTIME: disabled (CORGI_RT_PRIORITY=%d)", prio);
+        return;
+    }
+    struct sched_param sp;
+    sp.sched_priority = prio;
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) == 0) {
+        RCLCPP_WARN(log, "REALTIME: SCHED_FIFO priority %d ACQUIRED -- the "
+                         "1 kHz loop is protected from desktop/encoder load",
+                    prio);
+    } else {
+        RCLCPP_WARN(log, "REALTIME: could NOT set SCHED_FIFO %d (%s). Running "
+                         "at normal priority: the 1 kHz loop is vulnerable to "
+                         "CPU load and commands may degrade to ~15 Hz (S313). "
+                         "Fix: sudo setcap cap_sys_nice+ep on the binary, or "
+                         "launch under 'chrt -f %d'.",
+                    prio, std::strerror(errno), prio);
+    }
+}
+
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<GslipPronkNode>();
+    corgi_try_realtime(node->get_logger());
     node->run();
     rclcpp::shutdown();
     return 0;
