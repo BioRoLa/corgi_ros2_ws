@@ -1112,12 +1112,24 @@ class CorgiControlPanel(QWidget):
                          capture_output=True, text=True, timeout=5)
         except Exception:
             return []
-        mine = {self.process_manager.get_pid('ros_bridge'), os.getpid()}
-        pids = []
-        for tok in out.stdout.split():
-            if tok.isdigit() and int(tok) not in mine:
-                pids.append(tok)
-        return pids
+
+        # `ros2 run corgi_ros_bridge corgi_ros_bridge` is a WRAPPER: the
+        # actual node is its child, with a different pid. ProcessManager
+        # tracks the wrapper, so excluding only that pid leaves our own
+        # bridge looking like someone else's. Exclude the children too.
+        mine = {os.getpid()}
+        tracked = self.process_manager.get_pid('ros_bridge')
+        if tracked:
+            mine.add(tracked)
+            try:
+                kids = sp.run(['pgrep', '-P', str(tracked)],
+                              capture_output=True, text=True, timeout=5)
+                mine.update(int(k) for k in kids.stdout.split() if k.isdigit())
+            except Exception:
+                pass
+
+        return [tok for tok in out.stdout.split()
+                if tok.isdigit() and int(tok) not in mine]
 
     def _launch_fpga(self, allow_prompt: bool = True):
         """Open the driver's UI in a terminal window, then verify over ssh.
@@ -1190,23 +1202,25 @@ class CorgiControlPanel(QWidget):
                   'holds the reason on screen if it exits',
                   LOGLEVEL.INFO, 'fpga_driver')
 
-        # Launching a window is not starting a driver. Ask the sbRIO.
-        self.btn_fpga_driver.setText('Verifying FPGA driver…')
-        for attempt in range(8):
-            QApplication.processEvents()
-            st, st_lines = sbrio.fpga_driver_status()
-            if st == 'ALREADY_RUNNING':
-                return 'STARTED', ['confirmed running on the sbRIO'] + st_lines
-            if st in ('NO_KEY', 'NO_SSH', 'UNREACHABLE'):
-                # The terminal window does not need a key; this check does.
-                return 'UNVERIFIED', [
-                    'the terminal window is open and may well be running the '
-                    'driver, but this panel cannot confirm it (%s).' % st,
-                    'Look at the window. To let the panel check and stop it, '
-                    'install the ssh key — see corgi_ui/core/sbrio.py.'] + st_lines
-        return 'FAILED', [
-            'a terminal opened but no driver was running on the sbRIO 8 '
-            'checks later — read that window, it holds the reason'] + st_lines
+        # Launching a window is not starting a driver, but verifying it
+        # here was worse than not verifying: eight back-to-back ssh checks
+        # take about two seconds, and the window needs longer than that just
+        # to log in and start grpccore. It reported FAILED on a driver that
+        # came up fine 8 s later.
+        #
+        # Hand it to the async poll instead. These fire on the GUI thread's
+        # timer, each spawning the same worker the periodic poll uses, so
+        # nothing blocks and the button updates itself the moment the driver
+        # appears.
+        for delay_ms in (3000, 6000, 10000, 15000, 22000, 30000):
+            QTimer.singleShot(delay_ms, self._poll_fpga_status)
+
+        return 'LAUNCHED_TERMINAL', [
+            'the button will switch to "Stop FPGA Driver" on its own once the '
+            'sbRIO reports the driver up (checked at 3, 6, 10, 15, 22 and '
+            '30 s).',
+            'If it does not, read that terminal window — it holds the '
+            'reason, and stays open on exit.']
 
     def _start_fpga_driver(self, manual: bool) -> bool:
         """Bring the driver up over ssh and report what happened.
@@ -1228,7 +1242,8 @@ class CorgiControlPanel(QWidget):
             self._fpga_busy = False
             self.btn_fpga_driver.setEnabled(True)
 
-        ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED')
+        ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED',
+                       'LAUNCHED_TERMINAL')
         # UNVERIFIED_SKIPPED is not a failure of the driver, just of the
         # check -- log it as a warning rather than an error.
         if token == 'UNVERIFIED_SKIPPED':
@@ -1251,6 +1266,8 @@ class CorgiControlPanel(QWidget):
             'NO_SSH':          'no ssh client on this machine',
             'UNVERIFIED':      'FPGA driver launched in a terminal — NOT '
                                'confirmed by this panel',
+            'LAUNCHED_TERMINAL': 'FPGA driver launching in a terminal window '
+                                 'on %s' % sbrio.SBRIO_HOST,
             'UNVERIFIED_SKIPPED': 'FPGA driver NOT started — could not check '
                                   'whether one is already running',
         }.get(token, 'FPGA driver: unrecognised result %r' % token)
@@ -1262,7 +1279,7 @@ class CorgiControlPanel(QWidget):
         if not ok and not manual:
             self._log('  starting the bridge anyway — start the driver by hand '
                       'if it is really down', LOGLEVEL.WARN, 'fpga_driver')
-        if ok:
+        if ok and token != 'LAUNCHED_TERMINAL':
             self._fpga_running = True
         self._refresh_fpga_button()
         return ok
