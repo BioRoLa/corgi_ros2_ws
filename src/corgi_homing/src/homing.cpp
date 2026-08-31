@@ -49,7 +49,9 @@ int main(int argc, char **argv) {
     // zero comes from the FSM's INIT/SET_ZERO. The old hard-coded 17 deg sat
     // 0.1 deg off the 16.9 deg fold stop, so the legs parked against their
     // mechanical limit and the PD drew current fighting it forever.
-    node->declare_parameter<double>("home_theta_deg", 25.0);
+    // 18.4 deg: Alex's choice on the robot, 2026-09-01. Was 17.0, which
+    // sat 0.1 deg off the fold stop; this is 1.5 deg clear of it.
+    node->declare_parameter<double>("home_theta_deg", 18.4);
     node->declare_parameter<double>("min_theta_deg", 17.0);
     const double home_theta_deg = node->get_parameter("home_theta_deg").as_double();
     const double min_theta_deg  = node->get_parameter("min_theta_deg").as_double();
@@ -59,6 +61,23 @@ int main(int argc, char **argv) {
                 "Homing to theta = %.1f deg (fold-stop guard %.1f deg). "
                 "Override: --ros-args -p home_theta_deg:=<deg>",
                 home_theta_deg, min_theta_deg);
+
+    // The five-bar folds solid at ~16.9 deg. A target close to it parks the
+    // legs against their own limit and the PD then fights the stop forever
+    // -- that was the 17.0 deg default's whole problem. Warn rather than
+    // refuse: the margin that matters depends on how well the per-leg zeros
+    // agree, and only the robot knows that.
+    const double margin = home_theta_deg - 16.9;
+    if (margin < 2.0) {
+        RCLCPP_WARN(node->get_logger(),
+                    "Home target is only %.1f deg above the ~16.9 deg fold "
+                    "stop. Legs have been seen ~1.7 deg apart at rest, so a "
+                    "per-leg zero off by more than this margin parks THAT leg "
+                    "on the stop while the others sit clear. Check the "
+                    "per-leg torques in the panel after homing: they should "
+                    "settle near zero, not hold a steady offset.",
+                    margin);
+    }
 
     double theta_err[4];
     double beta_err[4];
