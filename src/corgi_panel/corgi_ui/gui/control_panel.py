@@ -992,6 +992,26 @@ class CorgiControlPanel(QWidget):
         self._refresh_fpga_button()
         return ok
 
+    def _stray_bridges(self):
+        """PIDs of corgi_ros_bridge processes this panel did not start.
+
+        A bridge outliving the panel that spawned it is easy to produce --
+        close the panel uncleanly and ProcessManager never gets to clean up
+        -- and it keeps trying to reach the sbRIO forever.
+        """
+        import subprocess as sp
+        try:
+            out = sp.run(['pgrep', '-f', 'corgi_ros_bridge'],
+                         capture_output=True, text=True, timeout=5)
+        except Exception:
+            return []
+        mine = {self.process_manager.get_pid('ros_bridge'), os.getpid()}
+        pids = []
+        for tok in out.stdout.split():
+            if tok.isdigit() and int(tok) not in mine:
+                pids.append(tok)
+        return pids
+
     def _launch_fpga(self):
         """Open the driver's UI in a terminal window, then verify over ssh.
 
@@ -1004,6 +1024,20 @@ class CorgiControlPanel(QWidget):
         terminal emulator, so a panel running over plain ssh still has the
         old behaviour rather than nothing.
         """
+        # grpccore aborts while SERVICING a registration, not while
+        # starting (its own log: binds, "receive publisher", then abort). Its
+        # only client is the bridge, so a bridge already running when the
+        # driver comes up is the first thing to rule out.
+        strays = self._stray_bridges()
+        if strays:
+            self._log('WARNING: corgi_ros_bridge is ALREADY RUNNING (pid %s) '
+                      'and this panel did not start it. It will connect to '
+                      'grpccore the moment the driver comes up, and grpccore '
+                      'has been aborting while servicing exactly that. Stop it '
+                      'first:  kill %s'
+                      % (', '.join(strays), ' '.join(strays)),
+                      LOGLEVEL.ERROR, 'fpga_driver')
+
         token, lines = sbrio.launch_in_terminal()
 
         if token != 'LAUNCHED_TERMINAL':
