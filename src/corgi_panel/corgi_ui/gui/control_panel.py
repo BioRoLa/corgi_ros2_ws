@@ -34,7 +34,6 @@ try:
 except ImportError:
     GPIO_defined = False
 
-
 class CorgiControlPanel(QWidget):
     """
     Main Control Panel for Corgi Robot
@@ -42,7 +41,7 @@ class CorgiControlPanel(QWidget):
     Features:
     - ROS Bridge control
     - Robot FSM management
-    - Process management (IMU, CSV control, set_zero)
+    - Process management (IMU, CSV control, homing)
     - Data recording trigger
     - Real-time monitoring (power, motor states)
     - Logging system with file output
@@ -190,20 +189,65 @@ class CorgiControlPanel(QWidget):
         # Power summary badges
         power_box = QHBoxLayout()
         power_box.setSpacing(8)
+
+        pb1_container = QVBoxLayout()
+        pb1_container.setSpacing(3)
+        pb1_title = QLabel("PB1")
+        pb1_title.setObjectName("PowerBoardTitle")
+        pb1_title.setAlignment(Qt.AlignCenter)
+        pb1_frame = QFrame()
+        pb1_frame.setObjectName("PowerBoardFrame")
+        pb1_frame_layout = QHBoxLayout()
+        pb1_frame_layout.setSpacing(10)
+        pb1_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        pb2_container = QVBoxLayout()
+        pb2_container.setSpacing(3)
+        pb2_title = QLabel("PB2")
+        pb2_title.setObjectName("PowerBoardTitle")
+        pb2_title.setAlignment(Qt.AlignCenter)
+        pb2_frame = QFrame()
+        pb2_frame.setObjectName("PowerBoardFrame")
+        pb2_frame_layout = QHBoxLayout()
+        pb2_frame_layout.setSpacing(10)
+        pb2_frame_layout.setContentsMargins(8, 8, 8, 8)
         
-        self.lbl_voltage = QLabel('--.- V')
-        self.lbl_voltage.setObjectName('PowerBadge')
-        self.lbl_soc = QLabel('-- %')
-        self.lbl_soc.setObjectName('PowerBadge')
-        self.lbl_current = QLabel('-.-- A')
-        self.lbl_current.setObjectName('PowerBadge')
-        self.lbl_power = QLabel('--.- W')
-        self.lbl_power.setObjectName('PowerBadge')
+        self.lbl_pb1_voltage = QLabel('--.- V')
+        self.lbl_pb1_voltage.setObjectName('PowerBadge')
+        self.lbl_pb1_soc = QLabel('-- %')
+        self.lbl_pb1_soc.setObjectName('PowerBadge')
+        self.lbl_pb1_current = QLabel('-.-- A')
+        self.lbl_pb1_current.setObjectName('PowerBadge')
+        self.lbl_pb1_power = QLabel('--.- W')
+        self.lbl_pb1_power.setObjectName('PowerBadge')
+
+        self.lbl_pb2_voltage = QLabel('--.- V')
+        self.lbl_pb2_voltage.setObjectName('PowerBadge')
+        self.lbl_pb2_soc = QLabel('-- %')
+        self.lbl_pb2_soc.setObjectName('PowerBadge')
+        self.lbl_pb2_current = QLabel('-.-- A')
+        self.lbl_pb2_current.setObjectName('PowerBadge')
+        self.lbl_pb2_power = QLabel('--.- W')
+        self.lbl_pb2_power.setObjectName('PowerBadge')
         
-        power_box.addWidget(self.lbl_voltage)
-        power_box.addWidget(self.lbl_soc)
-        power_box.addWidget(self.lbl_current)
-        power_box.addWidget(self.lbl_power)
+        pb1_frame_layout.addWidget(self.lbl_pb1_voltage)
+        pb1_frame_layout.addWidget(self.lbl_pb1_soc)
+        pb1_frame_layout.addWidget(self.lbl_pb1_current)
+        pb1_frame_layout.addWidget(self.lbl_pb1_power)
+        pb1_frame.setLayout(pb1_frame_layout)
+        pb1_container.addWidget(pb1_title)
+        pb1_container.addWidget(pb1_frame)
+
+        pb2_frame_layout.addWidget(self.lbl_pb2_voltage)
+        pb2_frame_layout.addWidget(self.lbl_pb2_soc)
+        pb2_frame_layout.addWidget(self.lbl_pb2_current)
+        pb2_frame_layout.addWidget(self.lbl_pb2_power)
+        pb2_frame.setLayout(pb2_frame_layout)
+        pb2_container.addWidget(pb2_title)
+        pb2_container.addWidget(pb2_frame)
+
+        power_box.addLayout(pb1_container)
+        power_box.addLayout(pb2_container)
         top_bar.addLayout(power_box)
         
         # E-Stop Button
@@ -305,11 +349,11 @@ class CorgiControlPanel(QWidget):
         grp_fsm.setLayout(grp_fsm_layout)
         sidebar.addWidget(grp_fsm)
         
-        # Set Zero button
-        self.btn_set_zero = QPushButton('Set Zero')
-        self.btn_set_zero.clicked.connect(self._on_set_zero_clicked)
-        self.btn_set_zero.setEnabled(False)
-        sidebar.addWidget(self.btn_set_zero)
+        # Homing button
+        self.btn_home = QPushButton('Homing')
+        self.btn_home.clicked.connect(self._on_home_clicked)
+        self.btn_home.setEnabled(False)
+        sidebar.addWidget(self.btn_home)
         
         sidebar.addStretch(1)
         return sidebar
@@ -383,23 +427,24 @@ class CorgiControlPanel(QWidget):
         grid_motors = QGridLayout()
         self.motor_labels = {}
 
-        # Define legs: (name, row, col, motors)
+        # Define legs: (name, row, col, module state fields)
         legs = [
-            ('LF', 0, 0, ['M1', 'M2']),
-            ('RF', 0, 1, ['M3', 'M4']),
-            ('LH', 1, 0, ['M5', 'M6']),
-            ('RH', 1, 1, ['M7', 'M8'])
+            ('LF', 0, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('RF', 0, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('LH', 1, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
+            ('RH', 1, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')])
         ]
 
-        for leg_name, r, c, motors in legs:
+        for leg_name, r, c, fields in legs:
             leg_group = QGroupBox(leg_name)
             leg_layout = QVBoxLayout()
 
-            for motor_key in motors:
-                lbl = QLabel(f"{motor_key}: --")
+            for field_name, display_name in fields:
+                label_key = f"{leg_name}_{field_name}"
+                lbl = QLabel(f"{display_name}: --")
                 lbl.setObjectName("MotorLabel")
                 leg_layout.addWidget(lbl)
-                self.motor_labels[motor_key] = lbl
+                self.motor_labels[label_key] = lbl
 
             leg_group.setLayout(leg_layout)
             grid_motors.addWidget(leg_group, r, c)
@@ -760,23 +805,23 @@ class CorgiControlPanel(QWidget):
             if self.process_manager.stop_process('imu', timeout=3.0):
                 self.log_widget.add_log('IMU Stopped', LOGLEVEL.WARN, 'system')
     
-    def _on_set_zero_clicked(self):
-        """Handle Set Zero button click"""
-        self.btn_set_zero.setEnabled(False)
-        self.btn_set_zero.setText('Setting Zero...')
+    def _on_home_clicked(self):
+        """Handle Home button click"""
+        self.btn_home.setEnabled(False)
+        self.btn_home.setText('Homing...')
         
         success = self.process_manager.start_process(
-            'set_zero',
-            ['ros2', 'run', 'corgi_set_zero', 'set_zero'],
+            'homing',
+            ['ros2', 'run', 'corgi_homing', 'homing'],
             capture_output=False
         )
         
         if success:
-            self.log_widget.add_log('Set Zero Started', LOGLEVEL.INFO, 'system')
+            self.log_widget.add_log('Homing Started', LOGLEVEL.INFO, 'system')
         else:
-            self.log_widget.add_log('Failed to start set_zero', LOGLEVEL.ERROR, 'system')
-            self.btn_set_zero.setEnabled(True)
-            self.btn_set_zero.setText('Set Zero')
+            self.log_widget.add_log('Failed to start homing', LOGLEVEL.ERROR, 'system')
+            self.btn_home.setEnabled(True)
+            self.btn_home.setText('Homing')
     
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
@@ -883,23 +928,27 @@ class CorgiControlPanel(QWidget):
         """Handle power state update from ROS"""
         self.power_state = state
         
-        try:
-            v_total = float(getattr(state, 'v_0', 0.0))
-        except Exception:
-            v_total = 0.0
-        
-        try:
-            i_total = float(getattr(state, 'i_1', 0.0))
-        except Exception:
-            i_total = 0.0
-        
-        soc = self._calculate_soc(v_total)
-        power = v_total * i_total
-        
-        self.lbl_voltage.setText(f"{v_total:.1f} V")
-        self.lbl_soc.setText(f"{soc:.0f} %")
-        self.lbl_current.setText(f"{i_total:.2f} A")
-        self.lbl_power.setText(f"{power:.1f} W")
+        pb1_voltage = self._get_float_field(state, 'pb1_v_0')
+        pb1_current = self._sum_powerboard_current(state, 'pb1')
+        pb2_voltage = self._get_float_field(state, 'pb2_v_0')
+        pb2_current = self._sum_powerboard_current(state, 'pb2')
+
+        self._update_power_badges(
+            pb1_voltage,
+            pb1_current,
+            self.lbl_pb1_voltage,
+            self.lbl_pb1_soc,
+            self.lbl_pb1_current,
+            self.lbl_pb1_power,
+        )
+        self._update_power_badges(
+            pb2_voltage,
+            pb2_current,
+            self.lbl_pb2_voltage,
+            self.lbl_pb2_soc,
+            self.lbl_pb2_current,
+            self.lbl_pb2_power,
+        )
         
         self._update_button_states()
     
@@ -960,39 +1009,30 @@ class CorgiControlPanel(QWidget):
         if not hasattr(state, 'module_a'):
             return
         
-        modules = [state.module_a, state.module_b, state.module_c, state.module_d]
+        modules = [
+            ('LF', state.module_a),
+            ('RF', state.module_b),
+            ('LH', state.module_d),
+            ('RH', state.module_c),
+        ]
+        state_fields = [
+            ('theta', 'θ'),
+            ('beta', 'β'),
+            ('gamma', 'γ'),
+        ]
         
-        for module_idx, module in enumerate(modules):
-            if not hasattr(module, 'motor_mode'):
+        for leg_name, module in modules:
+            if module is None:
                 continue
             
-            for motor_idx in range(2):  # L and R motors
-                motor_num = module_idx * 2 + motor_idx + 1
-                key = f'M{motor_num}'
-                
+            for field_name, display_name in state_fields:
+                key = f"{leg_name}_{field_name}"
                 if key not in self.motor_labels:
                     continue
                 
-                # Get position
-                pos = 0.0
-                if hasattr(module, 'position') and len(module.position) > motor_idx:
-                    pos = np.degrees(module.position[motor_idx])
-                
-                # Get temperature
-                temp = 0
-                if hasattr(module, 'temperature') and len(module.temperature) > motor_idx:
-                    temp = module.temperature[motor_idx]
-                
-                # Update label
-                self.motor_labels[key].setText(f"{key}: {pos:.1f}° | {temp}°C")
-                
-                # Color code by temperature
-                if temp > 60:
-                    self.motor_labels[key].setStyleSheet(
-                        f"color: {COLORS.STATUS_ERROR}; font-weight: bold;"
-                    )
-                else:
-                    self.motor_labels[key].setStyleSheet("color: #aaa;")
+                value = np.degrees(self._get_float_field(module, field_name))
+                self.motor_labels[key].setText(f"{display_name}: {value:.1f}°")
+                self.motor_labels[key].setStyleSheet("color: #aaa;")
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
@@ -1011,14 +1051,14 @@ class CorgiControlPanel(QWidget):
         # Display in log widget
         self.log_widget.add_log(message, LOGLEVEL(level), node_name)
         
-        # Handle special messages - check for set_zero completion
-        if 'set_zero' in node_name.lower():
+        # Handle special messages - check for homing completion
+        if 'homing' in node_name.lower():
             if 'completed' in message.lower() or 'complete' in message.lower():
                 self.log_widget.add_log(
-                    'Set Zero operation completed successfully',
+                    'Homing operation completed successfully',
                     LOGLEVEL.INFO, 'system'
                 )
-                self._on_set_zero_completed()
+                self._on_homing_completed()
         
         # Handle error recovery
         if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
@@ -1034,6 +1074,38 @@ class CorgiControlPanel(QWidget):
     # ========================================================================
     # Helper Methods
     # ========================================================================
+
+    def _get_float_field(self, state, field_name: str) -> float:
+        """Read a numeric field from a ROS message without breaking UI updates."""
+        try:
+            return float(getattr(state, field_name, 0.0))
+        except Exception:
+            return 0.0
+
+    def _sum_powerboard_current(self, state, board_prefix: str) -> float:
+        """Sum i_0 through i_7 for a powerboard."""
+        return sum(
+            self._get_float_field(state, f'{board_prefix}_i_{index}')
+            for index in range(8)
+        )
+
+    def _update_power_badges(
+        self,
+        voltage: float,
+        current: float,
+        voltage_label: QLabel,
+        soc_label: QLabel,
+        current_label: QLabel,
+        power_label: QLabel,
+    ):
+        """Update one powerboard summary row using v_0 and summed current."""
+        soc = self._calculate_soc(voltage)
+        power = voltage * current
+
+        voltage_label.setText(f"{voltage:.1f} V")
+        soc_label.setText(f"{soc:.0f} %")
+        current_label.setText(f"{current:.2f} A")
+        power_label.setText(f"{power:.1f} W")
     
     def _calculate_soc(self, v_total: float) -> float:
         """Calculate state of charge from voltage"""
@@ -1067,7 +1139,7 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        self.btn_set_zero.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
+        self.btn_home.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
         
         # FSM buttons - disable in simulation mode or when bridge is off
         if not bridge_on or self.use_sim_time:
@@ -1100,14 +1172,14 @@ class CorgiControlPanel(QWidget):
                     current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
                 )
     
-    def _on_set_zero_completed(self):
-        """Handle set zero completion"""
-        if self.process_manager.is_running('set_zero'):
-            self.process_manager.stop_process('set_zero', timeout=1.0)
+    def _on_homing_completed(self):
+        """Handle homing completion"""
+        if self.process_manager.is_running('homing'):
+            self.process_manager.stop_process('homing', timeout=1.0)
         
-        self.btn_set_zero.setEnabled(True)
-        self.btn_set_zero.setText('Set Zero')
-        self.log_widget.add_log('Motor zero points set successfully', LOGLEVEL.INFO, 'system')
+        self.btn_home.setEnabled(True)
+        self.btn_home.setText('Homing')
+        self.log_widget.add_log('Motor home position set successfully', LOGLEVEL.INFO, 'system')
     
     def _launch_config_panel(self):
         """Launch configuration panel"""
@@ -1139,11 +1211,11 @@ class CorgiControlPanel(QWidget):
     
     def _timer_update(self):
         """Periodic timer update"""
-        # Check if set_zero process has completed
-        if self.btn_set_zero.text() == 'Setting Zero...':
-            if not self.process_manager.is_running('set_zero'):
+        # Check if homing process has completed
+        if self.btn_home.text() == 'Homing...':
+            if not self.process_manager.is_running('homing'):
                 # Process finished but callback wasn't triggered
-                self._on_set_zero_completed()
+                self._on_homing_completed()
 
         # Detect sim-time clock jump (Webots reset) and restart data recorder
         if self.use_sim_time and self.ros_worker.is_running:

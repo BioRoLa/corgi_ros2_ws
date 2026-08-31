@@ -18,9 +18,9 @@ void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg){
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
 
-    auto node = rclcpp::Node::make_shared("corgi_set_zero");
+    auto node = rclcpp::Node::make_shared("corgi_homing");
     auto motor_cmd_pub = node->create_publisher<corgi_msgs::msg::MotorCmdStamped>("motor/command", 5);
-    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 5, motor_state_cb);
+    auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>("motor/state", 1, motor_state_cb);
     rclcpp::Rate rate(1000);
     rclcpp::spin_some(node);
 
@@ -40,10 +40,11 @@ int main(int argc, char **argv) {
         &motor_state.module_d
     };
 
-    RCLCPP_INFO(node->get_logger(), "Set Zero Starts");
+    RCLCPP_INFO(node->get_logger(), "Homing Starts");
 
     double theta_err[4];
     double beta_err[4];
+    double gamma_err[4];
 
     for (int i=0; i<1000; i++) {
         rclcpp::spin_some(node);
@@ -53,17 +54,23 @@ int main(int argc, char **argv) {
     for (int i=0; i<4; i++) {
         motor_cmd_modules[i]->theta = motor_state_modules[i]->theta;
         motor_cmd_modules[i]->beta = motor_state_modules[i]->beta;
+        motor_cmd_modules[i]->gamma = motor_state_modules[i]->gamma;
         motor_cmd_modules[i]->kp_r = 90;
         motor_cmd_modules[i]->kp_l = 90;
+        motor_cmd_modules[i]->kp_h = 90;
         motor_cmd_modules[i]->ki_r = 0;
         motor_cmd_modules[i]->ki_l = 0;
+        motor_cmd_modules[i]->ki_h = 0;
         motor_cmd_modules[i]->kd_r = 1.75;
         motor_cmd_modules[i]->kd_l = 1.75;
+        motor_cmd_modules[i]->kd_h = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
+        motor_cmd_modules[i]->torque_h = 0;
 
         theta_err[i] = (17/180.0*M_PI-motor_state_modules[i]->theta);
         beta_err[i] = (-motor_state_modules[i]->beta);
+        gamma_err[i] = (-motor_state_modules[i]->gamma);
 
         if (motor_cmd_modules[i]->theta < 17/180.0*M_PI) {
             RCLCPP_WARN(node->get_logger(), "Theta value too small, shutting down");
@@ -88,6 +95,7 @@ int main(int argc, char **argv) {
     for (int i=0; i<5000; i++){
         for (int j=0; j<4; j++){
             motor_cmd_modules[j]->beta += beta_err[j]/5000.0;
+            motor_cmd_modules[j]->gamma += gamma_err[j]/5000.0;
         }
 
         motor_cmd.header.seq = -1;
@@ -98,7 +106,7 @@ int main(int argc, char **argv) {
         rate.sleep();
     }
 
-    RCLCPP_INFO(node->get_logger(), "Set Zero Completed");
+    RCLCPP_INFO(node->get_logger(), "Homing Completed");
     rclcpp::shutdown();
     
     return 0;

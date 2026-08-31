@@ -1,0 +1,53 @@
+# Real robot axis direction config.
+# This file is separate from corgi_sim/corgi_driver_pkg/motor_config.yaml.
+#
+# joint_dir:
+#   theta: theta command/state direction
+#   beta : beta command/state direction
+#   gamma: ABAD command/state direction
+# motor_dir:
+#   R: right motor torque/velocity direction
+#   L: left motor torque/velocity direction
+#   H: ABAD motor torque/velocity direction
+#
+# Use 1.0 to keep the current convention, -1.0 to reverse it.
+
+A:
+  joint_dir:
+    theta: 1.0
+    beta: 1.0
+    gamma: 1.0
+  motor_dir:
+    R: 1.0
+    L: 1.0
+    H: 1.0
+
+B:
+  joint_dir:
+    theta: 1.0
+    beta: -1.0
+    gamma: -1.0
+  motor_dir:
+    R: 1.0
+    L: 1.0
+    H: 1.0
+
+C:
+  joint_dir:
+    theta: 1.0
+    beta: -1.0
+    gamma: 1.0
+  motor_dir:
+    R: 1.0
+    L: 1.0
+    H: 1.0
+
+D:
+  joint_dir:
+    theta: 1.0
+    beta: 1.0
+    gamma: -1.0
+  motor_dir:
+    R: 1.0
+    L: 1.0
+    H: 1.0

@@ -93,9 +93,20 @@ QLabel#MotorLabel {
 QLabel#PowerBadge {
     background-color: #222;
     border: 1px solid #555;
-    border-radius: 4px;
+    border-radius: 0px;
     padding: 4px 8px;
     color: #eee;
+}
+
+QLabel#PowerBoardTitle {
+    color: #eee;
+    font-weight: bold;
+    padding: 0px;
+}
+
+QFrame#PowerBoardFrame {
+    border: 1px solid #555;
+    border-radius: 5px;
 }
 
 /* Input Fields */

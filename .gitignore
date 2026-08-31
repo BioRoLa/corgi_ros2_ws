@@ -30,3 +30,5 @@ output_data/*
 
 # Byte-compiled analysers -- created by importing scripts/diag/*.py
 __pycache__/
+
+**/__pycache__
