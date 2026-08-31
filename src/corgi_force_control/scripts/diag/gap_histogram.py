@@ -95,27 +95,46 @@ def monotonicity(values):
     return abs(values[-1] - values[0]) / total
 
 
-def report(label, times_s, values, bar_ms=BAR_MS):
-    gaps, window, frozen, leading = gaps_from_series(times_s, values, bar_ms)
-    t_first, t_last = window
+def report(label, times_s, values, bar_ms=BAR_MS, score_window=None):
+    """Print one series. score_window restricts what COUNTS as a freeze.
+
+    The window and the series' own extent are deliberately separate names:
+    the first version called both `window`, the argument was overwritten by
+    the return value on the first line, and every gap was silently kept.
+    """
+    gaps, extent, _frozen_all, leading = gaps_from_series(times_s, values,
+                                                          bar_ms)
+    t_first, t_last = extent
     if t_last <= t_first:
         print("  %-16s no usable changes" % label)
         return 0
 
     mono = monotonicity(values)
     if mono < 0.5:
-        print("  %-16s NOT MONOTONE (%.2f) -- not scored"
-              % (label, mono))
+        print("  %-16s NOT MONOTONE (%.2f) -- not scored" % (label, mono))
         print("        Only %.0f%% of this signal's travel is net, so it "
               "returns to where it" % (100 * mono))
         print("        started -- a gait, or a toggling term. Holds are then "
               "the SHAPE of the")
         print("        signal, not freezes: scoring them reported the healthy "
               "air run 3 as")
-        print("        '223 gaps, 61.5%% frozen'. This test is for the "
+        print("        '223 gaps, 61.5% frozen'. This test is for the "
               "monotone standup ramp;")
         print("        for a gait use cmd_rate.py on cmd_beta_a.")
         return 0
+
+    outside = []
+    if score_window is not None:
+        w0, w1 = score_window
+        outside = [(t, ms) for t, ms in gaps if not (w0 <= t <= w1)]
+        gaps = [(t, ms) for t, ms in gaps if w0 <= t <= w1]
+        scored_span = min(t_last, w1) - max(t_first, w0)
+    else:
+        scored_span = t_last - t_first
+
+    frozen = (sum(ms for _, ms in gaps) / 1000.0 / scored_span
+              if scored_span > 0 else 0.0)
+
     print("  %-16s active %6.2f-%6.2f s   gaps>%.0fms: %-4d   frozen "
           "%5.1f%%   worst %6.1f ms"
           % (label, t_first, t_last, bar_ms, len(gaps), 100.0 * frozen,
@@ -127,55 +146,14 @@ def report(label, times_s, values, bar_ms=BAR_MS):
               "frozen fraction)")
     for t, ms in gaps:
         print("        at t=%6.3f s   held %6.1f ms" % (t, ms))
+    if outside:
+        print("        %d gap(s) OUTSIDE the commanded window, NOT counted "
+              "-- the producer" % len(outside))
+        print("        was not publishing then, so a held command is not a "
+              "freeze:")
+        for t, ms in outside:
+            print("          at t=%6.3f s   held %6.1f ms" % (t, ms))
     return len(gaps)
-
-
-def preflight_bag(path):
-    """Say what is wrong with a bag before rosbag2 raises about it.
-
-    Three states worth telling apart, because they need different actions:
-    still recording, recorded but never closed, and simply not a bag.
-    """
-    import glob
-    import os
-    import subprocess
-
-    if not os.path.isdir(path):
-        if os.path.isfile(path) and path.endswith('.db3'):
-            return path, None
-        return path, "not a directory and not a .db3 file: %s" % path
-
-    db3 = sorted(glob.glob(os.path.join(path, '*.db3')))
-    meta = os.path.join(path, 'metadata.yaml')
-
-    if not db3:
-        return path, ("no .db3 inside %s -- nothing was recorded there" % path)
-
-    # Is a recorder still holding it? That is the common case and the
-    # sqlite 'disk I/O error' on a read-only open is its signature.
-    try:
-        out = subprocess.run(['pgrep', '-af', 'bag record'],
-                             capture_output=True, text=True, timeout=5).stdout
-    except Exception:
-        out = ''
-    if os.path.basename(path) in out or path in out:
-        return path, (
-            "a `ros2 bag record` is STILL RUNNING on this bag:\n    %s\n"
-            "Stop it first (Ctrl-C in its terminal, or pkill -f 'bag record'), "
-            "then re-run.\nThe writer holds the sqlite file, and metadata.yaml "
-            "is not written until it stops." % out.strip().splitlines()[0]
-            if out.strip() else "a bag recorder appears to be running")
-
-    if not os.path.exists(meta):
-        return path, (
-            "metadata.yaml is missing from %s, so the recording was never "
-            "closed cleanly.\nEither a recorder is still running, or it was "
-            "killed. Rebuild the index with:\n"
-            "    ros2 bag reindex %s\n"
-            "then re-run. (Falling back to the .db3 directly also works: "
-            "point this script at\n    %s )" % (path, path, db3[0]))
-
-    return path, None
 
 
 def from_bag(path):
@@ -275,9 +253,22 @@ def from_bag(path):
 
     print("  %d messages of interest\n" % sum(len(v[0]) for v in series.values()))
 
+    # The producer's active window. Anything the consumer does outside it
+    # is a controller settling with no input, not a freeze under load.
+    prod = series.get('imp theta A')
+    window = None
+    if prod:
+        pg, pw, _pf, _pl = gaps_from_series(prod[0], prod[1])
+        window = pw
+        print("  COMMANDED WINDOW (from /impedance/command): "
+              "%.2f - %.2f s\n" % pw)
+
     counts = {}
     for label, (ts, vs) in series.items():
-        counts[label] = report(label, ts, vs)
+        w = None if label.startswith('imp') else window
+        counts[label] = report(label, ts, vs, score_window=w)
+
+    handover(series, window)
     verdict(counts)
     return 0
 
@@ -305,6 +296,39 @@ def from_csv(path):
             counts[label] = report(label, ts, vs)
     verdict(counts)
     return 0
+
+
+def handover(series, window):
+    """When did the consumer first respond to the producer?
+
+    The number that matters if the consumer is not tracking: producer first
+    change -> consumer first change. On standup_024548 that gap was 1.74 s
+    of a 1.95 s ramp, so the leg had nothing new commanded for almost the
+    whole extension and then received it all at once.
+    """
+    prod, cons = series.get('imp theta A'), series.get('cmd theta A')
+    if not (prod and cons and window):
+        return
+    cg, cw, _cf, _cl = gaps_from_series(cons[0], cons[1])
+    print("  HANDOVER")
+    print("    producer first change   t = %6.3f s" % window[0])
+    print("    consumer first change   t = %6.3f s" % cw[0])
+    lag = cw[0] - window[0]
+    ramp = window[1] - window[0]
+    print("    consumer lag            %+6.3f s   (%.0f%% of the %.2f s "
+          "commanded window)" % (lag, 100.0 * lag / ramp if ramp > 0 else 0,
+                                 ramp))
+    if lag > 0.25 * ramp:
+        print("    -> the consumer ignored the command for most of the ramp.")
+        print("       That is a HANDOVER problem, not CPU starvation: no")
+        print("       amount of scheduling priority moves this number.")
+        print("       Suspect the QoS match (S318.2: /impedance/command is")
+        print("       VOLATILE, so everything published before the reader")
+        print("       matches is dropped).")
+    elif lag < -0.05:
+        print("    -> the consumer was moving BEFORE the producer commanded")
+        print("       anything: that is force_control's own position_control()")
+        print("       path running on a zero-initialised imp_cmd_ (S318.2).")
 
 
 def verdict(counts):
