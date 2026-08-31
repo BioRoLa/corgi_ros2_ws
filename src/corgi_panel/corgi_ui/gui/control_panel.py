@@ -137,6 +137,11 @@ class CorgiControlPanel(QWidget):
         # Peaks come from the RAW samples, not the painted mean.
         self._peak_i = 0.0
         self._peak_w = 0.0
+        # When each 1 kHz stream last delivered. 0.0 = nothing ever arrived,
+        # which must not be reported as "stale" before the bridge is up.
+        self._last_power_at = 0.0
+        self._last_motor_at = 0.0
+        self._streams_stale = False
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
@@ -429,6 +434,14 @@ class CorgiControlPanel(QWidget):
         peak_container.addLayout(peak_header)
         peak_container.addWidget(peak_frame)
         power_box.addLayout(peak_container)
+
+        # Shown only while a 1 kHz stream has stopped. Placed with the power
+        # row because that is where a frozen number is most believable.
+        self.lbl_stream_stale = QLabel('')
+        self.lbl_stream_stale.setStyleSheet(
+            'color: #ffa726; font-weight: bold; padding-left: 10px;')
+        self.lbl_stream_stale.setVisible(False)
+        power_box.addWidget(self.lbl_stream_stale)
         top_bar.addLayout(power_box)
         
         # E-Stop Button
@@ -1834,6 +1847,7 @@ class CorgiControlPanel(QWidget):
         _repaint_power_badges().
         """
         self.power_state = state
+        self._last_power_at = time.monotonic()
         
         pb1_v = self._get_float_field(state, 'pb1_v_0')
         pb1_i = self._sum_powerboard_current(state, 'pb1')
@@ -1909,6 +1923,7 @@ class CorgiControlPanel(QWidget):
     def _handle_motor_state_update(self, state):
         """Handle motor state update from ROS"""
         self.motor_state = state
+        self._last_motor_at = time.monotonic()
         
         if not hasattr(state, 'module_a'):
             return
@@ -2054,6 +2069,57 @@ class CorgiControlPanel(QWidget):
         current_label.setToolTip(note)
         power_label.setToolTip(note)
     
+    STALE_AFTER_S = 0.75
+
+    def _check_stream_freshness(self):
+        """Dim what is no longer live, and say which stream stopped.
+
+        Runs on the 5 Hz paint timer. A value held on screen after its
+        stream stopped is indistinguishable from a live one that happens to
+        be steady -- which is exactly how a frozen reading gets believed.
+        """
+        now = time.monotonic()
+        stale = []
+        if self._last_power_at and now - self._last_power_at > self.STALE_AFTER_S:
+            stale.append(('power/state', now - self._last_power_at))
+        if self._last_motor_at and now - self._last_motor_at > self.STALE_AFTER_S:
+            stale.append(('motor/state', now - self._last_motor_at))
+
+        if stale:
+            worst = max(age for _, age in stale)
+            self.lbl_stream_stale.setText(
+                '\u26a0  %s STOPPED %.1f s ago \u2014 the values below are '
+                'frozen, not live'
+                % (' and '.join(n for n, _ in stale), worst))
+            self.lbl_stream_stale.setVisible(True)
+        else:
+            self.lbl_stream_stale.setVisible(False)
+
+        power_stale = any(n == 'power/state' for n, _ in stale)
+        dim = "color: #6a6a6a;"
+        for lbl in (self.lbl_pb1_voltage, self.lbl_pb1_current,
+                    self.lbl_pb1_power, self.lbl_pb2_voltage,
+                    self.lbl_pb2_current, self.lbl_pb2_power,
+                    self.lbl_total_current, self.lbl_total_power):
+            lbl.setStyleSheet(dim if power_stale else "")
+
+        if any(n == 'motor/state' for n, _ in stale):
+            for lbl in self.motor_labels.values():
+                lbl.setStyleSheet(dim)
+
+        if bool(stale) != self._streams_stale:
+            self._streams_stale = bool(stale)
+            if self._streams_stale:
+                self._log('%s stopped — panel values are FROZEN until it '
+                          'resumes. Expected during HALL_CALIBRATE: the sbRIO '
+                          'driver runs the sweep in its own loop and is not '
+                          'servicing gRPC meanwhile.'
+                          % ' and '.join(n for n, _ in stale),
+                          LOGLEVEL.WARN, 'system')
+            else:
+                self._log('state streams live again — values are current',
+                          LOGLEVEL.INFO, 'system')
+
     def _reset_power_peaks(self, why: str):
         """Zero the peaks, logging the outgoing value so none is lost."""
         if self._peak_w > 0.0:
@@ -2066,8 +2132,13 @@ class CorgiControlPanel(QWidget):
     def _repaint_power_badges(self):
         """Paint the 200 ms mean, at 5 Hz. Readable, and steadier than
         whichever single sample happened to land on the repaint."""
+        self._check_stream_freshness()
+
         a = self._power_accum
         if not a['n']:
+            # No samples this window. Deliberately does NOT clear the badges:
+            # the last real value is worth keeping on screen, but
+            # _check_stream_freshness has already dimmed it and said so.
             return
         n = float(a['n'])
         pb1_v, pb1_i = a['pb1_v'] / n, a['pb1_i'] / n
