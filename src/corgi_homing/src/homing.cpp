@@ -11,8 +11,11 @@
 std::array<double, 2> eta;
 corgi_msgs::msg::MotorStateStamped motor_state;
 
+bool state_received = false;
+
 void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg){
     motor_state = *msg;
+    state_received = true;
 }
 
 int main(int argc, char **argv) {
@@ -46,7 +49,32 @@ int main(int argc, char **argv) {
     double beta_err[4];
     double gamma_err[4];
 
-    for (int i=0; i<1000; i++) {
+    // Wait for a REAL /motor/state before reading theta.
+    //
+    // This used to be a blind fixed spin of 1000 iterations (~1 s), after
+    // which the code read the zero-initialised global regardless. If DDS
+    // discovery had not delivered the first /motor/state by then, theta read
+    // 0.00, tripped the "< 17 deg" guard below and homing aborted -- and it
+    // returned 0, so the panel reported success. That race is why homing
+    // "needed several presses": a retry found discovery already warm. It gets
+    // worse on a loaded machine, which is exactly when it matters.
+    const int wait_ticks = 5000;   // 1 kHz rate -> 5 s
+    int waited = 0;
+    while (rclcpp::ok() && !state_received && waited < wait_ticks) {
+        rclcpp::spin_some(node);
+        rate.sleep();
+        waited++;
+    }
+    if (!state_received) {
+        RCLCPP_ERROR(node->get_logger(),
+                     "No /motor/state after %d ms -- is the ROS bridge up? "
+                     "Homing ABORTED, nothing was moved.", wait_ticks);
+        rclcpp::shutdown();
+        return 1;
+    }
+    RCLCPP_INFO(node->get_logger(),
+                "motor/state acquired after %d ms; settling", waited);
+    for (int i=0; i<500; i++) {   // let a few more states land so theta is current
         rclcpp::spin_some(node);
         rate.sleep();
     }
@@ -73,9 +101,17 @@ int main(int argc, char **argv) {
         gamma_err[i] = (-motor_state_modules[i]->gamma);
 
         if (motor_cmd_modules[i]->theta < 17/180.0*M_PI) {
-            RCLCPP_WARN(node->get_logger(), "Theta value too small, shutting down");
+            // Name the leg and the value: "too small" alone gave no way to
+            // tell a genuinely low leg from a state that never arrived.
+            // Non-zero exit so the caller can tell this from success -- both
+            // paths used to return 0.
+            RCLCPP_WARN(node->get_logger(),
+                        "Leg %d theta is %.2f deg, below the 17 deg home "
+                        "target -- homing ABORTED, nothing was moved. Raise "
+                        "that leg above 17 deg and retry.",
+                        i, motor_cmd_modules[i]->theta * 180.0 / M_PI);
             rclcpp::shutdown();
-            return 0;
+            return 1;
         }
     }
 

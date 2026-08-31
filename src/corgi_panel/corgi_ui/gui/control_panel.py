@@ -108,6 +108,13 @@ class CorgiControlPanel(QWidget):
         # failed second press did exactly that) silently disabled
         # completion detection for the rest of the session.
         self._homing_active = False
+        # Did the homing node actually report completion? It has abort
+        # paths (theta below the 17 deg target, or no motor/state), and
+        # the panel used to announce 'home position set successfully'
+        # whenever the PROCESS EXITED -- abort included. Believing that
+        # leaves the zero unset while you think it is set, corrupting
+        # every theta/beta reference downstream.
+        self._homing_saw_complete = False
 
         # Auto-start data recorder
         self._start_data_recorder()
@@ -897,6 +904,7 @@ class CorgiControlPanel(QWidget):
             return
 
         self._homing_active = True
+        self._homing_saw_complete = False
         self.btn_home.setEnabled(False)
         self.btn_home.setText('Homing...')
         
@@ -1144,7 +1152,10 @@ class CorgiControlPanel(QWidget):
         
         # Handle special messages - check for homing completion
         if 'homing' in node_name.lower():
+            if 'abort' in message.lower():
+                self._homing_saw_complete = False
             if 'completed' in message.lower() or 'complete' in message.lower():
+                self._homing_saw_complete = True
                 self.log_widget.add_log(
                     'Homing operation completed successfully',
                     LOGLEVEL.INFO, 'system'
@@ -1276,7 +1287,15 @@ class CorgiControlPanel(QWidget):
         
         self.btn_home.setEnabled(True)
         self.btn_home.setText('Homing')
-        self.log_widget.add_log('Motor home position set successfully', LOGLEVEL.INFO, 'system')
+        if self._homing_saw_complete:
+            self.log_widget.add_log('Motor home position set successfully',
+                                    LOGLEVEL.INFO, 'system')
+        else:
+            self.log_widget.add_log(
+                'HOMING DID NOT COMPLETE -- the node exited without reporting '
+                'completion (see its warning above). The zero was NOT set; do '
+                'not run a gait on this. Fix the cause and home again.',
+                LOGLEVEL.ERROR, 'system')
     
     def _launch_config_panel(self):
         """Launch configuration panel"""
