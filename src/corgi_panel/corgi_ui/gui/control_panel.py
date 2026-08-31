@@ -6,6 +6,7 @@ Refactored version with modular architecture (MVC pattern)
 import os
 import sys
 import logging
+import threading
 import yaml
 import numpy as np
 from datetime import datetime
@@ -14,7 +15,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
     QMessageBox
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 
 from corgi_msgs.msg import RobotCmdStamped, TriggerStamped
 
@@ -37,6 +38,10 @@ except ImportError:
     GPIO_defined = False
 
 class CorgiControlPanel(QWidget):
+
+    # Emitted from the status worker thread; Qt delivers it to the GUI
+    # thread, which is the only thread allowed to touch widgets.
+    fpga_status_ready = pyqtSignal(str, object)
 
     # Operator-facing names, taken from the FIRMWARE rather than inferred:
     # fpga_driver/src/robot_fsm.cpp and motor_fsm.cpp (read 2026-09-01).
@@ -136,6 +141,16 @@ class CorgiControlPanel(QWidget):
         
         # Connect ROS signals
         self._connect_ros_signals()
+
+        # Ask the sbRIO what is actually running, rather than assuming the
+        # driver is down because this panel has not started one.
+        self._fpga_busy = False
+        self.fpga_status_ready.connect(self._on_fpga_status)
+        if not self.use_sim_time:
+            self._fpga_poll_timer = QTimer(self)
+            self._fpga_poll_timer.timeout.connect(self._poll_fpga_status)
+            self._fpga_poll_timer.start(30000)
+            QTimer.singleShot(300, self._poll_fpga_status)
 
         # Start ROS worker in simulation mode (no bridge)
         if self.use_sim_time:
@@ -925,6 +940,50 @@ class CorgiControlPanel(QWidget):
     # Event Handlers - sbRIO FPGA driver
     # ========================================================================
 
+    def _poll_fpga_status(self):
+        """Kick off a status check on a worker thread. Never blocks the GUI."""
+        if self.use_sim_time or self._fpga_busy:
+            return
+        self._fpga_busy = True
+
+        def work():
+            try:
+                token, lines = sbrio.fpga_driver_status()
+            except Exception as exc:                        # pragma: no cover
+                token, lines = 'FAILED', ['status check raised: %s' % exc]
+            self.fpga_status_ready.emit(token, lines)
+
+        threading.Thread(target=work, daemon=True,
+                         name='fpga-status').start()
+
+    def _on_fpga_status(self, token, lines):
+        """Apply a status result on the GUI thread."""
+        self._fpga_busy = False
+        was = self._fpga_running
+
+        if token == 'ALREADY_RUNNING':
+            self._fpga_running = True
+        elif token == 'NOT_RUNNING':
+            self._fpga_running = False
+        else:
+            # NO_KEY / UNREACHABLE / TIMEOUT: we do not know, and saying
+            # "not running" would be a guess that invites a duplicate.
+            self._fpga_running = None
+
+        self._refresh_fpga_button()
+
+        if was is not self._fpga_running:
+            if self._fpga_running is True:
+                self._log('FPGA driver is already running on %s'
+                          % sbrio.SBRIO_HOST, LOGLEVEL.INFO, 'fpga_driver')
+            elif self._fpga_running is False and was is True:
+                self._log('FPGA driver is NO LONGER running on %s — the '
+                          'terminal window was closed, or it exited'
+                          % sbrio.SBRIO_HOST, LOGLEVEL.WARN, 'fpga_driver')
+            elif self._fpga_running is None and was is not None:
+                self._log('cannot check the FPGA driver (%s) — its state is '
+                          'now unknown' % token, LOGLEVEL.WARN, 'fpga_driver')
+
     def _refresh_fpga_button(self):
         """Label and tooltip follow _fpga_running, which follows the sbRIO."""
         if self._fpga_running:
@@ -991,6 +1050,7 @@ class CorgiControlPanel(QWidget):
 
     def _stop_fpga_driver(self) -> bool:
         """SIGTERM on the sbRIO, escalating only if it will not go."""
+        self._fpga_busy = True
         self.btn_fpga_driver.setEnabled(False)
         self.btn_fpga_driver.setText('Stopping FPGA driver…')
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -999,6 +1059,7 @@ class CorgiControlPanel(QWidget):
             token, lines = sbrio.stop_fpga_driver()
         finally:
             QApplication.restoreOverrideCursor()
+            self._fpga_busy = False
             self.btn_fpga_driver.setEnabled(True)
 
         ok = token in ('STOPPED', 'STOPPED_HARD', 'NOT_RUNNING')
@@ -1142,6 +1203,7 @@ class CorgiControlPanel(QWidget):
         is useful until it finishes. A worker thread here would buy an
         unresponsive-looking wait instead of an honest one.
         """
+        self._fpga_busy = True
         self.btn_fpga_driver.setEnabled(False)
         self.btn_fpga_driver.setText('Starting FPGA driver…')
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -1150,6 +1212,7 @@ class CorgiControlPanel(QWidget):
             token, lines = self._launch_fpga(allow_prompt=manual)
         finally:
             QApplication.restoreOverrideCursor()
+            self._fpga_busy = False
             self.btn_fpga_driver.setEnabled(True)
 
         ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED')
