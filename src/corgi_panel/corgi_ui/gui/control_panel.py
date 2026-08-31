@@ -23,6 +23,7 @@ from corgi_ui.core.constants import (
     LOGLEVEL_TO_LOGGING_MAP,
     setup_file_logger, log_to_file, close_file_logger
 )
+from corgi_ui.core import sbrio
 from corgi_ui.core.ros_worker import ControlPanelRosWorker
 from corgi_ui.core.process_manager import ProcessManager
 from corgi_ui.gui.widgets.log_widget import LogWidget
@@ -303,6 +304,21 @@ class CorgiControlPanel(QWidget):
         sidebar = QVBoxLayout()
         sidebar.setSpacing(15)
         
+        # sbRIO FPGA driver -- the bottom of the stack, and the one step
+        # that used to be a hand-typed ssh session left open in a terminal.
+        # It sits above the bridge button because that is the order: driver,
+        # then bridge, then everything else.
+        self.btn_fpga_driver = QPushButton('Start FPGA Driver (sbRIO)')
+        self.btn_fpga_driver.clicked.connect(self._on_fpga_driver_clicked)
+        self.btn_fpga_driver.setToolTip(
+            'ssh to %s and run the FPGA driver.\n'
+            'Needs key-based ssh; see corgi_ui/core/sbrio.py for the one-time setup.'
+            % sbrio.target_description())
+        if hasattr(self, 'use_sim_time') and self.use_sim_time:
+            self.btn_fpga_driver.setEnabled(False)
+            self.btn_fpga_driver.setToolTip('No sbRIO in simulation mode')
+        sidebar.addWidget(self.btn_fpga_driver)
+
         # ROS Bridge button
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
         self.btn_ros_bridge.setCheckable(True)
@@ -326,6 +342,12 @@ class CorgiControlPanel(QWidget):
         mode_h_layout.setContentsMargins(5, 5, 5, 5)
         
         lbl_mode_title = QLabel("Current mode:")
+        # The ladder, so the numbers on the buttons mean something:
+        #   1 System On  <->  2 Idle  <->  3 Standby (home & run need this)
+        #   Motor Config hangs off System On / Idle.
+        # Canonical names are kept because they are what the firmware,
+        # the logs and the gRPC enum use -- renaming them here would
+        # only move the confusion.
         lbl_mode_title.setStyleSheet("color: #888; font-size: 12px;")
         
         self.label_robot_mode_value = QLabel("---")
@@ -340,23 +362,23 @@ class CorgiControlPanel(QWidget):
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('Set to System ON')
+        self.btn_systemon = QPushButton('①  System On  (lowest)')
         self.btn_systemon.setObjectName("SystemOnBtn")
         self.btn_systemon.setCheckable(True)
         self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.SYSTEM_ON))
         self.btn_systemon.setEnabled(False)
         
-        self.btn_idle = QPushButton('Set to IDLE')
+        self.btn_idle = QPushButton('②  Idle  (mid)')
         self.btn_idle.setCheckable(True)
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('Set STANDBY')
+        self.btn_standby = QPushButton('③  Standby  (ready — home & run)')
         self.btn_standby.setCheckable(True)
         self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
         self.btn_standby.setEnabled(False)
         
-        self.btn_motorconfig = QPushButton('Set to CONFIG')
+        self.btn_motorconfig = QPushButton('Motor Config  (side branch)')
         self.btn_motorconfig.setObjectName("ConfigBtn")
         self.btn_motorconfig.setCheckable(True)
         self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.MOTORCONFIG))
@@ -370,7 +392,7 @@ class CorgiControlPanel(QWidget):
         sidebar.addWidget(grp_fsm)
         
         # Homing button
-        self.btn_home = QPushButton('Homing')
+        self.btn_home = QPushButton('Set Home')
         self.btn_home.clicked.connect(self._on_home_clicked)
         self.btn_home.setEnabled(False)
         sidebar.addWidget(self.btn_home)
@@ -475,41 +497,123 @@ class CorgiControlPanel(QWidget):
 
         return monitor_layout
 
-    def _load_motor_config(self) -> dict:
-        """Load motor_config.yaml from the corgi_driver_pkg directory.
+    # Direction-table rows. Each row lists the key under BOTH schemas, because
+    # there are two of these files and they do not agree on names:
+    #
+    #   hardware  corgi_ros_bridge/config/real_motor_config.yaml
+    #             joint_dir{theta, beta, gamma}   motor_dir{R, L, H}
+    #   sim       corgi_driver_pkg/motor_config.yaml
+    #             joint_dir{theta, beta, g_joint_beta}  motor_dir{L, R, ABAD}
+    CONFIG_FIELDS = [
+        ('joint_dir', ('theta',),                'θ  joint dir'),
+        ('joint_dir', ('beta',),                 'β  joint dir'),
+        ('joint_dir', ('gamma', 'g_joint_beta'), 'γ / G-joint dir'),
+        ('motor_dir', ('L',),                    'Motor L dir'),
+        ('motor_dir', ('R',),                    'Motor R dir'),
+        ('motor_dir', ('H', 'ABAD'),             'ABAD motor dir'),
+    ]
 
-        Uses importlib to locate the installed (or symlinked) package so the
-        YAML is read directly from source — no rebuild needed.
+    def _load_motor_config(self) -> dict:
+        """Load the direction config that is ACTUALLY IN EFFECT.
+
+        The hardware file is read from the SOURCE tree, because that is the
+        path corgi_ros_bridge defaults to; override with
+        CORGI_REAL_MOTOR_CONFIG if the bridge was launched with a
+        real_motor_config_path parameter pointing elsewhere.
+
+        This used to look only for the simulator's motor_config.yaml inside
+        corgi_driver_pkg, a package that does not exist on the robot — so on
+        hardware every cell rendered '?'. Had it resolved, it would have been
+        worse: the panel would have shown the SIMULATOR's mirror signs while
+        the bridge was applying the real robot's. Load the file matching the
+        current mode first, and remember which one won so the group box can
+        name it.
         """
         import importlib.util
-        # Primary: find via the installed Python package (works with --symlink-install)
-        try:
+        self._config_source = None
+        self._config_source_kind = None
+
+        def _real_source():
+            # What corgi_ros_bridge ACTUALLY reads: its
+            # default_real_motor_config_path() points into the source tree, not
+            # the installed share, so the bridge picks up an edit without a
+            # rebuild. The panel has to read the same file or it can show
+            # yesterday's signs while the robot uses today's.
+            override = os.environ.get('CORGI_REAL_MOTOR_CONFIG')
+            if override:
+                return override, 'CORGI_REAL_MOTOR_CONFIG'
+            return (os.path.join(
+                os.path.expanduser('~'),
+                'corgi_ws/corgi_ros2_ws/src/corgi_ros_bridge/config',
+                'real_motor_config.yaml'), 'bridge source')
+
+        def _real_share():
+            from ament_index_python.packages import get_package_share_directory
+            share = get_package_share_directory('corgi_ros_bridge')
+            return (os.path.join(share, 'config', 'real_motor_config.yaml'),
+                    'installed share — the bridge may be reading a newer source copy')
+
+        def _sim():
             spec = importlib.util.find_spec('corgi_driver_pkg')
             if spec and spec.origin:
-                pkg_dir = os.path.dirname(spec.origin)
-                yaml_path = os.path.join(pkg_dir, 'motor_config.yaml')
-                with open(yaml_path, 'r') as f:
-                    return yaml.safe_load(f)
-        except Exception as e:
-            print(f"Warning: importlib path failed: {e}")
-
-        # Fallback: ament share directory (requires colcon build)
-        try:
+                return (os.path.join(os.path.dirname(spec.origin),
+                                     'motor_config.yaml'), 'simulator')
             from ament_index_python.packages import get_package_share_directory
-            share = get_package_share_directory('corgi_sim')
-            yaml_path = os.path.join(share, 'motor_config.yaml')
-            with open(yaml_path, 'r') as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            print(f"Warning: could not load motor_config.yaml from share: {e}")
+            return (os.path.join(get_package_share_directory('corgi_sim'),
+                                 'motor_config.yaml'), 'simulator')
+
+        order = ([_sim, _real_source, _real_share] if self.use_sim_time
+                 else [_real_source, _real_share, _sim])
+        for getter in order:
+            try:
+                path, kind = getter()
+                with open(path, 'r') as f:
+                    cfg = yaml.safe_load(f) or {}
+                if cfg:
+                    self._config_source = path
+                    self._config_source_kind = kind
+                    return cfg
+            except Exception as e:
+                print(f"Warning: direction config not readable ({e})")
 
         return {}
+
+    @staticmethod
+    def _config_value(cfg, mod_id, section, keys):
+        """First key present under this schema, or None when the row simply
+        does not exist in the file that was loaded (rendered as a dash, which
+        is a different statement from '?')."""
+        sect = (cfg or {}).get(mod_id, {}).get(section, {}) or {}
+        for k in keys:
+            if k in sect:
+                return sect[k]
+        return None
+
+    def _set_config_title(self):
+        """Name the loaded file on the group box. Which file it is matters
+        more than the signs it carries: an unlabelled direction table invites
+        reading the wrong robot's mirror convention."""
+        src = getattr(self, '_config_source', None)
+        kind = getattr(self, '_config_source_kind', None)
+        if src:
+            self._config_grp.setTitle(
+                "Motor Direction Config  —  %s  [%s]"
+                % (os.path.basename(src), kind or '?'))
+            self._config_grp.setToolTip(src)
+        else:
+            self._config_grp.setTitle(
+                "Motor Direction Config  —  NOT LOADED (no yaml found)")
+            self._config_grp.setToolTip(
+                'Looked for the bridge config in the source tree, then the '
+                'installed share, then the simulator package.')
 
     def _create_motor_config_display(self) -> QGroupBox:
         """Create a read-only display of the motor direction config (motor_config.yaml)."""
         cfg = self._load_motor_config()
 
-        grp = QGroupBox("Motor Direction Config  (motor_config.yaml)")
+        self._config_grp = QGroupBox()
+        grp = self._config_grp
+        self._set_config_title()
         outer = QVBoxLayout()
 
         # Reload button
@@ -524,14 +628,7 @@ class CorgiControlPanel(QWidget):
 
         # Map module id → friendly leg label
         MODULE_LABEL = {'A': 'A (FL)', 'B': 'B (FR)', 'C': 'C (RR)', 'D': 'D (RL)'}
-        FIELDS = [
-            ('joint_dir',  'theta',        'θ  joint dir'),
-            ('joint_dir',  'beta',         'β  joint dir'),
-            ('joint_dir',  'g_joint_beta', 'G-joint β dir'),
-            ('motor_dir',  'L',            'Motor L dir'),
-            ('motor_dir',  'R',            'Motor R dir'),
-            ('motor_dir',  'ABAD',         'ABAD dir'),
-        ]
+        FIELDS = self.CONFIG_FIELDS
 
         # Header row
         self._config_grid.addWidget(QLabel(""), 0, 0)
@@ -543,18 +640,18 @@ class CorgiControlPanel(QWidget):
 
         # Data rows
         self._config_value_labels = {}
-        for row, (section, key, label_text) in enumerate(FIELDS, start=1):
+        for row, (section, keys, label_text) in enumerate(FIELDS, start=1):
             row_lbl = QLabel(label_text)
             row_lbl.setStyleSheet("color: #aaa;")
             self._config_grid.addWidget(row_lbl, row, 0)
 
             for col, mod_id in enumerate(('A', 'B', 'C', 'D'), start=1):
-                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                val = self._config_value(cfg, mod_id, section, keys)
                 lbl = QLabel(self._fmt_dir(val))
                 lbl.setAlignment(Qt.AlignCenter)
                 lbl.setStyleSheet(self._dir_style(val))
                 self._config_grid.addWidget(lbl, row, col)
-                self._config_value_labels[(mod_id, section, key)] = lbl
+                self._config_value_labels[(mod_id, section, keys)] = lbl
 
         outer.addLayout(self._config_grid)
         grp.setLayout(outer)
@@ -562,7 +659,10 @@ class CorgiControlPanel(QWidget):
 
     @staticmethod
     def _fmt_dir(val) -> str:
-        """Format a direction value as +1 / -1 / ?"""
+        """+1 / -1; an em dash when the row does not exist in the loaded
+        schema; '?' only when the value is there but unreadable."""
+        if val is None:
+            return '—'
         try:
             v = float(val)
             return '+1' if v > 0 else '-1'
@@ -580,25 +680,24 @@ class CorgiControlPanel(QWidget):
         return f"color: {colour}; font-weight: bold; font-size: 14px;"
 
     def _reload_motor_config_display(self):
-        """Reload motor_config.yaml and refresh every label in the grid."""
+        """Reload the direction config and refresh every label in the grid."""
         cfg = self._load_motor_config()
-        FIELDS = [
-            ('joint_dir',  'theta',        ),
-            ('joint_dir',  'beta',         ),
-            ('joint_dir',  'g_joint_beta', ),
-            ('motor_dir',  'L',            ),
-            ('motor_dir',  'R',            ),
-            ('motor_dir',  'ABAD',         ),
-        ]
+        self._set_config_title()
         for mod_id in ('A', 'B', 'C', 'D'):
-            for section, key in FIELDS:
-                lbl = self._config_value_labels.get((mod_id, section, key))
+            for section, keys, _label in self.CONFIG_FIELDS:
+                lbl = self._config_value_labels.get((mod_id, section, keys))
                 if lbl is None:
                     continue
-                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                val = self._config_value(cfg, mod_id, section, keys)
                 lbl.setText(self._fmt_dir(val))
                 lbl.setStyleSheet(self._dir_style(val))
-        self._log("Motor config reloaded from YAML", LOGLEVEL.INFO, "system")
+        src = getattr(self, '_config_source', None)
+        if src:
+            self._log(f"Direction config reloaded from {src}",
+                      LOGLEVEL.INFO, "system")
+        else:
+            self._log("No direction config found — table shows nothing",
+                      LOGLEVEL.WARN, "system")
 
     
     def _create_log_area(self) -> QGroupBox:
@@ -705,6 +804,59 @@ class CorgiControlPanel(QWidget):
         return LOGLEVEL.DEBUG
     
     # ========================================================================
+    # Event Handlers - sbRIO FPGA driver
+    # ========================================================================
+
+    def _on_fpga_driver_clicked(self):
+        """Start the sbRIO's FPGA driver (grpccore + fpga_driver)."""
+        if self.use_sim_time:
+            self._log('No sbRIO in simulation mode', LOGLEVEL.WARN, 'fpga_driver')
+            return
+        self._start_fpga_driver(manual=True)
+
+    def _start_fpga_driver(self, manual: bool) -> bool:
+        """Bring the driver up over ssh and report what happened.
+
+        This blocks the GUI, deliberately: it is bounded (5 s to connect, 30 s
+        overall), it only ever runs at bring-up, and nothing else in the panel
+        is useful until it finishes. A worker thread here would buy an
+        unresponsive-looking wait instead of an honest one.
+        """
+        prev_text = self.btn_fpga_driver.text()
+        self.btn_fpga_driver.setEnabled(False)
+        self.btn_fpga_driver.setText('Starting FPGA driver…')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            token, lines = sbrio.start_fpga_driver()
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.btn_fpga_driver.setEnabled(True)
+            self.btn_fpga_driver.setText(prev_text)
+
+        ok = token in ('ALREADY_RUNNING', 'STARTED')
+        headline = {
+            'STARTED':         'FPGA driver started on %s' % sbrio.SBRIO_HOST,
+            'ALREADY_RUNNING': 'FPGA driver already running on %s' % sbrio.SBRIO_HOST,
+            'NO_SCRIPT':       'FPGA start script not found (%s)' % sbrio.target_description(),
+            'NO_KEY':          'sbRIO refused key-based ssh',
+            'UNREACHABLE':     'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
+            'TIMEOUT':         'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
+            'NO_SSH':          'no ssh client on this machine',
+        }.get(token, 'FPGA driver did not start')
+
+        self._log(headline, LOGLEVEL.INFO if ok else LOGLEVEL.ERROR, 'fpga_driver')
+        for line in lines[:12]:
+            self._log('  ' + line,
+                      LOGLEVEL.INFO if ok else LOGLEVEL.WARN, 'fpga_driver')
+        if not ok and not manual:
+            self._log('  starting the bridge anyway — start the driver by hand '
+                      'if it is really down', LOGLEVEL.WARN, 'fpga_driver')
+        if ok:
+            self.btn_fpga_driver.setText('FPGA Driver ✓  (start again)')
+        return ok
+
+    # ========================================================================
     # Event Handlers - ROS Bridge
     # ========================================================================
     
@@ -730,6 +882,13 @@ class CorgiControlPanel(QWidget):
                 )
                 return
             
+            # The bridge has nothing to talk to until the sbRIO's FPGA driver
+            # is up, so bring it up here instead of leaving it as a step to
+            # remember. Best-effort by design: a failure here is logged and the
+            # bridge still starts, because the driver may have been started by
+            # hand, or from another machine, or ssh keys may not be installed.
+            self._start_fpga_driver(manual=False)
+
             # Start ROS worker
             if self.ros_worker.start_ros():
                 self.log_widget.add_log(
@@ -906,7 +1065,7 @@ class CorgiControlPanel(QWidget):
         self._homing_active = True
         self._homing_saw_complete = False
         self.btn_home.setEnabled(False)
-        self.btn_home.setText('Homing...')
+        self.btn_home.setText('Homing…')
         
         success = self.process_manager.start_process(
             'homing',
@@ -920,7 +1079,7 @@ class CorgiControlPanel(QWidget):
             self.log_widget.add_log('Failed to start homing', LOGLEVEL.ERROR, 'system')
             self._homing_active = False
             self.btn_home.setEnabled(True)
-            self.btn_home.setText('Homing')
+            self.btn_home.setText('Set Home')
     
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
@@ -1286,7 +1445,7 @@ class CorgiControlPanel(QWidget):
             self.process_manager.stop_process('homing', timeout=1.0)
         
         self.btn_home.setEnabled(True)
-        self.btn_home.setText('Homing')
+        self.btn_home.setText('Set Home')
         if self._homing_saw_complete:
             self.log_widget.add_log('Motor home position set successfully',
                                     LOGLEVEL.INFO, 'system')
