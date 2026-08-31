@@ -104,6 +104,12 @@ class CorgiControlPanel(QWidget):
 
         # Auto-start data recorder
         self._start_data_recorder()
+
+        # Auto-start the IMU alongside it: every capture should carry
+        # IMU data, and the roll channel is what the hardware roll
+        # prediction is scored on. Real hardware only -- the simulator
+        # publishes its own IMU.
+        self._start_imu()
     
     def _check_use_sim_time(self) -> bool:
         """Check if use_sim_time parameter is set to true"""
@@ -625,6 +631,40 @@ class CorgiControlPanel(QWidget):
             self._log(f'Data recorder started ({mode_str} mode)', LOGLEVEL.INFO, 'system')
         else:
             self._log('Failed to start data recorder', LOGLEVEL.ERROR, 'system')
+
+    def _start_imu(self):
+        """Auto-start the IMU node so recordings always contain IMU data.
+
+        Mirrors _start_data_recorder. Skipped under use_sim_time (the
+        simulator publishes its own IMU). Reflects the state on the IMU
+        button so the operator sees it is live; the button still stops
+        and restarts it by hand.
+        """
+        if self.use_sim_time:
+            return
+
+        if self.process_manager.is_running('imu'):
+            self.btn_imu.setChecked(True)
+            self.btn_imu.setText('Stop IMU')
+            self._log('IMU already running', LOGLEVEL.INFO, 'system')
+            return
+
+        success = self.process_manager.start_process(
+            'imu',
+            ['ros2', 'run', 'corgi_imu', 'imu_node'],
+            capture_output=False
+        )
+
+        if success:
+            self.btn_imu.setChecked(True)
+            self.btn_imu.setText('Stop IMU')
+            self._log('IMU started (auto, with recorder)', LOGLEVEL.INFO, 'system')
+        else:
+            self.btn_imu.setChecked(False)
+            self.btn_imu.setText('IMU')
+            self._log('Failed to auto-start IMU -- start it by hand before '
+                      'recording, or the IMU columns will be empty',
+                      LOGLEVEL.ERROR, 'system')
     
     def _log(self, message: str, level=LOGLEVEL.INFO, source: str = "system"):
         """Unified logging method that writes to both GUI and file"""
