@@ -73,6 +73,46 @@ def gaps_from_series(times_s, values, bar_ms=BAR_MS):
         (frozen / span if span > 0 else 0.0), leading
 
 
+def step_report(label, times_s, values, factor=10.0, deg=True):
+    """Per-tick step distribution, and every outlier above factor x median.
+
+    A jerk is a JUMP. Holds are what everything else here measures, and a
+    stream can hold nothing while still stepping violently.
+    """
+    import statistics
+    steps = []
+    for (t0, v0), (t1, v1) in zip(zip(times_s, values), zip(times_s[1:], values[1:])):
+        d = abs(v1 - v0)
+        if d > 0:
+            steps.append((t1, d))
+    if len(steps) < 20:
+        print("  %-16s too few moves to characterise" % label)
+        return 0
+
+    mags = sorted(d for _, d in steps)
+    med = statistics.median(mags)
+    p99 = mags[int(0.99 * (len(mags) - 1))]
+    biggest = mags[-1]
+    k = 180.0 / 3.141592653589793 if deg else 1.0
+
+    print("  %-16s steps: median %8.4f  p99 %8.4f  max %8.4f %s  (%d moves)"
+          % (label, med * k, p99 * k, biggest * k,
+             "deg" if deg else "", len(steps)))
+    if med <= 0:
+        return 0
+
+    bar = factor * med
+    out = [(t, d) for t, d in steps if d > bar]
+    print("        %d step(s) over %.0fx the median (%.4f %s):"
+          % (len(out), factor, bar * k, "deg" if deg else ""))
+    for t, d in out[:25]:
+        print("          at t=%8.3f s   step %8.4f %s   (%.0fx median)"
+              % (t, d * k, "deg" if deg else "", d / med))
+    if len(out) > 25:
+        print("          ... and %d more" % (len(out) - 25))
+    return len(out)
+
+
 def monotonicity(values):
     """|net travel| / |total travel|, in [0, 1].
 
@@ -208,6 +248,83 @@ def preflight_bag(path):
             "works:\n    %s )" % (path, path, db3[0]))
 
     return path, None
+
+
+def steps_from_bag(path, factor=10.0):
+    """--steps entry point: characterise JUMPS in every commanded series."""
+    path, problem = preflight_bag(path)
+    if problem:
+        print("cannot read the bag.\n")
+        print("  " + problem.replace("\n", "\n  "))
+        return 2
+    try:
+        import rosbag2_py
+        from rclpy.serialization import deserialize_message
+        from rosidl_runtime_py.utilities import get_message
+    except ImportError as exc:
+        print("the rosbag2 python API is not importable (%s)." % exc)
+        print("  source /opt/ros/humble/setup.bash && source install/setup.bash")
+        return 2
+
+    reader = rosbag2_py.SequentialReader()
+    reader.open(rosbag2_py.StorageOptions(uri=path, storage_id='sqlite3'),
+                rosbag2_py.ConverterOptions('', ''))
+    types = {t.name: t.type for t in reader.get_all_topics_and_types()}
+
+    want = {
+        '/motor/command': [('module_a.theta', 'cmd theta A'),
+                           ('module_a.beta',  'cmd beta A'),
+                           ('module_b.theta', 'cmd theta B'),
+                           ('module_c.theta', 'cmd theta C'),
+                           ('module_d.theta', 'cmd theta D')],
+        '/impedance/command': [('module_a.theta', 'imp theta A'),
+                               ('module_a.beta',  'imp beta A')],
+        '/motor/state':   [('module_a.theta', 'state theta A')],
+    }
+    series, t0 = {}, None
+    while reader.has_next():
+        topic, data, tns = reader.read_next()
+        if topic not in want:
+            continue
+        if t0 is None:
+            t0 = tns
+        msg = deserialize_message(data, get_message(types[topic]))
+        for dotted, label in want[topic]:
+            obj = msg
+            try:
+                for part in dotted.split('.'):
+                    obj = getattr(obj, part)
+            except AttributeError:
+                continue
+            series.setdefault(label, ([], []))
+            series[label][0].append((tns - t0) / 1e9)
+            series[label][1].append(obj)
+
+    if not series:
+        print("no usable topics in %s" % path)
+        return 2
+
+    print("bag: %s   -- STEP analysis (jumps, not holds)\n" % path)
+    print("  A jerk is a single tick moving far more than its neighbours.")
+    print("  Everything else in this tool measures holds, which is why five")
+    print("  hypotheses were tested without ever measuring the symptom.\n")
+    total = 0
+    for label in ('imp theta A', 'imp beta A', 'cmd theta A', 'cmd beta A',
+                  'cmd theta B', 'cmd theta C', 'cmd theta D',
+                  'state theta A'):
+        if label in series:
+            total += step_report(label, series[label][0], series[label][1],
+                                 factor)
+    print()
+    if total == 0:
+        print("  No outlier steps. The commanded stream is smooth -- if the")
+        print("  robot is jerking, the discontinuity is DOWNSTREAM of")
+        print("  /motor/command (CAN packing, firmware, or mechanical).")
+    else:
+        print("  Outlier steps found. Compare their timestamps against the")
+        print("  jerks. If they appear on imp_* too, the producer is making")
+        print("  them; if only on cmd_*, force_control is.")
+    return 0
 
 
 def from_bag(path):
@@ -460,6 +577,17 @@ def selftest():
 def main(argv):
     if '--selftest' in argv:
         return 0 if selftest() else 1
+    if '--steps' in argv:
+        argv = [a for a in argv if a != '--steps']
+        factor = 10.0
+        if '--factor' in argv:
+            i = argv.index('--factor')
+            factor = float(argv[i + 1])
+            del argv[i:i + 2]
+        if len(argv) < 2:
+            print(__doc__)
+            return 2
+        return steps_from_bag(argv[1], factor)
     if len(argv) < 2:
         print(__doc__)
         return 2
