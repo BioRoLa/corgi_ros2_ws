@@ -84,12 +84,12 @@ def step_report(label, times_s, values, factor=10.0, deg=True):
     for (t0, v0), (t1, v1) in zip(zip(times_s, values), zip(times_s[1:], values[1:])):
         d = abs(v1 - v0)
         if d > 0:
-            steps.append((t1, d))
+            steps.append((t1, d, t1 - t0))
     if len(steps) < 20:
         print("  %-16s too few moves to characterise" % label)
         return 0
 
-    mags = sorted(d for _, d in steps)
+    mags = sorted(d for _, d, _dt in steps)
     med = statistics.median(mags)
     p99 = mags[int(0.99 * (len(mags) - 1))]
     biggest = mags[-1]
@@ -102,12 +102,15 @@ def step_report(label, times_s, values, factor=10.0, deg=True):
         return 0
 
     bar = factor * med
-    out = [(t, d) for t, d in steps if d > bar]
+    out = [(t, d, dt) for t, d, dt in steps if d > bar]
     print("        %d step(s) over %.0fx the median (%.4f %s):"
           % (len(out), factor, bar * k, "deg" if deg else ""))
-    for t, d in out[:25]:
-        print("          at t=%8.3f s   step %8.4f %s   (%.0fx median)"
-              % (t, d * k, "deg" if deg else "", d / med))
+    # dt matters more than the step size: a big move across a LONG dt is
+    # dropped messages, not a jump. Only a big move at dt ~ 1 ms is real.
+    for t, d, dt in out[:25]:
+        flag = 'JUMP' if dt <= 0.003 else 'dropped msgs?'
+        print('          at t=%8.3f s   step %8.4f %s   dt %6.1f ms   %s'
+              % (t, d * k, 'deg' if deg else '', dt * 1000.0, flag))
     if len(out) > 25:
         print("          ... and %d more" % (len(out) - 25))
     return len(out)
