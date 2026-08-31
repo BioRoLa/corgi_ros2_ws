@@ -152,6 +152,15 @@ ForceControlNode::ForceControlNode()
 void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
     imp_cmd_ = *msg;
 
+    if (!imp_cmd_seen_) {
+        imp_cmd_seen_ = true;
+        RCLCPP_WARN(this->get_logger(),
+                    "first /impedance/command received -- now publishing. "
+                    "Held the output until this moment on purpose: a "
+                    "zero-initialised command is theta=0 with kp=50, which "
+                    "folds the legs.");
+    }
+
     // Report the ARRIVAL rate once a second. motor_cmd's theta/beta are a
     // pure passthrough of this message, so they can only change as often as
     // it lands: at ~45 Hz against a 1 kHz producer the leg is stepped by
@@ -456,6 +465,33 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 }
 
 void ForceControlNode::timer_cb() {
+    // Publish NOTHING until something has told us what to command.
+    //
+    // A default-constructed ImpedanceCmd has every gain at 0, so the
+    // dispatch below takes the position_control branch, which commands
+    // theta = 0 (below min_theta 16.9 deg -- a fully folded leg) with a
+    // live kp of 50. That is not a neutral default; it is a hard pull
+    // toward closed, and it ran on every startup with every producer --
+    // reported 2026-09-01 as "delayed start then a sudden jump" on both
+    // gslip_pronk and corgi_csv_control.
+    //
+    // Holding the output leaves the robot under whatever the FSM last
+    // commanded, which is the correct thing to do while waiting.
+    if (!imp_cmd_seen_) {
+        const double now_w = this->now().seconds();
+        if (imp_wait_t0_ == 0.0) imp_wait_t0_ = now_w;
+        if (now_w - imp_wait_t0_ >= 2.0) {
+            imp_wait_t0_ = now_w;
+            RCLCPP_WARN(this->get_logger(),
+                        "waiting for the first /impedance/command -- "
+                        "publishing NOTHING until then (a zero-initialised "
+                        "command is theta=0 with kp=50, i.e. fold the legs). "
+                        "%zu publisher(s) seen on the topic.",
+                        this->count_publishers("impedance/command"));
+        }
+        return;
+    }
+
     Eigen::Quaterniond body_angle_quat;
     double roll = 0;
     double pitch = 0;

@@ -92,6 +92,12 @@ private:
     double cmd_slew_prev_be_[4] = {0, 0, 0, 0};
     long cmd_slew_hits_ = 0;         // ticks the limiter actually bit
     double state_probe_t0_ = 0.0;  // window for the per-leg theta probe
+    // False until the first impedance command arrives. Until then the
+    // node publishes NOTHING: a zero-initialised ImpedanceCmd takes the
+    // position_control branch, which commands theta=0 with kp=50 --
+    // fold the legs, hard. See no_zero_cmd.py.
+    bool imp_cmd_seen_ = false;
+    double imp_wait_t0_ = 0.0;   // when the wait started, for the report
     long imp_rx_count_ = 0;   // impedance messages since the last report
     double imp_rx_t0_ = 0.0;  // when that report window opened
     double imp_rx_last_ = 0.0;       // arrival time of the previous message
