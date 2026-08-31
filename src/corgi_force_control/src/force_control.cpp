@@ -67,6 +67,19 @@ ForceControlNode::ForceControlNode()
         }
     }
     
+    // Friction feedforward shaping. scale 0.0 turns the term off entirely,
+    // which is the one-run test for whether it is the jerk.
+    friction_ff_scale_ =
+        this->declare_parameter<double>("friction_ff_scale", friction_ff_scale_);
+    friction_deadband_ =
+        this->declare_parameter<double>("friction_deadband_rad", friction_deadband_);
+    RCLCPP_WARN(this->get_logger(),
+                "FRICTION FF: scale=%.2f deadband=%.5f rad (%.4f deg; CAN LSB "
+                "is 0.1648 deg). Latched direction, nothing until real "
+                "motion. scale=0 disables the term.",
+                friction_ff_scale_, friction_deadband_,
+                friction_deadband_ * 180.0 / M_PI);
+
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
     while (rclcpp::ok()) {
@@ -431,24 +444,53 @@ void ForceControlNode::timer_cb() {
             double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
             double gamma_fb = motor_state_modules[i]->gamma;
 
-            if (phi_r > phi_prev_modules_[i](1, 0)){
-                motor_cmd_modules[i]->torque_r -= friction_[2*i];
+            // Deadband + direction latch. The raw form was
+            //     if (phi > phi_prev) -= f;  else += f;
+            // which, on a CAN position word quantised at 0.1648 deg while
+            // the standup ramp advances 0.0413 deg per tick, holds
+            // phi == phi_prev for ~4 ticks in 5 -- so it read QUANTISATION,
+            // not direction, and chattered +/-0.625 N.m (1.25 peak to peak)
+            // at up to 1 kHz against a 2.6-3.3 N.m load. The equal case
+            // fell to `else`, so a stationary joint also carried a
+            // permanent +friction bias. Live in EVERY phase, standup and
+            // pronk alike, which is why nothing about scheduling, QoS or
+            // startup order ever touched the symptom.
+            //
+            // Corroborated in Alex's bag: cmd_trq_r_a has a monotonicity
+            // ratio of 0.00 -- it reverses constantly and goes nowhere.
+            //
+            // The sign convention is unchanged; only WHEN it flips changes.
+            // phi_prev advances ONLY on a decisive move, so slow real
+            // motion accumulates instead of being lost to rounding, and the
+            // direction starts at 0 so a parked leg carries no bias.
+            const double d_r = phi_r - phi_prev_modules_[i](1, 0);
+            if (d_r > friction_deadband_) {
+                fric_dir_[i][1] = +1;
+                phi_prev_modules_[i](1, 0) = phi_r;
+            } else if (d_r < -friction_deadband_) {
+                fric_dir_[i][1] = -1;
+                phi_prev_modules_[i](1, 0) = phi_r;
             }
-            else {
-                motor_cmd_modules[i]->torque_r += friction_[2*i];
-            }
+            if (fric_dir_[i][1] > 0)
+                motor_cmd_modules[i]->torque_r -= friction_ff_scale_ * friction_[2*i];
+            else if (fric_dir_[i][1] < 0)
+                motor_cmd_modules[i]->torque_r += friction_ff_scale_ * friction_[2*i];
 
-            if (phi_l > phi_prev_modules_[i](0, 0)){
-                motor_cmd_modules[i]->torque_l -= friction_[2*i+1];
+            const double d_l = phi_l - phi_prev_modules_[i](0, 0);
+            if (d_l > friction_deadband_) {
+                fric_dir_[i][0] = +1;
+                phi_prev_modules_[i](0, 0) = phi_l;
+            } else if (d_l < -friction_deadband_) {
+                fric_dir_[i][0] = -1;
+                phi_prev_modules_[i](0, 0) = phi_l;
             }
-            else {
-                motor_cmd_modules[i]->torque_l += friction_[2*i+1];
-            }
-            
-            // NOTE: assuming zero constant friction for gamma for now since it wasn't specified.
-            // if needed, similar compensation can be added.
+            if (fric_dir_[i][0] > 0)
+                motor_cmd_modules[i]->torque_l -= friction_ff_scale_ * friction_[2*i+1];
+            else if (fric_dir_[i][0] < 0)
+                motor_cmd_modules[i]->torque_l += friction_ff_scale_ * friction_[2*i+1];
 
-            phi_prev_modules_[i] << phi_l, phi_r, gamma_fb;
+            // gamma has no friction term specified; only its history is kept.
+            phi_prev_modules_[i](2, 0) = gamma_fb;
         }
     }
 

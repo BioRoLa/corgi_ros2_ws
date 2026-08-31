@@ -74,6 +74,16 @@ private:
     // Physical parameters
     const bool sim_ = false;
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
+
+    // Friction feedforward shaping. See the block in force_control.cpp:
+    // the raw comparison reads CAN quantisation rather than direction and
+    // chatters +/-0.625 N.m at up to 1 kHz.
+    //
+    // fric_dir_[module][0]=left, [1]=right. 0 until real motion is seen,
+    // so a parked leg carries no bias.
+    int fric_dir_[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+    double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely
+    double friction_deadband_ = 0.00288;  // rad; one CAN LSB is 0.1648 deg
     
     int loop_count_ = 0;
 };
