@@ -19,9 +19,22 @@
 #
 # Usage:   ./grant_realtime.sh            # grant, then verify
 #          ./grant_realtime.sh --check    # verify only, no sudo
+#
+# Run it WITHOUT sudo -- it calls `sudo setcap` itself, and only for that.
+# Running the whole script under sudo also works now, but is not needed.
+# If the executable bit is missing on a fresh checkout:  bash ./grant_realtime.sh
 set -u
 
-WS="${CORGI_WS:-$HOME/corgi_ws/corgi_ros2_ws}"
+# Derive the workspace from where THIS FILE lives, not from $HOME: under
+# sudo, $HOME is /root, and this script exists to be run in a context where
+# sudo is involved. Layout: <ws>/src/corgi_force_control/scripts/<this>
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+WS_GUESS=$(cd "$SELF_DIR/../../.." && pwd)
+WS="${CORGI_WS:-$WS_GUESS}"
+
+if [ ! -d "$WS/install" ]; then
+    echo "note: $WS has no install/ -- set CORGI_WS if the workspace is elsewhere"
+fi
 LIB="$WS/install/corgi_force_control/lib/corgi_force_control"
 # force_estimation_node is here because it is also a 1 kHz loop and was
 # missing from this list (log S318.5). Its install path differs.
