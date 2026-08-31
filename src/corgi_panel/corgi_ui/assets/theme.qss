@@ -50,6 +50,31 @@ QPushButton:disabled {
 }
 
 /* E-Stop Button */
+/* Stop Gait: ends a run and leaves the robot holding. AMBER, deliberately
+   not red -- it must not be mistaken for the emergency control beside it,
+   and the two do different things. */
+QPushButton#StopGaitBtn {
+    background-color: #ef6c00;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+}
+
+QPushButton#StopGaitBtn:hover {
+    background-color: #e65100;
+}
+
+QPushButton#StopGaitBtn:pressed {
+    background-color: #bf360c;
+}
+
+QPushButton#StopGaitBtn:disabled {
+    background-color: #4a2a10;
+    color: #888;
+}
+
 QPushButton#EstopBtn {
     background-color: #d32f2f;
     color: white;

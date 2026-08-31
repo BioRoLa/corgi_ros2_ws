@@ -391,6 +391,47 @@ class CorgiControlPanel(QWidget):
         self.btn_estop.setMinimumWidth(100)
         self.btn_estop.setMinimumHeight(50)
         self.btn_estop.clicked.connect(self._on_estop_clicked)
+        self._estop_timer = QTimer(self)
+        self._estop_timer.timeout.connect(self._estop_retry)
+        self._estop_deadline = 0.0
+
+        self.btn_stop_gait = QPushButton('Stop Gait')
+        self.btn_stop_gait.setObjectName("StopGaitBtn")
+        self.btn_stop_gait.setMinimumWidth(100)
+        self.btn_stop_gait.setMinimumHeight(50)
+        self.btn_stop_gait.clicked.connect(self._on_stop_gait_clicked)
+        self.btn_stop_gait.setEnabled(False)
+        self.btn_stop_gait.setToolTip(
+            'End the run and LEAVE THE ROBOT HOLDING.\n'
+            'Drops the gait trigger, then requests Energised (IDLE) -- the '
+            'motors stay powered.\n'
+            'Use this to finish a run. Use E-STOP when something is wrong.')
+        self.btn_estop.setToolTip(
+            'EMERGENCY STOP -- one press, one outcome, every time.\n'
+            '  1. drops the gait trigger (the controller\'s own abort)\n'
+            '  2. requests Motors Off (SYSTEM_ON): motors DE-ENERGISED.\n'
+            '     THE ROBOT GOES LIMP and will fall if unsupported.\n'
+            'Re-sent every 200 ms until the robot confirms. After 5 s with '
+            'no confirmation it says so and tells you to cut the supply.\n'
+            'No dialog, and no dependence on the current mode.\n'
+            'To end a run without dropping the robot, use Stop Gait.\n'
+            'This is a gRPC REQUEST and needs the ROS bridge. The bench '
+            'supply output-off is the real emergency stop.')
+        self._estop_timer = QTimer(self)
+        self._estop_timer.timeout.connect(self._estop_retry)
+        self._estop_deadline = 0.0
+
+        self.btn_stop_gait = QPushButton('Stop Gait')
+        self.btn_stop_gait.setObjectName("StopGaitBtn")
+        self.btn_stop_gait.setMinimumWidth(100)
+        self.btn_stop_gait.setMinimumHeight(50)
+        self.btn_stop_gait.clicked.connect(self._on_stop_gait_clicked)
+        self.btn_stop_gait.setEnabled(False)
+        self.btn_stop_gait.setToolTip(
+            'End the run and LEAVE THE ROBOT HOLDING.\n'
+            'Drops the gait trigger, then requests Energised (IDLE) -- the '
+            'motors stay powered.\n'
+            'Use this to finish a run. Use E-STOP when something is wrong.')
         self.btn_estop.setToolTip(
             'EMERGENCY STOP. Drops the gait trigger, then requests a mode '
             'change:\n'
@@ -406,6 +447,7 @@ class CorgiControlPanel(QWidget):
         self.btn_estop.setEnabled(False)
         
         top_bar.addStretch(1)
+        top_bar.addWidget(self.btn_stop_gait)
         top_bar.addWidget(self.btn_estop)
         
         return top_bar
@@ -1440,6 +1482,64 @@ class CorgiControlPanel(QWidget):
         
         self._update_button_states()
     
+    def _estop_retry(self):
+        """Re-send SYSTEM_ON until the robot confirms it, or time out loudly."""
+        mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', None)
+        if mode is not None and int(mode) == int(ROBOTMODE.SYSTEM_ON):
+            self._estop_timer.stop()
+            self.log_widget.add_log(
+                'E-STOP CONFIRMED: robot reports Motors Off (SYSTEM_ON)',
+                LOGLEVEL.WARN, 'orin')
+            return
+
+        if time.monotonic() > self._estop_deadline:
+            self._estop_timer.stop()
+            self.log_widget.add_log(
+                'E-STOP NOT CONFIRMED after 5 s -- the robot has not reported '
+                'Motors Off. The gait trigger IS dropped, but do NOT assume '
+                'the motors are de-energised: CUT THE BENCH SUPPLY OUTPUT.',
+                LOGLEVEL.FATAL, 'orin')
+            return
+
+        if not self.ros_worker.is_running:
+            return
+        robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
+        robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        self.ros_worker.send_robot_command(robot_cmd)
+        self._robot_cmd_seq += 1
+
+    def _on_stop_gait_clicked(self):
+        """End the run and leave the robot holding. NOT an emergency control.
+
+        Drops the trigger (the controller's own abort) and requests IDLE, so
+        the motors stay energised. This is what e-stop used to do on its
+        first press -- which is exactly why it needed its own button: an
+        operator reaching for a red button in a hurry should not have to
+        know the robot's current mode to predict what happens.
+        """
+        if not self.ros_worker.is_running:
+            return
+
+        if self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+
+        robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
+        robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
+        self._pending_robot_mode = int(ROBOTMODE.IDLE)
+        self.ros_worker.send_robot_command(robot_cmd)
+        self._robot_cmd_seq += 1
+        self.log_widget.add_log(
+            'STOP GAIT: trigger dropped, -> Energised (IDLE), motors still '
+            'holding', LOGLEVEL.WARN, 'orin')
+        self._update_button_states()
+
     def _on_estop_clicked(self):
         """Handle E-Stop button click"""
         if not self.ros_worker.is_running:
@@ -1490,46 +1590,26 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        if current == ROBOTMODE.STANDBY:
-            robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
-            self._pending_robot_mode = int(ROBOTMODE.IDLE)
-            self.log_widget.add_log(
-                'E-STOP: Commands Enabled (STANDBY) -> Energised (IDLE)',
-                                    LOGLEVEL.WARN, 'orin')
-        else:
-            # This request DE-ENERGISES the motors. Reached on a second
-            # press, since the first took STANDBY -> IDLE. The gait is
-            # already stopped by the trigger drop above, so there is
-            # nothing urgent left for this to achieve -- and a standing
-            # robot falls when it lands.
-            rapid = (time.monotonic() - self._last_estop_at) < 5.0
-            if rapid:
-                answer = QMessageBox.question(
-                    self, 'De-energise the motors?',
-                    'The gait is already stopped — the trigger was dropped '
-                    'and the robot is holding.\n\n'
-                    'This second press would go to Motors Off (SYSTEM_ON), '
-                    'which sets the motors to REST and switches the power '
-                    'off. THE ROBOT GOES LIMP: if it is standing '
-                    'unsupported, it will fall.\n\n'
-                    'De-energise anyway?',
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if answer != QMessageBox.Yes:
-                    self.log_widget.add_log(
-                        'E-STOP: de-energise declined — gait is stopped, '
-                        'motors still holding', LOGLEVEL.WARN, 'orin')
-                    self._last_estop_at = time.monotonic()
-                    self._update_button_states()
-                    return
-            robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self.log_widget.add_log(
-                'E-STOP: -> Motors Off (SYSTEM_ON) — motors de-energised',
-                                    LOGLEVEL.WARN, 'orin')
-        
+        # UNCONDITIONAL. Not "IDLE from STANDBY, SYSTEM_ON otherwise":
+        # an emergency control whose action depends on invisible state is
+        # not an emergency control. One press, one outcome, every time --
+        # motors de-energised. The gentle variant is its own button.
+        del current
+        robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        self.log_widget.add_log(
+            'E-STOP: -> Motors Off (SYSTEM_ON), de-energising -- retrying '
+            'until the robot confirms', LOGLEVEL.WARN, 'orin')
+
         self._last_estop_at = time.monotonic()
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
+        # The mode change is an UNACKNOWLEDGED gRPC request. Sent once and
+        # dropped, nothing says so -- a plausible reading of "the first
+        # press didn't stop the motors". Keep asking until /robot/state
+        # agrees, and say so loudly if it never does.
+        self._estop_deadline = time.monotonic() + 5.0
+        self._estop_timer.start(200)
         self._update_button_states()
     
     # ========================================================================
@@ -1952,6 +2032,7 @@ class CorgiControlPanel(QWidget):
         
         # Basic buttons
         self.btn_estop.setEnabled(bridge_on)  # E-stop always requires bridge (safety critical)
+        self.btn_stop_gait.setEnabled(bridge_on)
         self.btn_imu.setEnabled(enable_basic)
         self.btn_trigger.setEnabled(enable_basic)
         self.btn_csv_select.setEnabled(enable_basic)
