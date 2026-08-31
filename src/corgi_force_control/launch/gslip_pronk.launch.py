@@ -363,14 +363,22 @@ def generate_launch_description():
             executable='force_estimation_node',
             name='force_estimation_node',
             parameters=[{'use_sim_time': use_sim_time}],
-            output='log',
+            # stdout to file, stderr to screen: the std::cout flood is on
+            # stdout, while RCLCPP_* banners -- which the crib's
+            # verification step reads -- go to stderr. See log S318.5;
+            # plain output='log' hid the banners along with the flood.
+            output={'stdout': 'log', 'stderr': 'screen'},
         ),
         Node(
             package='corgi_force_control',
             executable='force_control_node',
             name='force_control_node',
             parameters=[{'use_sim_time': use_sim_time}],
-            output='log',
+            # stdout to file, stderr to screen: the std::cout flood is on
+            # stdout, while RCLCPP_* banners -- which the crib's
+            # verification step reads -- go to stderr. See log S318.5;
+            # plain output='log' hid the banners along with the flood.
+            output={'stdout': 'log', 'stderr': 'screen'},
         ),
         Node(
             package='corgi_force_control',
@@ -476,6 +484,10 @@ def generate_launch_description():
                 'ltheta_lut_path': LaunchConfiguration('ltheta_lut_path'),
                 'template_path': template_path,
             }],
-            output='log',
+            # stdout to file, stderr to screen: the std::cout flood is on
+            # stdout, while RCLCPP_* banners -- which the crib's
+            # verification step reads -- go to stderr. See log S318.5;
+            # plain output='log' hid the banners along with the flood.
+            output={'stdout': 'log', 'stderr': 'screen'},
         ),
     ])
