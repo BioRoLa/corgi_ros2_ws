@@ -363,14 +363,14 @@ def generate_launch_description():
             executable='force_estimation_node',
             name='force_estimation_node',
             parameters=[{'use_sim_time': use_sim_time}],
-            output='screen',
+            output='log',
         ),
         Node(
             package='corgi_force_control',
             executable='force_control_node',
             name='force_control_node',
             parameters=[{'use_sim_time': use_sim_time}],
-            output='screen',
+            output='log',
         ),
         Node(
             package='corgi_force_control',
@@ -476,6 +476,6 @@ def generate_launch_description():
                 'ltheta_lut_path': LaunchConfiguration('ltheta_lut_path'),
                 'template_path': template_path,
             }],
-            output='screen',
+            output='log',
         ),
     ])

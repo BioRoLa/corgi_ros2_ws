@@ -275,10 +275,15 @@ ForceEstimationNode::ForceEstimationNode()
     
     force_state_pub_ = this->create_publisher<corgi_msgs::msg::ForceStateStamped>("force/state", 10);
     
-    auto rate = std::chrono::milliseconds(1);
-    timer_ = this->create_wall_timer(
-        rate, 
-        std::bind(&ForceEstimationNode::timer_cb, this));
+    // NO wall timer. run() is the paced 1 kHz loop and calls timer_cb()
+    // itself; having both meant every tick ran the estimator TWICE, and
+    // doubled its share of the std::cout flood that was blocking the
+    // control threads (log S318.5).
+    //
+    // auto rate = std::chrono::milliseconds(1);
+    // timer_ = this->create_wall_timer(
+    //     rate,
+    //     std::bind(&ForceEstimationNode::timer_cb, this));
 }
 
 void ForceEstimationNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {

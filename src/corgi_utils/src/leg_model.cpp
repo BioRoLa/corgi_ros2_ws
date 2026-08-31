@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 #include <fstream>
@@ -53,18 +54,47 @@ LegModel::LegModel(bool sim) :
     this->forward(theta0, 0.0);
 }//end LegModel
 
+namespace {
+// Rate-limited stderr note: at most one line per second per site, carrying
+// how many were suppressed. Static state is fine here -- this exists to stop
+// a hot path from blocking on a pipe, not to be a general logger.
+struct ClampNote { long long n = 0; std::chrono::steady_clock::time_point last; };
+ClampNote clamp_hi_, clamp_lo_;
+
+void note_clamp(ClampNote& c, const char* msg) {
+    ++c.n;
+    auto now = std::chrono::steady_clock::now();
+    if (now - c.last < std::chrono::seconds(1)) return;
+    c.last = now;
+    std::cerr << msg << "  (" << c.n << " since last report)\n";
+    c.n = 0;
+}
+}  // namespace
+
 void LegModel::forward(double theta_in, double beta_in, bool vector) {
     theta = theta_in;
     beta = beta_in;
 
-    // Limit theta
+    // Limit theta.
+    //
+    // These used to print on every clamp. forward() is called once per leg
+    // per tick by force_control and twice per leg per tick by
+    // force_estimation -- up to ~12,000 lines/s across three nodes, all
+    // through one `ros2 launch` pipe reader that prefixes every line. When
+    // that reader falls behind the write() BLOCKS the 1 kHz control thread,
+    // which is a kernel wait, not a scheduling decision: SCHED_FIFO cannot
+    // help a thread that is not asking for CPU. See log S313 / S318.5.
+    //
+    // Still reported, but rate-limited to once a second per direction and
+    // with a count, so a persistent clamp is visible without being a
+    // denial-of-service on its own control loop.
     if (theta > max_theta) {
         theta = max_theta;
-        std::cout << "Theta exceeds upper limit. Set to max_theta.\n";
+        note_clamp(clamp_hi_, "Theta exceeds upper limit. Set to max_theta.");
     }
     if (theta < min_theta) {
         theta = min_theta;
-        std::cout << "Theta below lower limit. Set to min_theta.\n";
+        note_clamp(clamp_lo_, "Theta below lower limit. Set to min_theta.");
     }
 
     // Calculate positions

@@ -23,7 +23,10 @@ set -u
 
 WS="${CORGI_WS:-$HOME/corgi_ws/corgi_ros2_ws}"
 LIB="$WS/install/corgi_force_control/lib/corgi_force_control"
-BINS=("$LIB/force_control_node" "$LIB/gslip_pronk_node")
+# force_estimation_node is here because it is also a 1 kHz loop and was
+# missing from this list (log S318.5). Its install path differs.
+FELIB="$WS/install/corgi_force_estimation/lib/corgi_force_estimation"
+BINS=("$LIB/force_control_node" "$LIB/gslip_pronk_node" "$FELIB/force_estimation_node")
 
 CHECK_ONLY=0
 [ "${1:-}" = "--check" ] && CHECK_ONLY=1
