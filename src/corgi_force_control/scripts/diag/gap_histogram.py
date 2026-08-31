@@ -156,6 +156,54 @@ def report(label, times_s, values, bar_ms=BAR_MS, score_window=None):
     return len(gaps)
 
 
+def preflight_bag(path):
+    """Say what is wrong with a bag before rosbag2 raises about it.
+
+    Four states worth telling apart, because each needs a different action:
+    still recording, recorded but never closed, a directory with nothing in
+    it, and not a bag at all.
+    """
+    import glob
+    import os
+    import subprocess
+
+    if not os.path.isdir(path):
+        if os.path.isfile(path) and path.endswith('.db3'):
+            return path, None
+        return path, "not a directory and not a .db3 file: %s" % path
+
+    db3 = sorted(glob.glob(os.path.join(path, '*.db3')))
+    meta = os.path.join(path, 'metadata.yaml')
+
+    if not db3:
+        return path, ("no .db3 inside %s -- nothing was recorded there" % path)
+
+    # A recorder still holding the file is the common case, and the sqlite
+    # "disk I/O error" on a read-only open is its signature.
+    try:
+        out = subprocess.run(['pgrep', '-af', 'bag record'],
+                             capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        out = ''
+    if out.strip() and (os.path.basename(path) in out or path in out):
+        return path, (
+            "a `ros2 bag record` is STILL RUNNING on this bag:\n    %s\n"
+            "Stop it first (Ctrl-C in its terminal, or pkill -f 'bag "
+            "record'), then re-run.\nThe writer holds the sqlite file, and "
+            "metadata.yaml is not written until it stops."
+            % out.strip().splitlines()[0])
+
+    if not os.path.exists(meta):
+        return path, (
+            "metadata.yaml is missing from %s, so the recording was never "
+            "closed cleanly.\nEither a recorder is still running, or it was "
+            "killed. Rebuild the index with:\n    ros2 bag reindex %s\n"
+            "then re-run. (Pointing this script at the .db3 directly also "
+            "works:\n    %s )" % (path, path, db3[0]))
+
+    return path, None
+
+
 def from_bag(path):
     # Preflight BEFORE importing rosbag2: a bag that is still recording
     # and a shell with no ROS sourced are different problems, and a
