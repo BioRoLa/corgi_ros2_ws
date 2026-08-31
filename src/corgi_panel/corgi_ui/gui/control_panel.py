@@ -30,7 +30,17 @@ from corgi_ui.core.ros_worker import ControlPanelRosWorker
 from corgi_ui.core.process_manager import ProcessManager
 from corgi_ui.gui.widgets.log_widget import LogWidget
 
-# GPIO Support (optional)
+# GPIO Support (optional) -- used only to mirror the software trigger onto a
+# hardware pin, for syncing external instruments. Everything else works
+# without it, because the trigger is published on ROS regardless.
+#
+# On the Orin, importing this prints
+#     UserWarning: Could not open /dev/mem for pinmux check ... Permission
+#     denied: '/dev/mem'
+# That is Jetson.GPIO skipping an OPTIONAL sanity check (is this pin actually
+# muxed as GPIO?) which needs root to read physical memory. It is a warning,
+# not a failure: the library drives the pin through /dev/gpiochip* instead,
+# and that path does not need /dev/mem. Nothing is disabled by it.
 GPIO_defined = True
 try:
     import Jetson.GPIO as GPIO
@@ -310,8 +320,6 @@ class CorgiControlPanel(QWidget):
         
         self.lbl_pb1_voltage = QLabel('--.- V')
         self.lbl_pb1_voltage.setObjectName('PowerBadge')
-        self.lbl_pb1_soc = QLabel('-- %')
-        self.lbl_pb1_soc.setObjectName('PowerBadge')
         self.lbl_pb1_current = QLabel('-.-- A')
         self.lbl_pb1_current.setObjectName('PowerBadge')
         self.lbl_pb1_power = QLabel('--.- W')
@@ -319,15 +327,12 @@ class CorgiControlPanel(QWidget):
 
         self.lbl_pb2_voltage = QLabel('--.- V')
         self.lbl_pb2_voltage.setObjectName('PowerBadge')
-        self.lbl_pb2_soc = QLabel('-- %')
-        self.lbl_pb2_soc.setObjectName('PowerBadge')
         self.lbl_pb2_current = QLabel('-.-- A')
         self.lbl_pb2_current.setObjectName('PowerBadge')
         self.lbl_pb2_power = QLabel('--.- W')
         self.lbl_pb2_power.setObjectName('PowerBadge')
         
         pb1_frame_layout.addWidget(self.lbl_pb1_voltage)
-        pb1_frame_layout.addWidget(self.lbl_pb1_soc)
         pb1_frame_layout.addWidget(self.lbl_pb1_current)
         pb1_frame_layout.addWidget(self.lbl_pb1_power)
         pb1_frame.setLayout(pb1_frame_layout)
@@ -335,7 +340,6 @@ class CorgiControlPanel(QWidget):
         pb1_container.addWidget(pb1_frame)
 
         pb2_frame_layout.addWidget(self.lbl_pb2_voltage)
-        pb2_frame_layout.addWidget(self.lbl_pb2_soc)
         pb2_frame_layout.addWidget(self.lbl_pb2_current)
         pb2_frame_layout.addWidget(self.lbl_pb2_power)
         pb2_frame.setLayout(pb2_frame_layout)
@@ -1776,31 +1780,16 @@ class CorgiControlPanel(QWidget):
         voltage: float,
         current: float,
         voltage_label: QLabel,
-        soc_label: QLabel,
         current_label: QLabel,
         power_label: QLabel,
     ):
         """Update one powerboard summary row using v_0 and summed current."""
-        soc = self._calculate_soc(voltage)
         power = voltage * current
 
         voltage_label.setText(f"{voltage:.1f} V")
-        # NOT a state of charge -- see _calculate_soc. Named on the badge so
-        # it cannot be read as "the battery is 70% full".
-        soc_label.setText(f"{soc:.0f}% Vspan")
         current_label.setText(f"{current:.2f} A")
         power_label.setText(f"{power:.1f} W")
 
-        soc_label.setToolTip(
-            "NOT a battery state of charge.\n"
-            "Bus voltage on a fixed 42.0-50.4 V scale:  (V - 42.0) / 8.4 x 100\n"
-            "Sessions run on the BENCH SUPPLY at 48 V with the battery "
-            "installed but DISCONNECTED, so this reads ~70% because 47.9 V is "
-            "70% of the way up that window -- not because anything is 70% "
-            "charged.\n"
-            "Even on the battery a linear voltage-to-SOC map is poor: the "
-            "Li-ion curve is flat through the middle and sags under load.\n"
-            "Useful as a normalised voltage readout; useless as a fuel gauge.")
         voltage_label.setToolTip('Bus voltage (channel v_0), 200 ms mean.')
 
         note = ('Sum of i_1..i_7. Channel 0 is excluded: it sits at a near '
@@ -1824,33 +1813,15 @@ class CorgiControlPanel(QWidget):
 
         self._update_power_badges(
             pb1_v, pb1_i,
-            self.lbl_pb1_voltage, self.lbl_pb1_soc,
+            self.lbl_pb1_voltage,
             self.lbl_pb1_current, self.lbl_pb1_power,
         )
         self._update_power_badges(
             pb2_v, pb2_i,
-            self.lbl_pb2_voltage, self.lbl_pb2_soc,
+            self.lbl_pb2_voltage,
             self.lbl_pb2_current, self.lbl_pb2_power,
         )
 
-    def _calculate_soc(self, v_total: float) -> float:
-        """Bus voltage as a fraction of a fixed 42.0-50.4 V window.
-
-        Called SOC historically, and it is not one: a straight linear
-        rescale of voltage, with no current, no coulomb counting and no cell
-        model. On the bench supply it is a constant restated as a
-        percentage. Kept because a normalised voltage is worth a glance, but
-        labelled "Vspan" on the badge so nobody reads it as a fuel gauge.
-        """
-        V_MIN = 42.0  # 3.5V * 12
-        V_MAX = 50.4  # 4.2V * 12
-        
-        if V_MAX <= V_MIN:
-            return 0.0
-        
-        soc = (v_total - V_MIN) / (V_MAX - V_MIN) * 100.0
-        return max(0.0, min(100.0, soc))
-    
     def _update_button_states(self):
         """Update button enabled/disabled states based on current state"""
         bridge_on = self.btn_ros_bridge.isChecked()
