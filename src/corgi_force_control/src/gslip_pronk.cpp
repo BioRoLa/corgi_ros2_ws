@@ -3221,40 +3221,47 @@ void GslipPronkNode::execute_standup_phase() {
 
     const TemplateRow& first = template_.front();
 
-    // Wait for a matched subscriber before ramping.
+    // Wait for force_control to be ALIVE AND PUBLISHING before ramping.
     //
-    // /impedance/command is VOLATILE (default QoS both ends), so anything
-    // published before a reader matches is DISCARDED, not queued. Measured
-    // on 2026-09-01: rosbag2's own subscription first saw a message 0.886 s
-    // after the ramp began, so discovery of this freshly created publisher
-    // takes ~0.9 s here. force_control took longer still -- across both
-    // standup bags it held its output CONSTANT and started tracking only in
-    // the last 0.1-0.2 s of a 2 s ramp, then delivered the whole
-    // accumulated travel at once. That is the lurch.
+    // Measured 2026-09-01, bag standup_033150:
+    //     imp theta  msgs  1.78 - 17.75   producer up from 1.78
+    //     cmd theta  msgs  3.90 - 17.77   consumer silent until 3.90
+    // The ramp (1.78-3.74) finished before force_control emitted anything.
+    // It was not dropping the ramp -- it was not running yet.
     //
-    // Waiting removes the race rather than hiding it. The timeout keeps a
-    // solo run (no force_control) working, and the count is logged either
-    // way so the banner says whether anyone was actually listening.
+    // The first version of this guard waited on
+    // get_subscription_count("impedance/command"), which counts ANY
+    // subscriber including `ros2 bag record`. With a bag running it
+    // returned instantly, so the guard was inert precisely when it was
+    // being measured. count_publishers("motor/command") instead tests the
+    // thing that matters: the consumer is up and producing.
+    //
+    // Still a timeout, so a solo run (no force_control) works, and the
+    // outcome is logged either way -- a ramp published to nobody should
+    // never again be invisible in the banner.
     {
-        const int kSubWaitMs = 3000;
+        const int kWaitMs = 5000;
         int waited = 0;
-        while (rclcpp::ok() && imp_cmd_pub_->get_subscription_count() == 0
-               && waited < kSubWaitMs) {
+        while (rclcpp::ok() && this->count_publishers("motor/command") == 0
+               && waited < kWaitMs) {
             rclcpp::spin_some(this->get_node_base_interface());
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             waited += 10;
         }
-        const size_t n = imp_cmd_pub_->get_subscription_count();
-        if (n == 0) {
+        const size_t cons = this->count_publishers("motor/command");
+        const size_t subs = imp_cmd_pub_->get_subscription_count();
+        if (cons == 0) {
             RCLCPP_WARN(this->get_logger(),
-                        "NOBODY is subscribed to impedance/command after %d ms. "
-                        "The ramp will be published into the void: the topic is "
-                        "VOLATILE, so a late subscriber gets none of it.",
-                        kSubWaitMs);
+                        "force_control is NOT PUBLISHING motor/command after "
+                        "%d ms (%zu subscriber(s) on impedance/command, which "
+                        "may just be a bag). Ramping anyway -- expect the leg "
+                        "to sit still and then lurch when it starts.",
+                        kWaitMs, subs);
         } else {
             RCLCPP_INFO(this->get_logger(),
-                        "impedance/command has %zu subscriber(s) after %d ms -- "
-                        "ramping now that someone is listening", n, waited);
+                        "consumer ready after %d ms: %zu motor/command "
+                        "publisher(s), %zu impedance/command subscriber(s)",
+                        waited, cons, subs);
         }
     }
 
