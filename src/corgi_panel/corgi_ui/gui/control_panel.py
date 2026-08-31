@@ -789,7 +789,39 @@ class CorgiControlPanel(QWidget):
             return
         
         self.log_widget.add_log('EMERGENCY STOP ACTIVATED!', LOGLEVEL.FATAL, 'orin')
-        
+
+        # STEP 1 -- CUT THE COMMAND SOURCE FIRST.
+        #
+        # Requesting a robot-mode change on its own does NOT stop anything
+        # publishing motor commands: gslip_pronk keeps streaming a moving
+        # gait trajectory at 1 kHz while the firmware changes mode under
+        # it, and the two fight every control cycle -- that is the loud
+        # buzzing after an e-stop (observed 2026-08-31, motors energised
+        # and conflicted, which is not the same as stopped).
+        #
+        # The controller's gait loop is `while (rclcpp::ok() && trigger_)`
+        # (gslip_pronk.cpp:3567), so dropping the trigger is its designed
+        # abort: the loop exits, run() returns, the node terminates, and
+        # nothing publishes /motor/command afterwards. It also closes the
+        # recording cleanly, so the data up to the abort survives.
+        #
+        # Reuses the trigger handler wholesale (same idiom as
+        # _on_recording_input_entered) so the message, the GPIO line and
+        # the logging all follow their tested path.
+        if self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+            self.log_widget.add_log(
+                'E-Stop: trigger dropped -- controller gait loop exits, '
+                'motor command stream stops', LOGLEVEL.WARN, 'orin')
+
+        # STEP 2 -- then the mode request.
+        #
+        # NOTE this remains a REQUEST forwarded over gRPC to the robot's
+        # own state machine: there is no ack, no timeout and no retry, and
+        # it does not de-energise the motors. The bench supply output-off
+        # (or a physical e-stop inline) is the real emergency stop; this
+        # button stops the GAIT.
         robot_cmd = RobotCmdStamped()
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
