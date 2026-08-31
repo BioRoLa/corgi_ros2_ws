@@ -174,6 +174,9 @@ cd "$DIR" || { echo "NO_SCRIPT"; echo "cannot cd to $DIR"; exit 5; }
 # stdin is pinned to /dev/null on every variant: this whole script is being
 # fed to `bash -s` over ssh stdin, and a background child inheriting that
 # would eat the rest of it.
+# -lic, not -lc: ~/.bashrc is sourced only for INTERACTIVE shells, and it
+# is the difference between `ssh host CMD` (grpccore aborts) and `ssh host`
+# then typing CMD (works).
 if [ -x "$SCRIPT" ]; then
     CMD="cd '$DIR' && '$SCRIPT'"
 else
@@ -186,20 +189,20 @@ ENVPFX="TERM=xterm LINES=40 COLUMNS=120"
 
 if command -v script >/dev/null 2>&1; then
     LAUNCH="script(1) pty"
-    setsid env $ENVPFX script -qfec "bash -lc \"$CMD\"" "$LOG" \
+    setsid env $ENVPFX script -qfec "bash -lic \"$CMD\"" "$LOG" \
         </dev/null >/dev/null 2>&1 &
 elif command -v tmux >/dev/null 2>&1; then
     LAUNCH="tmux pty"
     tmux kill-session -t corgi_fpga 2>/dev/null
     env $ENVPFX tmux new-session -d -s corgi_fpga \
-        "bash -lc \"$CMD\" >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
+        "bash -lic \"$CMD\" >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
 elif command -v screen >/dev/null 2>&1; then
     LAUNCH="screen pty"
     env $ENVPFX screen -dmS corgi_fpga \
-        bash -lc "$CMD >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
+        bash -lic "$CMD >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
 else
     LAUNCH="NO PTY AVAILABLE -- install util-linux (script), tmux or screen"
-    setsid bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
+    setsid bash -lic "$CMD" >"$LOG" 2>&1 </dev/null &
 fi
 echo $! > "$PIDFILE" 2>/dev/null || true
 
@@ -405,8 +408,12 @@ def _remote_command() -> str:
     key = ''
     if os.path.exists(SBRIO_KEY):
         key = '-i %s ' % shlex.quote(SBRIO_KEY)
-    inner = 'cd %s && %s' % (shlex.quote(os.path.dirname(SBRIO_SCRIPT)),
-                             shlex.quote(SBRIO_SCRIPT))
+    # bash -lic: login AND interactive, so ~/.bashrc is sourced. -lc alone
+    # skips it, and that is the difference between `ssh host CMD` (fails) and
+    # `ssh host` then typing CMD (works).
+    inner = 'bash -lic %s' % shlex.quote(
+        'cd %s && %s' % (shlex.quote(os.path.dirname(SBRIO_SCRIPT)),
+                         shlex.quote(SBRIO_SCRIPT)))
     # No BatchMode here, deliberately: this window is interactive, so if key
     # auth is not set up the user can type the password into their own
     # terminal. That is the one place a password legitimately goes.
