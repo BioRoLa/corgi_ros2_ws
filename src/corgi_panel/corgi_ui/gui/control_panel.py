@@ -5,6 +5,7 @@ Refactored version with modular architecture (MVC pattern)
 """
 import os
 import sys
+import time
 import logging
 import threading
 import yaml
@@ -125,6 +126,9 @@ class CorgiControlPanel(QWidget):
         # None = not yet known (the panel does not ssh at startup just to
         # find out); True/False only ever set from what the sbRIO reported.
         self._fpga_running = None
+        # When the last e-stop press was, so a rapid second one can be
+        # recognised as a double-tap rather than a decision.
+        self._last_estop_at = 0.0
         # Power badges: accumulate at 1 kHz, paint the mean at 5 Hz. Defined
         # here, before _connect_ros_signals, so a message arriving early
         # cannot hit an attribute that does not exist yet.
@@ -346,8 +350,39 @@ class CorgiControlPanel(QWidget):
         pb2_container.addWidget(pb2_title)
         pb2_container.addWidget(pb2_frame)
 
+        # TOTAL -- what the bench supply is actually delivering, which is
+        # the number worth watching against its current limit. Neither
+        # per-board badge answers that on its own.
+        total_container = QVBoxLayout()
+        total_container.setSpacing(3)
+        total_title = QLabel("TOTAL  (both boards)")
+        total_title.setObjectName("PowerBoardTitle")
+        total_title.setAlignment(Qt.AlignCenter)
+        total_frame = QFrame()
+        total_frame.setObjectName("PowerBoardFrame")
+        total_frame_layout = QHBoxLayout()
+        total_frame_layout.setSpacing(10)
+        total_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        self.lbl_total_current = QLabel('-.-- A')
+        self.lbl_total_current.setObjectName('PowerBadge')
+        self.lbl_total_power = QLabel('--.- W')
+        self.lbl_total_power.setObjectName('PowerBadge')
+        for lbl in (self.lbl_total_current, self.lbl_total_power):
+            lbl.setToolTip(
+                'PB1 + PB2, load channels i_1..i_7 only.\n'
+                'Channel 0 is excluded: a near-constant ~13.5 A that does '
+                'not track load and correlates negatively with torque.\n'
+                '200 ms mean, painted at 5 Hz.')
+            total_frame_layout.addWidget(lbl)
+
+        total_frame.setLayout(total_frame_layout)
+        total_container.addWidget(total_title)
+        total_container.addWidget(total_frame)
+
         power_box.addLayout(pb1_container)
         power_box.addLayout(pb2_container)
+        power_box.addLayout(total_container)
         top_bar.addLayout(power_box)
         
         # E-Stop Button
@@ -363,7 +398,11 @@ class CorgiControlPanel(QWidget):
             'motors still holding\n'
             '  from anywhere else -> Motors Off (SYSTEM_ON), MOTORS '
             'DE-ENERGISED and the robot goes limp\n'
-            'Requires the ROS bridge.')
+            'A second press within 5 s asks before de-energising, so a '
+            'double-tap cannot drop a standing robot. The trigger is always '
+            'dropped first, unconditionally.\n'
+            'This is a REQUEST over gRPC: no ack, no retry, and it needs the '
+            'ROS bridge. The supply output-off is the real emergency stop.')
         self.btn_estop.setEnabled(False)
         
         top_bar.addStretch(1)
@@ -600,11 +639,17 @@ class CorgiControlPanel(QWidget):
         self.motor_labels = {}
 
         # Define legs: (name, row, col, module state fields)
+        # Angles in degrees, then the three motor torques in N*m. The
+        # torques are what say whether a leg is WORKING -- a pose alone
+        # cannot distinguish holding gently from grinding into a stop,
+        # which is exactly the state the home pose used to sit in.
+        ANG = [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]
+        TRQ = [('torque_r', 'τ R'), ('torque_l', 'τ L'), ('torque_h', 'τ H')]
         legs = [
-            ('LF', 0, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
-            ('RF', 0, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
-            ('LH', 1, 0, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]),
-            ('RH', 1, 1, [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')])
+            ('LF', 0, 0, ANG + TRQ),
+            ('RF', 0, 1, ANG + TRQ),
+            ('LH', 1, 0, ANG + TRQ),
+            ('RH', 1, 1, ANG + TRQ)
         ]
 
         for leg_name, r, c, fields in legs:
@@ -1441,12 +1486,37 @@ class CorgiControlPanel(QWidget):
                 'E-STOP: Commands Enabled (STANDBY) -> Energised (IDLE)',
                                     LOGLEVEL.WARN, 'orin')
         else:
+            # This request DE-ENERGISES the motors. Reached on a second
+            # press, since the first took STANDBY -> IDLE. The gait is
+            # already stopped by the trigger drop above, so there is
+            # nothing urgent left for this to achieve -- and a standing
+            # robot falls when it lands.
+            rapid = (time.monotonic() - self._last_estop_at) < 5.0
+            if rapid:
+                answer = QMessageBox.question(
+                    self, 'De-energise the motors?',
+                    'The gait is already stopped — the trigger was dropped '
+                    'and the robot is holding.\n\n'
+                    'This second press would go to Motors Off (SYSTEM_ON), '
+                    'which sets the motors to REST and switches the power '
+                    'off. THE ROBOT GOES LIMP: if it is standing '
+                    'unsupported, it will fall.\n\n'
+                    'De-energise anyway?',
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if answer != QMessageBox.Yes:
+                    self.log_widget.add_log(
+                        'E-STOP: de-energise declined — gait is stopped, '
+                        'motors still holding', LOGLEVEL.WARN, 'orin')
+                    self._last_estop_at = time.monotonic()
+                    self._update_button_states()
+                    return
             robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
             self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
             self.log_widget.add_log(
                 'E-STOP: -> Motors Off (SYSTEM_ON) — motors de-energised',
                                     LOGLEVEL.WARN, 'orin')
         
+        self._last_estop_at = time.monotonic()
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
         self._update_button_states()
@@ -1698,24 +1768,41 @@ class CorgiControlPanel(QWidget):
             ('LH', state.module_d),
             ('RH', state.module_c),
         ]
+        # (field, symbol, is_angle) -- angles convert to degrees, torques
+        # are already N*m and must NOT be run through np.degrees.
         state_fields = [
-            ('theta', 'θ'),
-            ('beta', 'β'),
-            ('gamma', 'γ'),
+            ('theta', 'θ', True),
+            ('beta', 'β', True),
+            ('gamma', 'γ', True),
+            ('torque_r', 'τ R', False),
+            ('torque_l', 'τ L', False),
+            ('torque_h', 'τ H', False),
         ]
         
         for leg_name, module in modules:
             if module is None:
                 continue
             
-            for field_name, display_name in state_fields:
+            for field_name, display_name, is_angle in state_fields:
                 key = f"{leg_name}_{field_name}"
                 if key not in self.motor_labels:
                     continue
                 
-                value = np.degrees(self._get_float_field(module, field_name))
-                self.motor_labels[key].setText(f"{display_name}: {value:.1f}°")
-                self.motor_labels[key].setStyleSheet("color: #aaa;")
+                raw = self._get_float_field(module, field_name)
+                if is_angle:
+                    self.motor_labels[key].setText(
+                        f"{display_name}: {np.degrees(raw):.1f}°")
+                    self.motor_labels[key].setStyleSheet("color: #aaa;")
+                else:
+                    self.motor_labels[key].setText(
+                        f"{display_name}: {raw:+.2f} N·m")
+                    # The ABAD clips silently at 45-64 N*m against a 44.25
+                    # stall (#15), so a torque worth noticing should look
+                    # different from one that is not.
+                    mag = abs(raw)
+                    colour = ('#ef5350' if mag > 20.0 else
+                              '#ffa726' if mag > 8.0 else '#aaa')
+                    self.motor_labels[key].setStyleSheet("color: %s;" % colour)
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
@@ -1838,6 +1925,11 @@ class CorgiControlPanel(QWidget):
             self.lbl_pb2_voltage,
             self.lbl_pb2_current, self.lbl_pb2_power,
         )
+
+        total_i = pb1_i + pb2_i
+        total_w = pb1_v * pb1_i + pb2_v * pb2_i
+        self.lbl_total_current.setText(f"{total_i:.2f} A")
+        self.lbl_total_power.setText(f"{total_w:.1f} W")
 
     def _update_button_states(self):
         """Update button enabled/disabled states based on current state"""
