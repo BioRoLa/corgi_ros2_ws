@@ -653,9 +653,20 @@ void ForceControlNode::run() {
         timer_cb();
         
         next_time += period;
+        // Ctrl-C invalidates the context between the ok() check and this
+        // call. Whether sleep_until() returns false or THROWS is a race:
+        // force_estimation aborted here until the previous commit, and then
+        // force_control started aborting in its place. Guard both.
+        if (!rclcpp::ok()) break;
+        try {
         if(!this->get_clock()->sleep_until(next_time)){
             RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
             break;
+        }
+        } catch (const rclcpp::exceptions::RCLError&) {
+            break;   // shutdown already invalidated the context
+        } catch (const std::runtime_error&) {
+            break;   // same, thrown as a plain runtime_error by rclcpp
         }
     }
 }

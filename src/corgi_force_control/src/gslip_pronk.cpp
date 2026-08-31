@@ -971,6 +971,12 @@ namespace {
 // force_control's IMP_CMD RX line: see tx_count.py for why one number
 // without the other is ambiguous. Static state is fine -- there is one
 // producer in one process, and this is diagnostic only.
+// Trigger messages received, ever. Separates "nothing is publishing"
+// from "publishing but enable=false" from "arrived and was ignored".
+// A namespace static, not a member: the member list at :993 is
+// declaration-order sensitive and a diagnostic must not perturb it.
+long g_trigger_msgs = 0;
+
 void note_imp_tx(const rclcpp::Logger& log, double now_s) {
     static long count = 0;
     static double t0 = 0.0;
@@ -1646,6 +1652,7 @@ bool GslipPronkNode::leg_in_stance(int leg, const TemplateRow& row) const {
 
 void GslipPronkNode::trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg) {
     trigger_ = msg->enable;
+    ++g_trigger_msgs;
 }
 
 void GslipPronkNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
@@ -3711,13 +3718,39 @@ void GslipPronkNode::run() {
     rclcpp::Duration period(0, 1000000);  // 1 ms
     rclcpp::Time next_time = this->now();
 
-    RCLCPP_INFO(this->get_logger(), "Holding pose; waiting for trigger");
+    {
+        const size_t npub = this->count_publishers("trigger");
+        if (npub == 0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "Holding pose; waiting for trigger -- but NOTHING IS "
+                        "PUBLISHING /trigger. Pressing the button will do "
+                        "nothing. Check the panel/bridge stack is up: "
+                        "ros2 topic info /trigger");
+        } else {
+            RCLCPP_INFO(this->get_logger(),
+                        "Holding pose; waiting for trigger (%zu publisher(s) "
+                        "on /trigger)", npub);
+        }
+    }
+    double trig_report_t0 = this->now().seconds();
     while (rclcpp::ok()) {
         rclcpp::spin_some(this->get_node_base_interface());
 
         if (trigger_) {
             execute_running_phase();
         } else {
+            // Every 5 s, state the situation rather than sitting silent.
+            // publishers==0 means nothing is wired; publishers>0 with msgs==0
+            // means the button never sent; msgs>0 with trigger_ still false
+            // means it sent enable=false and this node is behaving correctly.
+            const double now_r = this->now().seconds();
+            if (now_r - trig_report_t0 >= 5.0) {
+                trig_report_t0 = now_r;
+                RCLCPP_WARN(this->get_logger(),
+                            "still waiting for trigger: %zu publisher(s) on "
+                            "/trigger, %ld message(s) received so far",
+                            this->count_publishers("trigger"), g_trigger_msgs);
+            }
             TemplateRow hold = template_.front();
             hold.in_stance = hold_stance_;
             apply_row(hold);
