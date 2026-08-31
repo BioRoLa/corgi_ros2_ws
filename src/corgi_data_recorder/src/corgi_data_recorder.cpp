@@ -440,7 +440,14 @@ int main(int argc, char **argv) {
     auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 100, power_cmd_cb);
     auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 100, power_state_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 100, imu_cb);
-    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 100, imp_cmd_cb);
+    // BEST_EFFORT, KEEP_LAST(1) -- same reasoning as force_control. A
+    // RELIABLE reader with a 100-deep queue on a 1 kHz stream asks for
+    // retransmissions of samples that are already worthless, and this
+    // recorder was one of the subscribers measured at ~45 Hz on
+    // 2026-09-01 while the producer ran at 1 kHz.
+    rclcpp::QoS imp_qos(rclcpp::KeepLast(1));
+    imp_qos.best_effort();
+    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", imp_qos, imp_cmd_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 100, force_state_cb);
     auto sim_leg_contact_state_sub = node->create_subscription<corgi_msgs::msg::SimLegContactStamped>("sim/leg_contact", 100, sim_leg_contact_state_cb);
     // TF listener for odom -> base_link transform

@@ -965,6 +965,28 @@ private:
         const std::vector<rclcpp::Parameter>& params);
 };
 
+namespace {
+
+// Publish-rate report for impedance/command, once a second. Pairs with
+// force_control's IMP_CMD RX line: see tx_count.py for why one number
+// without the other is ambiguous. Static state is fine -- there is one
+// producer in one process, and this is diagnostic only.
+void note_imp_tx(const rclcpp::Logger& log, double now_s) {
+    static long count = 0;
+    static double t0 = 0.0;
+    ++count;
+    if (t0 == 0.0) { t0 = now_s; count = 0; return; }
+    if (now_s - t0 >= 1.0) {
+        RCLCPP_WARN(log, "IMP_CMD TX: %.0f Hz  (this loop targets 1000 Hz; "
+                         "compare against force_control's IMP_CMD RX)",
+                    count / (now_s - t0));
+        t0 = now_s;
+        count = 0;
+    }
+}
+
+}  // namespace
+
 GslipPronkNode::GslipPronkNode()
     : Node("gslip_pronk"),
       // Order here must match DECLARATION order -- the contact members are
@@ -3286,6 +3308,7 @@ void GslipPronkNode::execute_standup_phase() {
 
         imp_cmd_.header.stamp = this->now();
         imp_cmd_pub_->publish(imp_cmd_);
+        note_imp_tx(this->get_logger(), this->now().seconds());
 
         next_time = next_time + period;
         rclcpp::sleep_for(std::chrono::nanoseconds(
@@ -3319,6 +3342,7 @@ void GslipPronkNode::execute_running_phase() {
             apply_row(settle);
             imp_cmd_.header.stamp = this->now();
             imp_cmd_pub_->publish(imp_cmd_);
+            note_imp_tx(this->get_logger(), this->now().seconds());
             next_time = next_time + period;
             rclcpp::sleep_for(std::chrono::nanoseconds(
                 std::max<int64_t>(0, (next_time - this->now()).nanoseconds())));
@@ -3644,6 +3668,7 @@ void GslipPronkNode::execute_running_phase() {
         }
         imp_cmd_.header.stamp = this->now();
         imp_cmd_pub_->publish(imp_cmd_);
+        note_imp_tx(this->get_logger(), this->now().seconds());
 
         if (event_engaged_) sched_advance();
         index++;
@@ -3698,6 +3723,7 @@ void GslipPronkNode::run() {
             apply_row(hold);
             imp_cmd_.header.stamp = this->now();
             imp_cmd_pub_->publish(imp_cmd_);
+            note_imp_tx(this->get_logger(), this->now().seconds());
         }
 
         next_time = next_time + period;

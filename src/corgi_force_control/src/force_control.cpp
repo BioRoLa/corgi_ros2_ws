@@ -91,8 +91,26 @@ ForceControlNode::ForceControlNode()
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
 
+    // BEST_EFFORT, KeepLast(1). This is a 1 kHz control stream in which
+    // only the newest sample has value. RELIABLE asks the writer to
+    // retransmit stale ones and KEEP_LAST(10) queues 10 ms of backlog to
+    // chew through; measured 2026-09-01 this subscription delivered
+    // ~45 Hz against a 1 kHz producer, so the leg was held ~20 ms then
+    // STEPPED by up to the full template range (17.57 deg of an 18.499
+    // deg span). NOTE the bag did NOT miss the same fraction: it recorded
+    // several hundred Hz of distinct values with occasional 95-226 ms
+    // GAPS. So this is not yet proven to be transport. The IMP_CMD RX /
+    // IMP_CMD TX pair below is what settles it -- read both before
+    // believing this comment.
+    //
+    // Only the READER changes: a RELIABLE writer matches a BEST_EFFORT
+    // reader, but a BEST_EFFORT writer does NOT match a RELIABLE reader,
+    // so touching the writer could silently unmatch a subscriber and stop
+    // the robot. This direction cannot.
+    rclcpp::QoS imp_qos(rclcpp::KeepLast(1));
+    imp_qos.best_effort();
     imp_cmd_sub_ = this->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>(
-        "impedance/command", 10, 
+        "impedance/command", imp_qos,
         std::bind(&ForceControlNode::imp_cmd_cb, this, std::placeholders::_1));
     
     force_state_sub_ = this->create_subscription<corgi_msgs::msg::ForceStateStamped>(
@@ -113,6 +131,23 @@ ForceControlNode::ForceControlNode()
 
 void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
     imp_cmd_ = *msg;
+
+    // Report the ARRIVAL rate once a second. motor_cmd's theta/beta are a
+    // pure passthrough of this message, so they can only change as often as
+    // it lands: at ~45 Hz against a 1 kHz producer the leg is stepped by
+    // however far the template moved in between, which is the jerk. This
+    // line is how a run states whether that is still happening.
+    ++imp_rx_count_;
+    const double now_s = this->now().seconds();
+    if (imp_rx_t0_ == 0.0) { imp_rx_t0_ = now_s; imp_rx_count_ = 0; return; }
+    if (now_s - imp_rx_t0_ >= 1.0) {
+        const double hz = imp_rx_count_ / (now_s - imp_rx_t0_);
+        RCLCPP_WARN(this->get_logger(),
+                    "IMP_CMD RX: %.0f Hz  (producer runs at 1000 Hz; below "
+                    "~900 the leg is being STEPPED, not tracked)", hz);
+        imp_rx_t0_ = now_s;
+        imp_rx_count_ = 0;
+    }
 }
 
 void ForceControlNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg) {

@@ -82,6 +82,8 @@ private:
     // fric_dir_[module][0]=left, [1]=right. 0 until real motion is seen,
     // so a parked leg carries no bias.
     int fric_dir_[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+    long imp_rx_count_ = 0;   // impedance messages since the last report
+    double imp_rx_t0_ = 0.0;  // when that report window opened
     double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely
     double friction_deadband_ = 0.00288;  // rad; one CAN LSB is 0.1648 deg
     
