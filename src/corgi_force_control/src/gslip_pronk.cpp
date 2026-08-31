@@ -3220,6 +3220,44 @@ void GslipPronkNode::execute_standup_phase() {
     }
 
     const TemplateRow& first = template_.front();
+
+    // Wait for a matched subscriber before ramping.
+    //
+    // /impedance/command is VOLATILE (default QoS both ends), so anything
+    // published before a reader matches is DISCARDED, not queued. Measured
+    // on 2026-09-01: rosbag2's own subscription first saw a message 0.886 s
+    // after the ramp began, so discovery of this freshly created publisher
+    // takes ~0.9 s here. force_control took longer still -- across both
+    // standup bags it held its output CONSTANT and started tracking only in
+    // the last 0.1-0.2 s of a 2 s ramp, then delivered the whole
+    // accumulated travel at once. That is the lurch.
+    //
+    // Waiting removes the race rather than hiding it. The timeout keeps a
+    // solo run (no force_control) working, and the count is logged either
+    // way so the banner says whether anyone was actually listening.
+    {
+        const int kSubWaitMs = 3000;
+        int waited = 0;
+        while (rclcpp::ok() && imp_cmd_pub_->get_subscription_count() == 0
+               && waited < kSubWaitMs) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            waited += 10;
+        }
+        const size_t n = imp_cmd_pub_->get_subscription_count();
+        if (n == 0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "NOBODY is subscribed to impedance/command after %d ms. "
+                        "The ramp will be published into the void: the topic is "
+                        "VOLATILE, so a late subscriber gets none of it.",
+                        kSubWaitMs);
+        } else {
+            RCLCPP_INFO(this->get_logger(),
+                        "impedance/command has %zu subscriber(s) after %d ms -- "
+                        "ramping now that someone is listening", n, waited);
+        }
+    }
+
     RCLCPP_INFO(this->get_logger(),
                 "Ramping from measured theta=%.1f deg to template theta=%.1f deg",
                 theta_start * 180.0 / M_PI, first.theta * 180.0 / M_PI);
