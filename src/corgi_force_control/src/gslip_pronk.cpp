@@ -191,8 +191,14 @@ private:
     // fixed. Overrun (row in stance far past template stance duration with
     // no contact) is a diagnostic WARN only.
     //
-    // With spring_rest_reference_ on (the config of record) theta_ref is
-    // CONSTANT, so per-leg theta divergence only appears via flight rows.
+    // NOT the config of record -- it is OFF, and must stay off. S117:
+    // spring_rest_reference STOPS THE HOP DEAD (air 0.0%) at k7150, tested
+    // as S114 Cell B. Launch default is false and the banner reads "Radial
+    // reference: template trajectory" when it is right.
+    //
+    // (With it ON, theta_ref would be CONSTANT, so per-leg theta divergence
+    // would only appear via flight rows. That is the geometry of a
+    // configuration nobody should be running.)
     //
     // event_sched=false is EXACTLY off: the stride loop calls the same
     // apply_row(template_[index]) as before this existed (the gamma_openloop
@@ -3023,9 +3029,10 @@ void GslipPronkNode::apply_rows(const std::array<const TemplateRow*, 4>& rows) {
     // beta still follows the template: that is the clocked-torque part, the
     // leg angle the controller genuinely has to drive.
     //
-    // (theta_ref moved into the per-leg loop: with spring_rest_reference_
-    // on -- the config of record -- it is CONSTANT and per-leg rows change
-    // nothing here; off, each leg tracks its own row's theta.)
+    // (theta_ref moved into the per-leg loop. With spring_rest_reference_
+    // ON it is CONSTANT and per-leg rows change nothing here; OFF -- which
+    // is the config of record, S117: on kills the hop, air 0.0% -- each leg
+    // tracks its own row's theta.)
 
     // Left/right selector, same partition as gamma_correction's roll_sign.
     // A=FL, B=FR, C=RR, D=RL.

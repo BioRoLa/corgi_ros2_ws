@@ -299,7 +299,12 @@ def from_bag(path):
         print("  it was recording.")
         return 2
 
-    print("  %d messages of interest\n" % sum(len(v[0]) for v in series.values()))
+    # Per series, so a stream that was never produced can be told from
+    # one the recording lost: a 1.95 s ramp at 1 kHz is ~1950 messages.
+    print('  messages read:')
+    for _lab in sorted(series):
+        print('    %-16s %6d' % (_lab, len(series[_lab][0])))
+    print()
 
     # The producer's active window. Anything the consumer does outside it
     # is a controller settling with no input, not a freeze under load.
