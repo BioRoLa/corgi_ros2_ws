@@ -102,6 +102,13 @@ class CorgiControlPanel(QWidget):
         # Sim time tracking for clock jump detection
         self._last_sim_time_sec = 0.0
 
+        # Homing in progress. Tracked as REAL STATE, not inferred from
+        # the button's text: the completion poller used to key on
+        # text == 'Homing...', so any handler that reset the text (a
+        # failed second press did exactly that) silently disabled
+        # completion detection for the rest of the session.
+        self._homing_active = False
+
         # Auto-start data recorder
         self._start_data_recorder()
 
@@ -879,6 +886,17 @@ class CorgiControlPanel(QWidget):
     
     def _on_home_clicked(self):
         """Handle Home button click"""
+        # Refuse re-entry while a homing run is live. Without this, a second
+        # press reached start_process(), which returns False because the
+        # process is already running -- and the old failure branch then reset
+        # the button text, breaking completion detection. Same guard the IMU
+        # handler already had.
+        if self._homing_active or self.process_manager.is_running('homing'):
+            self.log_widget.add_log('Homing already in progress; ignoring press',
+                                    LOGLEVEL.WARN, 'system')
+            return
+
+        self._homing_active = True
         self.btn_home.setEnabled(False)
         self.btn_home.setText('Homing...')
         
@@ -892,6 +910,7 @@ class CorgiControlPanel(QWidget):
             self.log_widget.add_log('Homing Started', LOGLEVEL.INFO, 'system')
         else:
             self.log_widget.add_log('Failed to start homing', LOGLEVEL.ERROR, 'system')
+            self._homing_active = False
             self.btn_home.setEnabled(True)
             self.btn_home.setText('Homing')
     
@@ -1211,7 +1230,12 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        self.btn_home.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
+        # STANDBY gate kept (homing outside STANDBY is unsafe), but a
+        # live homing run also holds the button down: this is called on
+        # every robot-state update and used to re-enable it mid-run.
+        self.btn_home.setEnabled(bridge_on
+                                 and current == ROBOTMODE.STANDBY
+                                 and not self._homing_active)
         
         # FSM buttons - disable in simulation mode or when bridge is off
         if not bridge_on or self.use_sim_time:
@@ -1246,6 +1270,7 @@ class CorgiControlPanel(QWidget):
     
     def _on_homing_completed(self):
         """Handle homing completion"""
+        self._homing_active = False
         if self.process_manager.is_running('homing'):
             self.process_manager.stop_process('homing', timeout=1.0)
         
@@ -1283,8 +1308,10 @@ class CorgiControlPanel(QWidget):
     
     def _timer_update(self):
         """Periodic timer update"""
-        # Check if homing process has completed
-        if self.btn_home.text() == 'Homing...':
+        # Check if homing process has completed. Keyed on the state flag,
+        # not the button text -- the text is presentation and anything that
+        # rewrites it used to switch this detector off permanently.
+        if self._homing_active:
             if not self.process_manager.is_running('homing'):
                 # Process finished but callback wasn't triggered
                 self._on_homing_completed()
