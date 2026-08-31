@@ -38,34 +38,36 @@ except ImportError:
 
 class CorgiControlPanel(QWidget):
 
-    # The FSM's own names read as a flat list of synonyms -- "System On",
-    # "Idle" and "Standby" all sound like the robot is doing nothing, and
-    # "Idle" in particular sounds like the BOTTOM of the ladder when it is
-    # the middle rung and the only door to the state where the robot runs.
-    # These are the operator-facing names, describing position in the
-    # workflow and what entering each state actually does. The BUTTONS keep
-    # them IMPERATIVE ("Set Powered", "Go Live") -- a bare state name on a
-    # greyed-out button reads as a status readout claiming the robot is in
-    # that state, which is exactly what the first cut of this rename did.
+    # Operator-facing names, taken from the FIRMWARE rather than inferred:
+    # fpga_driver/src/robot_fsm.cpp and motor_fsm.cpp (read 2026-09-01).
     #
-    #     Powered (SYSTEM_ON 0) <-> Arm (IDLE 2) <-> Live (STANDBY 3)
-    #     Motor Config (MOTORCONFIG 4) hangs off Powered / Arm.
+    #   SYSTEM_ON (0)   switchMode(REST) + power switches OFF. REST zeroes
+    #                   every motor command, so the motors are DE-ENERGISED
+    #                   and the robot goes LIMP. The firmware's own name is
+    #                   the most misleading label in the stack.
+    #   INIT (1)        digital -> signal -> power, SET_ZERO, HALL_CALIBRATE
+    #                   (a driven velocity sweep -- THE LEGS MOVE), MOTOR,
+    #                   then auto-enters IDLE. Not a button: SystemOn -> IDLE
+    #                   is routed through it.
+    #   IDLE (2)        MOTOR mode, does NOT accept gRPC commands. Holds
+    #                   position only SOFTLY -- observed on the robot, and it
+    #                   follows: the gains still in force are HALL_CALIBRATE's
+    #                   (kp 50, kd 1.5). Firm torque arrives after Set Home.
+    #   STANDBY (3)     MOTOR mode, commands accepted -- nothing moves on
+    #                   entry, it only opens the door. Gaits run here; homing
+    #                   is permitted here and is what produces firm torque.
+    #   MOTORCONFIG (4) switchMode(CONFIG), which sets REST: motors LIMP
+    #                   again while parameters are read/written.
     #
-    # IDLE is emphatically NOT idle: entering it runs the motors' HALL
-    # CALIBRATION (Alex, 2026-08-31 -- the FSM lives in sbRIO firmware this
-    # repo cannot see, so this is not derivable from the source here). That
-    # is why it is the only door to Live, and why calling it 'Idle' -- or
-    # 'Ready' -- misleads in the direction that matters: it sounds like a
-    # state where nothing happens, and it is a state where the motors move.
-    #
-    # The canonical name is never hidden: it rides on every button's tooltip
-    # and in the mode readout, because the firmware, the logs and the gRPC
-    # enum all still say STANDBY.
+    # Three facts the old labels hid, the first two safety-relevant:
+    # "Set Powered" DROPPED the legs, "Arm" MOVES them, and "Go Live - home
+    # && run" neither homed nor produced holding torque. The buttons now say
+    # what each one does.
     MODE_LABEL = {
-        ROBOTMODE.SYSTEM_ON:   'Powered',
-        ROBOTMODE.INIT:        'Init',
-        ROBOTMODE.IDLE:        'Armed',
-        ROBOTMODE.STANDBY:     'Live',
+        ROBOTMODE.SYSTEM_ON:   'Motors Off',
+        ROBOTMODE.INIT:        'Initialising',
+        ROBOTMODE.IDLE:        'Energised (soft)',
+        ROBOTMODE.STANDBY:     'Commands Enabled',
         ROBOTMODE.MOTORCONFIG: 'Motor Config',
     }
 
@@ -259,7 +261,10 @@ class CorgiControlPanel(QWidget):
 
         pb1_container = QVBoxLayout()
         pb1_container.setSpacing(3)
-        pb1_title = QLabel("PB1")
+        # Which board is which side, established on the robot 2026-09-01
+        # (Alex). Correlating the banked runs could not separate them -- in an
+        # air pronk all four legs move in phase.
+        pb1_title = QLabel("PB1  —  LEFT side")
         pb1_title.setObjectName("PowerBoardTitle")
         pb1_title.setAlignment(Qt.AlignCenter)
         pb1_frame = QFrame()
@@ -270,7 +275,7 @@ class CorgiControlPanel(QWidget):
 
         pb2_container = QVBoxLayout()
         pb2_container.setSpacing(3)
-        pb2_title = QLabel("PB2")
+        pb2_title = QLabel("PB2  —  RIGHT side")
         pb2_title.setObjectName("PowerBoardTitle")
         pb2_title.setAlignment(Qt.AlignCenter)
         pb2_frame = QFrame()
@@ -318,11 +323,19 @@ class CorgiControlPanel(QWidget):
         top_bar.addLayout(power_box)
         
         # E-Stop Button
-        self.btn_estop = QPushButton('< ! >')
+        self.btn_estop = QPushButton('E-STOP')
         self.btn_estop.setObjectName("EstopBtn")
         self.btn_estop.setMinimumWidth(100)
         self.btn_estop.setMinimumHeight(50)
         self.btn_estop.clicked.connect(self._on_estop_clicked)
+        self.btn_estop.setToolTip(
+            'EMERGENCY STOP. Drops the gait trigger, then requests a mode '
+            'change:\n'
+            '  from Commands Enabled (STANDBY) -> Power Up && Hold (IDLE), '
+            'motors still holding\n'
+            '  from anywhere else -> Motors Off (SYSTEM_ON), MOTORS '
+            'DE-ENERGISED and the robot goes limp\n'
+            'Requires the ROS bridge.')
         self.btn_estop.setEnabled(False)
         
         top_bar.addStretch(1)
@@ -417,37 +430,51 @@ class CorgiControlPanel(QWidget):
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('1 \u00b7 Set Powered')
+        self.btn_systemon = QPushButton('1 \u00b7 Motors Off  (safe)')
         self.btn_systemon.setToolTip(
-            'SYSTEM_ON (0). The state the robot boots into, and where the '
-            'e-stop retreats to from anywhere but Live.\nUp: Arm.')
+            'SYSTEM_ON (0) — the firmware\'s "safe state", and NOT what its '
+            'name suggests.\nMotors go to REST (every command zeroed) and '
+            'the power switches go OFF, so THE ROBOT GOES LIMP. Support it '
+            'before pressing this.\nAlso where the e-stop retreats to from '
+            'anywhere but Standby.')
         self.btn_systemon.setObjectName("SystemOnBtn")
         self.btn_systemon.setCheckable(True)
         self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.SYSTEM_ON))
         self.btn_systemon.setEnabled(False)
         
-        self.btn_idle = QPushButton('2 \u00b7 Arm  \u2014  hall calib')
+        self.btn_idle = QPushButton('2 \u00b7 Power Up  \u2014  hall calib')
         self.btn_idle.setToolTip(
-            "IDLE (2). Entering this runs the motors' HALL CALIBRATION and "
-            'leaves them armed \u2014 the motors MOVE here; this is not a '
-            'rest state.\nAlso where you sit between runs, and where the '
-            'e-stop drops you FROM Live.\nDown: Powered.  Up: Live.')
+            'IDLE (2). Coming from Motors Off this routes through INIT: '
+            'power sequence, set-zero, then HALL CALIBRATION — a driven '
+            'sweep, SO THE LEGS MOVE. Keep clear.\n'
+            'It then settles into a closed pose, energised but only SOFTLY '
+            'held — no firm holding torque, because the gains still in force '
+            'are the calibration ones (kp 50, kd 1.5). Firm torque arrives '
+            'after Set Home.\n'
+            'Commands are NOT accepted in this state.\n'
+            'Also where the e-stop drops you from Commands Enabled.')
         self.btn_idle.setCheckable(True)
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('3 \u00b7 Go Live  \u2014  home && run')
+        self.btn_standby = QPushButton('3 \u00b7 Enable Commands')
         self.btn_standby.setToolTip(
-            'STANDBY (3). Commands are accepted here: homing and gaits run '
-            'in this state, and nowhere else.\nDown: Arm.')
+            'STANDBY (3). Motors accept commands. Nothing moves on entry — '
+            'this only opens the door.\n'
+            'It does NOT home: press "Set Home" for that (it runs '
+            'corgi_homing), and the firm holding torque appears once homing '
+            'has set the zero.\n'
+            'Gaits run in this state and nowhere else.\nDown: Power Up.')
         self.btn_standby.setCheckable(True)
         self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
         self.btn_standby.setEnabled(False)
         
         self.btn_motorconfig = QPushButton('Enter Motor Config')
         self.btn_motorconfig.setToolTip(
-            'MOTORCONFIG (4). Side branch off Powered / Arm, not a rung '
-            'on the ladder. Opens the config panel on entry.')
+            'MOTORCONFIG (4). Side branch off Motors Off / Power Up && Hold, '
+            'not a rung on the ladder.\nCONFIG sets the motors to REST, so '
+            'THE ROBOT GOES LIMP here too while parameters are read and '
+            'written.\nOpens the config panel on entry.')
         self.btn_motorconfig.setObjectName("ConfigBtn")
         self.btn_motorconfig.setCheckable(True)
         self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.MOTORCONFIG))
@@ -462,6 +489,12 @@ class CorgiControlPanel(QWidget):
         
         # Homing button
         self.btn_home = QPushButton('Set Home')
+        self.btn_home.setToolTip(
+            'Runs corgi_homing, which drives the legs to the reference pose '
+            'and sets the joint zero.\n'
+            'Only available in Commands Enabled (STANDBY).\n'
+            'This is what produces the FIRM holding torque — before it, the '
+            'motors are energised but softly held.')
         self.btn_home.clicked.connect(self._on_home_clicked)
         self.btn_home.setEnabled(False)
         sidebar.addWidget(self.btn_home)
@@ -935,9 +968,9 @@ class CorgiControlPanel(QWidget):
             if self.btn_trigger.isChecked():
                 why.append('the trigger is ON')
             if mode == ROBOTMODE.STANDBY:
-                why.append('the robot is Live (STANDBY)')
-            self._log('REFUSED to stop the FPGA driver: %s. Drop to Armed '
-                      '(IDLE) and stop the trigger first -- pulling the command '
+                why.append('the robot is in Commands Enabled (STANDBY)')
+            self._log('REFUSED to stop the FPGA driver: %s. Drop to Power '
+                      'Up (IDLE) and stop the trigger first -- pulling the command '
                       'source out from under a running gait is not a stop. Use '
                       'E-STOP if you need the robot to stop NOW.'
                       % ' and '.join(why), LOGLEVEL.ERROR, 'fpga_driver')
@@ -1311,12 +1344,14 @@ class CorgiControlPanel(QWidget):
         if current == ROBOTMODE.STANDBY:
             robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
             self._pending_robot_mode = int(ROBOTMODE.IDLE)
-            self.log_widget.add_log('E-Stop: Live (STANDBY) -> Armed (IDLE)',
+            self.log_widget.add_log(
+                'E-STOP: Commands Enabled (STANDBY) -> Energised (IDLE)',
                                     LOGLEVEL.WARN, 'orin')
         else:
             robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
             self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self.log_widget.add_log('E-Stop: -> Powered (SYSTEM_ON)',
+            self.log_widget.add_log(
+                'E-STOP: -> Motors Off (SYSTEM_ON) — motors de-energised',
                                     LOGLEVEL.WARN, 'orin')
         
         self.ros_worker.send_robot_command(robot_cmd)
