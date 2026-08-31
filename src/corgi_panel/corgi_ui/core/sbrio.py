@@ -14,10 +14,14 @@ Two rules shape what is here:
   password into, so an ssh that decides to prompt would hang the GUI until the
   timeout. BatchMode turns "would prompt" into an immediate, legible failure,
   and the caller turns that into a log line saying to install a key.
-* The driver is detached on the remote side (setsid, or nohup where setsid is
-  missing) so it outlives the ssh session. Without that it would be killed the
-  moment this call returns -- the same reason the manual recipe needed a
-  terminal left open.
+* The driver is detached on the remote side so it outlives the ssh session.
+  Without that it would be killed the moment this call returns -- the same
+  reason the manual recipe needed a terminal left open.
+* The driver is a CURSES application (a full-screen dashboard), so it needs a
+  pty. It is launched under script(1) -- or tmux/screen -- whose pty survives
+  our ssh disconnecting, unlike `ssh -tt`. Given only a redirected file and
+  /dev/null it aborts during terminal setup with
+  `basic_string::_M_construct null not valid`.
 
 This needs key-based ssh from the Orin to the sbRIO. One-time setup, run on
 the Orin:
@@ -141,18 +145,44 @@ cd "$DIR" || { echo "NO_SCRIPT"; echo "cannot cd to $DIR"; exit 5; }
 # Truncate first: log_says_up must not read a PREVIOUS run's success line.
 : > "$LOG" 2>/dev/null || true
 
-# bash -lc, so /etc/profile and ~/.profile run exactly as they do in the
-# interactive session where this script is known to work. Without it the
-# driver aborts on a null getenv (see this module's docstring).
+# The driver is a CURSES application -- a full-screen dashboard. It needs
+# a pty, not a redirected file, or it aborts during terminal setup with
+# basic_string::_M_construct (a null terminal name in a std::string).
+# bash -lc gives it the login environment; script(1) gives it the terminal.
+#
+# script(1) is preferred over `ssh -tt` because its pty OUTLIVES our ssh
+# connection -- the driver has to survive the panel closing, which is the
+# whole point of not leaving a terminal open by hand.
+#
+# stdin is pinned to /dev/null on every variant: this whole script is being
+# fed to `bash -s` over ssh stdin, and a background child inheriting that
+# would eat the rest of it.
 if [ -x "$SCRIPT" ]; then
     CMD="cd '$DIR' && '$SCRIPT'"
 else
     CMD="cd '$DIR' && sh '$SCRIPT'"
 fi
-if command -v setsid >/dev/null 2>&1; then
-    setsid bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
+
+# ncurses sizes itself from the tty; script's pty can come up 0x0, so give
+# it a sane fallback size and a capable TERM rather than the profile's dumb.
+ENVPFX="TERM=xterm LINES=40 COLUMNS=120"
+
+if command -v script >/dev/null 2>&1; then
+    LAUNCH="script(1) pty"
+    setsid env $ENVPFX script -qfec "bash -lc \"$CMD\"" "$LOG" \
+        </dev/null >/dev/null 2>&1 &
+elif command -v tmux >/dev/null 2>&1; then
+    LAUNCH="tmux pty"
+    tmux kill-session -t corgi_fpga 2>/dev/null
+    env $ENVPFX tmux new-session -d -s corgi_fpga \
+        "bash -lc \"$CMD\" >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
+elif command -v screen >/dev/null 2>&1; then
+    LAUNCH="screen pty"
+    env $ENVPFX screen -dmS corgi_fpga \
+        bash -lc "$CMD >'$LOG' 2>&1" </dev/null >/dev/null 2>&1
 else
-    nohup bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
+    LAUNCH="NO PTY AVAILABLE -- install util-linux (script), tmux or screen"
+    setsid bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
 fi
 echo $! > "$PIDFILE" 2>/dev/null || true
 
@@ -187,6 +217,7 @@ sleep 4
 C=$(crash_line)
 if [ -n "$C" ]; then
     echo "FAILED"
+    echo "launched under: $LAUNCH"
     echo "the driver started and then ABORTED: $C"
     echo "--- last lines of $LOG ---"
     tail -n 15 "$LOG" 2>/dev/null
@@ -201,6 +232,7 @@ if ! have_driver; then
 fi
 
 echo "STARTED"
+echo "launched under: $LAUNCH"
 echo "evidence: $EVIDENCE, still alive after a settle"
 report_pids
 if ! log_says_up; then
