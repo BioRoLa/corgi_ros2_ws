@@ -654,13 +654,24 @@ class CorgiControlPanel(QWidget):
 
         for leg_name, r, c, fields in legs:
             leg_group = QGroupBox(leg_name)
-            leg_layout = QVBoxLayout()
+            # Two columns of three: angles left, torques right. Stacked, the
+            # six labels made each leg box tall enough to shove the rest of
+            # the column around, and the reading that matters is per row --
+            # theta against tau R, and so on.
+            leg_layout = QGridLayout()
+            leg_layout.setHorizontalSpacing(18)
+            leg_layout.setVerticalSpacing(2)
 
-            for field_name, display_name in fields:
+            for idx, (field_name, display_name) in enumerate(fields):
                 label_key = f"{leg_name}_{field_name}"
                 lbl = QLabel(f"{display_name}: --")
                 lbl.setObjectName("MotorLabel")
-                leg_layout.addWidget(lbl)
+                col = idx // 3
+                if col:
+                    # Fixed width so the column does not twitch as the sign
+                    # and digit count change on every repaint.
+                    lbl.setMinimumWidth(120)
+                leg_layout.addWidget(lbl, idx % 3, col)
                 self.motor_labels[label_key] = lbl
 
             leg_group.setLayout(leg_layout)
