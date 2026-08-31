@@ -134,6 +134,9 @@ class CorgiControlPanel(QWidget):
         # cannot hit an attribute that does not exist yet.
         self._power_accum = {'n': 0, 'pb1_v': 0.0, 'pb1_i': 0.0,
                              'pb2_v': 0.0, 'pb2_i': 0.0}
+        # Peaks come from the RAW samples, not the painted mean.
+        self._peak_i = 0.0
+        self._peak_w = 0.0
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
@@ -383,6 +386,49 @@ class CorgiControlPanel(QWidget):
         power_box.addLayout(pb1_container)
         power_box.addLayout(pb2_container)
         power_box.addLayout(total_container)
+
+        # PEAK -- the largest single sample since the last reset. Sizing the
+        # supply and reading a pronk both depend on the spike, not the mean.
+        peak_container = QVBoxLayout()
+        peak_container.setSpacing(3)
+        peak_header = QHBoxLayout()
+        peak_header.setSpacing(4)
+        peak_title = QLabel("PEAK")
+        peak_title.setObjectName("PowerBoardTitle")
+        peak_title.setAlignment(Qt.AlignCenter)
+        self.btn_peak_reset = QPushButton('\u21ba')
+        self.btn_peak_reset.setMaximumWidth(28)
+        self.btn_peak_reset.setToolTip('Reset the peak readings')
+        self.btn_peak_reset.clicked.connect(lambda: self._reset_power_peaks('manual'))
+        peak_header.addStretch(1)
+        peak_header.addWidget(peak_title)
+        peak_header.addWidget(self.btn_peak_reset)
+        peak_header.addStretch(1)
+
+        peak_frame = QFrame()
+        peak_frame.setObjectName("PowerBoardFrame")
+        peak_frame_layout = QHBoxLayout()
+        peak_frame_layout.setSpacing(10)
+        peak_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        self.lbl_peak_current = QLabel('-.-- A')
+        self.lbl_peak_current.setObjectName('PowerBadge')
+        self.lbl_peak_power = QLabel('--.- W')
+        self.lbl_peak_power.setObjectName('PowerBadge')
+        for lbl in (self.lbl_peak_current, self.lbl_peak_power):
+            lbl.setToolTip(
+                'Largest SINGLE SAMPLE of PB1+PB2 since the last reset, at '
+                'the full 1 kHz \u2014 not the largest painted average.\n'
+                'A 20 ms spike barely moves the 200 ms mean shown under '
+                'TOTAL, and the spike is the point.\n'
+                'Resets automatically when the trigger goes ON, so it reads '
+                '"peak during this run"; the outgoing value is logged first.')
+            peak_frame_layout.addWidget(lbl)
+
+        peak_frame.setLayout(peak_frame_layout)
+        peak_container.addLayout(peak_header)
+        peak_container.addWidget(peak_frame)
+        power_box.addLayout(peak_container)
         top_bar.addLayout(power_box)
         
         # E-Stop Button
@@ -1766,6 +1812,9 @@ class CorgiControlPanel(QWidget):
             )
         
         if self.btn_trigger.isChecked():
+            # Peak should mean "during this run", not "since the panel
+            # opened". The outgoing value is logged by the reset itself.
+            self._reset_power_peaks('run start')
             filename = trigger_cmd.output_filename if trigger_cmd.output_filename else "no filename"
             self.log_widget.add_log(f'Trigger enabled: {filename}', LOGLEVEL.INFO, 'orin')
         else:
@@ -1786,12 +1835,23 @@ class CorgiControlPanel(QWidget):
         """
         self.power_state = state
         
+        pb1_v = self._get_float_field(state, 'pb1_v_0')
+        pb1_i = self._sum_powerboard_current(state, 'pb1')
+        pb2_v = self._get_float_field(state, 'pb2_v_0')
+        pb2_i = self._sum_powerboard_current(state, 'pb2')
+
         a = self._power_accum
         a['n'] += 1
-        a['pb1_v'] += self._get_float_field(state, 'pb1_v_0')
-        a['pb1_i'] += self._sum_powerboard_current(state, 'pb1')
-        a['pb2_v'] += self._get_float_field(state, 'pb2_v_0')
-        a['pb2_i'] += self._sum_powerboard_current(state, 'pb2')
+        a['pb1_v'] += pb1_v
+        a['pb1_i'] += pb1_i
+        a['pb2_v'] += pb2_v
+        a['pb2_i'] += pb2_i
+
+        # Peak from THIS sample. Doing it on the 5 Hz painted average would
+        # miss the transients entirely: a 20 ms spike barely moves a 200 ms
+        # mean, and a spike is the whole reason to have a peak reading.
+        self._peak_i = max(self._peak_i, pb1_i + pb2_i)
+        self._peak_w = max(self._peak_w, pb1_v * pb1_i + pb2_v * pb2_i)
 
         # painted by _repaint_power_badges on a 5 Hz timer
         
@@ -1994,6 +2054,15 @@ class CorgiControlPanel(QWidget):
         current_label.setToolTip(note)
         power_label.setToolTip(note)
     
+    def _reset_power_peaks(self, why: str):
+        """Zero the peaks, logging the outgoing value so none is lost."""
+        if self._peak_w > 0.0:
+            self._log('peak power %.1f W at %.2f A (%s) — resetting'
+                      % (self._peak_w, self._peak_i, why),
+                      LOGLEVEL.INFO, 'system')
+        self._peak_i = 0.0
+        self._peak_w = 0.0
+
     def _repaint_power_badges(self):
         """Paint the 200 ms mean, at 5 Hz. Readable, and steadier than
         whichever single sample happened to land on the repaint."""
@@ -2021,6 +2090,8 @@ class CorgiControlPanel(QWidget):
         total_w = pb1_v * pb1_i + pb2_v * pb2_i
         self.lbl_total_current.setText(f"{total_i:.2f} A")
         self.lbl_total_power.setText(f"{total_w:.1f} W")
+        self.lbl_peak_current.setText(f"{self._peak_i:.2f} A")
+        self.lbl_peak_power.setText(f"{self._peak_w:.1f} W")
 
     def _update_button_states(self):
         """Update button enabled/disabled states based on current state"""
