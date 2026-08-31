@@ -762,6 +762,22 @@ class CorgiControlPanel(QWidget):
             self._log('IMU already running', LOGLEVEL.INFO, 'system')
             return
 
+        # The CV7 hangs off /dev/ttyTHS1 and the packaged imu_node.sh opens
+        # with `sudo chmod 777` on it -- so the port is NOT reliably writable
+        # after a boot. ProcessManager only reports whether the spawn
+        # succeeded; a node that starts and then dies on the port looks
+        # identical to a healthy one from here, and the result is a capture
+        # with silently empty IMU columns. Check the port first and say what
+        # to do, rather than discovering it when P-HW-rho turns out unscoreable.
+        imu_port = os.environ.get('CORGI_IMU_PORT', '/dev/ttyTHS1')
+        if not os.path.exists(imu_port):
+            self._log('IMU port %s not present -- IMU columns will be empty'
+                      % imu_port, LOGLEVEL.WARN, 'system')
+        elif not os.access(imu_port, os.R_OK | os.W_OK):
+            self._log('IMU port %s is not writable; run  sudo chmod 777 %s  '
+                      '(once per boot) or the IMU node will die on startup'
+                      % (imu_port, imu_port), LOGLEVEL.WARN, 'system')
+
         success = self.process_manager.start_process(
             'imu',
             ['ros2', 'run', 'corgi_imu', 'imu_node'],
