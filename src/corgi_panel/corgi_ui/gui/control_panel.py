@@ -1012,7 +1012,7 @@ class CorgiControlPanel(QWidget):
                 pids.append(tok)
         return pids
 
-    def _launch_fpga(self):
+    def _launch_fpga(self, allow_prompt: bool = True):
         """Open the driver's UI in a terminal window, then verify over ssh.
 
         The headless launches all aborted -- three different theories about
@@ -1024,6 +1024,35 @@ class CorgiControlPanel(QWidget):
         terminal emulator, so a panel running over plain ssh still has the
         old behaviour rather than nothing.
         """
+        # Is one already up? The remote start script guards against this,
+        # but the terminal launcher does not run that script -- it runs
+        # run_fpga_driver.sh directly -- so without this check pressing Run
+        # ROS Bridge on a working driver opens a second one.
+        st, st_lines = sbrio.fpga_driver_status()
+        if st == 'ALREADY_RUNNING':
+            return 'ALREADY_RUNNING', (
+                ['already up on the sbRIO — not opening another window']
+                + st_lines)
+
+        if st not in ('NOT_RUNNING',):
+            # Cannot tell. A duplicate driver is worse than a refused start,
+            # so do not guess -- ask, and only when a human pressed the button.
+            if not allow_prompt:
+                return 'UNVERIFIED_SKIPPED', [
+                    'cannot check whether the driver is already running (%s), '
+                    'so not starting one automatically.' % st,
+                    'Press "Start FPGA Driver" yourself, or install the ssh '
+                    'key so the panel can check (see corgi_ui/core/sbrio.py).']
+            answer = QMessageBox.question(
+                self, 'Cannot check the FPGA driver',
+                'The panel cannot tell whether the driver is already running '
+                'on %s (%s).\n\nOpening a second one would leave two '
+                'drivers contending for the same FPGA.\n\n'
+                'Open a terminal and start it anyway?' % (sbrio.SBRIO_HOST, st),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return 'UNVERIFIED_SKIPPED', ['cancelled — nothing started']
+
         # grpccore aborts while SERVICING a registration, not while
         # starting (its own log: binds, "receive publisher", then abort). Its
         # only client is the bridge, so a bridge already running when the
@@ -1085,12 +1114,21 @@ class CorgiControlPanel(QWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
         try:
-            token, lines = self._launch_fpga()
+            token, lines = self._launch_fpga(allow_prompt=manual)
         finally:
             QApplication.restoreOverrideCursor()
             self.btn_fpga_driver.setEnabled(True)
 
         ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED')
+        # UNVERIFIED_SKIPPED is not a failure of the driver, just of the
+        # check -- log it as a warning rather than an error.
+        if token == 'UNVERIFIED_SKIPPED':
+            self._log('FPGA driver not started (could not verify whether one '
+                      'was already running)', LOGLEVEL.WARN, 'fpga_driver')
+            for line in lines[:4]:
+                self._log('  ' + line, LOGLEVEL.WARN, 'fpga_driver')
+            self._refresh_fpga_button()
+            return False
         headline = {
             'STARTED':         'FPGA driver started on %s' % sbrio.SBRIO_HOST,
             'ALREADY_RUNNING': 'FPGA driver already running on %s' % sbrio.SBRIO_HOST,
@@ -1104,6 +1142,8 @@ class CorgiControlPanel(QWidget):
             'NO_SSH':          'no ssh client on this machine',
             'UNVERIFIED':      'FPGA driver launched in a terminal — NOT '
                                'confirmed by this panel',
+            'UNVERIFIED_SKIPPED': 'FPGA driver NOT started — could not check '
+                                  'whether one is already running',
         }.get(token, 'FPGA driver: unrecognised result %r' % token)
 
         self._log(headline, LOGLEVEL.INFO if ok else LOGLEVEL.ERROR, 'fpga_driver')
