@@ -45,6 +45,21 @@ int main(int argc, char **argv) {
 
     RCLCPP_INFO(node->get_logger(), "Homing Starts");
 
+    // Home pose. NOT a zero -- this node only drives to a pose; the joint
+    // zero comes from the FSM's INIT/SET_ZERO. The old hard-coded 17 deg sat
+    // 0.1 deg off the 16.9 deg fold stop, so the legs parked against their
+    // mechanical limit and the PD drew current fighting it forever.
+    node->declare_parameter<double>("home_theta_deg", 25.0);
+    node->declare_parameter<double>("min_theta_deg", 17.0);
+    const double home_theta_deg = node->get_parameter("home_theta_deg").as_double();
+    const double min_theta_deg  = node->get_parameter("min_theta_deg").as_double();
+    const double home_theta_rad = home_theta_deg / 180.0 * M_PI;
+    const double min_theta_rad  = min_theta_deg / 180.0 * M_PI;
+    RCLCPP_INFO(node->get_logger(),
+                "Homing to theta = %.1f deg (fold-stop guard %.1f deg). "
+                "Override: --ros-args -p home_theta_deg:=<deg>",
+                home_theta_deg, min_theta_deg);
+
     double theta_err[4];
     double beta_err[4];
     double gamma_err[4];
@@ -96,20 +111,25 @@ int main(int argc, char **argv) {
         motor_cmd_modules[i]->torque_l = 0;
         motor_cmd_modules[i]->torque_h = 0;
 
-        theta_err[i] = (17/180.0*M_PI-motor_state_modules[i]->theta);
+        theta_err[i] = (home_theta_rad - motor_state_modules[i]->theta);
         beta_err[i] = (-motor_state_modules[i]->beta);
         gamma_err[i] = (-motor_state_modules[i]->gamma);
 
-        if (motor_cmd_modules[i]->theta < 17/180.0*M_PI) {
+        // The guard is about the FOLD STOP (~16.9 deg), not about the
+        // home target. They used to be the same number, but only because
+        // the target sat on the stop; coupling them would make a relaxed
+        // target reject exactly the legs that most need opening.
+        if (motor_cmd_modules[i]->theta < min_theta_rad) {
             // Name the leg and the value: "too small" alone gave no way to
             // tell a genuinely low leg from a state that never arrived.
             // Non-zero exit so the caller can tell this from success -- both
             // paths used to return 0.
             RCLCPP_WARN(node->get_logger(),
-                        "Leg %d theta is %.2f deg, below the 17 deg home "
-                        "target -- homing ABORTED, nothing was moved. Raise "
-                        "that leg above 17 deg and retry.",
-                        i, motor_cmd_modules[i]->theta * 180.0 / M_PI);
+                        "Leg %d theta is %.2f deg, below the %.1f deg fold-stop "
+                        "guard -- homing ABORTED, nothing was moved. Raise "
+                        "that leg and retry.",
+                        i, motor_cmd_modules[i]->theta * 180.0 / M_PI,
+                        min_theta_deg);
             rclcpp::shutdown();
             return 1;
         }
