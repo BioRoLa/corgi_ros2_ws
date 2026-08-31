@@ -102,6 +102,9 @@ class CorgiControlPanel(QWidget):
         self._robot_cmd_seq = 0
         self._pending_robot_mode = None
         self._last_confirmed_mode = None
+        # None = not yet known (the panel does not ssh at startup just to
+        # find out); True/False only ever set from what the sbRIO reported.
+        self._fpga_running = None
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
@@ -348,30 +351,18 @@ class CorgiControlPanel(QWidget):
         # that used to be a hand-typed ssh session left open in a terminal.
         # It sits above the bridge button because that is the order: driver,
         # then bridge, then everything else.
-        self.btn_fpga_driver = QPushButton('Start FPGA Driver (sbRIO)')
+        # One driver, one button. Not setCheckable: the checked state would
+        # flip on the click, before the sbRIO has said anything, so a failed
+        # start would sit there looking started.
+        self.btn_fpga_driver = QPushButton()
         self.btn_fpga_driver.clicked.connect(self._on_fpga_driver_clicked)
-        self.btn_fpga_driver.setToolTip(
-            'ssh to %s and run the FPGA driver.\n'
-            'Needs key-based ssh; see corgi_ui/core/sbrio.py for the one-time setup.'
-            % sbrio.target_description())
-
-        self.btn_fpga_stop = QPushButton('Stop')
-        self.btn_fpga_stop.setMaximumWidth(70)
-        self.btn_fpga_stop.clicked.connect(self._on_fpga_stop_clicked)
-        self.btn_fpga_stop.setToolTip(
-            'Stop grpccore + fpga_driver on the sbRIO.\n'
-            'SIGTERM first so the FPGA session is released cleanly.\n'
-            'Refused while the robot is Live or the trigger is on.')
+        self._refresh_fpga_button()
 
         if hasattr(self, 'use_sim_time') and self.use_sim_time:
-            for b in (self.btn_fpga_driver, self.btn_fpga_stop):
-                b.setEnabled(False)
-                b.setToolTip('No sbRIO in simulation mode')
+            self.btn_fpga_driver.setEnabled(False)
+            self.btn_fpga_driver.setToolTip('No sbRIO in simulation mode')
 
-        fpga_row = QHBoxLayout()
-        fpga_row.addWidget(self.btn_fpga_driver, 1)
-        fpga_row.addWidget(self.btn_fpga_stop, 0)
-        sidebar.addLayout(fpga_row)
+        sidebar.addWidget(self.btn_fpga_driver)
 
         # ROS Bridge button
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
@@ -888,18 +879,38 @@ class CorgiControlPanel(QWidget):
     # Event Handlers - sbRIO FPGA driver
     # ========================================================================
 
-    def _on_fpga_driver_clicked(self):
-        """Start the sbRIO's FPGA driver (grpccore + fpga_driver)."""
-        if self.use_sim_time:
-            self._log('No sbRIO in simulation mode', LOGLEVEL.WARN, 'fpga_driver')
-            return
-        self._start_fpga_driver(manual=True)
+    def _refresh_fpga_button(self):
+        """Label and tooltip follow _fpga_running, which follows the sbRIO."""
+        if self._fpga_running:
+            self.btn_fpga_driver.setText('Stop FPGA Driver (sbRIO)')
+            self.btn_fpga_driver.setToolTip(
+                'Stop grpccore + fpga_driver on %s.\n'
+                'SIGTERM first so the FPGA session is released cleanly.\n'
+                'Refused while the robot is Live or the trigger is on.'
+                % sbrio.SBRIO_HOST)
+        else:
+            self.btn_fpga_driver.setText('Start FPGA Driver (sbRIO)')
+            tip = ('ssh to %s and run the FPGA driver.\n'
+                   'Needs key-based ssh; see corgi_ui/core/sbrio.py for the '
+                   'one-time setup.' % sbrio.target_description())
+            if self._fpga_running is None:
+                tip += ('\nState not yet known — the panel does not ssh at '
+                        'startup. Pressing this is safe either way: a driver '
+                        'that is already up reports so and is left alone.')
+            self.btn_fpga_driver.setToolTip(tip)
 
-    def _on_fpga_stop_clicked(self):
-        """Stop grpccore + fpga_driver on the sbRIO."""
+    def _on_fpga_driver_clicked(self):
+        """One driver, one button: start it, or stop it."""
         if self.use_sim_time:
             self._log('No sbRIO in simulation mode', LOGLEVEL.WARN, 'fpga_driver')
             return
+        if self._fpga_running:
+            self._request_fpga_stop()
+        else:
+            self._start_fpga_driver(manual=True)
+
+    def _request_fpga_stop(self):
+        """Stop grpccore + fpga_driver on the sbRIO."""
 
         # Refuse under a live gait. Taking the FPGA layer away from a robot
         # that is running is not a stop, it is a fall: the motors lose their
@@ -934,19 +945,15 @@ class CorgiControlPanel(QWidget):
 
     def _stop_fpga_driver(self) -> bool:
         """SIGTERM on the sbRIO, escalating only if it will not go."""
-        prev_text = self.btn_fpga_stop.text()
-        for b in (self.btn_fpga_driver, self.btn_fpga_stop):
-            b.setEnabled(False)
-        self.btn_fpga_stop.setText('Stopping…')
+        self.btn_fpga_driver.setEnabled(False)
+        self.btn_fpga_driver.setText('Stopping FPGA driver…')
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
         try:
             token, lines = sbrio.stop_fpga_driver()
         finally:
             QApplication.restoreOverrideCursor()
-            for b in (self.btn_fpga_driver, self.btn_fpga_stop):
-                b.setEnabled(True)
-            self.btn_fpga_stop.setText(prev_text)
+            self.btn_fpga_driver.setEnabled(True)
 
         ok = token in ('STOPPED', 'STOPPED_HARD', 'NOT_RUNNING')
         headline = {
@@ -968,7 +975,8 @@ class CorgiControlPanel(QWidget):
             self._log('  ' + line,
                       LOGLEVEL.INFO if ok else LOGLEVEL.WARN, 'fpga_driver')
         if ok:
-            self.btn_fpga_driver.setText('Start FPGA Driver (sbRIO)')
+            self._fpga_running = False
+        self._refresh_fpga_button()
         return ok
 
     def _start_fpga_driver(self, manual: bool) -> bool:
@@ -979,7 +987,6 @@ class CorgiControlPanel(QWidget):
         is useful until it finishes. A worker thread here would buy an
         unresponsive-looking wait instead of an honest one.
         """
-        prev_text = self.btn_fpga_driver.text()
         self.btn_fpga_driver.setEnabled(False)
         self.btn_fpga_driver.setText('Starting FPGA driver…')
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -989,7 +996,6 @@ class CorgiControlPanel(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
             self.btn_fpga_driver.setEnabled(True)
-            self.btn_fpga_driver.setText(prev_text)
 
         ok = token in ('ALREADY_RUNNING', 'STARTED')
         headline = {
@@ -1013,7 +1019,8 @@ class CorgiControlPanel(QWidget):
             self._log('  starting the bridge anyway — start the driver by hand '
                       'if it is really down', LOGLEVEL.WARN, 'fpga_driver')
         if ok:
-            self.btn_fpga_driver.setText('FPGA Driver ✓  (start again)')
+            self._fpga_running = True
+        self._refresh_fpga_button()
         return ok
 
     # ========================================================================
