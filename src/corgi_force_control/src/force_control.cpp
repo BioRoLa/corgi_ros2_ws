@@ -120,7 +120,14 @@ ForceControlNode::ForceControlNode()
     // reader, but a BEST_EFFORT writer does NOT match a RELIABLE reader,
     // so touching the writer could silently unmatch a subscriber and stop
     // the robot. This direction cannot.
-    rclcpp::QoS imp_qos(rclcpp::KeepLast(1));
+    // Depth 5, not 1. The loop consumes at most ONE message per tick,
+    // so with two free-running 1 kHz loops that are not phase-locked,
+    // depth 1 discards every jitter surplus PERMANENTLY -- measured
+    // 2026-09-01 as ~780 Hz received against a clean 1000 Hz producer.
+    // Depth 5 lets a burst wait one tick instead, at a bounded cost of
+    // at most 5 ms of latency and only while saturated. BEST_EFFORT is
+    // the part that mattered; the depth was an over-correction.
+    rclcpp::QoS imp_qos(rclcpp::KeepLast(5));
     imp_qos.best_effort();
     imp_cmd_sub_ = this->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>(
         "impedance/command", imp_qos,
@@ -152,14 +159,33 @@ void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::Sh
     // line is how a run states whether that is still happening.
     ++imp_rx_count_;
     const double now_s = this->now().seconds();
-    if (imp_rx_t0_ == 0.0) { imp_rx_t0_ = now_s; imp_rx_count_ = 0; return; }
+    if (imp_rx_t0_ == 0.0) {
+        imp_rx_t0_ = now_s;
+        imp_rx_last_ = now_s;
+        imp_rx_count_ = 0;
+        return;
+    }
+
+    // The WORST gap, not just the mean. 780 Hz is equally consistent with
+    // harmless uniform jitter (worst gap ~3 ms) and with one 300 ms stall
+    // per second (worst gap 300 ms) -- and only the second one is a stutter
+    // you can feel. A 17.57 deg beta step needs >=102 consecutive template
+    // rows, so the historical holds were >=102 ms; a single-digit worst gap
+    // means that phenomenon is gone, whatever the mean says.
+    const double gap = now_s - imp_rx_last_;
+    imp_rx_last_ = now_s;
+    if (gap > imp_rx_worst_gap_) imp_rx_worst_gap_ = gap;
+
     if (now_s - imp_rx_t0_ >= 1.0) {
         const double hz = imp_rx_count_ / (now_s - imp_rx_t0_);
         RCLCPP_WARN(this->get_logger(),
-                    "IMP_CMD RX: %.0f Hz  (producer runs at 1000 Hz; below "
-                    "~900 the leg is being STEPPED, not tracked)", hz);
+                    "IMP_CMD RX: %.0f Hz, worst gap %.1f ms  (producer runs at "
+                    "1000 Hz. The GAP is the number that matters: under ~5 ms "
+                    "is jitter, over ~25 ms the leg is being STEPPED)",
+                    hz, imp_rx_worst_gap_ * 1000.0);
         imp_rx_t0_ = now_s;
         imp_rx_count_ = 0;
+        imp_rx_worst_gap_ = 0.0;
     }
 }
 

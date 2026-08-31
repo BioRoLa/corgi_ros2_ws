@@ -94,6 +94,8 @@ private:
     double state_probe_t0_ = 0.0;  // window for the per-leg theta probe
     long imp_rx_count_ = 0;   // impedance messages since the last report
     double imp_rx_t0_ = 0.0;  // when that report window opened
+    double imp_rx_last_ = 0.0;       // arrival time of the previous message
+    double imp_rx_worst_gap_ = 0.0;  // worst gap this window, seconds
     double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely
     double friction_deadband_ = 0.00288;  // rad; one CAN LSB is 0.1648 deg
     

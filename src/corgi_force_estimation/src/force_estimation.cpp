@@ -400,9 +400,21 @@ void ForceEstimationNode::run() {
         timer_cb();
         
         next_time += period;
+        // Ctrl-C invalidates the context between the ok() check above and
+        // this call, and sleep_until() then THROWS -- which is why this node
+        // died with SIGABRT and "context cannot be slept with because it's
+        // invalid" at the end of every single run. Cosmetic for control, but
+        // it ends every capture in a red ERROR and can truncate one.
+        if (!rclcpp::ok()) break;
+        try {
         if(!this->get_clock()->sleep_until(next_time)){
             RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
             break;
+        }
+        } catch (const rclcpp::exceptions::RCLError&) {
+            break;   // shutdown already invalidated the context
+        } catch (const std::runtime_error&) {
+            break;   // same, thrown as a plain runtime_error by rclcpp
         }
     }
 }
