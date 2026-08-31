@@ -114,6 +114,13 @@ report_pids() {
     echo "fpga_driver pid: $(running_pids)"
     echo "grpccore    pid: $(core_pids)"
 }
+
+# A C++ abort in the log is a definite answer and should not wait out the
+# whole start window.
+crash_line() {
+    grep -m1 -E "terminate called|std::logic_error|std::bad_alloc|Segmentation fault|error while loading shared libraries|command not found" \
+        "$LOG" 2>/dev/null
+}
 """
 
 _REMOTE_START = _COMMON + r"""
@@ -134,27 +141,74 @@ cd "$DIR" || { echo "NO_SCRIPT"; echo "cannot cd to $DIR"; exit 5; }
 # Truncate first: log_says_up must not read a PREVIOUS run's success line.
 : > "$LOG" 2>/dev/null || true
 
-if [ -x "$SCRIPT" ]; then RUN="$SCRIPT"; else RUN="sh $SCRIPT"; fi
-if command -v setsid >/dev/null 2>&1; then
-    setsid $RUN >"$LOG" 2>&1 </dev/null &
+# bash -lc, so /etc/profile and ~/.profile run exactly as they do in the
+# interactive session where this script is known to work. Without it the
+# driver aborts on a null getenv (see this module's docstring).
+if [ -x "$SCRIPT" ]; then
+    CMD="cd '$DIR' && '$SCRIPT'"
 else
-    nohup $RUN >"$LOG" 2>&1 </dev/null &
+    CMD="cd '$DIR' && sh '$SCRIPT'"
+fi
+if command -v setsid >/dev/null 2>&1; then
+    setsid bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
+else
+    nohup bash -lc "$CMD" >"$LOG" 2>&1 </dev/null &
 fi
 echo $! > "$PIDFILE" 2>/dev/null || true
 
+EVIDENCE=""
 n=0
 while [ $n -lt 15 ]; do
     sleep 1
-    if log_says_up; then echo "STARTED"; echo "evidence: the driver logged its FPGA session"; report_pids; sed -n '1,10p' "$LOG" 2>/dev/null; exit 0; fi
-    if have_driver;  then echo "STARTED"; echo "evidence: process table"; report_pids; sed -n '1,10p' "$LOG" 2>/dev/null; exit 0; fi
+    C=$(crash_line)
+    if [ -n "$C" ]; then
+        echo "FAILED"
+        echo "the driver ABORTED on startup: $C"
+        echo "--- last lines of $LOG ---"
+        tail -n 15 "$LOG" 2>/dev/null
+        exit 6
+    fi
+    if log_says_up; then EVIDENCE="the driver logged its FPGA session"; break; fi
+    if have_driver;  then EVIDENCE="process table"; break; fi
     n=$((n + 1))
 done
 
-echo "FAILED"
-echo "no FPGA session logged and no process found after 15 s"
-echo "--- last lines of $LOG ---"
-tail -n 15 "$LOG" 2>/dev/null
-exit 6
+if [ -z "$EVIDENCE" ]; then
+    echo "FAILED"
+    echo "no FPGA session logged and no process found after 15 s"
+    echo "--- last lines of $LOG ---"
+    tail -n 15 "$LOG" 2>/dev/null
+    exit 6
+fi
+
+# It EXISTED. That is not the same as it is running: the driver has been
+# seen alive at 1 s and gone by 50 s. Make it prove it survived.
+sleep 4
+C=$(crash_line)
+if [ -n "$C" ]; then
+    echo "FAILED"
+    echo "the driver started and then ABORTED: $C"
+    echo "--- last lines of $LOG ---"
+    tail -n 15 "$LOG" 2>/dev/null
+    exit 6
+fi
+if ! have_driver; then
+    echo "FAILED"
+    echo "the driver started and then EXITED within 5 s (no process left)"
+    echo "--- last lines of $LOG ---"
+    tail -n 15 "$LOG" 2>/dev/null
+    exit 6
+fi
+
+echo "STARTED"
+echo "evidence: $EVIDENCE, still alive after a settle"
+report_pids
+if ! log_says_up; then
+    echo "NOTE: no \"Session opened\"/\"IRQ reserved\" line yet -- the process"
+    echo "      is up but has not confirmed a working FPGA session."
+fi
+sed -n '1,10p' "$LOG" 2>/dev/null
+exit 0
 """
 
 _REMOTE_STOP = _COMMON + r"""
@@ -214,6 +268,13 @@ fi
 """
 
 
+_BANNER = ('NI Linux Real-Time', 'Log in with your NI-Auth credentials')
+
+
+def _is_banner(line: str) -> bool:
+    return any(b in line for b in _BANNER)
+
+
 def _ssh_argv(connect_timeout: int = 5):
     argv = [
         'ssh',
@@ -255,7 +316,10 @@ def _run(remote_script: str, timeout: float):
         return 'FAILED', ['ssh failed: %s' % exc]
 
     out = [ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip()]
-    err = [ln.rstrip() for ln in proc.stderr.splitlines() if ln.strip()]
+    # The sbRIO prints a login banner on every connection; it is not output
+    # and it made the panel log look like the driver was talking.
+    err = [ln.rstrip() for ln in proc.stderr.splitlines()
+           if ln.strip() and not _is_banner(ln)]
 
     for token in ('ALREADY_RUNNING', 'STARTED', 'STOPPED', 'STOPPED_HARD',
                   'NOT_RUNNING', 'NO_SCRIPT', 'FAILED'):
