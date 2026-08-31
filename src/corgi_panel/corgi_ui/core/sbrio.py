@@ -23,11 +23,24 @@ This needs key-based ssh from the Orin to the sbRIO. One-time setup, run on
 the Orin:
 
     ssh-keygen -t ed25519 -f ~/.ssh/id_sbrio -N ""
-    ssh-copy-id -i ~/.ssh/id_sbrio.pub admin@192.168.0.104
+    ssh-copy-id -i ~/.ssh/id_sbrio.pub admin@192.168.0.104   # asks for the
+                                                             # password ONCE
 
-Host/user/script path are overridable by environment so a re-addressed sbRIO
-does not need a rebuild:  CORGI_SBRIO_HOST, CORGI_SBRIO_USER,
-CORGI_SBRIO_SCRIPT.
+Note that ``id_sbrio`` is not one of the names ssh offers by default (it
+tries id_rsa / id_ecdsa / id_ed25519 / id_dsa and nothing else), so
+``ssh-copy-id`` installing it on the sbRIO is only half the job: the client
+has to be told to use it. We pass ``-i`` explicitly below whenever the file
+exists, which also means no ~/.ssh/config entry is required. If you would
+rather configure it once for every tool, this is the equivalent stanza:
+
+    Host 192.168.0.104
+        User admin
+        IdentityFile ~/.ssh/id_sbrio
+        IdentitiesOnly yes
+
+Host/user/script path/key are overridable by environment so a re-addressed
+sbRIO does not need a rebuild:  CORGI_SBRIO_HOST, CORGI_SBRIO_USER,
+CORGI_SBRIO_SCRIPT, CORGI_SBRIO_KEY.
 """
 
 import os
@@ -37,8 +50,11 @@ SBRIO_HOST = os.environ.get('CORGI_SBRIO_HOST', '192.168.0.104')
 SBRIO_USER = os.environ.get('CORGI_SBRIO_USER', 'admin')
 SBRIO_SCRIPT = os.environ.get('CORGI_SBRIO_SCRIPT',
                               '/home/admin/run_fpga_driver.sh')
+SBRIO_KEY = os.path.expanduser(
+    os.environ.get('CORGI_SBRIO_KEY', '~/.ssh/id_sbrio'))
 
-KEY_HINT = ("no passwordless ssh to the sbRIO -- run once on the Orin:  "
+KEY_HINT = ("no passwordless ssh to the sbRIO -- run once on the Orin "
+            "(ssh-copy-id asks for the sbRIO password, once):  "
             "ssh-keygen -t ed25519 -f ~/.ssh/id_sbrio -N '' && "
             "ssh-copy-id -i ~/.ssh/id_sbrio.pub %s@%s" % (SBRIO_USER, SBRIO_HOST))
 
@@ -111,14 +127,24 @@ fi
 
 
 def _ssh_argv(connect_timeout: int = 5):
-    return [
+    argv = [
         'ssh',
         '-o', 'BatchMode=yes',                     # never sit at a password prompt
         '-o', 'ConnectTimeout=%d' % connect_timeout,
         '-o', 'StrictHostKeyChecking=accept-new',
+    ]
+    # ssh's default identity list is id_rsa / id_ecdsa / id_ed25519 / id_dsa --
+    # id_sbrio is not on it, so a key installed by `ssh-copy-id -i` would never
+    # be OFFERED and the connection would fail as though setup had not happened.
+    # Named explicitly here; a ~/.ssh/config entry still works for anyone who
+    # prefers one, and is used unchanged when this file is absent.
+    if os.path.exists(SBRIO_KEY):
+        argv += ['-i', SBRIO_KEY]
+    argv += [
         '%s@%s' % (SBRIO_USER, SBRIO_HOST),
         'bash', '-s', '--', SBRIO_SCRIPT,
     ]
+    return argv
 
 
 def _run(remote_script: str, timeout: float):
