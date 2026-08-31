@@ -56,23 +56,26 @@ def gaps_from_series(times_s, values, bar_ms=BAR_MS):
     return gaps, span, (frozen / span if span > 0 else 0.0)
 
 
-def looks_periodic(values, min_reversals=8):
-    """Does this series turn around repeatedly?
+def monotonicity(values):
+    """|net travel| / |total travel|, in [0, 1].
 
-    The standup ramp is monotone: every hold in it is a freeze. A gait is
-    periodic: theta plateaus once per stride BY DESIGN, and counting those
-    as freezes reports a healthy robot as 61.5% frozen -- which is exactly
-    what this tool did to air run 3 before the guard existed.
+    Near 1: a ramp -- almost all movement is in one direction, and any hold
+    in it is a genuine freeze. Near 0: a gait -- it comes back to where it
+    started, so holds are the shape of the signal, not a fault.
+
+    Counting sign changes instead was the first attempt, and it refused a
+    real standup for "50 reversals": measured theta wobbles by a
+    micro-radian on the way up and every wobble looked like a turn.
     """
-    direction, reversals, prev = 0, 0, None
+    total = 0.0
+    prev = None
     for v in values:
-        if prev is not None and v != prev:
-            d = 1 if v > prev else -1
-            if direction and d != direction:
-                reversals += 1
-            direction = d
+        if prev is not None:
+            total += abs(v - prev)
         prev = v
-    return reversals >= min_reversals, reversals
+    if total <= 0:
+        return 1.0
+    return abs(values[-1] - values[0]) / total
 
 
 def report(label, times_s, values, bar_ms=BAR_MS):
@@ -81,18 +84,19 @@ def report(label, times_s, values, bar_ms=BAR_MS):
         print("  %-16s no usable changes" % label)
         return 0
 
-    periodic, reversals = looks_periodic(values)
-    if periodic:
-        print("  %-16s PERIODIC (%d reversals) -- NOT SCORED"
-              % (label, reversals))
-        print("        This looks like a gait, not the standup ramp. Holds "
-              "are expected once")
-        print("        per stride and counting them as freezes is "
-              "meaningless: on the HEALTHY")
-        print("        air run 3 that produced '223 gaps, 61.5% frozen'. "
-              "This tool is for")
-        print("        the PRE-TRIGGER STANDUP. For a gait, use cmd_rate.py "
-              "on cmd_beta_a.")
+    mono = monotonicity(values)
+    if mono < 0.5:
+        print("  %-16s NOT MONOTONE (%.2f) -- not scored"
+              % (label, mono))
+        print("        Only %.0f%% of this signal's travel is net, so it "
+              "returns to where it" % (100 * mono))
+        print("        started -- a gait, or a toggling term. Holds are then "
+              "the SHAPE of the")
+        print("        signal, not freezes: scoring them reported the healthy "
+              "air run 3 as")
+        print("        '223 gaps, 61.5%% frozen'. This test is for the "
+              "monotone standup ramp;")
+        print("        for a gait use cmd_rate.py on cmd_beta_a.")
         return 0
     print("  %-16s span %6.2f s   gaps>%.0fms: %-4d   frozen %5.1f%%   "
           "worst %6.1f ms"
@@ -103,15 +107,105 @@ def report(label, times_s, values, bar_ms=BAR_MS):
     return len(gaps)
 
 
+def preflight_bag(path):
+    """Say what is wrong with a bag before rosbag2 raises about it.
+
+    Three states worth telling apart, because they need different actions:
+    still recording, recorded but never closed, and simply not a bag.
+    """
+    import glob
+    import os
+    import subprocess
+
+    if not os.path.isdir(path):
+        if os.path.isfile(path) and path.endswith('.db3'):
+            return path, None
+        return path, "not a directory and not a .db3 file: %s" % path
+
+    db3 = sorted(glob.glob(os.path.join(path, '*.db3')))
+    meta = os.path.join(path, 'metadata.yaml')
+
+    if not db3:
+        return path, ("no .db3 inside %s -- nothing was recorded there" % path)
+
+    # Is a recorder still holding it? That is the common case and the
+    # sqlite 'disk I/O error' on a read-only open is its signature.
+    try:
+        out = subprocess.run(['pgrep', '-af', 'bag record'],
+                             capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        out = ''
+    if os.path.basename(path) in out or path in out:
+        return path, (
+            "a `ros2 bag record` is STILL RUNNING on this bag:\n    %s\n"
+            "Stop it first (Ctrl-C in its terminal, or pkill -f 'bag record'), "
+            "then re-run.\nThe writer holds the sqlite file, and metadata.yaml "
+            "is not written until it stops." % out.strip().splitlines()[0]
+            if out.strip() else "a bag recorder appears to be running")
+
+    if not os.path.exists(meta):
+        return path, (
+            "metadata.yaml is missing from %s, so the recording was never "
+            "closed cleanly.\nEither a recorder is still running, or it was "
+            "killed. Rebuild the index with:\n"
+            "    ros2 bag reindex %s\n"
+            "then re-run. (Falling back to the .db3 directly also works: "
+            "point this script at\n    %s )" % (path, path, db3[0]))
+
+    return path, None
+
+
 def from_bag(path):
-    import rosbag2_py
-    from rclpy.serialization import deserialize_message
-    from rosidl_runtime_py.utilities import get_message
+    # Preflight BEFORE importing rosbag2: a bag that is still recording
+    # and a shell with no ROS sourced are different problems, and a
+    # ModuleNotFoundError should not stand in for both.
+    path, problem = preflight_bag(path)
+    if problem:
+        print("cannot read the bag.\n")
+        print("  " + problem.replace("\n", "\n  "))
+        return 2
+
+    try:
+        import rosbag2_py
+        from rclpy.serialization import deserialize_message
+        from rosidl_runtime_py.utilities import get_message
+    except ImportError as exc:
+        print('the rosbag2 python API is not importable (%s).' % exc)
+        print('  Source your ROS environment first:')
+        print('      source /opt/ros/humble/setup.bash && '
+              'source install/setup.bash')
+        return 2
 
     reader = rosbag2_py.SequentialReader()
-    reader.open(rosbag2_py.StorageOptions(uri=path, storage_id='sqlite3'),
-                rosbag2_py.ConverterOptions('', ''))
-    types = {t.name: t.type for t in reader.get_all_topics_and_types()}
+    try:
+        reader.open(rosbag2_py.StorageOptions(uri=path, storage_id='sqlite3'),
+                    rosbag2_py.ConverterOptions('', ''))
+    except Exception as exc:
+        print("cannot read the bag: %s" % exc)
+        print("  If a recorder is still running, stop it and re-run.")
+        print("  If it was killed mid-write:  ros2 bag reindex %s" % path)
+        return 2
+    topics = reader.get_all_topics_and_types()
+    types = {t.name: t.type for t in topics}
+
+    # Inventory first. A bag that is missing the topics should say so before
+    # a silent pass over every message, not after.
+    print("bag: %s" % path)
+    print("  topics recorded:")
+    for t in sorted(types):
+        print("    %-24s %s" % (t, types[t]))
+    wanted_present = [t for t in ('/motor/command', '/motor/state',
+                                  '/impedance/command') if t in types]
+    if not wanted_present:
+        print()
+        print("  NONE of /motor/command, /motor/state, /impedance/command is")
+        print("  in this bag, so there is nothing to score. Record with:")
+        print("    ros2 bag record -o standup_$(date +%H%M%S) \\")
+        print("        /impedance/command /motor/command /motor/state")
+        print("  and start it BEFORE launching the controller.")
+        return 2
+    print("  reading %s ..." % ", ".join(wanted_present))
+    sys.stdout.flush()
 
     want = {
         '/motor/command': [('module_a.theta', 'cmd theta A'),
@@ -143,11 +237,15 @@ def from_bag(path):
             series[label][0].append((tns - t0) / 1e9)
             series[label][1].append(obj)
     if not series:
-        print("no usable topics in %s -- recorded %s"
-              % (path, ', '.join(sorted(types)) or 'nothing'))
+        print()
+        print("  the topics are present but no messages were read from them.")
+        print("  Most likely the bag was started and stopped without the")
+        print("  controller ever publishing -- i.e. no standup happened while")
+        print("  it was recording.")
         return 2
 
-    print("bag: %s" % path)
+    print("  %d messages of interest\n" % sum(len(v[0]) for v in series.values()))
+
     counts = {}
     for label, (ts, vs) in series.items():
         counts[label] = report(label, ts, vs)
