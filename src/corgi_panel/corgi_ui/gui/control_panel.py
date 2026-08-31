@@ -1504,11 +1504,28 @@ class CorgiControlPanel(QWidget):
         except Exception:
             return 0.0
 
+    # Channel 0 is NOT load current, and including it made the panel read
+    # ~14.4 A per board (~1.4 kW total) while the bench supply showed 48 V
+    # 2 A (~96 W). Measured across the three hardware air runs of
+    # 2026-08-31 (n = 348279 / 31953 / 61590 rows):
+    #
+    #   i_0        median 13.2-13.9 A, sd as low as 0.03, and it does not
+    #              move with the gait -- it correlates NEGATIVELY with total
+    #              |torque| (r = -0.29, -0.11). A real supply current rises
+    #              with torque.
+    #   i_1..i_7   median 0.0-0.3 A each, spiking to 2-6 A during the pronk,
+    #              and their sum correlates +0.67 with total |torque|.
+    #
+    # Summed over 1..7 both boards come to ~1.7 A, which is what the supply
+    # actually shows. What i_0 IS remains unidentified -- that lives in the
+    # power-board firmware -- so it is excluded rather than reinterpreted.
+    POWER_LOAD_CHANNELS = tuple(range(1, 8))
+
     def _sum_powerboard_current(self, state, board_prefix: str) -> float:
-        """Sum i_0 through i_7 for a powerboard."""
+        """Load current for one board: channels 1..7. See POWER_LOAD_CHANNELS."""
         return sum(
             self._get_float_field(state, f'{board_prefix}_i_{index}')
-            for index in range(8)
+            for index in self.POWER_LOAD_CHANNELS
         )
 
     def _update_power_badges(
@@ -1528,6 +1545,13 @@ class CorgiControlPanel(QWidget):
         soc_label.setText(f"{soc:.0f} %")
         current_label.setText(f"{current:.2f} A")
         power_label.setText(f"{power:.1f} W")
+
+        note = ('Sum of i_1..i_7. Channel 0 is excluded: it sits at a near '
+                'constant ~13.5 A, does not move with the gait, and '
+                'correlates negatively with torque — it is not load current. '
+                'Including it read ~1.4 kW against a supply showing ~96 W.')
+        current_label.setToolTip(note)
+        power_label.setToolTip(note)
     
     def _calculate_soc(self, v_total: float) -> float:
         """Calculate state of charge from voltage"""
