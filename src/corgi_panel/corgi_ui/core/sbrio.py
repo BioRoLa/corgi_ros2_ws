@@ -48,6 +48,8 @@ CORGI_SBRIO_SCRIPT, CORGI_SBRIO_KEY.
 """
 
 import os
+import shlex
+import shutil
 import subprocess
 
 SBRIO_HOST = os.environ.get('CORGI_SBRIO_HOST', '192.168.0.104')
@@ -366,6 +368,72 @@ def _run(remote_script: str, timeout: float):
             or 'could not resolve' in blob or 'connection refused' in blob):
         return 'UNREACHABLE', ['cannot reach %s@%s' % (SBRIO_USER, SBRIO_HOST)] + err
     return 'FAILED', (out + err) or ['ssh exited %d with no output' % proc.returncode]
+
+
+# Terminal emulators, most-likely-first. Each entry builds the argv that
+# runs one shell command in a new window; they disagree about the flag, which
+# is the only reason this is a table.
+_TERMINALS = (
+    ('gnome-terminal', lambda t, c: ['gnome-terminal', '--title', t, '--',
+                                     'bash', '-lc', c]),
+    ('x-terminal-emulator', lambda t, c: ['x-terminal-emulator', '-T', t,
+                                          '-e', 'bash', '-lc', c]),
+    ('konsole', lambda t, c: ['konsole', '-p', 'tabtitle=%s' % t,
+                              '-e', 'bash', '-lc', c]),
+    ('mate-terminal', lambda t, c: ['mate-terminal', '--title', t, '--',
+                                    'bash', '-lc', c]),
+    ('xfce4-terminal', lambda t, c: ['xfce4-terminal', '--title', t,
+                                     '--command', 'bash -lc %s' % shlex.quote(c)]),
+    ('xterm', lambda t, c: ['xterm', '-T', t, '-e', 'bash', '-lc', c]),
+)
+
+
+def _remote_command() -> str:
+    """The command run inside the terminal window: exactly the manual recipe,
+    then a pause so a driver that exits leaves its reason on screen."""
+    key = ''
+    if os.path.exists(SBRIO_KEY):
+        key = '-i %s ' % shlex.quote(SBRIO_KEY)
+    inner = 'cd %s && %s' % (shlex.quote(os.path.dirname(SBRIO_SCRIPT)),
+                             shlex.quote(SBRIO_SCRIPT))
+    # No BatchMode here, deliberately: this window is interactive, so if key
+    # auth is not set up the user can type the password into their own
+    # terminal. That is the one place a password legitimately goes.
+    return (
+        "ssh -t %s-o StrictHostKeyChecking=accept-new %s@%s %s; "
+        "rc=$?; echo; echo '--- FPGA driver exited (status '$rc') ---'; "
+        "read -r -p 'press Enter to close this window '"
+        % (key, SBRIO_USER, SBRIO_HOST, shlex.quote(inner))
+    )
+
+
+def launch_in_terminal():
+    """Open the driver's UI in a new terminal window.
+
+    Returns (token, lines): LAUNCHED_TERMINAL / NO_DISPLAY / NO_TERMINAL.
+    Launching is not the same as running -- the caller verifies separately.
+    """
+    if not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+        return 'NO_DISPLAY', ['no DISPLAY -- cannot open a terminal window '
+                              '(running headless over ssh?)']
+
+    cmd = _remote_command()
+    title = 'Corgi FPGA Driver — %s' % SBRIO_HOST
+    tried = []
+    for name, build in _TERMINALS:
+        if not shutil.which(name):
+            tried.append(name)
+            continue
+        try:
+            subprocess.Popen(build(title, cmd), start_new_session=True,
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+            return 'LAUNCHED_TERMINAL', ['opened a %s window running the '
+                                         'driver on %s' % (name, SBRIO_HOST)]
+        except Exception as exc:
+            tried.append('%s (%s)' % (name, exc))
+    return 'NO_TERMINAL', ['no terminal emulator found; tried: %s'
+                           % ', '.join(tried)]
 
 
 def start_fpga_driver(timeout: float = 30.0):

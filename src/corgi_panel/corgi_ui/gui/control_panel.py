@@ -992,6 +992,52 @@ class CorgiControlPanel(QWidget):
         self._refresh_fpga_button()
         return ok
 
+    def _launch_fpga(self):
+        """Open the driver's UI in a terminal window, then verify over ssh.
+
+        The headless launches all aborted -- three different theories about
+        why, all wrong -- while running it in a terminal works every time.
+        So use the working path and verify separately, rather than guess a
+        fourth time at which property of a terminal session matters.
+
+        Falls back to the headless launch when there is no display or no
+        terminal emulator, so a panel running over plain ssh still has the
+        old behaviour rather than nothing.
+        """
+        token, lines = sbrio.launch_in_terminal()
+
+        if token != 'LAUNCHED_TERMINAL':
+            self._log('cannot open a terminal window (%s) — falling back to '
+                      'the headless launch, which is known to abort on this '
+                      'driver' % token, LOGLEVEL.WARN, 'fpga_driver')
+            for line in lines[:4]:
+                self._log('  ' + line, LOGLEVEL.WARN, 'fpga_driver')
+            return sbrio.start_fpga_driver()
+
+        self._log(lines[0] if lines else 'terminal opened',
+                  LOGLEVEL.INFO, 'fpga_driver')
+        self._log('  watch that window: it shows the driver\'s dashboard, and '
+                  'holds the reason on screen if it exits',
+                  LOGLEVEL.INFO, 'fpga_driver')
+
+        # Launching a window is not starting a driver. Ask the sbRIO.
+        self.btn_fpga_driver.setText('Verifying FPGA driver…')
+        for attempt in range(8):
+            QApplication.processEvents()
+            st, st_lines = sbrio.fpga_driver_status()
+            if st == 'ALREADY_RUNNING':
+                return 'STARTED', ['confirmed running on the sbRIO'] + st_lines
+            if st in ('NO_KEY', 'NO_SSH', 'UNREACHABLE'):
+                # The terminal window does not need a key; this check does.
+                return 'UNVERIFIED', [
+                    'the terminal window is open and may well be running the '
+                    'driver, but this panel cannot confirm it (%s).' % st,
+                    'Look at the window. To let the panel check and stop it, '
+                    'install the ssh key — see corgi_ui/core/sbrio.py.'] + st_lines
+        return 'FAILED', [
+            'a terminal opened but no driver was running on the sbRIO 8 '
+            'checks later — read that window, it holds the reason'] + st_lines
+
     def _start_fpga_driver(self, manual: bool) -> bool:
         """Bring the driver up over ssh and report what happened.
 
@@ -1005,12 +1051,12 @@ class CorgiControlPanel(QWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
         try:
-            token, lines = sbrio.start_fpga_driver()
+            token, lines = self._launch_fpga()
         finally:
             QApplication.restoreOverrideCursor()
             self.btn_fpga_driver.setEnabled(True)
 
-        ok = token in ('ALREADY_RUNNING', 'STARTED')
+        ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED')
         headline = {
             'STARTED':         'FPGA driver started on %s' % sbrio.SBRIO_HOST,
             'ALREADY_RUNNING': 'FPGA driver already running on %s' % sbrio.SBRIO_HOST,
@@ -1022,6 +1068,8 @@ class CorgiControlPanel(QWidget):
             'UNREACHABLE':     'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
             'TIMEOUT':         'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
             'NO_SSH':          'no ssh client on this machine',
+            'UNVERIFIED':      'FPGA driver launched in a terminal — NOT '
+                               'confirmed by this panel',
         }.get(token, 'FPGA driver: unrecognised result %r' % token)
 
         self._log(headline, LOGLEVEL.INFO if ok else LOGLEVEL.ERROR, 'fpga_driver')
