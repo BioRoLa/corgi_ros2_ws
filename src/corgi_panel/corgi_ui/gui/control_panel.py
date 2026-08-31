@@ -11,7 +11,8 @@ import numpy as np
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication
+    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
+    QMessageBox
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -36,6 +37,45 @@ except ImportError:
     GPIO_defined = False
 
 class CorgiControlPanel(QWidget):
+
+    # The FSM's own names read as a flat list of synonyms -- "System On",
+    # "Idle" and "Standby" all sound like the robot is doing nothing, and
+    # "Idle" in particular sounds like the BOTTOM of the ladder when it is
+    # the middle rung and the only door to the state where the robot runs.
+    # These are the operator-facing names, describing position in the
+    # workflow and what entering each state actually does.
+    #
+    #     Powered (SYSTEM_ON 0) <-> Arm (IDLE 2) <-> Live (STANDBY 3)
+    #     Motor Config (MOTORCONFIG 4) hangs off Powered / Arm.
+    #
+    # IDLE is emphatically NOT idle: entering it runs the motors' HALL
+    # CALIBRATION (Alex, 2026-08-31 -- the FSM lives in sbRIO firmware this
+    # repo cannot see, so this is not derivable from the source here). That
+    # is why it is the only door to Live, and why calling it 'Idle' -- or
+    # 'Ready' -- misleads in the direction that matters: it sounds like a
+    # state where nothing happens, and it is a state where the motors move.
+    #
+    # The canonical name is never hidden: it rides on every button's tooltip
+    # and in the mode readout, because the firmware, the logs and the gRPC
+    # enum all still say STANDBY.
+    MODE_LABEL = {
+        ROBOTMODE.SYSTEM_ON:   'Powered',
+        ROBOTMODE.INIT:        'Init',
+        ROBOTMODE.IDLE:        'Armed',
+        ROBOTMODE.STANDBY:     'Live',
+        ROBOTMODE.MOTORCONFIG: 'Motor Config',
+    }
+
+    @classmethod
+    def _mode_text(cls, mode) -> str:
+        """'Live \u00b7 STANDBY' -- friendly first, canonical alongside, so the
+        panel and the robot's own log lines can be matched up at a glance."""
+        try:
+            enum = ROBOTMODE(mode)
+        except ValueError:
+            return '---'
+        return '%s \u00b7 %s' % (cls.MODE_LABEL.get(enum, enum.name), enum.name)
+
     """
     Main Control Panel for Corgi Robot
     
@@ -314,10 +354,24 @@ class CorgiControlPanel(QWidget):
             'ssh to %s and run the FPGA driver.\n'
             'Needs key-based ssh; see corgi_ui/core/sbrio.py for the one-time setup.'
             % sbrio.target_description())
+
+        self.btn_fpga_stop = QPushButton('Stop')
+        self.btn_fpga_stop.setMaximumWidth(70)
+        self.btn_fpga_stop.clicked.connect(self._on_fpga_stop_clicked)
+        self.btn_fpga_stop.setToolTip(
+            'Stop grpccore + fpga_driver on the sbRIO.\n'
+            'SIGTERM first so the FPGA session is released cleanly.\n'
+            'Refused while the robot is Live or the trigger is on.')
+
         if hasattr(self, 'use_sim_time') and self.use_sim_time:
-            self.btn_fpga_driver.setEnabled(False)
-            self.btn_fpga_driver.setToolTip('No sbRIO in simulation mode')
-        sidebar.addWidget(self.btn_fpga_driver)
+            for b in (self.btn_fpga_driver, self.btn_fpga_stop):
+                b.setEnabled(False)
+                b.setToolTip('No sbRIO in simulation mode')
+
+        fpga_row = QHBoxLayout()
+        fpga_row.addWidget(self.btn_fpga_driver, 1)
+        fpga_row.addWidget(self.btn_fpga_stop, 0)
+        sidebar.addLayout(fpga_row)
 
         # ROS Bridge button
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
@@ -342,19 +396,16 @@ class CorgiControlPanel(QWidget):
         mode_h_layout.setContentsMargins(5, 5, 5, 5)
         
         lbl_mode_title = QLabel("Current mode:")
-        # The ladder, so the numbers on the buttons mean something:
-        #   1 System On  <->  2 Idle  <->  3 Standby (home & run need this)
-        #   Motor Config hangs off System On / Idle.
-        # Canonical names are kept because they are what the firmware,
-        # the logs and the gRPC enum use -- renaming them here would
-        # only move the confusion.
+        # Friendly name first, canonical second -- see MODE_LABEL. The
+        # readout is the one place both have to be visible, because the
+        # robot's own log lines say STANDBY while this panel says Live.
         lbl_mode_title.setStyleSheet("color: #888; font-size: 12px;")
         
         self.label_robot_mode_value = QLabel("---")
         self.label_robot_mode_value.setObjectName("StatusLabel")
         self.label_robot_mode_value.setAlignment(Qt.AlignCenter)
         self.label_robot_mode_value.setStyleSheet(
-            "color: #bdbdbd; font-weight: bold; font-size: 20px;"
+            "color: #bdbdbd; font-weight: bold; font-size: 16px;"
         )
         
         mode_h_layout.addWidget(lbl_mode_title)
@@ -362,23 +413,37 @@ class CorgiControlPanel(QWidget):
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('①  System On  (lowest)')
+        self.btn_systemon = QPushButton('1 \u00b7 Powered')
+        self.btn_systemon.setToolTip(
+            'SYSTEM_ON (0). The state the robot boots into, and where the '
+            'e-stop retreats to from anywhere but Live.\nUp: Arm.')
         self.btn_systemon.setObjectName("SystemOnBtn")
         self.btn_systemon.setCheckable(True)
         self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.SYSTEM_ON))
         self.btn_systemon.setEnabled(False)
         
-        self.btn_idle = QPushButton('②  Idle  (mid)')
+        self.btn_idle = QPushButton('2 \u00b7 Arm  \u2014  hall calib')
+        self.btn_idle.setToolTip(
+            "IDLE (2). Entering this runs the motors' HALL CALIBRATION and "
+            'leaves them armed \u2014 the motors MOVE here; this is not a '
+            'rest state.\nAlso where you sit between runs, and where the '
+            'e-stop drops you FROM Live.\nDown: Powered.  Up: Live.')
         self.btn_idle.setCheckable(True)
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('③  Standby  (ready — home & run)')
+        self.btn_standby = QPushButton('3 \u00b7 Live  \u2014  home && run')
+        self.btn_standby.setToolTip(
+            'STANDBY (3). Commands are accepted here: homing and gaits run '
+            'in this state, and nowhere else.\nDown: Arm.')
         self.btn_standby.setCheckable(True)
         self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
         self.btn_standby.setEnabled(False)
         
-        self.btn_motorconfig = QPushButton('Motor Config  (side branch)')
+        self.btn_motorconfig = QPushButton('Motor Config')
+        self.btn_motorconfig.setToolTip(
+            'MOTORCONFIG (4). Side branch off Powered / Arm, not a rung '
+            'on the ladder. Opens the config panel on entry.')
         self.btn_motorconfig.setObjectName("ConfigBtn")
         self.btn_motorconfig.setCheckable(True)
         self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.MOTORCONFIG))
@@ -830,6 +895,82 @@ class CorgiControlPanel(QWidget):
             return
         self._start_fpga_driver(manual=True)
 
+    def _on_fpga_stop_clicked(self):
+        """Stop grpccore + fpga_driver on the sbRIO."""
+        if self.use_sim_time:
+            self._log('No sbRIO in simulation mode', LOGLEVEL.WARN, 'fpga_driver')
+            return
+
+        # Refuse under a live gait. Taking the FPGA layer away from a robot
+        # that is running is not a stop, it is a fall: the motors lose their
+        # command source with the legs loaded. The e-stop is the control for
+        # that situation; this button is for between runs.
+        mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', -1)
+        if self.btn_trigger.isChecked() or mode == ROBOTMODE.STANDBY:
+            why = []
+            if self.btn_trigger.isChecked():
+                why.append('the trigger is ON')
+            if mode == ROBOTMODE.STANDBY:
+                why.append('the robot is Live (STANDBY)')
+            self._log('REFUSED to stop the FPGA driver: %s. Drop to Armed '
+                      '(IDLE) and stop the trigger first -- pulling the command '
+                      'source out from under a running gait is not a stop. Use '
+                      'E-STOP if you need the robot to stop NOW.'
+                      % ' and '.join(why), LOGLEVEL.ERROR, 'fpga_driver')
+            return
+
+        answer = QMessageBox.question(
+            self, 'Stop the FPGA driver?',
+            'This stops grpccore and fpga_driver on the sbRIO (%s).\n\n'
+            'The ROS bridge will lose its gRPC server, and nothing can '
+            'command the motors until the driver is started again.\n\n'
+            'Continue?' % sbrio.SBRIO_HOST,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            self._log('FPGA driver stop cancelled', LOGLEVEL.INFO, 'fpga_driver')
+            return
+
+        self._stop_fpga_driver()
+
+    def _stop_fpga_driver(self) -> bool:
+        """SIGTERM on the sbRIO, escalating only if it will not go."""
+        prev_text = self.btn_fpga_stop.text()
+        for b in (self.btn_fpga_driver, self.btn_fpga_stop):
+            b.setEnabled(False)
+        self.btn_fpga_stop.setText('Stopping…')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            token, lines = sbrio.stop_fpga_driver()
+        finally:
+            QApplication.restoreOverrideCursor()
+            for b in (self.btn_fpga_driver, self.btn_fpga_stop):
+                b.setEnabled(True)
+            self.btn_fpga_stop.setText(prev_text)
+
+        ok = token in ('STOPPED', 'STOPPED_HARD', 'NOT_RUNNING')
+        headline = {
+            'STOPPED':      'FPGA driver stopped on %s' % sbrio.SBRIO_HOST,
+            'STOPPED_HARD': 'FPGA driver KILLED on %s -- it ignored SIGTERM; if '
+                            'the next start fails, reboot the sbRIO'
+                            % sbrio.SBRIO_HOST,
+            'NOT_RUNNING':  'FPGA driver was not running on %s' % sbrio.SBRIO_HOST,
+            'NO_KEY':       'sbRIO refused key-based ssh',
+            'UNREACHABLE':  'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
+            'TIMEOUT':      'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
+            'NO_SSH':       'no ssh client on this machine',
+        }.get(token, 'FPGA driver did not stop')
+
+        level = LOGLEVEL.INFO if token in ('STOPPED', 'NOT_RUNNING') else (
+            LOGLEVEL.WARN if token == 'STOPPED_HARD' else LOGLEVEL.ERROR)
+        self._log(headline, level, 'fpga_driver')
+        for line in lines[:12]:
+            self._log('  ' + line,
+                      LOGLEVEL.INFO if ok else LOGLEVEL.WARN, 'fpga_driver')
+        if ok:
+            self.btn_fpga_driver.setText('Start FPGA Driver (sbRIO)')
+        return ok
+
     def _start_fpga_driver(self, manual: bool) -> bool:
         """Bring the driver up over ssh and report what happened.
 
@@ -854,12 +995,15 @@ class CorgiControlPanel(QWidget):
         headline = {
             'STARTED':         'FPGA driver started on %s' % sbrio.SBRIO_HOST,
             'ALREADY_RUNNING': 'FPGA driver already running on %s' % sbrio.SBRIO_HOST,
+            'FAILED':          'FPGA driver did not come up on %s -- its own '
+                               'log follows' % sbrio.SBRIO_HOST,
+            'NOT_RUNNING':     'FPGA driver is not running on %s' % sbrio.SBRIO_HOST,
             'NO_SCRIPT':       'FPGA start script not found (%s)' % sbrio.target_description(),
             'NO_KEY':          'sbRIO refused key-based ssh',
             'UNREACHABLE':     'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
             'TIMEOUT':         'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
             'NO_SSH':          'no ssh client on this machine',
-        }.get(token, 'FPGA driver did not start')
+        }.get(token, 'FPGA driver: unrecognised result %r' % token)
 
         self._log(headline, LOGLEVEL.INFO if ok else LOGLEVEL.ERROR, 'fpga_driver')
         for line in lines[:12]:
@@ -1025,11 +1169,13 @@ class CorgiControlPanel(QWidget):
         if current == ROBOTMODE.STANDBY:
             robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
             self._pending_robot_mode = int(ROBOTMODE.IDLE)
-            self.log_widget.add_log('E-Stop: STANDBY -> IDLE', LOGLEVEL.WARN, 'orin')
+            self.log_widget.add_log('E-Stop: Live (STANDBY) -> Armed (IDLE)',
+                                    LOGLEVEL.WARN, 'orin')
         else:
             robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
             self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self.log_widget.add_log('E-Stop: -> SYSTEM_ON', LOGLEVEL.WARN, 'orin')
+            self.log_widget.add_log('E-Stop: -> Powered (SYSTEM_ON)',
+                                    LOGLEVEL.WARN, 'orin')
         
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
@@ -1234,7 +1380,7 @@ class CorgiControlPanel(QWidget):
         # Check if pending mode transition completed
         if self._pending_robot_mode is not None and current_mode == int(self._pending_robot_mode):
             self.log_widget.add_log(
-                f'Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})',
+                f'Robot mode reached: {self._mode_text(self._pending_robot_mode)} ({self._pending_robot_mode})',
                 LOGLEVEL.INFO, 'system'
             )
             self._pending_robot_mode = None
@@ -1247,8 +1393,7 @@ class CorgiControlPanel(QWidget):
         
         # Update mode display
         try:
-            mode_enum = ROBOTMODE(state.robot_mode)
-            mode_text = mode_enum.name
+            mode_text = self._mode_text(state.robot_mode)
         except ValueError:
             mode_text = "---"
         

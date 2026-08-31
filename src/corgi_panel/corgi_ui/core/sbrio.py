@@ -62,19 +62,64 @@ KEY_HINT = ("no passwordless ssh to the sbRIO -- run once on the Orin "
 # Sent as text rather than installed as a file so there is nothing to get out
 # of date on the sbRIO, and nothing for colcon to fail to install on the Orin.
 #
-# pgrep -x (exact process NAME) rather than -f (full command line): -f would
-# match this very bash, whose argv carries the script path, and every start
-# would report ALREADY_RUNNING.
-_REMOTE_START = r'''
+# HISTORY, because it cost a bring-up: the first version detected the driver
+# with `pgrep -x fpga_driver`. That does not work on the sbRIO. The driver
+# launched perfectly every time and was reported FAILED every time -- and
+# because a failed start is not a start, each press launched ANOTHER instance.
+# Nothing here may depend on one process tool existing.
+_COMMON = r"""
 set -u
 SCRIPT="${1:-/home/admin/run_fpga_driver.sh}"
 DIR=$(dirname "$SCRIPT")
 LOG="$DIR/panel_fpga_start.log"
+PIDFILE="$DIR/panel_fpga.pid"
+SELF=$$
 
-if pgrep -x fpga_driver >/dev/null 2>&1; then
+# Union of every detector available, deduped. Each contributes nothing when
+# its tool is missing or unsupported, so the answer degrades instead of lying.
+running_pids() {
+    {
+        if command -v pgrep >/dev/null 2>&1; then
+            pgrep -x fpga_driver 2>/dev/null
+        fi
+        ps -eo pid=,comm= 2>/dev/null | awk '$2 == "fpga_driver" { print $1 }'
+        ps ax 2>/dev/null | awk -v self="$SELF" \
+            '$1 != self && /fpga_driver/ && !/run_fpga_driver/ { print $1 }'
+        if [ -f "$PIDFILE" ]; then
+            p=$(cat "$PIDFILE" 2>/dev/null)
+            if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then echo "$p"; fi
+        fi
+    } 2>/dev/null | sort -u | tr '\n' ' '
+}
+
+core_pids() {
+    {
+        if command -v pgrep >/dev/null 2>&1; then
+            pgrep -x grpccore 2>/dev/null
+        fi
+        ps -eo pid=,comm= 2>/dev/null | awk '$2 == "grpccore" { print $1 }'
+    } 2>/dev/null | sort -u | tr '\n' ' '
+}
+
+have_driver() { [ -n "$(running_pids | tr -d ' ')" ]; }
+
+# The driver's own words. Independent of every process tool, and the only
+# evidence that it reached a working FPGA session rather than merely existing.
+log_says_up() {
+    grep -q "Session opened" "$LOG" 2>/dev/null || \
+    grep -q "IRQ reserved"  "$LOG" 2>/dev/null
+}
+
+report_pids() {
+    echo "fpga_driver pid: $(running_pids)"
+    echo "grpccore    pid: $(core_pids)"
+}
+"""
+
+_REMOTE_START = _COMMON + r"""
+if have_driver; then
     echo "ALREADY_RUNNING"
-    echo "fpga_driver pid: $(pgrep -x fpga_driver | tr '\n' ' ')"
-    echo "grpccore    pid: $(pgrep -x grpccore | tr '\n' ' ')"
+    report_pids
     exit 0
 fi
 
@@ -86,44 +131,87 @@ fi
 
 cd "$DIR" || { echo "NO_SCRIPT"; echo "cannot cd to $DIR"; exit 5; }
 
+# Truncate first: log_says_up must not read a PREVIOUS run's success line.
+: > "$LOG" 2>/dev/null || true
+
 if [ -x "$SCRIPT" ]; then RUN="$SCRIPT"; else RUN="sh $SCRIPT"; fi
 if command -v setsid >/dev/null 2>&1; then
     setsid $RUN >"$LOG" 2>&1 </dev/null &
 else
     nohup $RUN >"$LOG" 2>&1 </dev/null &
 fi
+echo $! > "$PIDFILE" 2>/dev/null || true
 
-# The driver opens its FPGA session about 2.5 s in; wait for the process, not
-# for a fixed sleep, so a healthy start returns as soon as it is up.
 n=0
-while [ $n -lt 12 ]; do
+while [ $n -lt 15 ]; do
     sleep 1
-    if pgrep -x fpga_driver >/dev/null 2>&1; then break; fi
+    if log_says_up; then echo "STARTED"; echo "evidence: the driver logged its FPGA session"; report_pids; sed -n '1,10p' "$LOG" 2>/dev/null; exit 0; fi
+    if have_driver;  then echo "STARTED"; echo "evidence: process table"; report_pids; sed -n '1,10p' "$LOG" 2>/dev/null; exit 0; fi
     n=$((n + 1))
 done
 
-if pgrep -x fpga_driver >/dev/null 2>&1; then
-    echo "STARTED"
-    echo "fpga_driver pid: $(pgrep -x fpga_driver | tr '\n' ' ')"
-    echo "grpccore    pid: $(pgrep -x grpccore | tr '\n' ' ')"
-    sed -n '1,10p' "$LOG" 2>/dev/null
+echo "FAILED"
+echo "no FPGA session logged and no process found after 15 s"
+echo "--- last lines of $LOG ---"
+tail -n 15 "$LOG" 2>/dev/null
+exit 6
+"""
+
+_REMOTE_STOP = _COMMON + r"""
+D=$(running_pids)
+C=$(core_pids)
+
+if [ -z "$(printf '%s' "$D$C" | tr -d ' ')" ]; then
+    echo "NOT_RUNNING"
     exit 0
 fi
 
-echo "FAILED"
-tail -n 20 "$LOG" 2>/dev/null
-exit 6
-'''
+# SIGTERM first, and give it real time. The driver closes its FPGA session and
+# releases the reserved IRQ on the way out; a killed one can leave the session
+# held, and then the NEXT start fails with the board still owned by a corpse.
+kill -TERM $D $C 2>/dev/null
 
-_REMOTE_STATUS = r'''
-if pgrep -x fpga_driver >/dev/null 2>&1; then
+n=0
+while [ $n -lt 10 ]; do
+    sleep 1
+    if [ -z "$(printf '%s' "$(running_pids)$(core_pids)" | tr -d ' ')" ]; then
+        rm -f "$PIDFILE" 2>/dev/null
+        echo "STOPPED"
+        exit 0
+    fi
+    n=$((n + 1))
+done
+
+echo "did not exit on SIGTERM after 10 s -- escalating to SIGKILL"
+echo "the FPGA session may be left held; if the next start fails, reboot the sbRIO"
+kill -KILL $(running_pids) $(core_pids) 2>/dev/null
+sleep 1
+
+if [ -n "$(printf '%s' "$(running_pids)$(core_pids)" | tr -d ' ')" ]; then
+    echo "FAILED"
+    report_pids
+    exit 7
+fi
+
+rm -f "$PIDFILE" 2>/dev/null
+echo "STOPPED_HARD"
+exit 0
+"""
+
+_REMOTE_STATUS = _COMMON + r"""
+if have_driver; then
     echo "ALREADY_RUNNING"
-    echo "fpga_driver pid: $(pgrep -x fpga_driver | tr '\n' ' ')"
-    echo "grpccore    pid: $(pgrep -x grpccore | tr '\n' ' ')"
+    report_pids
+    if log_says_up; then
+        echo "the driver logged a working FPGA session"
+    else
+        echo "WARNING: process is up but no FPGA session line in $LOG"
+    fi
 else
     echo "NOT_RUNNING"
+    report_pids
 fi
-'''
+"""
 
 
 def _ssh_argv(connect_timeout: int = 5):
@@ -149,8 +237,8 @@ def _ssh_argv(connect_timeout: int = 5):
 
 def _run(remote_script: str, timeout: float):
     """Returns (token, lines). token is one of
-    ALREADY_RUNNING / STARTED / NOT_RUNNING / FAILED / NO_SCRIPT /
-    NO_KEY / UNREACHABLE / TIMEOUT / NO_SSH."""
+    ALREADY_RUNNING / STARTED / STOPPED / STOPPED_HARD / NOT_RUNNING /
+    FAILED / NO_SCRIPT / NO_KEY / UNREACHABLE / TIMEOUT / NO_SSH."""
     try:
         proc = subprocess.run(
             _ssh_argv(),
@@ -169,8 +257,8 @@ def _run(remote_script: str, timeout: float):
     out = [ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip()]
     err = [ln.rstrip() for ln in proc.stderr.splitlines() if ln.strip()]
 
-    for token in ('ALREADY_RUNNING', 'STARTED', 'NOT_RUNNING',
-                  'NO_SCRIPT', 'FAILED'):
+    for token in ('ALREADY_RUNNING', 'STARTED', 'STOPPED', 'STOPPED_HARD',
+                  'NOT_RUNNING', 'NO_SCRIPT', 'FAILED'):
         if token in out:
             return token, [ln for ln in out if ln != token] + err
 
@@ -192,6 +280,16 @@ def start_fpga_driver(timeout: float = 30.0):
     running'.
     """
     return _run(_REMOTE_START, timeout)
+
+
+def stop_fpga_driver(timeout: float = 40.0):
+    """Stop the driver on the sbRIO.
+
+    The timeout is generous because the remote side deliberately waits out
+    a full SIGTERM before escalating; the ordinary case returns in a second
+    or two.
+    """
+    return _run(_REMOTE_STOP, timeout)
 
 
 def fpga_driver_status(timeout: float = 12.0):
