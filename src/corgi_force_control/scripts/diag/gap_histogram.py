@@ -45,15 +45,32 @@ def gaps_from_series(times_s, values, bar_ms=BAR_MS):
             change_t.append(t)
         prev = v
     if len(change_t) < 3:
-        return [], 0.0, 0.0
+        return [], (0.0, 0.0), 0.0, None
     span = change_t[-1] - change_t[0]
+
     gaps = []
     for a, b in zip(change_t, change_t[1:]):
         ms = (b - a) * 1000.0
         if ms > bar_ms:
-            gaps.append((a - change_t[0], ms))
+            # Times are BAG-relative, so gaps on different series -- and the
+            # jerks on the video -- can be lined up with each other.
+            gaps.append((a, ms))
+
+    # A hold starting at the very first change is initialisation, not a
+    # freeze: force_control holds a constant pose until the first impedance
+    # command arrives. Counting it made one run read 97.1% frozen off a
+    # single 1912 ms leading hold.
+    # Within 50 ms of the first change, not exactly at it: a single
+    # initialisation step (an uninitialised 0 -> the clamped pose) often
+    # lands just before the hold and used to defeat this.
+    leading = None
+    if gaps and gaps[0][0] <= change_t[0] + 0.050:
+        leading = gaps.pop(0)
+        span = change_t[-1] - (leading[0] + leading[1] / 1000.0)
+
     frozen = sum(ms for _, ms in gaps) / 1000.0
-    return gaps, span, (frozen / span if span > 0 else 0.0)
+    return gaps, (change_t[0], change_t[-1]), \
+        (frozen / span if span > 0 else 0.0), leading
 
 
 def monotonicity(values):
@@ -79,8 +96,9 @@ def monotonicity(values):
 
 
 def report(label, times_s, values, bar_ms=BAR_MS):
-    gaps, span, frozen = gaps_from_series(times_s, values, bar_ms)
-    if span <= 0:
+    gaps, window, frozen, leading = gaps_from_series(times_s, values, bar_ms)
+    t_first, t_last = window
+    if t_last <= t_first:
         print("  %-16s no usable changes" % label)
         return 0
 
@@ -98,10 +116,15 @@ def report(label, times_s, values, bar_ms=BAR_MS):
               "monotone standup ramp;")
         print("        for a gait use cmd_rate.py on cmd_beta_a.")
         return 0
-    print("  %-16s span %6.2f s   gaps>%.0fms: %-4d   frozen %5.1f%%   "
-          "worst %6.1f ms"
-          % (label, span, bar_ms, len(gaps), 100.0 * frozen,
+    print("  %-16s active %6.2f-%6.2f s   gaps>%.0fms: %-4d   frozen "
+          "%5.1f%%   worst %6.1f ms"
+          % (label, t_first, t_last, bar_ms, len(gaps), 100.0 * frozen,
              max((ms for _, ms in gaps), default=0.0)))
+    if leading is not None:
+        print("        (leading hold %.1f ms at the series start -- "
+              "initialisation," % leading[1])
+        print("         not a freeze; excluded from the count and the "
+              "frozen fraction)")
     for t, ms in gaps:
         print("        at t=%6.3f s   held %6.1f ms" % (t, ms))
     return len(gaps)
@@ -225,6 +248,12 @@ def from_bag(path):
             continue
         if t0 is None:
             t0 = tns
+            import datetime
+            print("  bag starts at %s  (epoch %.3f)"
+                  % (datetime.datetime.fromtimestamp(tns / 1e9)
+                     .strftime('%H:%M:%S.%f')[:-3], tns / 1e9))
+            print("  all times below are seconds from that moment\n")
+            sys.stdout.flush()
         msg = deserialize_message(data, get_message(types[topic]))
         for dotted, label in want[topic]:
             obj = msg
@@ -301,7 +330,8 @@ def selftest():
     # 1 kHz, always changing: no gaps.
     t = [i / 1000.0 for i in range(5000)]
     v = [i * 0.001 for i in range(5000)]
-    g, span, fr = gaps_from_series(t, v)
+    g, (w0, w1), fr, _lead = gaps_from_series(t, v)
+    span = w1 - w0
     good = (len(g) == 0 and abs(span - 4.999) < 0.01)
     print("selftest clean 1 kHz      -> %d gaps, span %.2f s   %s"
           % (len(g), span, "ok" if good else "*** FAILED ***"))
@@ -316,7 +346,7 @@ def selftest():
         else:
             held = i * 0.001
         v2.append(held)
-    g2, _, fr2 = gaps_from_series(t, v2)
+    g2, _w, fr2, _l2 = gaps_from_series(t, v2)
     # A gap spans the hold PLUS the tick that ends it, so a 40 ms hold
     # measures 41 ms. The tool is right; the first expectation was not.
     want = [41, 81, 201]
@@ -328,7 +358,7 @@ def selftest():
 
     # a 15 Hz comb must read as MANY gaps, not a few -- the buzz case
     v3 = [(i // 67) * 0.001 for i in range(5000)]
-    g3, _, _ = gaps_from_series(t, v3)
+    g3, _w3, _f3, _l3 = gaps_from_series(t, v3)
     good = len(g3) > 50
     print("selftest 15 Hz comb       -> %d gaps (want >50, a buzz)   %s"
           % (len(g3), "ok" if good else "*** FAILED ***"))
@@ -336,7 +366,7 @@ def selftest():
 
     # under the bar must not be reported
     v4 = [(i // 10) * 0.001 for i in range(5000)]
-    g4, _, _ = gaps_from_series(t, v4)
+    g4, _w4, _f4, _l4 = gaps_from_series(t, v4)
     good = len(g4) == 0
     print("selftest 10 ms holds      -> %d gaps (want 0, under the bar)   %s"
           % (len(g4), "ok" if good else "*** FAILED ***"))
