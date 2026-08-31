@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
 #include <sys/stat.h>
@@ -287,7 +288,14 @@ void write_data(rclcpp::Node::SharedPtr node) {
         return;
     }
 
-    output_file << node->now().nanoseconds() / 1e9 << ","
+    // The epoch is ~1.79e9; at the default 6 significant digits it
+    // printed as 1.78817e+09 on EVERY row -- the time column was
+    // dead (found 2026-08-31 on the first hardware captures).
+    // Microsecond resolution here, default formatting restored
+    // immediately so the data columns are unchanged.
+    output_file << std::fixed << std::setprecision(6)
+                << node->now().nanoseconds() / 1e9
+                << std::defaultfloat << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << "," << motor_cmd.module_a.gamma << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << "," << motor_cmd.module_a.torque_h << ","
