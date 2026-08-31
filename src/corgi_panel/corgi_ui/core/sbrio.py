@@ -89,8 +89,11 @@ running_pids() {
             pgrep -x fpga_driver 2>/dev/null
         fi
         ps -eo pid=,comm= 2>/dev/null | awk '$2 == "fpga_driver" { print $1 }'
+        # fpga_driver as a whole word, not as a directory in someone
+        # else's path: grpccore lives under .../fpga_driver/... and a
+        # substring match reported IT as the driver.
         ps ax 2>/dev/null | awk -v self="$SELF" \
-            '$1 != self && /fpga_driver/ && !/run_fpga_driver/ { print $1 }'
+            '$1 != self && !/run_fpga_driver/ && /(^| |\/)fpga_driver( |$)/ { print $1 }'
         if [ -f "$PIDFILE" ]; then
             p=$(cat "$PIDFILE" 2>/dev/null)
             if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then echo "$p"; fi
@@ -124,8 +127,20 @@ report_pids() {
 # A C++ abort in the log is a definite answer and should not wait out the
 # whole start window.
 crash_line() {
-    grep -m1 -E "terminate called|std::logic_error|std::bad_alloc|Segmentation fault|error while loading shared libraries|command not found" \
+    grep -m1 -E "terminate called|std::logic_error|std::bad_alloc|Segmentation fault|error while loading shared libraries|command not found|exited during startup" \
         "$LOG" 2>/dev/null
+}
+
+# grpccore's log is ~95% "subscriber condition unlock". Every tail anyone
+# has read showed that spam and hid the actual startup error, so strip it.
+GRPCCORE_LOG="$DIR/corgi_ws/fpga_driver/logs/grpccore.log"
+useful_tail() {
+    for f in "$LOG" "$GRPCCORE_LOG"; do
+        [ -f "$f" ] || continue
+        echo "--- $f (spam filtered) ---"
+        grep -v -E "subscriber condition unlock|^receive (subscriber|publisher)$" "$f" \
+            2>/dev/null | tail -n 12
+    done
 }
 """
 
@@ -195,9 +210,8 @@ while [ $n -lt 15 ]; do
     C=$(crash_line)
     if [ -n "$C" ]; then
         echo "FAILED"
-        echo "the driver ABORTED on startup: $C"
-        echo "--- last lines of $LOG ---"
-        tail -n 15 "$LOG" 2>/dev/null
+        echo "ABORTED on startup: $C"
+        useful_tail
         exit 6
     fi
     if log_says_up; then EVIDENCE="the driver logged its FPGA session"; break; fi
@@ -208,8 +222,7 @@ done
 if [ -z "$EVIDENCE" ]; then
     echo "FAILED"
     echo "no FPGA session logged and no process found after 15 s"
-    echo "--- last lines of $LOG ---"
-    tail -n 15 "$LOG" 2>/dev/null
+    useful_tail
     exit 6
 fi
 
@@ -220,16 +233,14 @@ C=$(crash_line)
 if [ -n "$C" ]; then
     echo "FAILED"
     echo "launched under: $LAUNCH"
-    echo "the driver started and then ABORTED: $C"
-    echo "--- last lines of $LOG ---"
-    tail -n 15 "$LOG" 2>/dev/null
+    echo "ABORTED: $C"
+    useful_tail
     exit 6
 fi
 if ! have_driver; then
     echo "FAILED"
-    echo "the driver started and then EXITED within 5 s (no process left)"
-    echo "--- last lines of $LOG ---"
-    tail -n 15 "$LOG" 2>/dev/null
+    echo "started and then EXITED within 5 s (no process left)"
+    useful_tail
     exit 6
 fi
 
