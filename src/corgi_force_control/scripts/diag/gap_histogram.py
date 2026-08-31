@@ -135,6 +135,12 @@ def report(label, times_s, values, bar_ms=BAR_MS, score_window=None):
     frozen = (sum(ms for _, ms in gaps) / 1000.0 / scored_span
               if scored_span > 0 else 0.0)
 
+    # The MESSAGE span, beside the CHANGE span. A series that is
+    # published throughout but holds one value is a different fault
+    # from one that is not published at all, and the change window
+    # alone cannot tell them apart.
+    print("  %-16s msgs %6.2f-%6.2f s (%d)"
+          % (label, times_s[0], times_s[-1], len(times_s)))
     print("  %-16s active %6.2f-%6.2f s   gaps>%.0fms: %-4d   frozen "
           "%5.1f%%   worst %6.1f ms"
           % (label, t_first, t_last, bar_ms, len(gaps), 100.0 * frozen,
