@@ -236,6 +236,11 @@ def generate_launch_description():
         # the correction makes things worse (same rule as k_roll/k_yaw).
         # ADOPTED 2026-08-30 with k_tangential above (log S300). Was 0.0.
         DeclareLaunchArgument("k_pitch", default_value="-0.30"),
+
+        # Friction feedforward shaping, consumed by FORCE_CONTROL (not by
+        # gslip_pronk). scale 0.0 turns the term off entirely.
+        DeclareLaunchArgument("friction_ff_scale", default_value="1.0"),
+        DeclareLaunchArgument("friction_deadband_rad", default_value="0.00288"),
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
 
@@ -373,7 +378,21 @@ def generate_launch_description():
             package='corgi_force_control',
             executable='force_control_node',
             name='force_control_node',
-            parameters=[{'use_sim_time': use_sim_time}],
+            # NOTE: until 2026-09-01 this was parameters=[{'use_sim_time':
+            # ...}] alone, so NO launch argument had ever reached this node.
+            # A friction_ff_scale:=0.0 on the command line was accepted by
+            # `ros2 launch` and silently dropped, and the node ran its
+            # default while an A/B test was being conducted against it. If
+            # you add a declare_parameter() in force_control.cpp, add it
+            # here too or it will be equally inert -- the banner is the only
+            # thing that will tell you.
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'friction_ff_scale':
+                    LaunchConfiguration('friction_ff_scale'),
+                'friction_deadband_rad':
+                    LaunchConfiguration('friction_deadband_rad'),
+            }],
             # stdout to file, stderr to screen: the std::cout flood is on
             # stdout, while RCLCPP_* banners -- which the crib's
             # verification step reads -- go to stderr. See log S318.5;
