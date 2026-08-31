@@ -542,6 +542,30 @@ void ForceControlNode::timer_cb() {
         }
     }
 
+    // WHICH legs are outside the leg model's range. leg_model cannot say:
+    // it is one shared instance reused for all four legs, so its clamp
+    // report names a value but never a module. This does. Measured
+    // 2026-09-01, 3 of 4 contact_map_3d calls per tick were clamped, and
+    // every one of them corrupts that leg's torque/kp/kd through J_fb,
+    // e_t and contact_p_3d -- commanded theta/beta are untouched.
+    {
+        const double now_s = this->now().seconds();
+        if (state_probe_t0_ == 0.0) {
+            state_probe_t0_ = now_s;
+        } else if (now_s - state_probe_t0_ >= 1.0) {
+            state_probe_t0_ = now_s;
+            const double r2d = 180.0 / M_PI;
+            RCLCPP_WARN(this->get_logger(),
+                        "MEASURED THETA (deg): A %.2f  B %.2f  C %.2f  D %.2f"
+                        "  -- leg model accepts 16.9 to 160.0; the v070"
+                        " template spans 83.2 to 100.0",
+                        motor_state_.module_a.theta * r2d,
+                        motor_state_.module_b.theta * r2d,
+                        motor_state_.module_c.theta * r2d,
+                        motor_state_.module_d.theta * r2d);
+        }
+    }
+
     motor_cmd_.header.stamp = this->now();
     
     // Slew limit, applied to what is actually PUBLISHED so nothing

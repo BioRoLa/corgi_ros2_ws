@@ -58,16 +58,35 @@ namespace {
 // Rate-limited stderr note: at most one line per second per site, carrying
 // how many were suppressed. Static state is fine here -- this exists to stop
 // a hot path from blocking on a pipe, not to be a general logger.
-struct ClampNote { long long n = 0; std::chrono::steady_clock::time_point last; };
+struct ClampNote {
+    long long n = 0;
+    std::chrono::steady_clock::time_point last;
+    // The offending values, not just how many there were. A count says the
+    // clamp fired; the VALUE says why. 0.0 means a module's state was never
+    // populated; ~94 means a degrees value reached a radians argument
+    // (94.7 deg = 1.653 rad, and 94.7 rad is far outside max_theta);
+    // anything else means genuine garbage. Measured 2026-09-01: 3 of 4 legs
+    // clamp on every tick and nobody knew which values were arriving.
+    double lo_val = 0.0;   // smallest offender this window
+    double hi_val = 0.0;   // largest offender this window
+    bool seen = false;
+};
 ClampNote clamp_hi_, clamp_lo_;
 
-void note_clamp(ClampNote& c, const char* msg) {
+void note_clamp(ClampNote& c, const char* msg, double offending) {
     ++c.n;
+    if (!c.seen) { c.lo_val = c.hi_val = offending; c.seen = true; }
+    if (offending < c.lo_val) c.lo_val = offending;
+    if (offending > c.hi_val) c.hi_val = offending;
     auto now = std::chrono::steady_clock::now();
     if (now - c.last < std::chrono::seconds(1)) return;
     c.last = now;
-    std::cerr << msg << "  (" << c.n << " since last report)\n";
+    std::cerr << msg << "  (" << c.n << " since last report; offending theta "
+              << c.lo_val << " to " << c.hi_val << " rad = "
+              << (c.lo_val * 180.0 / M_PI) << " to "
+              << (c.hi_val * 180.0 / M_PI) << " deg)\n";
     c.n = 0;
+    c.seen = false;
 }
 }  // namespace
 
@@ -90,11 +109,11 @@ void LegModel::forward(double theta_in, double beta_in, bool vector) {
     // denial-of-service on its own control loop.
     if (theta > max_theta) {
         theta = max_theta;
-        note_clamp(clamp_hi_, "Theta exceeds upper limit. Set to max_theta.");
+        note_clamp(clamp_hi_, "Theta exceeds upper limit. Set to max_theta.", theta_in);
     }
     if (theta < min_theta) {
         theta = min_theta;
-        note_clamp(clamp_lo_, "Theta below lower limit. Set to min_theta.");
+        note_clamp(clamp_lo_, "Theta below lower limit. Set to min_theta.", theta_in);
     }
 
     // Calculate positions

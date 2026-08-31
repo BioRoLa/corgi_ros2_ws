@@ -91,6 +91,7 @@ private:
     double cmd_slew_prev_th_[4] = {0, 0, 0, 0};
     double cmd_slew_prev_be_[4] = {0, 0, 0, 0};
     long cmd_slew_hits_ = 0;         // ticks the limiter actually bit
+    double state_probe_t0_ = 0.0;  // window for the per-leg theta probe
     long imp_rx_count_ = 0;   // impedance messages since the last report
     double imp_rx_t0_ = 0.0;  // when that report window opened
     double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely
