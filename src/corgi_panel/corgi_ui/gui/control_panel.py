@@ -43,7 +43,10 @@ class CorgiControlPanel(QWidget):
     # "Idle" in particular sounds like the BOTTOM of the ladder when it is
     # the middle rung and the only door to the state where the robot runs.
     # These are the operator-facing names, describing position in the
-    # workflow and what entering each state actually does.
+    # workflow and what entering each state actually does. The BUTTONS keep
+    # them IMPERATIVE ("Set Powered", "Go Live") -- a bare state name on a
+    # greyed-out button reads as a status readout claiming the robot is in
+    # that state, which is exactly what the first cut of this rename did.
     #
     #     Powered (SYSTEM_ON 0) <-> Arm (IDLE 2) <-> Live (STANDBY 3)
     #     Motor Config (MOTORCONFIG 4) hangs off Powered / Arm.
@@ -392,19 +395,29 @@ class CorgiControlPanel(QWidget):
         # robot's own log lines say STANDBY while this panel says Live.
         lbl_mode_title.setStyleSheet("color: #888; font-size: 12px;")
         
-        self.label_robot_mode_value = QLabel("---")
+        self.label_robot_mode_value = QLabel("no robot state")
         self.label_robot_mode_value.setObjectName("StatusLabel")
         self.label_robot_mode_value.setAlignment(Qt.AlignCenter)
         self.label_robot_mode_value.setStyleSheet(
             "color: #bdbdbd; font-weight: bold; font-size: 16px;"
         )
         
+        # Every FSM button is gated on a mode arriving on /robot/state. When
+        # none ever does, all four sit greyed out with nothing saying why --
+        # and the cause is upstream of the panel every time.
+        self.label_robot_mode_value.setToolTip(
+            'The mode comes from /robot/state, via the bridge, from the '
+            'sbRIO.\nWhile this reads "no robot state" the FSM buttons stay '
+            'disabled and the fault is upstream of the panel:\n'
+            '  - is the FPGA driver up AND STAYING up on the sbRIO?\n'
+            '  - is the ROS bridge running?\n'
+            'Mode commands are still sent -- they are simply never confirmed.')
         mode_h_layout.addWidget(lbl_mode_title)
         mode_h_layout.addWidget(self.label_robot_mode_value)
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('1 \u00b7 Powered')
+        self.btn_systemon = QPushButton('1 \u00b7 Set Powered')
         self.btn_systemon.setToolTip(
             'SYSTEM_ON (0). The state the robot boots into, and where the '
             'e-stop retreats to from anywhere but Live.\nUp: Arm.')
@@ -423,7 +436,7 @@ class CorgiControlPanel(QWidget):
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('3 \u00b7 Live  \u2014  home && run')
+        self.btn_standby = QPushButton('3 \u00b7 Go Live  \u2014  home && run')
         self.btn_standby.setToolTip(
             'STANDBY (3). Commands are accepted here: homing and gaits run '
             'in this state, and nowhere else.\nDown: Arm.')
@@ -431,7 +444,7 @@ class CorgiControlPanel(QWidget):
         self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
         self.btn_standby.setEnabled(False)
         
-        self.btn_motorconfig = QPushButton('Motor Config')
+        self.btn_motorconfig = QPushButton('Enter Motor Config')
         self.btn_motorconfig.setToolTip(
             'MOTORCONFIG (4). Side branch off Powered / Arm, not a rung '
             'on the ladder. Opens the config panel on entry.')
@@ -1402,7 +1415,7 @@ class CorgiControlPanel(QWidget):
         try:
             mode_text = self._mode_text(state.robot_mode)
         except ValueError:
-            mode_text = "---"
+            mode_text = "no robot state"
         
         self.label_robot_mode_value.setText(mode_text)
         
