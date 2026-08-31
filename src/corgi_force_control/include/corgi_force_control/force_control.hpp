@@ -82,6 +82,15 @@ private:
     // fric_dir_[module][0]=left, [1]=right. 0 until real motion is seen,
     // so a parked leg carries no bias.
     int fric_dir_[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+    // Slew limit on the PUBLISHED command, deg/s. 0 disables an axis.
+    // Off by default -- see slew.py. Limits the consequence (a
+    // full-range step in one tick) rather than the cause.
+    double cmd_slew_theta_ = 0.0;
+    double cmd_slew_beta_ = 0.0;
+    bool cmd_slew_primed_ = false;   // first tick seeds, never limits
+    double cmd_slew_prev_th_[4] = {0, 0, 0, 0};
+    double cmd_slew_prev_be_[4] = {0, 0, 0, 0};
+    long cmd_slew_hits_ = 0;         // ticks the limiter actually bit
     long imp_rx_count_ = 0;   // impedance messages since the last report
     double imp_rx_t0_ = 0.0;  // when that report window opened
     double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely

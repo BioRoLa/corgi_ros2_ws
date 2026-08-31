@@ -73,6 +73,19 @@ ForceControlNode::ForceControlNode()
         this->declare_parameter<double>("friction_ff_scale", friction_ff_scale_);
     friction_deadband_ =
         this->declare_parameter<double>("friction_deadband_rad", friction_deadband_);
+    cmd_slew_theta_ =
+        this->declare_parameter<double>("cmd_slew_theta_deg_s", cmd_slew_theta_);
+    cmd_slew_beta_ =
+        this->declare_parameter<double>("cmd_slew_beta_deg_s", cmd_slew_beta_);
+    if (cmd_slew_theta_ > 0.0 || cmd_slew_beta_ > 0.0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "CMD SLEW: theta %.0f deg/s, beta %.0f deg/s. Template v070 needs 462 and 188 deg/s at its 0.2642 s stride, so this should never bite in healthy operation -- if CMD SLEW BIT appears, the command stream is stepping.",
+                    cmd_slew_theta_, cmd_slew_beta_);
+    } else {
+        RCLCPP_WARN(this->get_logger(),
+                    "CMD SLEW: OFF (cmd_slew_theta_deg_s / cmd_slew_beta_deg_s are 0). Nothing limits a single-tick command step.");
+    }
+
     RCLCPP_WARN(this->get_logger(),
                 "FRICTION FF: scale=%.2f deadband=%.5f rad (%.4f deg; CAN LSB "
                 "is 0.1648 deg). Latched direction, nothing until real "
@@ -531,6 +544,50 @@ void ForceControlNode::timer_cb() {
 
     motor_cmd_.header.stamp = this->now();
     
+    // Slew limit, applied to what is actually PUBLISHED so nothing
+    // upstream can bypass it. Seeded on the first tick (never limits it),
+    // then each axis may move at most rate*dt per tick. A no-op unless
+    // the command steps harder than any legitimate template motion.
+    if (cmd_slew_theta_ > 0.0 || cmd_slew_beta_ > 0.0) {
+        corgi_msgs::msg::MotorCmd* mods[4] = {
+            &motor_cmd_.module_a, &motor_cmd_.module_b,
+            &motor_cmd_.module_c, &motor_cmd_.module_d};
+        const double dt_s = 0.001;   // the 1 kHz control tick
+        const double d2r = M_PI / 180.0;
+        const double max_th = cmd_slew_theta_ * d2r * dt_s;
+        const double max_be = cmd_slew_beta_ * d2r * dt_s;
+        bool bit = false;
+        for (int i = 0; i < 4; ++i) {
+            if (!cmd_slew_primed_) {
+                cmd_slew_prev_th_[i] = mods[i]->theta;
+                cmd_slew_prev_be_[i] = mods[i]->beta;
+                continue;
+            }
+            if (max_th > 0.0) {
+                const double d = mods[i]->theta - cmd_slew_prev_th_[i];
+                if (d > max_th)       { mods[i]->theta = cmd_slew_prev_th_[i] + max_th; bit = true; }
+                else if (d < -max_th) { mods[i]->theta = cmd_slew_prev_th_[i] - max_th; bit = true; }
+            }
+            if (max_be > 0.0) {
+                const double d = mods[i]->beta - cmd_slew_prev_be_[i];
+                if (d > max_be)       { mods[i]->beta = cmd_slew_prev_be_[i] + max_be; bit = true; }
+                else if (d < -max_be) { mods[i]->beta = cmd_slew_prev_be_[i] - max_be; bit = true; }
+            }
+            cmd_slew_prev_th_[i] = mods[i]->theta;
+            cmd_slew_prev_be_[i] = mods[i]->beta;
+        }
+        cmd_slew_primed_ = true;
+        if (bit) {
+            ++cmd_slew_hits_;
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                 "CMD SLEW BIT on %ld tick(s) so far -- the "
+                                 "command stream is stepping faster than any "
+                                 "template motion. The limiter is covering "
+                                 "for it; the cause is still upstream.",
+                                 cmd_slew_hits_);
+        }
+    }
+
     motor_cmd_pub_->publish(motor_cmd_);
 
     loop_count_++;

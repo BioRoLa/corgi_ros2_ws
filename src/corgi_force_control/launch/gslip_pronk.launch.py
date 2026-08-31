@@ -240,6 +240,14 @@ def generate_launch_description():
         # Friction feedforward shaping, consumed by FORCE_CONTROL (not by
         # gslip_pronk). scale 0.0 turns the term off entirely.
         DeclareLaunchArgument("friction_ff_scale", default_value="1.0"),
+
+        # Slew limit on the published command, deg/s. DEFAULT 0 = OFF,
+        # so a diagnostic run is not also a mechanism change. Template
+        # v070 needs 462 (theta) and 188 (beta) deg/s at its 0.2642 s
+        # stride; 1200/600 are ~3x that, a no-op in healthy operation
+        # that still caps the measured 17.57 deg single-tick step.
+        DeclareLaunchArgument("cmd_slew_theta_deg_s", default_value="0.0"),
+        DeclareLaunchArgument("cmd_slew_beta_deg_s", default_value="0.0"),
         DeclareLaunchArgument("friction_deadband_rad", default_value="0.00288"),
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
@@ -392,6 +400,10 @@ def generate_launch_description():
                     LaunchConfiguration('friction_ff_scale'),
                 'friction_deadband_rad':
                     LaunchConfiguration('friction_deadband_rad'),
+                'cmd_slew_theta_deg_s':
+                    LaunchConfiguration('cmd_slew_theta_deg_s'),
+                'cmd_slew_beta_deg_s':
+                    LaunchConfiguration('cmd_slew_beta_deg_s'),
             }],
             # stdout to file, stderr to screen: the std::cout flood is on
             # stdout, while RCLCPP_* banners -- which the crib's
