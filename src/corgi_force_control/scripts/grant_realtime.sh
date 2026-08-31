@@ -1,101 +1,144 @@
 #!/bin/bash
-# Grant CAP_SYS_NICE to the two 1 kHz control binaries, so they can actually
-# take the SCHED_FIFO priority they ask for at startup (log S313).
+# Let the 1 kHz control loops take SCHED_FIFO, WITHOUT breaking ROS.
 #
-# ******************************************************************
-# RE-RUN THIS AFTER EVERY colcon build.
+# ============================================================================
+# WHY THIS NO LONGER USES setcap  --  READ BEFORE "FIXING" IT BACK
 #
-# setcap is an attribute of the binary FILE. A rebuild writes a NEW file,
-# and the capability does not come with it. The nodes are fail-safe -- they
-# warn and run at normal priority rather than refusing to start -- so a
-# rebuild silently disarms the mitigation and the only sign is one WARN line
-# scrolling past in the launch output. This is the easiest way for the
-# 15 Hz starvation of S313 to come back after it was "fixed".
-# ******************************************************************
+# The first version ran `setcap cap_sys_nice+ep` on the node binaries. That
+# works, and it also makes every one of them fail to start:
 #
-# Alternative that needs no capability and no sudo afterwards:
-#     chrt -f 80 ros2 launch corgi_force_control gslip_pronk.launch.py ...
-# but that has to prefix every launch, and it is easy to forget on one.
+#   error while loading shared libraries: librclcpp.so: cannot open shared
+#   object file: No such file or directory                    (exit code 127)
 #
-# Usage:   ./grant_realtime.sh            # grant, then verify
-#          ./grant_realtime.sh --check    # verify only, no sudo
+# A binary carrying file capabilities is executed with AT_SECURE=1, and
+# glibc's dynamic loader then IGNORES LD_LIBRARY_PATH (and LD_PRELOAD) for
+# it. ROS 2 finds all of its libraries through LD_LIBRARY_PATH. So capability
+# and ROS are mutually exclusive on the same binary -- observed on the Orin
+# 2026-09-01, all three nodes dead at once.
 #
-# Run it WITHOUT sudo -- it calls `sudo setcap` itself, and only for that.
-# Running the whole script under sudo also works now, but is not needed.
-# If the executable bit is missing on a fresh checkout:  bash ./grant_realtime.sh
+# The right mechanism is RLIMIT_RTPRIO: raise the user's real-time priority
+# ceiling, and an ordinary unprivileged process can call sched_setscheduler()
+# itself. No capability, no AT_SECURE, LD_LIBRARY_PATH untouched.
+# ============================================================================
+#
+# Usage:  ./grant_realtime.sh            # set the limit, revoke stale caps
+#         ./grant_realtime.sh --check    # report only, no changes, no sudo
+#         ./grant_realtime.sh --revoke   # remove capabilities and stop
+#
+# Run WITHOUT sudo; it calls sudo only for the two things that need it.
+# After granting you MUST start a NEW LOGIN SESSION (log out and back in, or
+# reboot): PAM applies limits at login, so the shell you ran this from keeps
+# the old ceiling.
 set -u
 
-# Derive the workspace from where THIS FILE lives, not from $HOME: under
-# sudo, $HOME is /root, and this script exists to be run in a context where
-# sudo is involved. Layout: <ws>/src/corgi_force_control/scripts/<this>
+PRIO=80
+LIMITS_FILE=/etc/security/limits.d/99-corgi-realtime.conf
+
+# Derive the workspace from where THIS FILE lives, not from $HOME: under sudo
+# $HOME is /root. Layout: <ws>/src/corgi_force_control/scripts/<this>
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WS_GUESS=$(cd "$SELF_DIR/../../.." && pwd)
 WS="${CORGI_WS:-$WS_GUESS}"
 
-if [ ! -d "$WS/install" ]; then
-    echo "note: $WS has no install/ -- set CORGI_WS if the workspace is elsewhere"
-fi
-LIB="$WS/install/corgi_force_control/lib/corgi_force_control"
-# force_estimation_node is here because it is also a 1 kHz loop and was
-# missing from this list (log S318.5). Its install path differs.
-FELIB="$WS/install/corgi_force_estimation/lib/corgi_force_estimation"
-BINS=("$LIB/force_control_node" "$LIB/gslip_pronk_node" "$FELIB/force_estimation_node")
+BINS=(
+    "$WS/install/corgi_force_control/lib/corgi_force_control/force_control_node"
+    "$WS/install/corgi_force_control/lib/corgi_force_control/gslip_pronk_node"
+    "$WS/install/corgi_force_estimation/lib/corgi_force_estimation/force_estimation_node"
+)
 
-CHECK_ONLY=0
-[ "${1:-}" = "--check" ] && CHECK_ONLY=1
+MODE=grant
+case "${1:-}" in
+    --check)  MODE=check ;;
+    --revoke) MODE=revoke ;;
+    "")       ;;
+    *) echo "unknown option: $1"; exit 2 ;;
+esac
 
-if ! command -v getcap >/dev/null 2>&1; then
-    echo "getcap/setcap not found -- install libcap2-bin:"
-    echo "    sudo apt-get install -y libcap2-bin"
-    exit 3
-fi
+[ -d "$WS/install" ] || echo "note: $WS has no install/ -- set CORGI_WS if the workspace is elsewhere"
 
-rc=0
-for b in "${BINS[@]}"; do
-    name=$(basename "$b")
-    if [ ! -f "$b" ]; then
-        echo "MISSING   $name  ($b)"
-        echo "          build the workspace first, or set CORGI_WS"
-        rc=3
-        continue
-    fi
-
-    have=$(getcap "$b" 2>/dev/null)
-    if printf '%s' "$have" | grep -q "cap_sys_nice"; then
-        echo "OK        $name  already has cap_sys_nice"
-        continue
-    fi
-
-    if [ "$CHECK_ONLY" = 1 ]; then
-        echo "NOT SET   $name  -- run without --check to grant it"
-        rc=1
-        continue
-    fi
-
-    echo "granting  $name ..."
-    if sudo setcap cap_sys_nice+ep "$b"; then
-        if getcap "$b" 2>/dev/null | grep -q "cap_sys_nice"; then
-            echo "OK        $name  granted"
-        else
-            echo "FAILED    $name  setcap reported success but the cap is absent"
-            echo "          (a filesystem mounted nosuid or without xattr support"
-            echo "           will do this -- use 'chrt -f 80 ...' instead)"
-            rc=2
+# ---------------------------------------------------------------------------
+# Stale capabilities are actively harmful: they stop the nodes loading at all.
+# Always look, in every mode.
+# ---------------------------------------------------------------------------
+stale=()
+if command -v getcap >/dev/null 2>&1; then
+    for b in "${BINS[@]}"; do
+        [ -f "$b" ] || continue
+        if getcap "$b" 2>/dev/null | grep -q cap_sys_nice; then
+            stale+=("$b")
         fi
+    done
+fi
+
+if [ ${#stale[@]} -gt 0 ]; then
+    echo "FOUND capabilities on ${#stale[@]} binary(ies). These BREAK ROS:"
+    echo "  a binary with file caps runs AT_SECURE, so the loader ignores"
+    echo "  LD_LIBRARY_PATH and librclcpp.so is not found (exit 127)."
+    if [ "$MODE" = check ]; then
+        for b in "${stale[@]}"; do echo "  STALE CAP  $(basename "$b")"; done
+        echo "  Run without --check (or with --revoke) to remove them."
     else
-        echo "FAILED    $name  setcap failed"
-        rc=2
+        for b in "${stale[@]}"; do
+            if sudo setcap -r "$b" 2>/dev/null; then
+                echo "  revoked    $(basename "$b")"
+            else
+                echo "  FAILED to revoke $(basename "$b")"
+            fi
+        done
     fi
-done
+    echo
+fi
+
+[ "$MODE" = revoke ] && exit 0
+
+# ---------------------------------------------------------------------------
+# The actual mechanism: RLIMIT_RTPRIO for this user.
+# ---------------------------------------------------------------------------
+CUR_RT=$(ulimit -r 2>/dev/null || echo 0)
+echo "current shell's real-time priority ceiling (ulimit -r): $CUR_RT"
+echo "needed for SCHED_FIFO $PRIO: at least $PRIO"
+
+configured=no
+if [ -f "$LIMITS_FILE" ] && grep -q rtprio "$LIMITS_FILE" 2>/dev/null; then
+    configured=yes
+fi
+echo "limits file $LIMITS_FILE: $([ "$configured" = yes ] && echo present || echo absent)"
+
+if [ "$MODE" = check ]; then
+    if [ "$CUR_RT" != unlimited ] && [ "${CUR_RT:-0}" -lt "$PRIO" ] 2>/dev/null; then
+        echo
+        echo "NOT granted in this session -- the nodes will warn and run at normal"
+        echo "priority, and commands can degrade to ~15 Hz under load (log S313)."
+        [ "$configured" = yes ] && echo "The limit IS configured; you have not started a new login session yet."
+        exit 1
+    fi
+    echo
+    echo "This session can take SCHED_FIFO $PRIO."
+    exit 0
+fi
+
+if [ "$configured" = no ]; then
+    echo
+    echo "writing $LIMITS_FILE (needs sudo):"
+    printf '%s\n' \
+        "# Corgi 1 kHz control loops need SCHED_FIFO (log S313)." \
+        "# NOT setcap: file capabilities make the loader ignore LD_LIBRARY_PATH" \
+        "# and every ROS node then fails with 'librclcpp.so: cannot open'." \
+        "$USER  -  rtprio  99" \
+        "$USER  -  memlock unlimited" \
+        | sudo tee "$LIMITS_FILE" >/dev/null && echo "  written" || {
+            echo "  FAILED to write $LIMITS_FILE"; exit 2; }
+fi
 
 echo
-if [ "$rc" = 0 ]; then
-    echo "Both control binaries can take SCHED_FIFO."
-    echo "Confirm at launch: the banner must say"
-    echo "    REALTIME: SCHED_FIFO priority 80 ACQUIRED"
-    echo "If it says 'could NOT set', this did not take effect."
+if [ "$CUR_RT" = unlimited ] || [ "${CUR_RT:-0}" -ge "$PRIO" ] 2>/dev/null; then
+    echo "Ready: this session can already take SCHED_FIFO $PRIO."
 else
-    echo "NOT fully granted -- the 1 kHz loops will run at normal priority"
-    echo "and commands can degrade to ~15 Hz under CPU load (S313)."
+    echo "*** LOG OUT AND BACK IN (or reboot) before launching. ***"
+    echo "PAM applies limits at login, so this shell still has the old ceiling."
+    echo "Confirm afterwards with:  ulimit -r      (want 99)"
 fi
-exit $rc
+echo
+echo "Then at the controller launch the banner must say:"
+echo "    REALTIME: SCHED_FIFO priority $PRIO ACQUIRED"
+echo "If it says 'could NOT set', this did not take effect."
