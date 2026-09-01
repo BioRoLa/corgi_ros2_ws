@@ -174,6 +174,12 @@ class CorgiControlPanel(QWidget):
         self._power_paint_timer = QTimer(self)
         self._power_paint_timer.timeout.connect(self._repaint_power_badges)
         self._power_paint_timer.timeout.connect(self._repaint_cmd_source)
+        # _update_button_states is driven by the 5 Hz paint timer rather
+        # than by the 1 kHz state callbacks. It makes nineteen setEnabled()
+        # calls and depends on nothing that changes faster than a user can
+        # act; every user action also calls it directly, so the only
+        # latency added is up to 200 ms on an FSM-driven enable.
+        self._power_paint_timer.timeout.connect(self._update_button_states)
         self._power_paint_timer.start(200)
 
         self._fpga_busy = False
@@ -1904,7 +1910,12 @@ class CorgiControlPanel(QWidget):
 
         # painted by _repaint_power_badges on a 5 Hz timer
         
-        self._update_button_states()
+        # Buttons are NOT refreshed here. This callback runs at the
+        # bridge's 1 kHz and _update_button_states() makes nineteen
+        # setEnabled() calls, none of which depend on power state --
+        # it reads only the bridge toggle, use_sim_time, the robot
+        # mode and _homing_active. It is driven by the 5 Hz paint
+        # timer instead, and directly by every user action.
     
     def _handle_robot_state_update(self, state):
         """Handle robot state update from ROS"""
@@ -1924,6 +1935,22 @@ class CorgiControlPanel(QWidget):
                 self._launch_config_panel()
         
         self._last_confirmed_mode = current_mode
+
+        # Everything below repaints the mode display, and reads ONLY
+        # state.robot_mode. robot/state streams at the bridge's 1 kHz
+        # while the mode changes a handful of times per session, so
+        # repainting per message is pure waste -- and setStyleSheet() is
+        # not cheap: Qt reparses the CSS and repolishes the widget on
+        # every call, on the GUI thread, competing with the log pane and
+        # the power badges.
+        #
+        # Guarding on the mode is exact: if it has not changed, the
+        # display is already correct. The pending-transition latch above
+        # stays per-message on purpose -- it must not miss the tick the
+        # transition lands on.
+        if current_mode == getattr(self, "_displayed_mode", None):
+            return
+        self._displayed_mode = current_mode
         
         # Update mode display
         try:
@@ -1953,7 +1980,10 @@ class CorgiControlPanel(QWidget):
         self.btn_standby.setChecked(state.robot_mode == ROBOTMODE.STANDBY)
         self.btn_motorconfig.setChecked(state.robot_mode == ROBOTMODE.MOTORCONFIG)
         
-        self._update_button_states()
+        # Refreshed on the 5 Hz paint timer, not here: robot/state also
+        # streams at 1 kHz, so this call site doubled the ~19,000
+        # setEnabled() calls a second. The mode transition logic above
+        # still runs per message; only the button repaint is throttled.
     
     def _handle_motor_cmd_update(self, msg):
         """Store the newest motor command. Painting happens at 5 Hz."""
