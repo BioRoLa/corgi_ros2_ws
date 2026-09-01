@@ -1734,6 +1734,34 @@ class CorgiControlPanel(QWidget):
         
         self.log_widget.add_log('EMERGENCY STOP ACTIVATED!', LOGLEVEL.FATAL, 'orin')
 
+        # STEP 0 -- tell the truth about what this button can reach.
+        #
+        # During INIT the legs are driven by the sbRIO's own SET_ZERO /
+        # HALL_CALIBRATE sweep, not by /motor/command. Step 1 below has no
+        # command stream to cut, and step 2 is a gRPC request to a driver
+        # that is inside its sweep loop and not servicing gRPC -- so it is
+        # queued until the sweep returns. Reported from the robot: "it only
+        # stops after the calibration is done." That is the designed
+        # behaviour, and no change in THIS repository can alter it; the
+        # abort would have to be polled inside the sweep, which lives in the
+        # sbRIO FPGA driver.
+        #
+        # Said loudly and immediately, because the operator is looking at
+        # this panel at the one moment it matters, and because Issue #35 has
+        # HALL_CALIBRATE failing on the ABAD motor of all four legs and
+        # driving them ~30 s with no stopping condition -- i.e. half a minute
+        # of leg motion this button cannot interrupt.
+        if (hasattr(self, 'robot_state')
+                and hasattr(self.robot_state, 'robot_mode')
+                and int(self.robot_state.robot_mode) == ROBOTMODE.INIT):
+            self.log_widget.add_log(
+                'E-STOP CANNOT interrupt hall calibration. The legs are driven '
+                'by the sbRIO sweep, not by motor/command, and the mode request '
+                'is queued until the sweep returns -- the robot will stop when '
+                'calibration ends, not now. To stop it NOW: bench supply output '
+                'off, or the physical e-stop inline.',
+                LOGLEVEL.FATAL, 'orin')
+
         # STEP 1 -- CUT THE COMMAND SOURCE FIRST.
         #
         # Requesting a robot-mode change on its own does NOT stop anything
