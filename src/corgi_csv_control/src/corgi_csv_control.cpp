@@ -85,6 +85,56 @@ int main(int argc, char **argv) {
     std::string line;
     
 
+    // Wait for someone to be listening before starting the transform.
+    //
+    // This loop advances on its OWN clock for 5000 ticks whether or not
+    // anything has matched the publisher yet. DDS discovery takes tens to
+    // hundreds of ms, so the opening rows went nowhere while the index
+    // kept moving, and the first command the robot actually RECEIVED was
+    // already well into the trajectory -- far from where the leg was
+    // standing. At kp 90 it snaps to it: a delayed start, then a sudden
+    // jump. Reported on hardware 2026-09-01.
+    //
+    // KNOWN LIMIT: get_subscription_count() also counts `ros2 bag record`,
+    // so this is a NECESSARY condition, not a sufficient one -- it cannot
+    // prove the bridge specifically is listening. It still turns
+    // publishing into the void into publishing to someone, which is the
+    // failure being fixed.
+    {
+        const int kMaxWaitMs = 5000;
+        int waited = 0;
+        while (rclcpp::ok() && motor_cmd_pub->get_subscription_count() == 0
+               && waited < kMaxWaitMs) {
+            rclcpp::spin_some(node);
+            rclcpp::sleep_for(std::chrono::milliseconds(10));
+            waited += 10;
+        }
+        if (motor_cmd_pub->get_subscription_count() == 0) {
+            RCLCPP_WARN(node->get_logger(),
+                        "no subscriber on motor/command after %d ms -- "
+                        "starting anyway, but the opening rows will go "
+                        "nowhere and the robot will jump to wherever the "
+                        "trajectory has reached by the time it connects.",
+                        waited);
+        } else {
+            // Let discovery settle before the first row, so the match is
+            // established rather than merely announced.
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
+            RCLCPP_INFO(node->get_logger(),
+                        "consumer ready after %d ms: %zu subscriber(s) on "
+                        "motor/command", waited,
+                        motor_cmd_pub->get_subscription_count());
+        }
+    }
+
+    // Start the trajectory clock HERE, not before the argument parsing and
+    // the file open. next_time was already in the past by the time the loop
+    // began, and sleep_until() on a past deadline returns immediately --
+    // which dumped the first several rows back to back at full speed
+    // instead of 1 kHz. Same bug as above in miniature: a trajectory clock
+    // that starts before the trajectory does.
+    next_time = node->now();
+
     RCLCPP_INFO(node->get_logger(), "Leg Transform Starts\n");
     
     for (int i=0; i<5000; i++){
