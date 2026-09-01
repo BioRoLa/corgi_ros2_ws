@@ -171,10 +171,20 @@ def main():
     # showed bin means of 0.8-1.9 N.m against a peak of 170, because the hold
     # outnumbers the gait by an order of magnitude.
     #
-    # The boundary is sharp and does not need a heuristic: during the hold
-    # force_control sits in position_control and publishes t_ff == 0 exactly.
-    # The first non-zero t_ff anywhere is the moment impedance control takes
-    # over. Window by TIME from there, globally, so all series stay aligned and
+    # The boundary is sharp and does not need a heuristic: t_ff is exactly
+    # zero throughout the hold, and the first non-zero t_ff anywhere is the
+    # moment the stride starts.
+    #
+    # CORRECTED 2026-09-01. This used to say the hold is zero "because
+    # force_control sits in position_control". It does not: gslip_pronk
+    # publishes a FULL-GAIN hold row at 1 kHz (gslip_pronk.cpp:3754-3758),
+    # so force_control is in its impedance branch for the whole hold. t_ff
+    # is zero there because the hold row carries no clock feedforward, not
+    # because the node is in position_control. The window is unaffected;
+    # only the reason was wrong -- and it made position_control sound like a
+    # routine operating mode, which it is not. Nothing in the built tree
+    # deliberately enters it, and doing so means all six impedance gains
+    # arrived at zero. Window by TIME from there, globally, so all series stay aligned and
     # a legitimately-zero t_ff mid-gait is not dropped.
     t_start = None
     for _, v in data.items():
