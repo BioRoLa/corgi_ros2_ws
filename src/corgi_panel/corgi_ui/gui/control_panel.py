@@ -427,9 +427,19 @@ class CorgiControlPanel(QWidget):
         total_container.addWidget(total_title)
         total_container.addWidget(total_frame)
 
-        power_box.addLayout(pb1_container)
-        power_box.addLayout(pb2_container)
-        power_box.addLayout(total_container)
+        # One block, not four floating stacks. PB1/PB2/TOTAL/PEAK are one
+        # family of readings and nothing said so; the eye had to infer it.
+        # Same numbers, same tooltips, same painting -- one visual object.
+        power_block = QFrame()
+        power_block.setObjectName("PowerBlock")
+        power_block.setStyleSheet(
+            "#PowerBlock { border: 1px solid #3a3a3a; border-radius: 6px; }")
+        power_block_layout = QHBoxLayout()
+        power_block_layout.setSpacing(14)
+        power_block_layout.setContentsMargins(10, 6, 10, 8)
+        power_block_layout.addLayout(pb1_container)
+        power_block_layout.addLayout(pb2_container)
+        power_block_layout.addLayout(total_container)
 
         # PEAK -- the largest single sample since the last reset. Sizing the
         # supply and reading a pronk both depend on the spike, not the mean.
@@ -472,7 +482,9 @@ class CorgiControlPanel(QWidget):
         peak_frame.setLayout(peak_frame_layout)
         peak_container.addLayout(peak_header)
         peak_container.addWidget(peak_frame)
-        power_box.addLayout(peak_container)
+        power_block_layout.addLayout(peak_container)
+        power_block.setLayout(power_block_layout)
+        power_box.addWidget(power_block)
 
         # Shown only while a 1 kHz stream has stopped. Placed with the power
         # row because that is where a frozen number is most believable.
@@ -719,44 +731,6 @@ class CorgiControlPanel(QWidget):
         sidebar.setSpacing(15)
         
         # CSV Control Group
-        # ---- Command Source -------------------------------------------
-        # What the robot is being TOLD. The panel showed motor/state and
-        # never motor/command, so a node commanding theta=0 with kp=50, and
-        # two nodes writing the topic at once, were both invisible here.
-        grp_src = QGroupBox("Command Source")
-        grp_src_layout = QVBoxLayout()
-
-        self._cmd_mode_label = QLabel("no command stream")
-        self._cmd_mode_label.setStyleSheet(
-            "color: #888; font-size: 13px; font-weight: bold;")
-        self._cmd_mode_label.setWordWrap(True)
-
-        self._cmd_pub_label = QLabel("publishers on motor/command: -")
-        self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
-        # Wraps rather than widening the sidebar: this label can read
-        # "publishers on motor/command: 2 -- TWO WRITERS, they will fight at
-        # 1 kHz", which is the same unbounded-sizeHint trap as the staleness
-        # banner above, one column over.
-        self._cmd_pub_label.setWordWrap(True)
-
-        self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
-        self._cmd_gain_label.setStyleSheet(
-            "color: #aaa; font-size: 11px; font-family: monospace;")
-
-        grp_src_layout.addWidget(self._cmd_mode_label)
-        grp_src_layout.addWidget(self._cmd_gain_label)
-        grp_src_layout.addWidget(self._cmd_pub_label)
-        grp_src.setLayout(grp_src_layout)
-        sidebar.addWidget(grp_src)
-
-        # Stored by the callback, painted at 5 Hz. Never paint per message:
-        # this topic runs at 1 kHz and repainting a QLabel that often wedges
-        # the GUI thread -- the same trap the power readout already solved.
-        self._last_cmd = None
-        self._last_cmd_t = 0.0
-        self._cmd_pub_count = -1
-        self._cmd_pub_poll = 0
-
         grp_csv = QGroupBox("CSV Control")
         grp_csv_layout = QVBoxLayout()
         
@@ -859,6 +833,53 @@ class CorgiControlPanel(QWidget):
         sidebar.addStretch(1)
         return sidebar
     
+    def _create_command_source(self) -> QGroupBox:
+        """What is commanding the robot, for the monitor column.
+
+        Lives here rather than in the tools sidebar for two reasons. The
+        tools column was the tallest of the three and therefore set the
+        height of the whole middle row, leaving the other two showing
+        several hundred pixels of nothing; taking ~130 px out of the tallest
+        column is what reclaims that space. And it belongs here: this column
+        already answers "what is the robot doing" and "how is it wired", and
+        "what is commanding it" is read in the same glance -- a leg behaving
+        oddly next to a source reading POSITION FALLBACK is one question,
+        not two.
+
+        Laid out horizontally because this column is wide; the original was
+        a tall narrow stack built for a narrow one.
+        """
+        grp_src = QGroupBox("Command Source")
+        row = QHBoxLayout()
+        row.setSpacing(16)
+
+        self._cmd_mode_label = QLabel("no command stream")
+        self._cmd_mode_label.setStyleSheet(
+            "color: #888; font-size: 13px; font-weight: bold;")
+        self._cmd_mode_label.setWordWrap(True)
+
+        self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
+        self._cmd_gain_label.setStyleSheet(
+            "color: #aaa; font-size: 11px; font-family: monospace;")
+
+        self._cmd_pub_label = QLabel("publishers on motor/command: -")
+        self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._cmd_pub_label.setWordWrap(True)
+
+        row.addWidget(self._cmd_mode_label, 3)
+        row.addWidget(self._cmd_gain_label, 1)
+        row.addWidget(self._cmd_pub_label, 2)
+        grp_src.setLayout(row)
+
+        # Stored by the callback, painted at 5 Hz. Never paint per message:
+        # motor/command runs at 1 kHz and repainting a QLabel that often
+        # wedges the GUI thread -- the trap the power readout already solved.
+        self._last_cmd = None
+        self._last_cmd_t = 0.0
+        self._cmd_pub_count = -1
+        self._cmd_pub_poll = 0
+        return grp_src
+
     def _create_motor_monitor(self) -> QVBoxLayout:
         """Create motor status monitor"""
         monitor_layout = QVBoxLayout()
@@ -871,17 +892,78 @@ class CorgiControlPanel(QWidget):
         # torques are what say whether a leg is WORKING -- a pose alone
         # cannot distinguish holding gently from grinding into a stop,
         # which is exactly the state the home pose used to sit in.
+        # What the six symbols actually mean. None of them is guessable and
+        # two are actively misleading -- theta is not a pointing direction,
+        # and tau R / tau L are not two different legs.
+        SYMBOL_HELP = {
+            'theta':
+                'θ — LEG EXTENSION, the included angle of the five-bar '
+                'linkage.\n'
+                'How OPEN the leg is, not where it points. 17° = folded shut, '
+                '160° = fully extended.\n'
+                'It sets the leg LENGTH: hip-to-contact is 0.145 m at 17° and '
+                '0.293 m at 100°.\n'
+                'The v070 stride template spans 83.2–100.0°.',
+            'beta':
+                'β — LEG SWING about the hip, in the sagittal plane.\n'
+                'Where the leg points fore/aft. This is the one that sweeps '
+                'through a stride;\n'
+                'the v070 template spans ±9.25°.',
+            'gamma':
+                'γ — CAMBER (ab/adduction), the leg tilting out of the '
+                'sagittal plane.\n'
+                'Driven by the ABAD motor (τ H below). Zero in the template of '
+                'record;\n'
+                'non-zero here means the roll/steering channels are acting, or '
+                'the leg is loaded sideways.',
+            'torque_r':
+                'τ R — the RIGHT motor of THIS leg\'s five-bar pair. Not a '
+                'different leg.\n'
+                'θ and β come out of the two motors differentially:\n'
+                '    φ_l = θ + β − 17°        φ_r = β − θ + 17°\n'
+                'so θ is their DIFFERENCE and β their common mode. Stall 29.5 '
+                'N·m.',
+            'torque_l':
+                'τ L — the LEFT motor of THIS leg\'s five-bar pair. Not a '
+                'different leg.\n'
+                'θ and β come out of the two motors differentially:\n'
+                '    φ_l = θ + β − 17°        φ_r = β − θ + 17°\n'
+                'so θ is their DIFFERENCE and β their common mode. Stall 29.5 '
+                'N·m.',
+            'torque_h':
+                'τ H — the ABAD (hip) motor, the one that produces γ.\n'
+                'Called "ABAD motor dir" in the Motor Direction Config below. '
+                '9:1 gearbox,\n'
+                'stall 44.25 N·m — but Issue #15 has it clipping silently well '
+                'below that.',
+        }
+
         ANG = [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]
         TRQ = [('torque_r', 'τ R'), ('torque_l', 'τ L'), ('torque_h', 'τ H')]
+        # Keyed by MODULE LETTER, which is what every other surface uses:
+        # the topics are module_a..d, the controller logs "MEASURED THETA
+        # (deg): A .. B .. C .. D", the zero-gain warning names "leg(s) AB",
+        # and every analyser column is cmd_theta_a. The old LF/RF/LH/RH was a
+        # third dialect -- the config display below already says A (FL) etc.,
+        # with the letters in the opposite order.
+        #
+        # The mapping is NOT guessable and was never written down on screen:
+        # the letters go round the robot, so LH was module_D and RH module_C.
+        # Grid position is a plan view, front at the top.
         legs = [
-            ('LF', 0, 0, ANG + TRQ),
-            ('RF', 0, 1, ANG + TRQ),
-            ('LH', 1, 0, ANG + TRQ),
-            ('RH', 1, 1, ANG + TRQ)
+            ('A', 'A  \u00b7  Front Left',  0, 0, ANG + TRQ),
+            ('B', 'B  \u00b7  Front Right', 0, 1, ANG + TRQ),
+            ('D', 'D  \u00b7  Rear Left',   1, 0, ANG + TRQ),
+            ('C', 'C  \u00b7  Rear Right',  1, 1, ANG + TRQ),
         ]
 
-        for leg_name, r, c, fields in legs:
-            leg_group = QGroupBox(leg_name)
+        for leg_name, leg_title, r, c, fields in legs:
+            leg_group = QGroupBox(leg_title)
+            leg_group.setToolTip(
+                'module_%s. The four boxes are laid out as a PLAN VIEW: '
+                'front at the top, left on the left. The module letters run '
+                'round the robot rather than across it, so the rear pair is '
+                'D (left) and C (right).' % leg_name.lower())
             # Two columns of three: angles left, torques right. Stacked, the
             # six labels made each leg box tall enough to shove the rest of
             # the column around, and the reading that matters is per row --
@@ -894,6 +976,7 @@ class CorgiControlPanel(QWidget):
                 label_key = f"{leg_name}_{field_name}"
                 lbl = QLabel(f"{display_name}: --")
                 lbl.setObjectName("MotorLabel")
+                lbl.setToolTip(SYMBOL_HELP.get(field_name, ''))
                 col = idx // 3
                 if col:
                     # Fixed width so the column does not twitch as the sign
@@ -906,7 +989,21 @@ class CorgiControlPanel(QWidget):
             grid_motors.addWidget(leg_group, r, c)
 
         monitor_layout.addLayout(grid_motors)
+
+        # The tooltips carry the detail; this carries the fact that there IS
+        # detail, and the two things nobody guesses right: theta is an
+        # extension, and R/L are two motors of one leg rather than two legs.
+        legend = QLabel(
+            "θ leg EXTENSION (17° folded → 160° open, sets leg length)   ·   "
+            "β swing fore/aft   ·   γ camber (ABAD)        "
+            "τ R / τ L — the two motors of ONE leg's five-bar (θ differential, "
+            "β common)   ·   τ H — the ABAD motor.   Hover any label.")
+        legend.setStyleSheet("color: #7d7d7d; font-size: 10px;")
+        legend.setWordWrap(True)
+        monitor_layout.addWidget(legend)
+
         monitor_layout.addWidget(self._create_motor_config_display())
+        monitor_layout.addWidget(self._create_command_source())
         monitor_layout.addStretch(1)
 
         return monitor_layout
@@ -2321,11 +2418,14 @@ class CorgiControlPanel(QWidget):
         if not hasattr(state, 'module_a'):
             return
         
+        # Same keys as the box definitions above -- module letters, not
+        # display strings. Keeping display text as a dictionary key is what
+        # allowed the panel to drift into two naming conventions.
         modules = [
-            ('LF', state.module_a),
-            ('RF', state.module_b),
-            ('LH', state.module_d),
-            ('RH', state.module_c),
+            ('A', state.module_a),
+            ('B', state.module_b),
+            ('D', state.module_d),
+            ('C', state.module_c),
         ]
         # (field, symbol, is_angle) -- angles convert to degrees, torques
         # are already N*m and must NOT be run through np.degrees.
