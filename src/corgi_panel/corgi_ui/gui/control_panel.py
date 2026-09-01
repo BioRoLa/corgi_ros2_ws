@@ -1870,6 +1870,37 @@ class CorgiControlPanel(QWidget):
                                     LOGLEVEL.WARN, 'system')
             return
 
+        # Do not quietly become the SECOND writer on motor/command.
+        #
+        # corgi_homing publishes motor/command directly at kp 90, and
+        # force_control publishes it at 1 kHz too. With the pronk launch
+        # still open, homing ramps to 18.4 deg while force_control holds the
+        # last pronk pose at kp_h ~710, and the firmware takes them
+        # alternately -- reported 2026-09-01 as the robot spazzing after Set
+        # Home without Ctrl-C'ing the controller first.
+        #
+        # Tested on RECENT TRAFFIC, not on publisher existence: force_control
+        # keeps its publisher while idle (it stops publishing after 500 ms of
+        # silence), and gating on existence would refuse the ordinary
+        # launch-still-open case that is now harmless.
+        if (self._last_cmd is not None
+                and time.monotonic() - self._last_cmd_t < 0.5):
+            reply = QMessageBox.warning(
+                self, 'Something is already commanding the robot',
+                'motor/command is live right now -- the controller has not '
+                'stopped.\n\n'
+                'Homing publishes to the same topic at 1 kHz. Two writers '
+                'will fight every control cycle and the robot will thrash.\n\n'
+                'Stop the controller first (Ctrl-C its terminal, or Stop '
+                'Gait), then home.\n\n'
+                'Home anyway?',
+                QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+            if reply != QMessageBox.Yes:
+                self.log_widget.add_log(
+                    'Homing cancelled -- motor/command is still live. Stop the '
+                    'controller first.', LOGLEVEL.WARN, 'system')
+                return
+
         self._homing_active = True
         self._homing_saw_complete = False
         self.btn_home.setEnabled(False)

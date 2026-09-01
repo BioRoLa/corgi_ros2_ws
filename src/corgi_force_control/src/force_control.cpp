@@ -503,6 +503,45 @@ void ForceControlNode::timer_cb() {
         return;
     }
 
+    // The producer has gone away -- stop asserting a setpoint.
+    //
+    // Dropping the trigger ends gslip_pronk's gait loop and it stops
+    // publishing, but THIS node does not exit: it went on re-sending the
+    // last pronk pose at 1 kHz forever. Start corgi_homing (Set Home) and
+    // there are then two writers on motor/command -- one holding the pronk
+    // pose at kp_h ~710, one ramping to 18.4 deg at kp 90 -- and the
+    // firmware takes them alternately. Reported from the robot 2026-09-01
+    // as the robot "spazzing out" after Set Home with the pronk launch
+    // still open.
+    //
+    // Same principle as the startup guard above, at the other end of the
+    // run: publish only while something is telling us what to publish.
+    //
+    // 500 ms is measured, not chosen: the worst observed arrival gap is
+    // 19.0 ms at reader depth 5, so this is ~26x the worst real hiccup and
+    // cannot fire on jitter. Benign either way -- the firmware holds its
+    // last command, which is exactly what was being re-sent.
+    {
+        const double silent = this->now().seconds() - imp_rx_last_;
+        if (silent > 0.5) {
+            if (!imp_stream_dead_) {
+                imp_stream_dead_ = true;
+                RCLCPP_WARN(this->get_logger(),
+                            "impedance/command silent for %.1f s -- NO LONGER "
+                            "PUBLISHING motor/command. The firmware holds its "
+                            "last command. This frees the topic so homing or "
+                            "csv control cannot end up fighting a stale "
+                            "controller at 1 kHz.", silent);
+            }
+            return;
+        }
+        if (imp_stream_dead_) {
+            imp_stream_dead_ = false;
+            RCLCPP_WARN(this->get_logger(),
+                        "impedance/command resumed -- publishing again.");
+        }
+    }
+
     Eigen::Quaterniond body_angle_quat;
     double roll = 0;
     double pitch = 0;

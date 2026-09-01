@@ -101,6 +101,9 @@ private:
     // count cannot distinguish two events from eight thousand.
     unsigned long long zero_gain_ticks_ = 0;
     bool imp_cmd_seen_ = false;
+    // True while the impedance stream has been silent long enough that
+    // this node has stopped publishing. See two_writer_fix.py.
+    bool imp_stream_dead_ = false;
     double imp_wait_t0_ = 0.0;   // when the wait started, for the report
     long imp_rx_count_ = 0;   // impedance messages since the last report
     double imp_rx_t0_ = 0.0;  // when that report window opened
