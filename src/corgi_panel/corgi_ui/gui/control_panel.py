@@ -14,7 +14,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
-    QMessageBox, QSizePolicy
+    QMessageBox, QSizePolicy, QCheckBox
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFontMetrics
@@ -175,6 +175,7 @@ class CorgiControlPanel(QWidget):
         self._power_paint_timer = QTimer(self)
         self._power_paint_timer.timeout.connect(self._repaint_power_badges)
         self._power_paint_timer.timeout.connect(self._repaint_cmd_source)
+        self._power_paint_timer.timeout.connect(self._repaint_bag_status)
         # _update_button_states is driven by the 5 Hz paint timer rather
         # than by the 1 kHz state callbacks. It makes nineteen setEnabled()
         # calls and depends on nothing that changes faster than a user can
@@ -795,12 +796,58 @@ class CorgiControlPanel(QWidget):
         self.btn_trigger = QPushButton('Start Trigger')
         self.btn_trigger.setCheckable(True)
         self.btn_trigger.clicked.connect(self._on_trigger_clicked)
+        # toggled, not clicked: seven places call setChecked() on this button
+        # (e-stop, stop-gait, the filename shortcut, two FSM paths). clicked
+        # fires only for the user; toggled fires for all of them, so the label
+        # can never disagree with the state.
+        self.btn_trigger.toggled.connect(
+            lambda on: self.btn_trigger.setText(
+                'Stop Trigger' if on else 'Start Trigger'))
         self.btn_trigger.setEnabled(False)
         
         grp_rec_layout.addWidget(self.edit_output)
         grp_rec_layout.addWidget(self.btn_trigger)
         grp_rec.setLayout(grp_rec_layout)
         sidebar.addWidget(grp_rec)
+
+        # ---- ROS Bag ---------------------------------------------------
+        # Separate from Recorder above: that one is corgi_data_recorder,
+        # which is trigger-gated and writes CSV, and therefore CANNOT see
+        # the standup. This records the raw topics, which is what
+        # gap_histogram.py reads.
+        grp_bag = QGroupBox("ROS Bag")
+        grp_bag_layout = QVBoxLayout()
+
+        self.edit_bag = QLineEdit()
+        self.edit_bag.setPlaceholderText("bag name (default: run_HHMMSS)")
+
+        self.chk_bag_all = QCheckBox("all topics")
+        self.chk_bag_all.setToolTip(
+            "Off: record the six topics the diagnostics read.\n"
+            "On: every topic. Much larger, and slower to analyse -- the extra "
+            "streams are not ones anything scores.")
+        self.chk_bag_all.setStyleSheet("font-size: 11px;")
+
+        self.btn_bag = QPushButton('Record Bag')
+        self.btn_bag.setCheckable(True)
+        self.btn_bag.clicked.connect(self._on_bag_record_clicked)
+        self.btn_bag.toggled.connect(
+            lambda on: self.btn_bag.setText(
+                'Stop Recording' if on else 'Record Bag'))
+
+        self.lbl_bag_status = QLabel("idle")
+        self.lbl_bag_status.setStyleSheet("color: #aaa; font-size: 11px;")
+        self.lbl_bag_status.setWordWrap(True)
+
+        grp_bag_layout.addWidget(self.edit_bag)
+        grp_bag_layout.addWidget(self.chk_bag_all)
+        grp_bag_layout.addWidget(self.btn_bag)
+        grp_bag_layout.addWidget(self.lbl_bag_status)
+        grp_bag.setLayout(grp_bag_layout)
+        sidebar.addWidget(grp_bag)
+
+        self._bag_started_at = 0.0
+        self._bag_path = ''
         
         # IMU button
         self.btn_imu = QPushButton('IMU')
@@ -1886,6 +1933,111 @@ class CorgiControlPanel(QWidget):
         else:
             self.log_widget.add_log('Recording already in progress', LOGLEVEL.WARN, 'orin')
     
+    # Topics the diagnostics actually read. gap_histogram.py needs the first
+    # three; the rest are what make a run interpretable afterwards. Kept
+    # explicit rather than recording everything: a bigger bag is a slower
+    # analysis, not a better one.
+    BAG_TOPICS = (
+        '/impedance/command',
+        '/motor/command',
+        '/motor/state',
+        '/force/state',
+        '/power/state',
+        '/robot/state',
+        '/trigger',
+    )
+    BAG_DIR = os.path.expanduser('~/corgi_bags')
+
+    def _on_bag_record_clicked(self):
+        """Start or stop `ros2 bag record`.
+
+        Stopping goes through process_manager.stop_process, which sends
+        SIGINT to the process GROUP before escalating. That matters: rosbag
+        finalises its sqlite database on SIGINT, and a harder kill leaves a
+        corrupt .db3 -- "sqlite disk I/O error" already cost one capture.
+        """
+        if self.btn_bag.isChecked():
+            if self.process_manager.is_running('rosbag'):
+                self.log_widget.add_log('A bag is already recording',
+                                        LOGLEVEL.WARN, 'system')
+                return
+
+            name = self.edit_bag.text().strip() or datetime.now().strftime(
+                'run_%H%M%S')
+            name = os.path.basename(name)          # no path escapes
+            try:
+                os.makedirs(self.BAG_DIR, exist_ok=True)
+            except OSError as exc:
+                self.log_widget.add_log('Cannot create %s: %s'
+                                        % (self.BAG_DIR, exc),
+                                        LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            path = os.path.join(self.BAG_DIR, name)
+            if os.path.exists(path):
+                self.log_widget.add_log(
+                    'Bag %s already exists -- pick another name (rosbag will '
+                    'refuse to overwrite)' % path, LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            cmd = ['ros2', 'bag', 'record', '-o', path]
+            cmd += ['-a'] if self.chk_bag_all.isChecked() else list(self.BAG_TOPICS)
+
+            if not self.process_manager.start_process('rosbag', cmd,
+                                                      capture_output=False):
+                self.log_widget.add_log('Failed to start ros2 bag record',
+                                        LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            self._bag_path = path
+            self._bag_started_at = time.monotonic()
+            self.log_widget.add_log(
+                'Recording %s (%s)' % (path, 'all topics'
+                                       if self.chk_bag_all.isChecked()
+                                       else '%d topics' % len(self.BAG_TOPICS)),
+                LOGLEVEL.INFO, 'system')
+        else:
+            if not self.process_manager.is_running('rosbag'):
+                self.lbl_bag_status.setText('idle')
+                return
+            # 10 s before escalating past SIGINT: rosbag needs time to close
+            # its database, and a truncated bag is worse than a slow stop.
+            self.process_manager.stop_process('rosbag', timeout=10.0)
+            secs = time.monotonic() - self._bag_started_at
+            self.lbl_bag_status.setText('saved (%.0f s): %s'
+                                        % (secs, self._bag_path))
+            self.log_widget.add_log(
+                'Bag saved after %.0f s: %s' % (secs, self._bag_path),
+                LOGLEVEL.INFO, 'system')
+
+    def _repaint_bag_status(self):
+        """Elapsed time while recording. On the 5 Hz paint timer."""
+        if not hasattr(self, 'lbl_bag_status'):
+            return
+        running = self.process_manager.is_running('rosbag')
+        if running:
+            self.lbl_bag_status.setText(
+                'RECORDING %.0f s -> %s'
+                % (time.monotonic() - self._bag_started_at,
+                   os.path.basename(self._bag_path)))
+            self.lbl_bag_status.setStyleSheet(
+                'color: #e06c5a; font-size: 11px; font-weight: bold;')
+        else:
+            self.lbl_bag_status.setStyleSheet('color: #aaa; font-size: 11px;')
+            if self.btn_bag.isChecked():
+                # It died on its own -- almost always a name clash or no
+                # write permission. Say so rather than showing a stale
+                # "RECORDING" that is no longer true.
+                self.btn_bag.setChecked(False)
+                self.lbl_bag_status.setText('rosbag exited unexpectedly')
+                self.log_widget.add_log(
+                    'ros2 bag record exited on its own -- check the bag name '
+                    'and that %s is writable' % self.BAG_DIR,
+                    LOGLEVEL.ERROR, 'system')
+
     def _on_trigger_clicked(self):
         """Handle trigger button click"""
         if not self.ros_worker.is_running:
