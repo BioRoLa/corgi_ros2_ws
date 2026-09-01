@@ -856,7 +856,16 @@ class CorgiControlPanel(QWidget):
         self._cmd_mode_label = QLabel("no command stream")
         self._cmd_mode_label.setStyleSheet(
             "color: #888; font-size: 13px; font-weight: bold;")
-        self._cmd_mode_label.setWordWrap(True)
+        # NOT word-wrapped. Wrapping gives a QLabel a tiny minimum width and
+        # an unbounded minimum HEIGHT; beside two labels that do not wrap it
+        # was squeezed into a narrow column, a long message became six lines,
+        # this group grew ~90 px, and the column took that height out of the
+        # config table above -- whose rows then overlapped. Reported from a
+        # screenshot 2026-09-01. The real fix is the shorter text below; this
+        # makes the failure mode unreachable.
+        self._cmd_mode_label.setWordWrap(False)
+        self._cmd_mode_label.setSizePolicy(QSizePolicy.Ignored,
+                                           QSizePolicy.Preferred)
 
         self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
         self._cmd_gain_label.setStyleSheet(
@@ -866,10 +875,18 @@ class CorgiControlPanel(QWidget):
         self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
         self._cmd_pub_label.setWordWrap(True)
 
-        row.addWidget(self._cmd_mode_label, 3)
-        row.addWidget(self._cmd_gain_label, 1)
-        row.addWidget(self._cmd_pub_label, 2)
+        self._cmd_pub_label.setWordWrap(False)
+        self._cmd_pub_label.setSizePolicy(QSizePolicy.Ignored,
+                                          QSizePolicy.Preferred)
+
+        row.addWidget(self._cmd_mode_label, 4)
+        row.addWidget(self._cmd_gain_label, 2)
+        row.addWidget(self._cmd_pub_label, 3)
         grp_src.setLayout(row)
+        # One line, always. Nothing this group displays can change the
+        # column's height, so nothing above it can be compressed.
+        fm = QFontMetrics(self._cmd_mode_label.font())
+        grp_src.setFixedHeight(fm.height() + 34)
 
         # Stored by the callback, painted at 5 Hz. Never paint per message:
         # motor/command runs at 1 kHz and repainting a QLabel that often
@@ -879,6 +896,55 @@ class CorgiControlPanel(QWidget):
         self._cmd_pub_count = -1
         self._cmd_pub_poll = 0
         return grp_src
+
+    def _on_symbols_help(self):
+        """What the six per-leg symbols mean.
+
+        A dialog rather than the strip it replaces, because the two things
+        that actually mislead people need a sentence each and a strip had
+        room for neither: theta is an EXTENSION that sets leg length, not a
+        pointing direction, and tau R / tau L are two motors of ONE leg.
+        """
+        QMessageBox.information(
+            self, 'What the symbols mean',
+            '<b>Angles</b>'
+            '<p><b>&theta; &nbsp; leg EXTENSION</b> &mdash; the included '
+            'angle of the five-bar linkage: how <i>open</i> the leg is, not '
+            'where it points.<br>'
+            '17&deg; = folded shut, 160&deg; = fully extended. It sets the '
+            'leg <b>length</b>: hip-to-contact is 0.145 m at 17&deg; and '
+            '0.293 m at 100&deg;.<br>'
+            'The v070 stride template spans 83.2&ndash;100.0&deg;.</p>'
+            '<p><b>&beta; &nbsp; leg SWING</b> about the hip, in the '
+            'sagittal plane &mdash; where the leg points fore/aft. This is '
+            'what sweeps through a stride; v070 spans &plusmn;9.25&deg;.</p>'
+            '<p><b>&gamma; &nbsp; CAMBER</b> (ab/adduction) &mdash; the leg '
+            'tilting out of the sagittal plane, driven by the ABAD motor. '
+            'Zero in the template of record, so non-zero here means the '
+            'roll/steering channels are acting, or the leg is loaded '
+            'sideways.</p>'
+            '<hr><b>Torques</b>'
+            '<p><b>&tau; R</b> and <b>&tau; L</b> are the two motors of '
+            '<b>ONE leg\'s</b> five-bar pair &mdash; <i>not</i> a right leg '
+            'and a left leg.<br>'
+            '&theta; and &beta; come out of them differentially:<br>'
+            '&nbsp;&nbsp;<tt>&phi;_l = &theta; + &beta; &minus; 17&deg;'
+            '&nbsp;&nbsp;&nbsp;&nbsp;&phi;_r = &beta; &minus; &theta; + '
+            '17&deg;</tt><br>'
+            'so &theta; is their <i>difference</i> and &beta; their '
+            '<i>common mode</i>. That is why the 17&deg; linkage limit '
+            'constrains a difference and cannot be written as a per-joint '
+            'stop. Stall 29.5 N&middot;m.</p>'
+            '<p><b>&tau; H</b> &mdash; the <b>ABAD (hip) motor</b>, the one '
+            'that produces &gamma;. Called "ABAD motor dir" in the Motor '
+            'Direction Config below. 9:1 gearbox, stall 44.25 N&middot;m '
+            '&mdash; though Issue #15 has it clipping silently well below '
+            'that.</p>'
+            '<hr><p>The four boxes are a <b>plan view</b>: front at the top, '
+            'left on the left. Module letters run <i>round</i> the robot, so '
+            'the rear pair is D (left) and C (right).</p>'
+            '<p style="color:#888">Every label carries this as a tooltip '
+            'too.</p>')
 
     def _create_motor_monitor(self) -> QVBoxLayout:
         """Create motor status monitor"""
@@ -990,19 +1056,26 @@ class CorgiControlPanel(QWidget):
 
         monitor_layout.addLayout(grid_motors)
 
-        # The tooltips carry the detail; this carries the fact that there IS
-        # detail, and the two things nobody guesses right: theta is an
-        # extension, and R/L are two motors of one leg rather than two legs.
-        legend = QLabel(
-            "θ leg EXTENSION (17° folded → 160° open, sets leg length)   ·   "
-            "β swing fore/aft   ·   γ camber (ABAD)        "
-            "τ R / τ L — the two motors of ONE leg's five-bar (θ differential, "
-            "β common)   ·   τ H — the ABAD motor.   Hover any label.")
-        legend.setStyleSheet("color: #7d7d7d; font-size: 10px;")
-        legend.setWordWrap(True)
-        monitor_layout.addWidget(legend)
+        # The symbol legend was a permanent two-line strip spending real
+        # estate on something read once. A button costs one line, and the
+        # dialog has room for what the strip had to cut.
+        help_row = QHBoxLayout()
+        help_row.addStretch(1)
+        btn_symbols = QPushButton("?  what the symbols mean")
+        btn_symbols.setFlat(True)
+        btn_symbols.setStyleSheet(
+            "color: #7d9dc4; font-size: 11px; border: none;")
+        btn_symbols.setCursor(Qt.PointingHandCursor)
+        btn_symbols.clicked.connect(self._on_symbols_help)
+        help_row.addWidget(btn_symbols)
+        monitor_layout.addLayout(help_row)
 
-        monitor_layout.addWidget(self._create_motor_config_display())
+        cfg = self._create_motor_config_display()
+        # Belt and braces: six rows, a header and a button. With the Command
+        # Source group now fixed-height nothing should compete for this
+        # space, but a squashed table is unreadable rather than merely ugly.
+        cfg.setMinimumHeight(200)
+        monitor_layout.addWidget(cfg)
         monitor_layout.addWidget(self._create_command_source())
         monitor_layout.addStretch(1)
 
@@ -2380,6 +2453,9 @@ class CorgiControlPanel(QWidget):
                  or time.monotonic() - self._last_cmd_t > 0.5)
         if stale:
             self._cmd_mode_label.setText("NO COMMAND STREAM")
+            self._cmd_mode_label.setToolTip(
+                "Nothing has published <tt>motor/command</tt> for over "
+                "0.5 s.")
             self._cmd_mode_label.setStyleSheet(
                 "color: #888; font-size: 13px; font-weight: bold;")
             self._cmd_gain_label.setText("kp  -  /  -  /  -")
@@ -2393,20 +2469,40 @@ class CorgiControlPanel(QWidget):
         def near(a, b):
             return abs(a - b) < 0.5
 
+        # Short label, detail on hover. The full sentences were three to
+        # five times the width of the slot, and that is what drove the
+        # wrapping that squashed the config table.
         if near(kp_l, 50) and near(kp_r, 50) and near(kp_h, 50):
-            text = ("POSITION FALLBACK (kp 50) -- impedance gains are ZERO. "
-                    "This is force_control's position_control branch and "
-                    "almost certainly a bug.")
+            text = "POSITION FALLBACK"
+            tip = ("<b>kp 50 on all three motors</b> -- force_control's "
+                   "<tt>position_control</tt> branch.<br><br>"
+                   "Reached only when <b>all six</b> impedance gains arrive "
+                   "at zero, and nothing in the built tree does that "
+                   "deliberately, so this is almost certainly a bug.<br><br>"
+                   "Until 2026-09-01 this branch also commanded "
+                   "<b>theta = 0</b> -- a fully folded leg -- with that live "
+                   "kp.")
             colour = "#e06c5a"
         elif near(kp_l, 90) and near(kp_r, 90) and near(kp_h, 90):
-            text = ("FIXED-GAIN JOINT PD (kp 90) -- inferred: homing OR csv "
-                    "control. force_control is not in the loop.")
+            text = "JOINT PD  (homing or CSV)"
+            tip = ("<b>kp 90 / kd 1.75</b> -- fixed-gain joint PD, with "
+                   "force_control <b>out of the loop entirely</b>.<br><br>"
+                   "Which of the two cannot be told apart from here: "
+                   "<tt>corgi_homing</tt> and <tt>corgi_csv_control</tt> use "
+                   "identical gains and both publish "
+                   "<tt>motor/command</tt> directly.")
             colour = "#5a9fd4"
         else:
-            text = "IMPEDANCE (force_control) -- inferred from computed gains"
+            text = "IMPEDANCE"
+            tip = ("force_control's impedance law -- gains computed per leg "
+                   "from the commanded stiffness and damping. The normal "
+                   "running state.<br><br>"
+                   "Inferred from the gains, not from the publisher's "
+                   "identity.")
             colour = "#6fbf73"
 
         self._cmd_mode_label.setText(text)
+        self._cmd_mode_label.setToolTip(tip)
         self._cmd_mode_label.setStyleSheet(
             "color: %s; font-size: 13px; font-weight: bold;" % colour)
 
