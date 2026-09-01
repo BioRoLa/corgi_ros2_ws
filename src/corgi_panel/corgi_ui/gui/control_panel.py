@@ -173,6 +173,7 @@ class CorgiControlPanel(QWidget):
         # driver is down because this panel has not started one.
         self._power_paint_timer = QTimer(self)
         self._power_paint_timer.timeout.connect(self._repaint_power_badges)
+        self._power_paint_timer.timeout.connect(self._repaint_cmd_source)
         self._power_paint_timer.start(200)
 
         self._fpga_busy = False
@@ -676,6 +677,39 @@ class CorgiControlPanel(QWidget):
         sidebar.setSpacing(15)
         
         # CSV Control Group
+        # ---- Command Source -------------------------------------------
+        # What the robot is being TOLD. The panel showed motor/state and
+        # never motor/command, so a node commanding theta=0 with kp=50, and
+        # two nodes writing the topic at once, were both invisible here.
+        grp_src = QGroupBox("Command Source")
+        grp_src_layout = QVBoxLayout()
+
+        self._cmd_mode_label = QLabel("no command stream")
+        self._cmd_mode_label.setStyleSheet(
+            "color: #888; font-size: 13px; font-weight: bold;")
+        self._cmd_mode_label.setWordWrap(True)
+
+        self._cmd_pub_label = QLabel("publishers on motor/command: -")
+        self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+
+        self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
+        self._cmd_gain_label.setStyleSheet(
+            "color: #aaa; font-size: 11px; font-family: monospace;")
+
+        grp_src_layout.addWidget(self._cmd_mode_label)
+        grp_src_layout.addWidget(self._cmd_gain_label)
+        grp_src_layout.addWidget(self._cmd_pub_label)
+        grp_src.setLayout(grp_src_layout)
+        sidebar.addWidget(grp_src)
+
+        # Stored by the callback, painted at 5 Hz. Never paint per message:
+        # this topic runs at 1 kHz and repainting a QLabel that often wedges
+        # the GUI thread -- the same trap the power readout already solved.
+        self._last_cmd = None
+        self._last_cmd_t = 0.0
+        self._cmd_pub_count = -1
+        self._cmd_pub_poll = 0
+
         grp_csv = QGroupBox("CSV Control")
         grp_csv_layout = QVBoxLayout()
         
@@ -1007,6 +1041,7 @@ class CorgiControlPanel(QWidget):
         self.ros_worker.power_state_updated.connect(self._handle_power_state_update)
         self.ros_worker.robot_state_updated.connect(self._handle_robot_state_update)
         self.ros_worker.motor_state_updated.connect(self._handle_motor_state_update)
+        self.ros_worker.motor_cmd_updated.connect(self._handle_motor_cmd_update)
         self.ros_worker.log_updated.connect(self._handle_log_update)
     
     def _start_data_recorder(self):
@@ -1920,6 +1955,83 @@ class CorgiControlPanel(QWidget):
         
         self._update_button_states()
     
+    def _handle_motor_cmd_update(self, msg):
+        """Store the newest motor command. Painting happens at 5 Hz."""
+        import time
+        self._last_cmd = msg
+        self._last_cmd_t = time.monotonic()
+
+    def _repaint_cmd_source(self):
+        """Name what is commanding the robot, from the gain fingerprint.
+
+        The label says "inferred" because a fingerprint is not an identity.
+        kp 90 / kd 1.75 is used by BOTH corgi_homing (homing.cpp:120-126)
+        and corgi_csv_control (corgi_csv_control.cpp:103-111), so it cannot
+        name one of them, and it does not try to.
+        """
+        import time
+        if not hasattr(self, "_cmd_mode_label"):
+            return
+
+        # Publisher count is a ROS API call; poll it every ~2 s, not at 5 Hz.
+        self._cmd_pub_poll += 1
+        if self._cmd_pub_poll >= 10:
+            self._cmd_pub_poll = 0
+            try:
+                if self.ros_worker.is_running and self.ros_worker.node is not None:
+                    self._cmd_pub_count = self.ros_worker.node.count_publishers(
+                        "motor/command")
+            except Exception:
+                self._cmd_pub_count = -1
+
+        n = self._cmd_pub_count
+        if n < 0:
+            self._cmd_pub_label.setText("publishers on motor/command: ?")
+            self._cmd_pub_label.setStyleSheet("color: #888; font-size: 11px;")
+        elif n > 1:
+            self._cmd_pub_label.setText(
+                "publishers on motor/command: %d  -- TWO WRITERS, they will "
+                "fight at 1 kHz" % n)
+            self._cmd_pub_label.setStyleSheet(
+                "color: #e06c5a; font-size: 11px; font-weight: bold;")
+        else:
+            self._cmd_pub_label.setText("publishers on motor/command: %d" % n)
+            self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+
+        stale = (self._last_cmd is None
+                 or time.monotonic() - self._last_cmd_t > 0.5)
+        if stale:
+            self._cmd_mode_label.setText("NO COMMAND STREAM")
+            self._cmd_mode_label.setStyleSheet(
+                "color: #888; font-size: 13px; font-weight: bold;")
+            self._cmd_gain_label.setText("kp  -  /  -  /  -")
+            return
+
+        m = self._last_cmd.module_a
+        kp_l, kp_r, kp_h = m.kp_l, m.kp_r, m.kp_h
+        self._cmd_gain_label.setText(
+            "kp %6.1f / %6.1f / %6.1f   (l/r/h)" % (kp_l, kp_r, kp_h))
+
+        def near(a, b):
+            return abs(a - b) < 0.5
+
+        if near(kp_l, 50) and near(kp_r, 50) and near(kp_h, 50):
+            text = ("POSITION FALLBACK (kp 50) -- impedance gains are ZERO. "
+                    "This is force_control's position_control branch and "
+                    "almost certainly a bug.")
+            colour = "#e06c5a"
+        elif near(kp_l, 90) and near(kp_r, 90) and near(kp_h, 90):
+            text = ("FIXED-GAIN JOINT PD (kp 90) -- inferred: homing OR csv "
+                    "control. force_control is not in the loop.")
+            colour = "#5a9fd4"
+        else:
+            text = "IMPEDANCE (force_control) -- inferred from computed gains"
+            colour = "#6fbf73"
+
+        self._cmd_mode_label.setText(text)
+        self._cmd_mode_label.setStyleSheet(
+            "color: %s; font-size: 13px; font-weight: bold;" % colour)
+
     def _handle_motor_state_update(self, state):
         """Handle motor state update from ROS"""
         self.motor_state = state
