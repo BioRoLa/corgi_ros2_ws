@@ -450,7 +450,18 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
 void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                                         corgi_msgs::msg::MotorCmd* motor_cmd_) {
-    motor_cmd_->theta = imp_cmd_->theta;
+    // Clamp to min_theta, the same clamp the else branch already applies
+    // before force_control(). This branch did NOT have it: it passed theta
+    // straight through, which is how it came to command theta = 0 -- a fully
+    // folded leg -- with a live kp of 50 while the robot stood at 18.6 deg
+    // (2026-09-01). The vault's implementation log has meanwhile been
+    // asserting that this branch clamps to 17 deg; now it does.
+    //
+    // A no-op for any correct producer: the v070 template spans 83.2-100.0
+    // deg and anything below 17 deg is outside the leg model's range.
+    motor_cmd_->theta = (imp_cmd_->theta < 17/180.0*M_PI)
+                            ? 17/180.0*M_PI
+                            : imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
     motor_cmd_->gamma = imp_cmd_->gamma;
     motor_cmd_->kp_r = 50;
@@ -528,9 +539,17 @@ void ForceControlNode::timer_cb() {
         &motor_cmd_.module_d
     };
 
+    unsigned zero_gain_mask = 0;
+    double zero_gain_theta = 0.0;
     for (int i=0; i<4; i++){
         if (imp_cmd_modules[i]->kx == 0 && imp_cmd_modules[i]->ky == 0 && imp_cmd_modules[i]->kz == 0 && 
             imp_cmd_modules[i]->bx == 0 && imp_cmd_modules[i]->by == 0 && imp_cmd_modules[i]->bz == 0) {
+            // Record, do not log here: this is inside a 4-leg loop at 1 kHz, and
+            // an unthrottled per-leg warn is 4000 lines/s. Flooding the launch
+            // pipe until write() blocks the control thread is a fault this file
+            // has already caused once (leg_model.cpp, S313/S318.5).
+            zero_gain_mask |= (1u << i);
+            zero_gain_theta = imp_cmd_modules[i]->theta;
             position_control(imp_cmd_modules[i], motor_cmd_modules[i]);
         }
         else {
@@ -545,6 +564,34 @@ void ForceControlNode::timer_cb() {
             
         }
         phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;
+    }
+
+    // The all-zero-gain branch, announced. Verified 2026-09-01 that
+    // nothing in the built tree needs it -- but it is two commands away:
+    //   ros2 param set /gslip_pronk_node k_flight 0.0
+    //   ros2 param set /gslip_pronk_node b_flight 0.0
+    // The flight arm derives all six gains from that pair, and it governs
+    // the standup ramp and the pre-trigger hold as well as flight, so two
+    // numbers put every leg into fixed kp-50 joint PD for most of a run.
+    if (zero_gain_mask) {
+        ++zero_gain_ticks_;
+        char legs[5] = {0, 0, 0, 0, 0};
+        int n = 0;
+        for (int i = 0; i < 4; ++i) {
+            if (zero_gain_mask & (1u << i)) legs[n++] = static_cast<char>('A' + i);
+        }
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "ZERO-GAIN COMMAND on leg(s) %s: all six "
+                             "impedance gains are 0, so force_control is in "
+                             "position_control -- fixed joint PD (kp 50, "
+                             "kd 1, torque 0), NOT impedance. Commanded "
+                             "theta %.1f deg. %llu tick(s) since the last "
+                             "report. Usual cause: k_flight/b_flight set to "
+                             "zero, or a producer publishing a "
+                             "default-constructed module.",
+                             legs, zero_gain_theta * 180.0 / M_PI,
+                             zero_gain_ticks_);
+        zero_gain_ticks_ = 0;
     }
 
     // dynamic friction compensation

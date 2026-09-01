@@ -3262,8 +3262,23 @@ void GslipPronkNode::execute_standup_phase() {
     // get_subscription_count("impedance/command"), which counts ANY
     // subscriber including `ros2 bag record`. With a bag running it
     // returned instantly, so the guard was inert precisely when it was
-    // being measured. count_publishers("motor/command") instead tests the
-    // thing that matters: the consumer is up and producing.
+    // being measured. count_publishers("motor/command") is used instead.
+    //
+    // CORRECTED 2026-09-01: this used to say it "tests the thing that
+    // matters: the consumer is up and producing". Since d605ab9 that is
+    // false -- it tests EXISTENCE, not production. force_control creates
+    // its publisher in its constructor but now emits nothing until its own
+    // first impedance command arrives, so the count is 1 as soon as the
+    // node exists, whether or not it will ever publish.
+    //
+    // NOT a mutual wait: the publisher exists from construction, so this
+    // guard passes immediately and this node starts publishing, which is
+    // precisely what unblocks force_control. No deadlock, no dead time.
+    //
+    // Not strengthened, deliberately. The honest test is "has force_control
+    // actually published", which needs a subscription to motor/command that
+    // this node does not have and does not otherwise need; adding one to
+    // satisfy a banner is not worth the coupling.
     //
     // Still a timeout, so a solo run (no force_control) works, and the
     // outcome is logged either way -- a ramp published to nobody should

@@ -96,6 +96,10 @@ private:
     // node publishes NOTHING: a zero-initialised ImpedanceCmd takes the
     // position_control branch, which commands theta=0 with kp=50 --
     // fold the legs, hard. See no_zero_cmd.py.
+    // Ticks on which at least one leg fell into position_control.
+    // Reported and reset every 2 s; a throttled warning without a
+    // count cannot distinguish two events from eight thousand.
+    unsigned long long zero_gain_ticks_ = 0;
     bool imp_cmd_seen_ = false;
     double imp_wait_t0_ = 0.0;   // when the wait started, for the report
     long imp_rx_count_ = 0;   // impedance messages since the last report
