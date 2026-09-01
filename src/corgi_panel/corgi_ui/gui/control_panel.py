@@ -14,9 +14,10 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
-    QMessageBox
+    QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QFontMetrics
 
 from corgi_msgs.msg import RobotCmdStamped, TriggerStamped
 
@@ -283,6 +284,7 @@ class CorgiControlPanel(QWidget):
         
         # Top Bar (Power + E-Stop)
         main_layout.addLayout(self._create_top_bar())
+        main_layout.addWidget(self._create_stale_banner())
         
         # Middle Area (Controls + Monitor)
         main_layout.addLayout(self._create_middle_area())
@@ -304,6 +306,35 @@ class CorgiControlPanel(QWidget):
         
         self.show()
     
+    def _create_stale_banner(self):
+        """A permanently reserved one-line row for the stream-staleness warning.
+
+        Reserved rather than shown-on-demand, and that is the whole point.
+        Toggling a widget's visibility is a layout change, and a layout change
+        is what the complaint was about: this label used to live in the top
+        bar, where making it visible raised the layout's minimum width by 889
+        px (measured) and Qt force-grew the window, because a window cannot be
+        drawn narrower than its layout demands.
+
+        Always present, empty when healthy, so the panel's geometry never
+        moves in either axis whatever the streams do. Costs ~18 px of height,
+        permanently, which is a fair price for a warning that cannot be
+        missed and cannot shove the window around.
+
+        Horizontally Ignored so its text still cannot raise the minimum width,
+        and elided rather than wrapped in _repaint_stream_staleness -- wrapping
+        would grow the row to two lines on a narrow window and reintroduce the
+        same complaint in the other axis.
+        """
+        self.lbl_stream_stale.setSizePolicy(QSizePolicy.Ignored,
+                                            QSizePolicy.Preferred)
+        self.lbl_stream_stale.setMinimumWidth(0)
+        self.lbl_stream_stale.setWordWrap(False)
+        fm = QFontMetrics(self.lbl_stream_stale.font())
+        self.lbl_stream_stale.setFixedHeight(fm.height() + 4)
+        self.lbl_stream_stale.setVisible(True)
+        return self.lbl_stream_stale
+
     def _create_top_bar(self) -> QHBoxLayout:
         """Create top bar with power display and E-Stop button"""
         top_bar = QHBoxLayout()
@@ -447,9 +478,13 @@ class CorgiControlPanel(QWidget):
         self.lbl_stream_stale = QLabel('')
         self.lbl_stream_stale.setStyleSheet(
             'color: #ffa726; font-weight: bold; padding-left: 10px;')
-        self.lbl_stream_stale.setVisible(False)
-        power_box.addWidget(self.lbl_stream_stale)
+        # Geometry and size policy are set in _create_stale_banner().
         top_bar.addLayout(power_box)
+        # The staleness banner is NOT in this bar. Measured: at the default
+        # 1024-wide window the power boxes and buttons claim ~892 px, leaving
+        # ~130 px of slack, so a label here was allocated 63 px of a
+        # 90-character warning. It lives on its own reserved row instead --
+        # see _create_stale_banner().
         
         # E-Stop Button
         self.btn_estop = QPushButton('E-STOP')
@@ -697,6 +732,11 @@ class CorgiControlPanel(QWidget):
 
         self._cmd_pub_label = QLabel("publishers on motor/command: -")
         self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        # Wraps rather than widening the sidebar: this label can read
+        # "publishers on motor/command: 2 -- TWO WRITERS, they will fight at
+        # 1 kHz", which is the same unbounded-sizeHint trap as the staleness
+        # banner above, one column over.
+        self._cmd_pub_label.setWordWrap(True)
 
         self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
         self._cmd_gain_label.setStyleSheet(
@@ -2229,13 +2269,26 @@ class CorgiControlPanel(QWidget):
 
         if stale:
             worst = max(age for _, age in stale)
-            self.lbl_stream_stale.setText(
-                '\u26a0  %s STOPPED %.1f s ago \u2014 the values below are '
-                'frozen, not live'
-                % (' and '.join(n for n, _ in stale), worst))
-            self.lbl_stream_stale.setVisible(True)
+            full = ('\u26a0  %s STOPPED %.1f s ago \u2014 the values below '
+                    'are frozen, not live'
+                    % (' and '.join(n for n, _ in stale), worst))
+            # Elide to the width the label actually has. Without this the
+            # Ignored size policy above would simply clip mid-word with no
+            # indication. Recomputed here on the 5 Hz timer, so it tracks a
+            # manual window resize by itself; the tooltip always has it all.
+            avail = self.lbl_stream_stale.width() - 14
+            if avail > 40:
+                fm = QFontMetrics(self.lbl_stream_stale.font())
+                self.lbl_stream_stale.setText(
+                    fm.elidedText(full, Qt.ElideRight, avail))
+            else:
+                self.lbl_stream_stale.setText(full)
+            self.lbl_stream_stale.setToolTip(full)
         else:
-            self.lbl_stream_stale.setVisible(False)
+            # Blanked, never hidden -- the row is reserved so the geometry
+            # cannot move. See _create_stale_banner().
+            self.lbl_stream_stale.setText('')
+            self.lbl_stream_stale.setToolTip('')
 
         power_stale = any(n == 'power/state' for n, _ in stale)
         dim = "color: #6a6a6a;"
