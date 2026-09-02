@@ -249,6 +249,15 @@ def generate_launch_description():
         DeclareLaunchArgument("cmd_slew_theta_deg_s", default_value="0.0"),
         DeclareLaunchArgument("cmd_slew_beta_deg_s", default_value="0.0"),
         DeclareLaunchArgument("friction_deadband_rad", default_value="0.00288"),
+
+        # Bisect scales, consumed by FORCE_CONTROL (2026-09-02, pitch-excited
+        # limit cycle on the mirrored legs B/C). 1.0 = the unmodified law,
+        # 0.0 removes exactly that term. The node prints BISECT SCALES at
+        # startup -- read it before believing an A/B.
+        DeclareLaunchArgument("phi_pitch_scale", default_value="1.0"),
+        DeclareLaunchArgument("coupling_scale", default_value="1.0"),
+        DeclareLaunchArgument("inertia_ff_scale", default_value="1.0"),
+
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
 
@@ -404,6 +413,12 @@ def generate_launch_description():
                     LaunchConfiguration('cmd_slew_theta_deg_s'),
                 'cmd_slew_beta_deg_s':
                     LaunchConfiguration('cmd_slew_beta_deg_s'),
+                'phi_pitch_scale':
+                    LaunchConfiguration('phi_pitch_scale'),
+                'coupling_scale':
+                    LaunchConfiguration('coupling_scale'),
+                'inertia_ff_scale':
+                    LaunchConfiguration('inertia_ff_scale'),
             }],
             # stdout to file, stderr to screen: the std::cout flood is on
             # stdout, while RCLCPP_* banners -- which the crib's

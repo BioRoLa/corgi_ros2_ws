@@ -93,6 +93,27 @@ ForceControlNode::ForceControlNode()
                 friction_ff_scale_, friction_deadband_,
                 friction_deadband_ * 180.0 / M_PI);
 
+    // Bisect scales for the 2026-09-02 pitch-excited limit cycle on the
+    // mirrored legs (B, C). Measured in the straps: force_control's own
+    // feedforward does net POSITIVE work on B and C (+10 N.m.rad/s on the r
+    // motors) and net zero on A and D, and a slow HELD pitch sustains it, so
+    // the term is in the position path. Each scale defaults to 1.0
+    // (bit-identical: x*1.0 == x) and 0.0 removes exactly one term at
+    // launch, no rebuild between A/Bs.
+    //   phi_pitch_scale  -- the IMU pitch added into phi_fb (feedback leg angle)
+    //   coupling_scale   -- the off-diagonal K/B coupling compensation on trq_cmd
+    //   inertia_ff_scale -- the M*(-acc_fb) term inside trq_cmd_base
+    phi_pitch_scale_ =
+        this->declare_parameter<double>("phi_pitch_scale", phi_pitch_scale_);
+    coupling_scale_ =
+        this->declare_parameter<double>("coupling_scale", coupling_scale_);
+    inertia_ff_scale_ =
+        this->declare_parameter<double>("inertia_ff_scale", inertia_ff_scale_);
+    RCLCPP_WARN(this->get_logger(),
+                "BISECT SCALES: phi_pitch=%.2f coupling=%.2f inertia_ff=%.2f "
+                "(all 1.0 = the unmodified law; 0.0 removes that term)",
+                phi_pitch_scale_, coupling_scale_, inertia_ff_scale_);
+
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
     while (rclcpp::ok()) {
@@ -392,7 +413,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     }
 
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma;
-    trq_cmd_base = J_fb.transpose() * (force_des + f_clock + M*(-acc_fb));
+    trq_cmd_base = J_fb.transpose() * (force_des + f_clock + inertia_ff_scale_ * (M*(-acc_fb)));
 
     // calculate phi command
     Eigen::MatrixXd phi_des(3, 1);
@@ -401,8 +422,8 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                eta_cmd(2, 0);
 
     Eigen::MatrixXd phi_fb(3, 1);
-    phi_fb << motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI,
-              motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
+    phi_fb << motor_state_->beta + phi_pitch_scale_ * pitch + motor_state_->theta - 17/180.0*M_PI,
+              motor_state_->beta + phi_pitch_scale_ * pitch - motor_state_->theta + 17/180.0*M_PI,
               motor_state_->gamma;
 
     Eigen::MatrixXd phi_err = phi_des-phi_fb;
@@ -427,8 +448,8 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     for (int i=0; i<3; ++i) {
         for (int j=0; j<3; ++j) {
             if (i != j) {
-                trq_cmd(i) += K_joint(i, j) * phi_err(j);
-                trq_cmd(i) += B_joint(i, j) * (-phi_vel(j));
+                trq_cmd(i) += coupling_scale_ * K_joint(i, j) * phi_err(j);
+                trq_cmd(i) += coupling_scale_ * B_joint(i, j) * (-phi_vel(j));
             }
         }
     }

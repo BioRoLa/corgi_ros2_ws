@@ -111,7 +111,12 @@ private:
     double imp_rx_worst_gap_ = 0.0;  // worst gap this window, seconds
     double friction_ff_scale_ = 1.0;      // 0.0 disables the term entirely
     double friction_deadband_ = 0.00288;  // rad; one CAN LSB is 0.1648 deg
-    
+    // Bisect scales (2026-09-02, pitch-excited limit cycle on legs B/C).
+    // 1.0 = the unmodified law; 0.0 removes exactly that term.
+    double phi_pitch_scale_ = 1.0;   // IMU pitch added into phi_fb
+    double coupling_scale_ = 1.0;    // off-diagonal K/B coupling on trq_cmd
+    double inertia_ff_scale_ = 1.0;  // M*(-acc_fb) inside trq_cmd_base
+
     int loop_count_ = 0;
 };
 
