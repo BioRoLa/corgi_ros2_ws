@@ -615,13 +615,20 @@ void ForceControlNode::timer_cb() {
         else {
             if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
 
-            if (i == 1 || i == 2) {
-                force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
-            }
-            else {
-                force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
-            }
-            
+            // Same pitch sign for all four legs. Until 2026-09-02 legs B and
+            // C (i == 1, 2) received -pitch on the assumption that their beta
+            // arrives mirrored. It does not: the bridge publishes motor/state
+            // frame-consistent (measured beta reads the same sign on all four
+            // legs, -6..-7 deg, against one commanded -9.25 deg), so B/C were
+            // evaluated at beta - pitch instead of beta + pitch -- a 2*pitch
+            // error in contact_map_3d, J_fb and phi_fb that only appears when
+            // the body pitches, only on the mirrored legs, and only through
+            // this path. In the straps that made the coupling term pump
+            // energy into B and C (+10 N.m.rad/s on the r motors, net zero on
+            // A and D) and limit-cycle under any held pitch; limp and IDLE
+            // holds were quiet. Bisected with phi_pitch_scale/coupling_scale.
+            force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
+
         }
         phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;
     }
