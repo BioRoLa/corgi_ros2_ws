@@ -139,6 +139,26 @@ class PATHS:
 
 
 # ============================================================================
+# Touchdown Softening (corgi_csv_control)
+# ============================================================================
+
+class TOUCHDOWN:
+    """Defaults for corgi_csv_control's per-leg touchdown gain softening.
+
+    Values mirror the node's own ROS parameter defaults; the panel only sends
+    them so the fields start out showing what the node would use anyway.
+    Softening engages only when a "<name>_phase.csv" sidecar sits beside the
+    trajectory CSV, so these have no effect on inputs without one.
+    """
+    PHASE_SUFFIX = '_phase.csv'
+    KP_SCALE = 0.35     # kp_r/kp_l multiplier at the instant of touchdown
+    LEAD_MS = 25.0      # opens the window before the SCHEDULED touchdown, since body
+                        # tilt makes real contact arrive early (~20 ms at 3 deg roll)
+    HOLD_MS = 20.0      # time held fully softened
+    RAMP_MS = 60.0      # linear ramp back to the baseline gains
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 

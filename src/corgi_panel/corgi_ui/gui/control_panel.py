@@ -19,7 +19,7 @@ from corgi_msgs.msg import RobotCmdStamped, TriggerStamped
 
 # Import from corgi_ui package
 from corgi_ui.core.constants import (
-    ROBOTMODE, LOGLEVEL, COLORS, PATHS,
+    ROBOTMODE, LOGLEVEL, COLORS, PATHS, TOUCHDOWN,
     LOGLEVEL_TO_LOGGING_MAP,
     setup_file_logger, log_to_file, close_file_logger
 )
@@ -28,11 +28,13 @@ from corgi_ui.core.process_manager import ProcessManager
 from corgi_ui.gui.widgets.log_widget import LogWidget
 
 # GPIO Support (optional)
-GPIO_defined = True
+GPIO_defined = False
+GPIO = None
 try:
     import Jetson.GPIO as GPIO
-except ImportError:
-    GPIO_defined = False
+    GPIO_defined = True
+except (ImportError, RuntimeError) as exc:
+    logging.getLogger(__name__).warning("GPIO support disabled: %s", exc)
 
 class CorgiControlPanel(QWidget):
     """
@@ -49,13 +51,18 @@ class CorgiControlPanel(QWidget):
     
     def __init__(self):
         super().__init__()
+        global GPIO_defined
         
         # Initialize GPIO if available
         if GPIO_defined:
-            self.trigger_pin = 11
-            GPIO.setmode(GPIO.BOARD)
-            GPIO.setup(self.trigger_pin, GPIO.OUT)
-            GPIO.output(self.trigger_pin, GPIO.HIGH)
+            try:
+                self.trigger_pin = 11
+                GPIO.setmode(GPIO.BOARD)
+                GPIO.setup(self.trigger_pin, GPIO.OUT)
+                GPIO.output(self.trigger_pin, GPIO.HIGH)
+            except RuntimeError as exc:
+                logging.getLogger(__name__).warning("GPIO initialization failed: %s", exc)
+                GPIO_defined = False
         
         # Initialize instance variables
         self._robot_cmd_seq = 0
@@ -386,11 +393,45 @@ class CorgiControlPanel(QWidget):
         csv_btn_layout.addWidget(self.btn_csv_select)
         csv_btn_layout.addWidget(self.btn_csv_run)
         
+        # Phase sidecar status. corgi_csv_control softens the landing leg's kp only
+        # when "<name>_phase.csv" sits next to the trajectory CSV; without it the node
+        # silently falls back to constant gains, so surface the state before Run.
+        self.label_phase_status = QLabel('')
+        self.label_phase_status.setStyleSheet('font-size: 11px;')
+        self.label_phase_status.setWordWrap(True)
+        
+        self.label_td = QLabel('Touchdown softening:')
+        self.label_td.setStyleSheet('color: #aaa; font-size: 12px;')
+        
+        td_layout = QGridLayout()
+        td_layout.setContentsMargins(0, 0, 0, 0)
+        self.edit_td_kp_scale = QLineEdit(str(TOUCHDOWN.KP_SCALE))
+        self.edit_td_lead_ms = QLineEdit(str(TOUCHDOWN.LEAD_MS))
+        self.edit_td_hold_ms = QLineEdit(str(TOUCHDOWN.HOLD_MS))
+        self.edit_td_ramp_ms = QLineEdit(str(TOUCHDOWN.RAMP_MS))
+        for col, (text, widget) in enumerate((
+            ('kp x', self.edit_td_kp_scale),
+            ('lead ms', self.edit_td_lead_ms),
+            ('hold ms', self.edit_td_hold_ms),
+            ('ramp ms', self.edit_td_ramp_ms),
+        )):
+            caption = QLabel(text)
+            caption.setStyleSheet('color: #aaa; font-size: 11px;')
+            widget.setFixedWidth(46)
+            td_layout.addWidget(caption, 0, col)
+            td_layout.addWidget(widget, 1, col)
+        
         grp_csv_layout.addWidget(self.label_csv)
         grp_csv_layout.addWidget(self.edit_csv)
         grp_csv_layout.addLayout(csv_btn_layout)
+        grp_csv_layout.addWidget(self.label_phase_status)
+        grp_csv_layout.addWidget(self.label_td)
+        grp_csv_layout.addLayout(td_layout)
         grp_csv.setLayout(grp_csv_layout)
         sidebar.addWidget(grp_csv)
+        
+        self.edit_csv.textChanged.connect(self._refresh_phase_status)
+        self._refresh_phase_status()
         
         # Recorder Group
         grp_rec = QGroupBox("Recorder")
@@ -808,6 +849,82 @@ class CorgiControlPanel(QWidget):
             self.btn_home.setEnabled(True)
             self.btn_home.setText('Homing')
     
+    def _csv_arg_for(self, csv_file: str) -> str:
+        """Reproduce the argv[1] the Run handler passes to corgi_csv_control."""
+        csv_filename = os.path.basename(csv_file)
+        if csv_filename.endswith('.csv'):
+            csv_filename = csv_filename[:-4]
+        if not os.path.isabs(csv_file) and '/' not in csv_file:
+            return csv_filename
+        return csv_file
+
+    def _resolve_phase_path(self, csv_file: str):
+        """Resolve the phase sidecar exactly as corgi_csv_control does.
+
+        The node treats an argument containing '/' as a path and anything else as a
+        name under input_csv/, appends '.csv' when missing, then swaps that suffix
+        for '_phase.csv'. Mirroring it here means the panel reports on the same file
+        the node will actually open. Returns (csv_path, phase_path).
+        """
+        arg = self._csv_arg_for(csv_file)
+        if '/' in arg:
+            csv_path = arg
+        else:
+            csv_path = os.path.join(PATHS.DEFAULT_CSV_DIR, arg)
+        if not csv_path.endswith('.csv'):
+            csv_path += '.csv'
+        return csv_path, csv_path[:-4] + TOUCHDOWN.PHASE_SUFFIX
+
+    def _refresh_phase_status(self):
+        """Show whether touchdown softening will engage for the selected CSV."""
+        csv_file = self.edit_csv.text().strip()
+        enabled = bool(csv_file)
+        for widget in (self.edit_td_kp_scale, self.edit_td_lead_ms,
+                       self.edit_td_hold_ms, self.edit_td_ramp_ms):
+            widget.setEnabled(enabled)
+        if not csv_file:
+            self.label_phase_status.setText('')
+            return
+        _, phase_path = self._resolve_phase_path(csv_file)
+        if os.path.isfile(phase_path):
+            self.label_phase_status.setStyleSheet('color: #4caf50; font-size: 11px;')
+            self.label_phase_status.setText(
+                f'Phase sidecar found: {os.path.basename(phase_path)} — softening will engage'
+            )
+        else:
+            self.label_phase_status.setStyleSheet('color: #ff9800; font-size: 11px;')
+            self.label_phase_status.setText(
+                f'No {os.path.basename(phase_path)} — constant gains (softening off)'
+            )
+
+    def _touchdown_param_args(self):
+        """Build the -p arguments for touchdown softening.
+
+        Invalid entries fall back to the node defaults with a warning rather than
+        blocking the run, so a typo cannot strand the robot mid-session.
+        """
+        fields = (
+            ('td_kp_scale', self.edit_td_kp_scale, TOUCHDOWN.KP_SCALE),
+            ('td_lead_ms', self.edit_td_lead_ms, TOUCHDOWN.LEAD_MS),
+            ('td_hold_ms', self.edit_td_hold_ms, TOUCHDOWN.HOLD_MS),
+            ('td_ramp_ms', self.edit_td_ramp_ms, TOUCHDOWN.RAMP_MS),
+        )
+        args = []
+        for name, widget, default in fields:
+            text = widget.text().strip()
+            try:
+                value = float(text)
+                if value < 0.0:
+                    raise ValueError('negative')
+            except ValueError:
+                self.log_widget.add_log(
+                    f'Invalid {name} "{text}"; using default {default}', LOGLEVEL.WARN, 'system'
+                )
+                value = default
+                widget.setText(str(default))
+            args += ['-p', f'{name}:={value}']
+        return args
+
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
         file_name, _ = QFileDialog.getOpenFileName(
@@ -820,6 +937,16 @@ class CorgiControlPanel(QWidget):
         if file_name:
             self.edit_csv.setText(file_name)
             self.log_widget.add_log(f'Selected CSV file: {file_name}', LOGLEVEL.INFO, 'orin')
+            _, phase_path = self._resolve_phase_path(file_name)
+            if os.path.isfile(phase_path):
+                self.log_widget.add_log(
+                    f'Phase sidecar found: {phase_path}', LOGLEVEL.INFO, 'orin'
+                )
+            else:
+                self.log_widget.add_log(
+                    f'No phase sidecar at {phase_path}; touchdown softening will stay off',
+                    LOGLEVEL.WARN, 'system'
+                )
     
     def _on_csv_run_clicked(self):
         """Handle CSV control run button click"""
@@ -845,10 +972,29 @@ class CorgiControlPanel(QWidget):
                 self.log_widget.add_log('CSV Control already running; skip start', LOGLEVEL.WARN, 'system')
                 return
             
-            # Build command with use_sim_time parameter if needed
+            _, phase_path = self._resolve_phase_path(csv_file)
+            softening = os.path.isfile(phase_path)
+            if softening:
+                self.log_widget.add_log(
+                    f'Touchdown softening ON via {os.path.basename(phase_path)}',
+                    LOGLEVEL.INFO, 'system'
+                )
+            else:
+                self.log_widget.add_log(
+                    f'Touchdown softening OFF (no {os.path.basename(phase_path)}); '
+                    'constant gains will be used',
+                    LOGLEVEL.WARN, 'system'
+                )
+            
+            # Build command; every -p goes after a single --ros-args separator
             cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg]
+            ros_args = []
             if self.use_sim_time:
-                cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg, '--ros-args', '-p', 'use_sim_time:=true']
+                ros_args += ['-p', 'use_sim_time:=true']
+            if softening:
+                ros_args += self._touchdown_param_args()
+            if ros_args:
+                cmd += ['--ros-args'] + ros_args
             
             success = self.process_manager.start_process(
                 'csv_control',
@@ -858,7 +1004,8 @@ class CorgiControlPanel(QWidget):
             
             if success:
                 mode_str = ' (sim)' if self.use_sim_time else ''
-                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}{mode_str}', LOGLEVEL.INFO, 'system')
+                soft_str = ' [soft touchdown]' if softening else ' [constant gains]'
+                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}{mode_str}{soft_str}', LOGLEVEL.INFO, 'system')
             else:
                 self.log_widget.add_log('Failed to start CSV Control', LOGLEVEL.ERROR, 'system')
                 self.btn_csv_run.setChecked(False)
