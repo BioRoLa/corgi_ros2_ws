@@ -799,15 +799,6 @@ class CorgiControlPanel(QWidget):
         grp_csv.setLayout(grp_csv_layout)
         sidebar.addWidget(grp_csv)
         
-        grp_csv_layout.addWidget(self.label_csv)
-        grp_csv_layout.addWidget(self.edit_csv)
-        grp_csv_layout.addLayout(csv_btn_layout)
-        grp_csv_layout.addWidget(self.label_phase_status)
-        grp_csv_layout.addWidget(self.label_td)
-        grp_csv_layout.addLayout(td_layout)
-        grp_csv.setLayout(grp_csv_layout)
-        sidebar.addWidget(grp_csv)
-        
         self.edit_csv.textChanged.connect(self._refresh_phase_status)
         self._refresh_phase_status()
         
