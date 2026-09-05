@@ -139,6 +139,127 @@ class PATHS:
 
 
 # ============================================================================
+# Touchdown Softening (corgi_csv_control)
+# ============================================================================
+
+class TOUCHDOWN:
+    """Defaults for corgi_csv_control's per-leg touchdown gain softening.
+
+    Values mirror the node's own ROS parameter defaults; the panel only sends
+    them so the fields start out showing what the node would use anyway.
+    Softening engages only when a "<name>_phase.csv" sidecar sits beside the
+    trajectory CSV, so these have no effect on inputs without one.
+    """
+    PHASE_SUFFIX = '_phase.csv'
+    KP_SCALE = 0.35     # kp_r/kp_l multiplier at the instant of touchdown
+    LEAD_MS = 25.0      # opens the window before the SCHEDULED touchdown, since body
+                        # tilt makes real contact arrive early (~20 ms at 3 deg roll)
+    HOLD_MS = 20.0      # time held fully softened
+    RAMP_MS = 60.0      # linear ramp back to the baseline gains
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def get_log_color(level: LOGLEVEL) -> str:
+    """Get HTML color code for a log level"""
+    return COLORS.LOG_COLORS.get(level, '#ffffff')
+
+
+def get_log_name(level: LOGLEVEL) -> str:
+    """Get formatted name for a log level"""
+    return COLORS.LOG_NAMES.get(level, 'UNKNOWN')
+
+
+def format_log_html(timestamp: str, level: LOGLEVEL, source: str, message: str) -> str:
+    """
+    Format a log message as HTML with appropriate colors
+    
+    Args:
+        timestamp: Formatted timestamp string (e.g., '12:34:56.789')
+        level: Log level enum value
+        source: Source identifier (e.g., 'system', 'orin', 'fpga_driver')
+        message: Log message content
+    
+    Returns:
+        HTML-formatted log string
+    """
+    color = get_log_color(level)
+    level_name = get_log_name(level)
+    
+    html = f'<span style="color:{COLORS.TIMESTAMP};">[{timestamp}]</span> '
+    html += f'<span style="color:{color}; font-weight:bold;">[{level_name}]</span> '
+    html += f'<span style="color:{COLORS.SOURCE};">[{source}]</span> '
+    html += f'<span style="color:{COLORS.MESSAGE};">{message}</span>'
+    
+    return html
+
+
+def setup_file_logger(name: str, log_filepath: str):
+    """
+    Create a standardized file logger
+    
+    Args:
+        name: Logger name (e.g., 'CorgiControlPanel', 'CorgiConfigPanel')
+        log_filepath: Full path to log file
+    
+    Returns:
+        Configured logging.Logger instance
+    """
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+    
+    handler = logging.FileHandler(log_filepath, mode='w')
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '[%(asctime)s] [%(levelname)-5s] [%(name)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    return logger
+
+
+def log_to_file(logger, level: LOGLEVEL, source: str, message: str):
+    """
+    Write a log message to file logger
+    
+    Args:
+        logger: logging.Logger instance
+        level: LOGLEVEL enum value
+        source: Source identifier
+        message: Log message
+    """
+    file_level = LOGLEVEL_TO_LOGGING_MAP.get(level, logging.INFO)
+    logger.log(file_level, f'[{source}] {message}')
+
+
+def close_file_logger(logger, log_filepath: str, panel_name: str = "Panel"):
+    """
+    Close file logger and display save confirmation
+    
+    Args:
+        logger: logging.Logger instance to close
+        log_filepath: Path where log file was saved
+        panel_name: Name of the panel (for display message)
+    """
+    try:
+        # Close all handlers
+        for handler in logger.handlers[:]:
+            handler.close()
+            logger.removeHandler(handler)
+        print(f'{panel_name} log saved to: {log_filepath}')
+    except Exception as e:
+        print(f'Error closing {panel_name} log file: {e}')
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
