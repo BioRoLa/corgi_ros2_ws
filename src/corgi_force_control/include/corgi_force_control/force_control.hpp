@@ -127,6 +127,9 @@ private:
     double slew_target_[4][4] = {};
     double slew_s_[4] = {1.0, 1.0, 1.0, 1.0};
     bool slew_valid_[4] = {};
+    long slew_switch_n_ = 0;        // gain-set switches seen (all legs)
+    long slew_cut_n_ = 0;           // of which arrived before the previous ramp finished
+    double slew_cut_min_s_ = 1.0;   // the shortest fraction a cut ramp reached
 
     int loop_count_ = 0;
 };

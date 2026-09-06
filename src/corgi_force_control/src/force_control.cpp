@@ -366,6 +366,8 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
         bool changed = false;
         for (int k = 0; k < 4; ++k) if (req[k] != slew_target_[L][k]) changed = true;
         if (changed) {
+            ++slew_switch_n_;
+            if (slew_s_[L] < 1.0) { ++slew_cut_n_; if (slew_s_[L] < slew_cut_min_s_) slew_cut_min_s_ = slew_s_[L]; }
             for (int k = 0; k < 4; ++k) {
                 slew_start_[L][k] = slew_start_[L][k] + slew_s_[L] * (slew_target_[L][k] - slew_start_[L][k]);
                 slew_target_[L][k] = req[k];
@@ -398,7 +400,14 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
         e_t = Eigen::Vector3d(-e_r(2), 0.0, e_r(0));
     }
 
-    if (imp_cmd_->leg_frame) {
+    // With the gain slew on, ALWAYS build in the leg frame (review
+    // wf_5b550d3e): the producer flips leg_frame on the same tick as the
+    // gain set, and a scalar ramp placed on body axes on that tick swaps the
+    // stiff and the compliant axis instead of ramping them. The flight set
+    // is isotropic in kx/kz, so its leg-frame build kx*(e_r e_r^T + e_t
+    // e_t^T) is the same matrix as the body-frame diag(kx, ky, kz) -- exact
+    // once the ramp completes, and the ramp itself stays in one basis.
+    if (imp_cmd_->leg_frame || gain_slew_s_ > 0.0) {
         // The G-SLIP spring acts along the leg, so the commanded stiffness is
         // given in the leg frame and rotated here. Building the basis from the
         // contact point keeps K and B free of sign conventions -- e_t enters as
@@ -668,10 +677,12 @@ void ForceControlNode::timer_cb() {
 
     unsigned zero_gain_mask = 0;
     double zero_gain_theta = 0.0;
-    // Wall-clock tick interval for the gain slew, clamped so that a burst of
-    // catch-up ticks after a stall advances the ramp by about nothing.
+    // Tick interval for the gain slew in the NODE clock (so a ramp is the same
+    // number of controller milliseconds in Webots at any real-time factor),
+    // clamped so that a burst of catch-up ticks after a stall advances the
+    // ramp by about nothing.
     {
-        const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const double wall = this->now().seconds();   // node clock: sim time in Webots, system time on the robot
         double dt = (slew_last_wall_ > 0.0) ? (wall - slew_last_wall_) : 0.001;
         if (dt < 0.0) dt = 0.0;
         if (dt > 0.002) dt = 0.002;
@@ -824,6 +835,12 @@ void ForceControlNode::timer_cb() {
                         motor_state_.module_b.gamma * r2d, motor_cmd_.module_b.gamma * r2d, motor_state_.module_b.torque_h,
                         motor_state_.module_c.gamma * r2d, motor_cmd_.module_c.gamma * r2d, motor_state_.module_c.torque_h,
                         motor_state_.module_d.gamma * r2d, motor_cmd_.module_d.gamma * r2d, motor_state_.module_d.torque_h);
+            if (gain_slew_s_ > 0.0) {
+                RCLCPP_WARN(this->get_logger(),
+                            "GAIN SLEW: %ld gain-set switches so far, %ld ramps cut short by the next switch (shortest reached %.0f %% of %.0f ms)"
+                            " -- a cut ramp means the delivered stiffness never reached the request that phase",
+                            slew_switch_n_, slew_cut_n_, 100.0 * slew_cut_min_s_, gain_slew_s_ * 1000.0);
+            }
         }
     }
 
