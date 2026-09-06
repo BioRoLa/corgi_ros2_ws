@@ -121,6 +121,7 @@ private:
     double trim_gamma_cur_ = 0.0;   // the leg being computed; set per leg in timer_cb
     int leg_idx_cur_ = 0;
     double gain_slew_s_ = 0.0;      // ramp time in seconds; 0 = off
+    bool slew_liftoff_only_ = true; // ramp only into flight; stance jumps
     double slew_dt_ = 0.001;        // wall-clock tick interval, clamped (timer_cb)
     double slew_last_wall_ = 0.0;
     double slew_start_[4][4] = {};  // per leg: kx, kz, bx, bz at ramp start

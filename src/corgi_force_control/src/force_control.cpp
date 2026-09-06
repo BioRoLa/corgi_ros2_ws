@@ -124,13 +124,16 @@ ForceControlNode::ForceControlNode()
         }
     }
     gain_slew_s_ = this->declare_parameter<double>("gain_slew_ms", 0.0) / 1000.0;
+    slew_liftoff_only_ = this->declare_parameter<bool>("gain_slew_liftoff_only", true);
     RCLCPP_WARN(this->get_logger(),
                 "ZERO TRIMS gamma (deg): A %.2f B %.2f C %.2f D %.2f (0 = none; a trim is the encoder reading at a level hold "
                 "with the command at 0 -- after trimming the state still reads +trim; cmd -> +trim and torque_h -> 0)",
                 gamma_trim_[0] * 180.0 / M_PI, gamma_trim_[1] * 180.0 / M_PI, gamma_trim_[2] * 180.0 / M_PI, gamma_trim_[3] * 180.0 / M_PI);
     RCLCPP_WARN(this->get_logger(),
-                "GAIN SLEW: %.0f ms ramp of kx/kz/bx/bz at every gain-set switch (0 = off; #49); ky/by (ABAD) still step (#36 wrap)",
-                gain_slew_s_ * 1000.0);
+                "GAIN SLEW: %.0f ms ramp of kx/kz/bx/bz %s (0 = off; #49); ky/by (ABAD) still step (#36 wrap)",
+                gain_slew_s_ * 1000.0,
+                slew_liftoff_only_ ? "INTO FLIGHT only (stance jumps to the request)"
+                                   : "at every gain-set switch, both directions");
 
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
@@ -374,7 +377,15 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
             }
             slew_s_[L] = 0.0;
         }
-        slew_s_[L] = std::min(1.0, slew_s_[L] + slew_dt_ / gain_slew_s_);
+        // Ramp INTO flight only, by default (v4, from ladder_slew1): the spike
+        // this exists to remove sits ~10 ms after the switch to the flight set
+        // (777/792 per-leg peaks, log S325.13), while ramping at TOUCHDOWN
+        // holds the tangential spring near k_flight for the ramp's length and
+        // fights the stance sweep -- 30 ms of it cost ~30 % of the hop energy
+        // (landings 29 -> 21 m/s2, peak current 41 -> 25 A). In stance, jump
+        // straight to the request.
+        if (slew_liftoff_only_ && imp_cmd_->leg_frame) slew_s_[L] = 1.0;
+        else slew_s_[L] = std::min(1.0, slew_s_[L] + slew_dt_ / gain_slew_s_);
         double out[4];
         for (int k = 0; k < 4; ++k) out[k] = slew_start_[L][k] + slew_s_[L] * (slew_target_[L][k] - slew_start_[L][k]);
         kx_s = out[0]; kz_s = out[1]; bx_s = out[2]; bz_s = out[3];

@@ -267,6 +267,7 @@ def generate_launch_description():
         DeclareLaunchArgument("gamma_trim_c_deg", default_value="0.0"),
         DeclareLaunchArgument("gamma_trim_d_deg", default_value="0.0"),
         DeclareLaunchArgument("gain_slew_ms", default_value="0.0"),
+        DeclareLaunchArgument("gain_slew_liftoff_only", default_value="true"),
 
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
@@ -434,6 +435,7 @@ def generate_launch_description():
                 'gamma_trim_c_deg': ParameterValue(LaunchConfiguration('gamma_trim_c_deg'), value_type=float),
                 'gamma_trim_d_deg': ParameterValue(LaunchConfiguration('gamma_trim_d_deg'), value_type=float),
                 'gain_slew_ms': ParameterValue(LaunchConfiguration('gain_slew_ms'), value_type=float),
+                'gain_slew_liftoff_only': ParameterValue(LaunchConfiguration('gain_slew_liftoff_only'), value_type=bool),
             }],
             # stdout to file, stderr to screen: the std::cout flood is on
             # stdout, while RCLCPP_* banners -- which the crib's
