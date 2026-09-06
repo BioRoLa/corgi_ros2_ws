@@ -116,17 +116,17 @@ private:
     double phi_pitch_scale_ = 1.0;   // IMU pitch added into phi_fb
     double coupling_scale_ = 1.0;    // off-diagonal K/B coupling on trq_cmd
     double inertia_ff_scale_ = 1.0;  // M*(-acc_fb) inside trq_cmd_base
-    // Zero trims (rad) and joint-gain slew, 2026-09-06 (log S325.13, #49).
-    double beta_trim_[4] = {0.0, 0.0, 0.0, 0.0};
+    // Gamma zero trims (rad) and the gain slew, 2026-09-06 (log S325.13, #49).
     double gamma_trim_[4] = {0.0, 0.0, 0.0, 0.0};
-    double trim_beta_cur_ = 0.0;    // the leg force_control() is computing
-    double trim_gamma_cur_ = 0.0;
+    double trim_gamma_cur_ = 0.0;   // the leg being computed; set per leg in timer_cb
     int leg_idx_cur_ = 0;
-    double gain_slew_kp_ = 0.0;     // per second; 0 = off
-    double gain_slew_kd_ = 0.0;
-    double kp_prev_[4][3] = {};
-    double kd_prev_[4][3] = {};
-    bool gain_prev_valid_[4][6] = {};
+    double gain_slew_s_ = 0.0;      // ramp time in seconds; 0 = off
+    double slew_dt_ = 0.001;        // wall-clock tick interval, clamped (timer_cb)
+    double slew_last_wall_ = 0.0;
+    double slew_start_[4][4] = {};  // per leg: kx, kz, bx, bz at ramp start
+    double slew_target_[4][4] = {};
+    double slew_s_[4] = {1.0, 1.0, 1.0, 1.0};
+    bool slew_valid_[4] = {};
 
     int loop_count_ = 0;
 };

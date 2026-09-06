@@ -115,6 +115,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -257,19 +258,15 @@ def generate_launch_description():
         DeclareLaunchArgument("phi_pitch_scale", default_value="1.0"),
         DeclareLaunchArgument("coupling_scale", default_value="1.0"),
         DeclareLaunchArgument("inertia_ff_scale", default_value="1.0"),
-        # Zero trims (deg; the reading at a level hold with the command at 0)
-        # and the joint-gain slew (per second; 0 = off). Both force_control,
-        # 2026-09-06 (log S325.13, #49). Write decimals: 0.7, never 1.
-        DeclareLaunchArgument("beta_trim_a_deg", default_value="0.0"),
-        DeclareLaunchArgument("beta_trim_b_deg", default_value="0.0"),
-        DeclareLaunchArgument("beta_trim_c_deg", default_value="0.0"),
-        DeclareLaunchArgument("beta_trim_d_deg", default_value="0.0"),
+        # Gamma zero trims (deg; the ENCODER reading at a level hold with the
+        # command at 0 -- beta is deliberately not trimmed, see force_control)
+        # and the gain slew (ms; 0 = off). force_control, 2026-09-06 (log
+        # S325.13, #49). Coerced to float below, so 1 and 1.0 both work.
         DeclareLaunchArgument("gamma_trim_a_deg", default_value="0.0"),
         DeclareLaunchArgument("gamma_trim_b_deg", default_value="0.0"),
         DeclareLaunchArgument("gamma_trim_c_deg", default_value="0.0"),
         DeclareLaunchArgument("gamma_trim_d_deg", default_value="0.0"),
-        DeclareLaunchArgument("gain_slew_kp_per_s", default_value="0.0"),
-        DeclareLaunchArgument("gain_slew_kd_per_s", default_value="0.0"),
+        DeclareLaunchArgument("gain_slew_ms", default_value="0.0"),
 
         DeclareLaunchArgument("d_pitch", default_value="0.0"),
         DeclareLaunchArgument("pitch_limit", default_value="0.05236"),  # 3 deg
@@ -432,16 +429,11 @@ def generate_launch_description():
                     LaunchConfiguration('coupling_scale'),
                 'inertia_ff_scale':
                     LaunchConfiguration('inertia_ff_scale'),
-                'beta_trim_a_deg': LaunchConfiguration('beta_trim_a_deg'),
-                'beta_trim_b_deg': LaunchConfiguration('beta_trim_b_deg'),
-                'beta_trim_c_deg': LaunchConfiguration('beta_trim_c_deg'),
-                'beta_trim_d_deg': LaunchConfiguration('beta_trim_d_deg'),
-                'gamma_trim_a_deg': LaunchConfiguration('gamma_trim_a_deg'),
-                'gamma_trim_b_deg': LaunchConfiguration('gamma_trim_b_deg'),
-                'gamma_trim_c_deg': LaunchConfiguration('gamma_trim_c_deg'),
-                'gamma_trim_d_deg': LaunchConfiguration('gamma_trim_d_deg'),
-                'gain_slew_kp_per_s': LaunchConfiguration('gain_slew_kp_per_s'),
-                'gain_slew_kd_per_s': LaunchConfiguration('gain_slew_kd_per_s'),
+                'gamma_trim_a_deg': ParameterValue(LaunchConfiguration('gamma_trim_a_deg'), value_type=float),
+                'gamma_trim_b_deg': ParameterValue(LaunchConfiguration('gamma_trim_b_deg'), value_type=float),
+                'gamma_trim_c_deg': ParameterValue(LaunchConfiguration('gamma_trim_c_deg'), value_type=float),
+                'gamma_trim_d_deg': ParameterValue(LaunchConfiguration('gamma_trim_d_deg'), value_type=float),
+                'gain_slew_ms': ParameterValue(LaunchConfiguration('gain_slew_ms'), value_type=float),
             }],
             # stdout to file, stderr to screen: the std::cout flood is on
             # stdout, while RCLCPP_* banners -- which the crib's

@@ -115,25 +115,22 @@ ForceControlNode::ForceControlNode()
                 "(all 1.0 = the unmodified law; 0.0 removes that term)",
                 phi_pitch_scale_, coupling_scale_, inertia_ff_scale_);
 
-    // Zero trims (deg on the command line, rad inside) and the joint-gain
-    // slew. See force_control(). Defaults are bit-identical to the old law.
+    // Gamma zero trims (deg on the command line, rad inside) and the gain
+    // slew (ms). See force_control(). Defaults are bit-identical.
     {
         const char legs[4] = {'a', 'b', 'c', 'd'};
         for (int i = 0; i < 4; ++i) {
-            beta_trim_[i] = this->declare_parameter<double>(std::string("beta_trim_") + legs[i] + "_deg", 0.0) * M_PI / 180.0;
             gamma_trim_[i] = this->declare_parameter<double>(std::string("gamma_trim_") + legs[i] + "_deg", 0.0) * M_PI / 180.0;
         }
     }
-    gain_slew_kp_ = this->declare_parameter<double>("gain_slew_kp_per_s", 0.0);
-    gain_slew_kd_ = this->declare_parameter<double>("gain_slew_kd_per_s", 0.0);
+    gain_slew_s_ = this->declare_parameter<double>("gain_slew_ms", 0.0) / 1000.0;
     RCLCPP_WARN(this->get_logger(),
-                "ZERO TRIMS (deg): beta A %.2f B %.2f C %.2f D %.2f | gamma A %.2f B %.2f C %.2f D %.2f "
-                "(0 = none; a trim is the reading at a level hold with the command at 0)",
-                beta_trim_[0] * 180.0 / M_PI, beta_trim_[1] * 180.0 / M_PI, beta_trim_[2] * 180.0 / M_PI, beta_trim_[3] * 180.0 / M_PI,
+                "ZERO TRIMS gamma (deg): A %.2f B %.2f C %.2f D %.2f (0 = none; a trim is the encoder reading at a level hold "
+                "with the command at 0 -- after trimming the state still reads +trim; cmd -> +trim and torque_h -> 0)",
                 gamma_trim_[0] * 180.0 / M_PI, gamma_trim_[1] * 180.0 / M_PI, gamma_trim_[2] * 180.0 / M_PI, gamma_trim_[3] * 180.0 / M_PI);
     RCLCPP_WARN(this->get_logger(),
-                "GAIN SLEW: kp %.0f/s kd %.1f/s (0 = off; rate-limits the stance<->flight gain step, #49)",
-                gain_slew_kp_, gain_slew_kd_);
+                "GAIN SLEW: %.0f ms ramp of kx/kz/bx/bz at every gain-set switch (0 = off; #49); ky/by (ABAD) still step (#36 wrap)",
+                gain_slew_s_ * 1000.0);
 
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
@@ -264,20 +261,6 @@ void ForceControlNode::quaternion_to_euler(const Eigen::Quaterniond& q, double& 
                      1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
 }
 
-namespace {
-// Rate-limit a joint gain toward its request (1 kHz loop, rate in units/s).
-// rate <= 0 passes the request through. `prev` is updated either way.
-inline void slew_gain(double& prev, bool& valid, double& value, double rate) {
-    if (valid && rate > 0.0) {
-        const double dmax = rate * 0.001;
-        const double d = value - prev;
-        if (d > dmax) value = prev + dmax;
-        else if (d < -dmax) value = prev - dmax;
-    }
-    prev = value; valid = true;
-}
-}  // namespace
-
 void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                                        Eigen::MatrixXd phi_vel_prev_, 
                                        corgi_msgs::msg::MotorState* motor_state_, 
@@ -285,12 +268,17 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                        corgi_msgs::msg::MotorCmd* motor_cmd_, 
                                        double pitch) {
     // force command (3D)
-    // Zero trims (2026-09-06, log S325.13): the ABAD hall zeros and the beta
-    // zeros read 0.3-0.9 deg off at a level hold, all the same sign, so the
-    // robot stands with a uniform lean and walks off sideways. A trim is
-    // that hold reading with the command at 0: the controller sees
-    // (measured - trim) and commands (target + trim). 0.0 = bit-identical.
-    const double beta_meas = motor_state_->beta - trim_beta_cur_;
+    // Gamma zero trim (2026-09-06, log S325.13; review wf_930d9335): the ABAD
+    // encoders read +0.3..+0.9 deg at a level hold with the command at 0 --
+    // the same value at a wrapped (~130 N.m/rad) and an unwrapped (~460)
+    // ABAD gain, i.e. a zero error, not a deflection (#35). A trim is that
+    // reading: the law sees (encoder - trim) and commands (target + trim).
+    // After trimming, /motor/state STILL reads +trim at a planted hold; what
+    // changes is torque_h (toward 0) and cmd - state (toward 0). Beta is NOT
+    // trimmed: its hold offsets change sign between runs and are friction on
+    // the 600 N/m tangential spring, for which this correction has the wrong
+    // sign. 0.0 = bit-identical.
+    const double beta_meas = motor_state_->beta;
     const double gamma_meas = motor_state_->gamma - trim_gamma_cur_;
     Eigen::MatrixXd force_des(3, 1);
     force_des << imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz;
@@ -353,6 +341,43 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd trq_cmd_base(3, 1);
     Eigen::MatrixXd trq_cmd(3, 1);
 
+    // Gain slew (#49, 2026-09-06; v2 after review wf_930d9335): at every
+    // gain-set switch (stance <-> flight) the commanded Cartesian gains step
+    // (k_radial -> k_flight, b_tangential -> b_flight ...) and the joint PD
+    // turns the step into a 40-51 N.m torque spike per leg on every stride,
+    // at any stance stiffness. Ramp the SAGITTAL gains kx/kz/bx/bz linearly
+    // over gain_slew_s_ seconds of wall time, all four in lockstep, restarting
+    // from the current value if the request changes mid-ramp. K and B are
+    // then built from the slewed values, so the diagonals and the coupling
+    // stay consistent and every mode stays positive throughout. ky/by (the
+    // ABAD) are NOT slewed: the flight set's kp_h sits above the 12-bit CAN
+    // ceiling and a ramp through it would sweep the delivered gain through
+    // zero (#36) -- the ABAD keeps today's step. The pose-driven variation
+    // inside a phase lives in J_fb and passes through untouched. 0 = off
+    // (bit-identical).
+    double kx_s = imp_cmd_->kx, kz_s = imp_cmd_->kz, bx_s = imp_cmd_->bx, bz_s = imp_cmd_->bz;
+    if (gain_slew_s_ > 0.0) {
+        const int L = leg_idx_cur_;
+        const double req[4] = {kx_s, kz_s, bx_s, bz_s};
+        if (!slew_valid_[L]) {
+            for (int k = 0; k < 4; ++k) { slew_start_[L][k] = req[k]; slew_target_[L][k] = req[k]; }
+            slew_s_[L] = 1.0; slew_valid_[L] = true;
+        }
+        bool changed = false;
+        for (int k = 0; k < 4; ++k) if (req[k] != slew_target_[L][k]) changed = true;
+        if (changed) {
+            for (int k = 0; k < 4; ++k) {
+                slew_start_[L][k] = slew_start_[L][k] + slew_s_[L] * (slew_target_[L][k] - slew_start_[L][k]);
+                slew_target_[L][k] = req[k];
+            }
+            slew_s_[L] = 0.0;
+        }
+        slew_s_[L] = std::min(1.0, slew_s_[L] + slew_dt_ / gain_slew_s_);
+        double out[4];
+        for (int k = 0; k < 4; ++k) out[k] = slew_start_[L][k] + slew_s_[L] * (slew_target_[L][k] - slew_start_[L][k]);
+        kx_s = out[0]; kz_s = out[1]; bx_s = out[2]; bz_s = out[3];
+    }
+
     M(0, 0) = imp_cmd_->mx; M(1, 1) = imp_cmd_->my; M(2, 2) = imp_cmd_->mz;
 
     // The leg-frame basis, built from the MEASURED contact point:
@@ -383,21 +408,21 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
         if (!leg_basis_ok) {
             // Degenerate (contact directly under the hip axis): fall back to
             // body-frame axes rather than normalising a zero vector.
-            K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
-            B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
+            K(0, 0) = kx_s; K(1, 1) = imp_cmd_->ky; K(2, 2) = kz_s;
+            B(0, 0) = bx_s; B(1, 1) = imp_cmd_->by; B(2, 2) = bz_s;
         } else {
             Eigen::Vector3d e_y(0.0, 1.0, 0.0);
 
-            K = imp_cmd_->kx * (e_r * e_r.transpose())
+            K = kx_s * (e_r * e_r.transpose())
               + imp_cmd_->ky * (e_y * e_y.transpose())
-              + imp_cmd_->kz * (e_t * e_t.transpose());
-            B = imp_cmd_->bx * (e_r * e_r.transpose())
+              + kz_s * (e_t * e_t.transpose());
+            B = bx_s * (e_r * e_r.transpose())
               + imp_cmd_->by * (e_y * e_y.transpose())
-              + imp_cmd_->bz * (e_t * e_t.transpose());
+              + bz_s * (e_t * e_t.transpose());
         }
     } else {
-        B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
-        K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
+        B(0, 0) = bx_s; B(1, 1) = imp_cmd_->by; B(2, 2) = bz_s;
+        K(0, 0) = kx_s; K(1, 1) = imp_cmd_->ky; K(2, 2) = kz_s;
     }
 
     // ---- The clocked-torque feedforward (Lu & Lin 2024 eq 11's D term) -------
@@ -417,7 +442,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     // same degeneracy guard. dbeta_ref == 0 reproduces the old behaviour bitwise.
     Eigen::MatrixXd f_clock = Eigen::MatrixXd::Zero(3, 1);
     if (leg_basis_ok && imp_cmd_->dbeta_ref != 0.0) {
-        f_clock = imp_cmd_->bz * (imp_cmd_->dbeta_ref * radial_norm) * e_t;
+        f_clock = bz_s * (imp_cmd_->dbeta_ref * radial_norm) * e_t;
     }
 
     // PROOF OF ACTION, from inside the law itself.
@@ -449,9 +474,9 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
             this->get_logger(), *this->get_clock(), 5000,
             "CLOCK FF ACTIVE: dbeta_ref=%+.4f rad/s bz=%.1f lever=%.4f m "
             "-> |f_clock|=%.3f N, tau_beta=%+.3f N.m (%.3f N.m/motor)",
-            imp_cmd_->dbeta_ref, imp_cmd_->bz, radial_norm, f_clock.norm(),
-            imp_cmd_->bz * imp_cmd_->dbeta_ref * radial_norm * radial_norm,
-            0.5 * imp_cmd_->bz * imp_cmd_->dbeta_ref * radial_norm * radial_norm);
+            imp_cmd_->dbeta_ref, bz_s, radial_norm, f_clock.norm(),
+            bz_s * imp_cmd_->dbeta_ref * radial_norm * radial_norm,
+            0.5 * bz_s * imp_cmd_->dbeta_ref * radial_norm * radial_norm);
     }
 
     eta_cmd << imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma;
@@ -483,20 +508,6 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     double kd_r_cmd = B_joint(1, 1);
     double kd_h_cmd = B_joint(2, 2);
 
-    // Gain slew (#49, 2026-09-06): the stance->flight switch steps kp_r from
-    // ~20 to ~170 in one tick and the joint PD turns that into a ~45 N.m
-    // torque spike on every stride, at any stance stiffness. Rate-limit the
-    // six diagonal gains per leg. 0 = off (bit-identical). The coupling
-    // compensation below still uses the unslewed K_joint/B_joint.
-    {
-        double* kp[3] = {&kp_l_cmd, &kp_r_cmd, &kp_h_cmd};
-        double* kd[3] = {&kd_l_cmd, &kd_r_cmd, &kd_h_cmd};
-        for (int k = 0; k < 3; ++k) {
-            slew_gain(kp_prev_[leg_idx_cur_][k], gain_prev_valid_[leg_idx_cur_][k], *kp[k], gain_slew_kp_);
-            slew_gain(kd_prev_[leg_idx_cur_][k], gain_prev_valid_[leg_idx_cur_][3 + k], *kd[k], gain_slew_kd_);
-        }
-    }
-
     // Initial torque command
     trq_cmd = trq_cmd_base;
 
@@ -512,7 +523,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 
     // send to motor command
     motor_cmd_->theta = eta_cmd(0, 0);
-    motor_cmd_->beta = eta_cmd(1, 0) + trim_beta_cur_;
+    motor_cmd_->beta = eta_cmd(1, 0);
     motor_cmd_->gamma = eta_cmd(2, 0) + trim_gamma_cur_;
     motor_cmd_->kp_l = kp_l_cmd;
     motor_cmd_->kp_r = kp_r_cmd;
@@ -540,7 +551,7 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                             ? 17/180.0*M_PI
                             : imp_cmd_->theta;
     motor_cmd_->beta = imp_cmd_->beta;
-    motor_cmd_->gamma = imp_cmd_->gamma;
+    motor_cmd_->gamma = imp_cmd_->gamma + trim_gamma_cur_;   // same encoder-frame target as force_control()
     motor_cmd_->kp_r = 50;
     motor_cmd_->kp_l = 50;
     motor_cmd_->kp_h = 50;
@@ -657,7 +668,18 @@ void ForceControlNode::timer_cb() {
 
     unsigned zero_gain_mask = 0;
     double zero_gain_theta = 0.0;
+    // Wall-clock tick interval for the gain slew, clamped so that a burst of
+    // catch-up ticks after a stall advances the ramp by about nothing.
+    {
+        const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        double dt = (slew_last_wall_ > 0.0) ? (wall - slew_last_wall_) : 0.001;
+        if (dt < 0.0) dt = 0.0;
+        if (dt > 0.002) dt = 0.002;
+        slew_dt_ = dt; slew_last_wall_ = wall;
+    }
     for (int i=0; i<4; i++){
+        leg_idx_cur_ = i;                  // both branches below read these
+        trim_gamma_cur_ = gamma_trim_[i];
         if (imp_cmd_modules[i]->kx == 0 && imp_cmd_modules[i]->ky == 0 && imp_cmd_modules[i]->kz == 0 && 
             imp_cmd_modules[i]->bx == 0 && imp_cmd_modules[i]->by == 0 && imp_cmd_modules[i]->bz == 0) {
             // Record, do not log here: this is inside a 4-leg loop at 1 kHz, and
@@ -683,9 +705,6 @@ void ForceControlNode::timer_cb() {
             // energy into B and C (+10 N.m.rad/s on the r motors, net zero on
             // A and D) and limit-cycle under any held pitch; limp and IDLE
             // holds were quiet. Bisected with phi_pitch_scale/coupling_scale.
-            leg_idx_cur_ = i;
-            trim_beta_cur_ = beta_trim_[i];
-            trim_gamma_cur_ = gamma_trim_[i];
             force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
 
         }
@@ -798,6 +817,13 @@ void ForceControlNode::timer_cb() {
                         motor_state_.module_b.theta * r2d,
                         motor_state_.module_c.theta * r2d,
                         motor_state_.module_d.theta * r2d);
+            RCLCPP_WARN(this->get_logger(),
+                        "MEASURED GAMMA (deg) state/cmd/torque_h(N.m): A %.2f/%.2f/%.1f  B %.2f/%.2f/%.1f  C %.2f/%.2f/%.1f  D %.2f/%.2f/%.1f"
+                        "  -- with trims the state stays at +trim; cmd -> +trim and torque_h -> 0 mean the trim sign is right",
+                        motor_state_.module_a.gamma * r2d, motor_cmd_.module_a.gamma * r2d, motor_state_.module_a.torque_h,
+                        motor_state_.module_b.gamma * r2d, motor_cmd_.module_b.gamma * r2d, motor_state_.module_b.torque_h,
+                        motor_state_.module_c.gamma * r2d, motor_cmd_.module_c.gamma * r2d, motor_state_.module_c.torque_h,
+                        motor_state_.module_d.gamma * r2d, motor_cmd_.module_d.gamma * r2d, motor_state_.module_d.torque_h);
         }
     }
 
