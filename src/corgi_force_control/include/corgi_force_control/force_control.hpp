@@ -116,6 +116,17 @@ private:
     double phi_pitch_scale_ = 1.0;   // IMU pitch added into phi_fb
     double coupling_scale_ = 1.0;    // off-diagonal K/B coupling on trq_cmd
     double inertia_ff_scale_ = 1.0;  // M*(-acc_fb) inside trq_cmd_base
+    // Zero trims (rad) and joint-gain slew, 2026-09-06 (log S325.13, #49).
+    double beta_trim_[4] = {0.0, 0.0, 0.0, 0.0};
+    double gamma_trim_[4] = {0.0, 0.0, 0.0, 0.0};
+    double trim_beta_cur_ = 0.0;    // the leg force_control() is computing
+    double trim_gamma_cur_ = 0.0;
+    int leg_idx_cur_ = 0;
+    double gain_slew_kp_ = 0.0;     // per second; 0 = off
+    double gain_slew_kd_ = 0.0;
+    double kp_prev_[4][3] = {};
+    double kd_prev_[4][3] = {};
+    bool gain_prev_valid_[4][6] = {};
 
     int loop_count_ = 0;
 };
