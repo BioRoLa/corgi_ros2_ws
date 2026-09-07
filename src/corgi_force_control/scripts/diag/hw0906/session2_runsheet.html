@@ -1,0 +1,582 @@
+<title>Corgi Session 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F7;
+    --surface: #FFFFFF;
+    --ink: #1B2530;
+    --muted: #5A6B7C;
+    --line: #D8DFE6;
+    --accent: #0E7C86;
+    --accent-soft: #E2F0F1;
+    --danger: #B3382E;
+    --danger-bg: #F9ECEA;
+    --warn: #8A6100;
+    --warn-bg: #F7F0DC;
+    --ok: #2A7A45;
+    --ok-bg: #E7F3EB;
+    --code-bg: #1B2530;
+    --code-ink: #D9E4EE;
+    --code-accent: #7FD6DE;
+    --chip-bg: #E8ECEF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F141A;
+      --surface: #161D26;
+      --ink: #E4EAF1;
+      --muted: #93A3B4;
+      --line: #2A3542;
+      --accent: #4CC8D4;
+      --accent-soft: #12333A;
+      --danger: #F07A6C;
+      --danger-bg: #341D1A;
+      --warn: #E0B54F;
+      --warn-bg: #2E250E;
+      --ok: #74CE93;
+      --ok-bg: #142B1C;
+      --code-bg: #0B0F14;
+      --code-ink: #D9E4EE;
+      --code-accent: #7FD6DE;
+      --chip-bg: #1F2833;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F141A;
+    --surface: #161D26;
+    --ink: #E4EAF1;
+    --muted: #93A3B4;
+    --line: #2A3542;
+    --accent: #4CC8D4;
+    --accent-soft: #12333A;
+    --danger: #F07A6C;
+    --danger-bg: #341D1A;
+    --warn: #E0B54F;
+    --warn-bg: #2E250E;
+    --ok: #74CE93;
+    --ok-bg: #142B1C;
+    --code-bg: #0B0F14;
+    --code-ink: #D9E4EE;
+    --code-accent: #7FD6DE;
+    --chip-bg: #1F2833;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Public Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0 0 6rem;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 1rem; }
+
+  header.masthead { padding: 1.6rem 0 0.9rem; border-bottom: 2px solid var(--ink); }
+  .masthead .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-family: "Archivo", "Public Sans", sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.7rem, 5vw, 2.3rem);
+    letter-spacing: -0.01em;
+    margin: 0.15rem 0 0.4rem;
+    text-wrap: balance;
+  }
+  .masthead .sub { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.8rem; }
+  .locks { display: flex; flex-wrap: wrap; gap: 0.4rem; padding-bottom: 1rem; }
+  .locks .chip {
+    background: var(--chip-bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .locks .chip b { color: var(--accent); }
+
+  nav.phasenav {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  nav.phasenav .row { display: flex; gap: 0.25rem; padding: 0.45rem 1rem; width: max-content; }
+  nav.phasenav a {
+    font-family: "Archivo", sans-serif;
+    font-weight: 600; font-size: 0.8rem;
+    color: var(--muted); text-decoration: none;
+    padding: 0.22rem 0.55rem; border-radius: 3px;
+    white-space: nowrap;
+  }
+  nav.phasenav a:hover, nav.phasenav a:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+
+  section.phase { padding-top: 1.5rem; }
+  .phasehead {
+    display: flex; align-items: baseline; gap: 0.7rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.35rem; margin-bottom: 0.9rem;
+  }
+  .phasehead .pnum {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .phasehead h2 {
+    font-family: "Archivo", sans-serif; font-weight: 700;
+    font-size: 1.22rem; margin: 0; flex: 1; text-wrap: balance;
+  }
+  .phasehead .tbox {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem; color: var(--muted); white-space: nowrap;
+  }
+  h3 {
+    font-family: "Archivo", sans-serif; font-weight: 600;
+    font-size: 0.98rem; margin: 1.2rem 0 0.4rem;
+  }
+  p { margin: 0.5rem 0; }
+  .note { color: var(--muted); font-size: 0.88rem; }
+  strong { font-weight: 700; }
+  code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.84em;
+    background: var(--chip-bg);
+    border-radius: 3px;
+    padding: 0.06em 0.3em;
+  }
+
+  .cmd { position: relative; margin: 0.7rem 0; }
+  .cmd pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    padding: 0.7rem 0.8rem;
+    overflow-x: auto;
+    margin: 0;
+  }
+  .cmd pre .hl { color: var(--code-accent); }
+  .cmd button.copy {
+    position: absolute; top: 0.4rem; right: 0.4rem;
+    font-family: "Archivo", sans-serif; font-size: 0.68rem; font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--code-ink);
+    background: rgba(127, 214, 222, 0.14);
+    border: 1px solid rgba(127, 214, 222, 0.4);
+    border-radius: 3px;
+    padding: 0.15rem 0.5rem;
+    cursor: pointer;
+  }
+  .cmd button.copy:hover, .cmd button.copy:focus-visible { background: rgba(127, 214, 222, 0.3); outline: none; }
+
+  ul.steps { list-style: none; margin: 0.5rem 0; padding: 0; }
+  ul.steps li { display: flex; gap: 0.55rem; padding: 0.28rem 0; align-items: flex-start; }
+  ul.steps input[type="checkbox"] {
+    flex: none; width: 1.05rem; height: 1.05rem; margin-top: 0.22rem;
+    accent-color: var(--accent); cursor: pointer;
+  }
+  ul.steps input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ul.steps li > div { flex: 1; min-width: 0; }
+  ul.steps li.done > div { color: var(--muted); }
+
+  .gate {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    background: var(--ok-bg);
+    border-left: 4px solid var(--ok);
+    border-radius: 0 4px 4px 0;
+    padding: 0.55rem 0.75rem;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+  }
+  .gate .tag, .callout .tag {
+    font-family: "Archivo", sans-serif; font-weight: 700; font-size: 0.72rem;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    white-space: nowrap; margin-top: 0.15rem;
+  }
+  .gate .tag { color: var(--ok); }
+  .callout {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    border-radius: 0 4px 4px 0;
+    padding: 0.55rem 0.75rem;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+  }
+  .callout.danger { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+  .callout.danger .tag { color: var(--danger); }
+  .callout.warn { background: var(--warn-bg); border-left: 4px solid var(--warn); }
+  .callout.warn .tag { color: var(--warn); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    margin: 0.9rem 0;
+  }
+  .card h3 { margin-top: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+  .tablewrap { overflow-x: auto; margin: 0.7rem 0; }
+  th, td { text-align: left; padding: 0.38rem 0.55rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: "Archivo", sans-serif; font-weight: 600; font-size: 0.76rem;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+  }
+  td:first-child { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .fill { border-bottom: 1px dashed var(--muted); min-width: 5.5rem; display: inline-block; }
+
+  ol { padding-left: 1.3rem; margin: 0.5rem 0; }
+  ol li { margin: 0.25rem 0; }
+
+  footer { margin-top: 2.5rem; border-top: 1px solid var(--line); padding-top: 0.8rem; }
+  footer p { color: var(--muted); font-size: 0.8rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">Cambered G-SLIP · Corgi ABAD · Stage 4 gate</div>
+    <h1>Hardware Session 2 — The Matrix</h1>
+    <div class="callout danger"><span class="tag">EXECUTED 2026-09-06 · read this first</span><div><strong>The matrix as booked did not run; a measured camber result did.</strong> The closed-loop λ cells are <strong>degenerate</strong>: the yaw loop converges on ~13.4° of camber whatever the feedforward, so λ10/λ15/λ20 CL were one experiment, and it fails the speed floor (log §325.23). The λ dimension exists only <strong>open loop</strong>. On the open-loop sweep at <code>k_roll:=0.60</code>: <strong>camber term +0.232 m⁻¹ at 10°, +0.510 m⁻¹ at 15°</strong> (mirror contrast, drift cancelled; ratio 2.20 against 1.50 linear — §§325.31, 325.34). <strong>−λ is a viable gait</strong> (0.309 m/s at −10, 0.273 at −15, floor 0.257); <strong>+λ is not reproducible</strong> (0.262 then 0.168 at +10; +15 fails at 0.232 and drove leg C to 63.3 N·m — §325.38). <code>k_roll</code> 0.25→0.60 removed the roll divergence <em>and</em> collapsed the straight-line drift inside its bar (κ −0.160 → −0.049, n=2; §§325.24–27, 325.37). Every arc is n = 1 per cell except λ0. Differential and λ20 cells: <strong>not run</strong>.<br><br><strong>Do not, next time:</strong> score any arc on a window shorter than the whole arc (§325.25 — rejected on its own arithmetic) · repeat +15° · run a CL λ cell · change <code>k_pitch</code>/<code>pitch_limit</code>/<code>k_roll</code> mid-campaign without a registered test · trust <code>SYS_RESET_N</code> as proof of a pin pull. <strong>Bench first next session</strong> (no Vicon, no licence): static load sweep front vs rear leg, loaded foot radius, 60 s still-IMU log, find the 40 N·m ABAD ceiling, one hour on an independent Orin supply. Full session summary: log <strong>§325.39</strong>; handover in <em>Handovers/</em>; everything (13 GB) is at <code>~/corgi_runs/hw_2026-09-06</code>.</div></div>
+    <p class="sub">Target Sep 3–5 (book it) · ~half day, ≈ 31 attempts ≈ 2 h robot time · The Stage 4 gate is <strong>the matrix run with valid arcs</strong> — a deliverable gate, it cannot be failed by a null. Runbook owns protocol; log §§246/248/250 own the predictions; if this sheet and the log disagree, the log wins.</p>
+    <div class="locks">
+      <span class="chip">Gains <b>600 / +0.30</b> pinned</span>
+      <span class="chip"><b>k_roll 0.60</b> (was 0.25)</span>
+      <span class="chip"><b>dir = +1 only</b> (#13)</span>
+      <span class="chip">CL rate <b>−0.115</b> · diff <b>−0.09</b></span>
+      <span class="chip"><b>≥ 5 valid arcs</b> / cell</span>
+      <span class="chip">Deadbeat <b>OFF</b></span>
+    </div>
+  </header>
+</div>
+
+<nav class="phasenav" aria-label="Sections"><div class="row">
+  <a href="#pinned">Pinned</a>
+  <a href="#fill">From S1</a>
+  <a href="#gonogo">Go/no-go</a>
+  <a href="#bringup">Bring-up</a>
+  <a href="#cells">Cells</a>
+  <a href="#ladder">Ladder</a>
+  <a href="#valid">Validity</a>
+  <a href="#pred">Predictions</a>
+  <a href="#between">Between/abort</a>
+  <a href="#stretch">Stretch + §301</a>
+  <a href="#wrap">Wrap</a>
+</div></nav>
+
+<div class="wrap">
+
+  <section class="phase" id="pinned">
+    <div class="phasehead"><span class="pnum">PINNED</span><h2>Every run, all day</h2></div>
+    <div class="card">
+      <h3>Anatomy of every launch — reference only; copy the complete per-cell commands from the Cells section</h3>
+      <div class="cmd"><pre><span class="hl">RUN=s2_l15_a1</span>   # cell + attempt; set in EVERY terminal — same id in panel filename, bag, Vicon
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  <span class="hl">k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236</span> k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">&lt;CELL ARGS&gt;</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Never leave a literal <code>&lt;run_id&gt;</code> or <code>&lt;CELL ARGS&gt;</code> in a command — bash reads <code>&lt;</code> as a redirect. The launch records nothing; recording is the bag + the panel-armed recorder + Vicon, all keyed by <code>$RUN</code>.</p>
+      <p class="note">Base banners every run: <code>K_TANGENTIAL OVERRIDDEN: 600.0</code> · <code>Loaded 265 template rows (0.2642 s stride)</code> · <code>k_yaw=0.00</code> · <code>SCHED_FIFO ... ACQUIRED</code> (ignore any "sudo setcap" advice in that warning — stale; <code>grant_realtime.sh</code> + relogin) · <code>BISECT SCALES: phi_pitch=1.00 coupling=1.00 inertia_ff=1.00</code> · slew OFF · live <code>IMP_CMD RX 926–999</code>. The <code>FLIGHT GAINS set</code> line's "(default 12000.0/150.0)" parenthetical is stale text — 7150/115.8 IS the default. Cell-specific banners in the Cells table below.</p>
+    </div>
+    <div class="card">
+      <h3>Per-arc rhythm + gates</h3>
+      <p><strong>Set <code>RUN</code> first, in each terminal</strong> (a shell variable doesn't carry across terminals). Then: panel filename = <code>$RUN</code> (<strong>no filename ⇒ no file</strong>) → rosbag → Vicon armed, <em>same run ID</em> → <strong>two sharp body rocks</strong> → <strong><code>/impedance/command</code> = 2 subscribers</strong> → trigger → <strong>2.5 s settle before the first stride</strong> (keep the trigger on; a 1.6 s trigger produces no gait at all) → arc → trigger off, bag stop, Vicon stop.</p>
+      <div class="cmd"><pre>ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="gate"><span class="tag">Gate</span><div><code>cmd_rate.py</code> per capture: mean ≥ 900 Hz <strong>and</strong> worst freeze ≤ 25 ms. Live: worst gap &gt; 25 ms in the hold or RX &lt; ~900 → abandon, re-take. A green gate does <em>not</em> exonerate the command — <strong>every cambered arc runs under #36</strong> (ABAD kp_h wraps the 12-bit CAN field; annotate every capture) unless the clamp shipped between sessions.</div></div>
+    </div>
+    <div class="callout danger"><span class="tag">Never</span><div>
+      <code>gamma_acker_ff</code> together with <code>gamma_acker_dir</code> — <strong>fatal at startup by design</strong> (ambiguous camber, §128's lesson); but <code>ff</code> with only in/out and dir left 0 is NOT caught — it starts and silently ignores in/out · a bare integer in any double arg — write <code>1.0</code>, never <code>1</code> (the node aborts) · <code>ros2 param set</code> <code>k_flight</code>/<code>b_flight</code> 0 · gslip launch left up during a CSV run · <code>setcap</code> · writer-side QoS changes · <code>/imu_raw</code> · battery in parallel with the supply · analysing against <code>/mnt/c</code>.
+    </div></div>
+  </section>
+
+    <div class="callout danger"><span class="tag">Session config</span><div><strong>Every command below already carries it — do not mix, do not omit, log it once (2026-09-06, log §§325.13–325.16).</strong> <code>k_radial:=4500.0</code> (8941 breaks links; 6000 was hop-template-only) · <code>k_lateral:=5000.0</code> (keeps the ABAD gain under #36's 12-bit wrap) · <code>b_lateral:=12.0</code> (settle buzz, §325.10) · <code>coupling_scale:=0.0</code> (B/C pitch limit cycle, §324) · <code>k_roll:=0.25</code> · <code>gain_slew_ms:=30.0</code> (#49, −33 % peak load) · <strong><code>k_pitch:=0.30 d_pitch:=0.10</code> — note the POSITIVE sign: −0.30, the value adopted from sim, is inverted on this robot and makes the front legs drag (§325.14 R2c).</strong> No γ trims (withdrawn). <strong>The §301 gains block is DROPPED tonight</strong> — its new arm runs <code>k_pitch:=-0.30</code>, which this session showed is the wrong sign, so it would score a known-bad arm.</div></div>
+
+  <section class="phase" id="fill">
+    <div class="phasehead"><span class="pnum">CARRY-IN</span><h2>Numbers from Session 1 — fill before starting</h2></div>
+    <div class="card">
+      <ul class="steps">
+        <li><input type="checkbox" data-k="f-base"><div>Straight-baseline median v_fwd: <span class="fill"></span> m/s → <strong>0.85× validity floor = <span class="fill"></span> m/s</strong> (the sim's 0.235 is NOT the anchor)</div></li>
+        <li><input type="checkbox" data-k="f-cc"><div>Peak bus current from S1: <span class="fill"></span> A → <strong>CC limit ≥ 1.5× = <span class="fill"></span> A</strong> (supply: two PSW 80-40.5 paralleled at 50.4/50.2 V, both tethers paralleled at the robot — §325.11; OVP 55)</div></li>
+        <li><input type="checkbox" data-k="f-venue"><div>Venue from the entry-transient answer: <strong>Vicon volume</strong> / <strong>tennis-court protocol</strong> (circle one)</div></li>
+        <li><input type="checkbox" data-k="f-mass"><div>Mass for any energy arithmetic: <span class="fill"></span> kg (S1 re-weigh; record was 30.0 measured / 30.84 Webots)</div></li>
+        <li><input type="checkbox" data-k="f-marker"><div>Marker layout reproduced from the D3 photo</div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="phase" id="gonogo">
+    <div class="phasehead"><span class="pnum">GATE</span><h2>Go/no-go (all five, from Session 1)</h2></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="g-license"><div><strong>Hop license — re-registered 2026-09-02 (log §325)</strong>: regen ≈ 0 at 1–10 cm; a landing is a 6 → ≥48 A <em>draw</em>, and the 10 cm rung browned out a 20 A CC limit into SYSTEM_ON. Repeated with OCP at max: peak <strong>56 A</strong>, supply never off — the boards cut when their input sags to ≈43 V through the tether (~0.09 Ω). No bench supply on this tether can carry it (one PSW 22.5 A, pair 45 A). <strong>License = a pulse source AT the robot — the LiPo with a pulse-rated fuse, or ~0.25 F at the robot end — demonstrated on one 10 cm drop with the boards staying up</strong> (log §325.6). The first stride's <em>push-off</em> alone draws <strong>51 A</strong> (§325.8). Only one PSW was connected on 2026-09-02; the binding constraint is the tether's ~0.09 Ω drop (boards cut at ≈43 V input). <strong>Levers: supply at 50.4 V (not above ~52), short heavy lead, the master–slave pair</strong> — prove with one 10 cm drop, boards up (§325.9). Chopper step moot. <strong>2026-09-03 (§325.11): line 1 PASSES on two PSW paralleled at 50.4/50.2 V with both tethers paralleled — 10 cm survived, worst channel 47.3 V, 41 A / 1.95 kW; hop license conditional on ground probe 3 (push-off). The 43 V cut is a design line, not a measured trip point.</strong> <strong>Probe 3, 2026-09-03 (§325.12): eleven strides carried on the pair — 65.7 A / 3.08 kW peak, boards up; PB1 input 44.68 V, i.e. the 46 V bar missed by 1.3 V for ~40 ms with no cut (rails to 38.9 V). Re-decide the bar, or raise the supply, before calling line 1 passed on the bar as written.</strong></div></li>
+      <li><input type="checkbox" data-k="g-bearing"><div>Bearing has no play (or spare fitted).</div></li>
+      <li><input type="checkbox" data-k="g-link"><div><strong>Foot-train links (#44):</strong> the rear-left printed lower link failed under the first full-stiffness floor pronk (§325.12). Spare fitted, the other three links inspected for cracks, and the <strong>soft-start ladder run first</strong> on the repaired robot before any matrix cell — no full-stiffness pronk before it. Release the trigger at a stride end, never mid-flight (#45: trigger-off snaps the legs to the hold pose in one message). <strong>And #48: module A's leg-drive belt slipped first (the primary event) — the belt identified and re-timed against the encoder at the hold pose, all four modules' belts checked, and a static hold-pose check (link angle vs encoder, four legs) added to the between-cells cadence.</strong></div></li>
+      <li><input type="checkbox" data-k="g-markers"><div>Markers track through 20° roll (else re-position, or court).</div></li>
+      <li><input type="checkbox" data-k="g-entry"><div>Entry transient settles inside the volume (else court protocol).</div></li>
+      <li><input type="checkbox" data-k="g-thermal"><div>ABAD current through one arc stays inside thermal comfort.</div></li>
+    </ul>
+    <div class="callout warn"><span class="tag">Miss</span><div>Any line unmet → that line's contingency runs <em>first</em> today (e.g. no license → the drop test opens the session; court → court protocol). The matrix does not start on an open gate line.</div></div>
+  </section>
+
+  <section class="phase" id="bringup">
+    <div class="phasehead"><span class="pnum">BRING-UP</span><h2>Condensed (full ladder in the Session 1 sheet)</h2><span class="tbox">~45 min</span></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="b-pull"><div>Orin: <code>git fetch origin &amp;&amp; git checkout gslip-hw-merge &amp;&amp; colcon build</code> — record the hash (the branch carries <code>cf1c85c</code>, a pitch-sign correctness fix — NOT a cure for the B/C pitch limit cycle, which is the bridge's torque frame, log §324. Matrix cells start on the config of record, scales at 1.0, with a bag running; if B/C oscillate in the standup or gait, fall back to <code>coupling_scale:=0.0</code> for the session and log it); fresh terminals; acceptance <code>grep -c "K_TANGENTIAL OVERRIDDEN"</code> = 1; <code>ulimit -r</code> = 99.</div></li>
+      <li><input type="checkbox" data-k="b-inspect"><div>Bearing + witness-mark + tread photos (rung 0 zero-cycle media: D1 "before", τ_ABAD from the standing lean scores #15).</div></li>
+      <li><input type="checkbox" data-k="b-fpga"><div>sbRIO driver (panel button or <code>bash -lic</code> ssh); duplicate check = 1.</div></li>
+      <li><input type="checkbox" data-k="b-init"><div><strong>Init ONCE, hand on the supply</strong> (#41 — ~30 s uninterruptible; #35 protocol applies unless closed in S1: <code>[rx] Ver:</code> check first, one repeat max).</div></li>
+      <li><input type="checkbox" data-k="b-home"><div>Reference pose → <code>ros2 run corgi_homing homing</code> (the executable is <code>homing</code>) → Set Home → bridge / <code>imu.launch.py</code> (<code>/imu</code>) / panel / recorder.</div></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="cells">
+    <div class="phasehead"><span class="pnum">CELLS</span><h2>The matrix — one command per cell</h2></div>
+    <p class="note">Args verified 2026-09-01 against <code>sweep_cl_track.sh</code>'s composition and <code>gslip_pronk.launch.py</code>. All radians, all with decimal points. <strong><code>k_acker_yaw</code>/<code>d_acker_yaw</code> launch defaults are 0.0 — omit them and the CL cell runs feedforward-only with no loop.</strong> <code>gamma_acker_hi</code> defaults to 15°, so the λ15/λ20 cells must raise it; <code>steer_limit</code> defaults to 8°, so the diff arm must pass 12°.</p>
+
+    <div class="card">
+      <h3>Control structure — what closes the loop in each cell (log §237)</h3>
+      <div class="cmd"><pre>lam_cmd = −sign(turn_rate)·ff  +  k_acker_yaw·yaw_err  +  d_acker_yaw·wz</pre></div>
+      <p class="note">The CL camber law: <code>ff</code> is a feedforward standing lean at the cell's λ; the PD terms trim it to track the yaw reference integrated from <code>turn_rate</code> (a reference <em>shared</em> with the diff arm); |lam_cmd| clamps to [<code>gamma_acker_min</code> 5°, <code>gamma_acker_hi</code>], and <code>gamma_acker_limit</code> 20° hard-clamps both channels (it is not open-loop-only). One layer down, the gait itself is open-loop template playback (v070 on its own clock) through the impedance layer, with only roll stabilized (k_roll 0.25, k_yaw 0.00 — yaw is deliberately free at the attitude level; turning belongs to the per-cell channel).</p>
+      <div class="tablewrap"><table>
+        <tr><th>Cell</th><th>Feedforward</th><th>Feedback</th><th>Steers via</th></tr>
+        <tr><td>λ0 drift</td><td>none</td><td>none (k_yaw = 0.00)</td><td>nothing — measures uncommanded drift (#29: never subtract it)</td></tr>
+        <tr><td>λ10/15/20 CL</td><td>standing lean at ff</td><td>yaw PD — k 0.5 / d 0.15 trims the lean</td><td>camber (ABAD)</td></tr>
+        <tr><td>differential</td><td><code>steer_offset</code> 2.5°</td><td>yaw P — <code>k_steer_yaw</code> −0.8, clamp 12°</td><td>differential β</td></tr>
+        <tr><td>open-loop λ sweep</td><td>fixed Ackermann pair (in/out/dir)</td><td>none</td><td>camber, no yaw loop — the raw λ→κ slope</td></tr>
+        <tr><td>combo</td><td>both ffs</td><td>both loops, shared yaw_ref</td><td>both — the loop resolves the split</td></tr>
+      </table></div>
+      <p class="note"><strong>Read the results accordingly:</strong> in the CL cells γ is NOT a controlled variable — the loop leans as much as it needs (§250 γ medians 11.6 / 6.4 / 8.7° ≠ the ff values), so per-cell differences read on the ABAD current integral, never on γ. And all three CL cells track the same <code>turn_rate</code>, so they should deliver the <em>same</em> ~2.05 m commanded radius — indistinguishable λ rows are the "ff choice is free" result, not a failure. A CL launch missing the k/d args is silently the "open-loop" row of this table wearing a CL name; the <code>ACKER CL set ... k_yaw=0.500 d_yaw=0.150</code> banner is the check.</p>
+    </div>
+
+    <p class="note">Each block is the complete launch — bump the attempt suffix (<code>a1 → a2 …</code>) on every retry, and use the same id in the panel filename, bag, and Vicon.</p>
+
+    <h3>λ0 drift — n = 5</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_l0_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <p class="note">Banner: <code>Turn: turn_rate=0.0000</code>, and NO <code>ACKER CL/CAMBER set</code> line. Never subtract drift (#29) — quote |κ| ≤ 0.05, sign unresolved.</p>
+
+    <h3>λ15 CL — 5 valid, book 6 <span class="note">(run this cell FIRST of the CL set — ladder rung 2; V1 video here)</span></h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_l15_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">turn_rate:=-0.115 gamma_acker_ff:=0.26180 k_acker_yaw:=0.5 d_acker_yaw:=0.15</span> \
+  <span class="hl">gamma_acker_hi:=0.34907</span> k_steer_yaw:=0.0 steer_offset:=0.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>Differential — 5 valid, book 8 <span class="note">(rate is −0.09, NOT −0.115 — runbook cell table + §250; watch the first two runs, open-loop yield unproven on hardware)</span></h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_diff_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">turn_rate:=-0.09 steer_offset:=0.04363 k_steer_yaw:=-0.8 steer_limit:=0.2094</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ10 CL — 5 valid, book 6</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_l10_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">turn_rate:=-0.115 gamma_acker_ff:=0.17453 k_acker_yaw:=0.5 d_acker_yaw:=0.15</span> \
+  <span class="hl">gamma_acker_hi:=0.26180</span> k_steer_yaw:=0.0 steer_offset:=0.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ20 CL — 5 valid, book 6 <span class="note">(highest lever, #15 — dropped first under heat. Note: ff = hi = 20° = the hard clamp, so the loop can only trim λ <em>down</em> toward 5° — zero upward authority; an under-turning λ20 arc may be clamp-limited, not loop-limited)</span></h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_l20_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">turn_rate:=-0.115 gamma_acker_ff:=0.34907 k_acker_yaw:=0.5 d_acker_yaw:=0.15</span> \
+  <span class="hl">gamma_acker_hi:=0.34907</span> k_steer_yaw:=0.0 steer_offset:=0.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <div class="card">
+      <h3>Banner checks per cell type (before trigger, every arc)</h3>
+      <div class="tablewrap"><table>
+        <tr><th>Cell</th><th>Must show</th><th>Must NOT show</th></tr>
+        <tr><td>CL λ10/15/20</td><td><code>ACKER CL set: ff=10.00/15.00/20.00 deg k_yaw=0.500 d_yaw=0.150</code> · <code>Turn: turn_rate=-0.1150 rad/s</code> · <code>k_steer_yaw=0.000</code></td><td><code>ACKER CAMBER set</code></td></tr>
+        <tr><td>diff</td><td><code>Turn: turn_rate=-0.0900</code> · <code>steer_offset=2.50 deg</code> · <code>k_steer_yaw=-0.800</code> · <code>limit 12.0 deg</code></td><td>any <code>ACKER</code> banner</td></tr>
+        <tr><td>λ0 drift</td><td><code>turn_rate=0.0000</code></td><td>any <code>ACKER</code> banner</td></tr>
+      </table></div>
+      <p class="note">No <code>ACKER CL set</code> line on a CL launch = the parameter never reached the node (the launch-drop trap) — abort, do not run the cell.</p>
+    </div>
+  </section>
+
+  <section class="phase" id="ladder">
+    <div class="phasehead"><span class="pnum">LADDER</span><h2>Run order — most paper-critical banks first</h2></div>
+    <div class="tablewrap"><table>
+      <tr><th>#</th><th>Run</th><th>Banked if the session ends after it</th></tr>
+      <tr><td class="num">0</td><td>Preconditions + zero-cycle media (bearing, tread photos, hall cal, teaser/lean strip, τ_ABAD standing lean)</td><td>Fig. 0, video shot 4, #15 scored</td></tr>
+      <tr><td class="num">1</td><td>λ0 straight baseline, n = 5</td><td>Instrumentation proven, speed anchor</td></tr>
+      <tr><td class="num">2</td><td><strong>λ15 CL</strong> (5 valid, book 6) — V1 video here</td><td><strong>§V-D exists</strong> — cambered turning at predicted radius</td></tr>
+      <tr><td class="num">3</td><td>Differential (−0.09, book 8) — V2 video here</td><td>The trade-space comparison</td></tr>
+      <tr><td class="num">4</td><td>Coarse open-loop λ sweep (3 pts × 1–2 arcs, one speed) — stall-prone, after the core pair</td><td>Sim-to-real map (Table II slope, ~0.1 m/°, no knee-hunting)</td></tr>
+      <tr><td class="num">5</td><td>λ10 CL</td><td>"ff choice is free" comparison</td></tr>
+      <tr><td class="num">6</td><td>λ20 CL</td><td><strong>Matrix complete</strong></td></tr>
+      <tr><td class="num">7</td><td>Combo stretch (n = 2, no retries)</td><td>Crossover sentence confirmed/killed</td></tr>
+      <tr><td class="num">8</td><td>§301 gains block (~20–30 min)</td><td>Hardware-adoption screen</td></tr>
+    </table></div>
+    <p class="note"><strong>As run, 2026-09-06 (Vicon names in brackets):</strong> λ0 ×5 at k_roll 0.25 [L0_ramp_1–5] → λ15 CL ×3 [L15_1, L15_2, L15_B1] <em>degenerate, fail</em> → λ10 CL ×1 [L10_A1] <em>degenerate</em> → λ+10 OL at 0.25 [OL10_A1] <em>decays</em> → <strong>k_roll 0.60 from here</strong> → λ+10 OL [OL10_R1] <em>0.262 pass</em> → λ0 [L0_RA1] 0.285 → λ−10 OL [OL10_NA1] <em>rope</em> → λ−10 OL [OL10_NA2] <em>0.309 pass</em> → λ+15 OL [OL15_A1] <em>0.232 fail, C 63.3 N·m</em> → λ−15 OL [OL15_NA1] <em>0.273 pass</em> → λ0 [L0RA2] 0.320 → λ+10 OL repeat [OL10A2] <em>0.168 fail</em>. Floor = 0.85 × mean(0.285, 0.320) = <strong>0.257 m/s</strong>, whole arc, no window. Orin reset at 19:31, 20:44, 21:15, 21:39, 22:30ish; no bag lost. Stop order kept for bag integrity; it is not the crash fix.</p>
+  </section>
+
+  <section class="phase" id="valid">
+    <div class="phasehead"><span class="pnum">VALIDITY</span><h2>What counts as a valid arc + how cells score</h2></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="v-arc"><div><strong>Arcs, not laps</strong>: 180–270° in the Vicon volume.</div></li>
+      <li><input type="checkbox" data-k="v-heading"><div>≥ 180° heading over the steady band; <strong>fit arc ≥ 90°</strong>.</div></li>
+      <li><input type="checkbox" data-k="v-speed"><div>No 4 s window with v_fwd &lt; 0.10 m/s; <strong>median v_fwd ≥ 0.85× the session straight baseline</strong> (the carry-in number).</div></li>
+      <li><input type="checkbox" data-k="v-cert"><div>Replacing sim self-certification: current logging on, bearing checked, config echoed (the tee).</div></li>
+    </ul>
+    <p><strong>Scoring:</strong> R_yaw = v_fwd / yaw rate <em>primary</em>, Kåsa circle fit beside it (band + fit arc quoted per run; <strong>Menger retired</strong>). Energy axis = <strong>ABAD current integral per arc</strong> — γ is not a controlled variable under the loop, so per-cell differences read on current, not γ medians; indistinguishable λ rows are themselves a result. Cross-track = Kåsa residual both arms; repeatability = sd(κ) over ≥ 5 arcs.</p>
+    <div class="callout warn"><span class="tag">Free</span><div><strong>P-HW-ρ on every λ cell</strong> (record body roll, IMU + Vicon — it is free): bar sign NEGATIVE, magnitude in [0.15, 0.65] °/°. It arbitrates the entire sim roll story and outranks everything except the matrix itself. Also free: <strong>per-leg β_TD at touchdown</strong> from the 1 kHz log on the straight-baseline runs (#20 trim; per-leg pooling with the dir_beta mirror — the §112 trap).</div></div>
+  </section>
+
+  <section class="phase" id="pred">
+    <div class="phasehead"><span class="pnum">PREDICT</span><h2>Score against (§250 owns this table)</h2></div>
+    <div class="tablewrap"><table>
+      <tr><th>Cell</th><th>R_yaw med (m)</th><th>R_fit med (m)</th><th>v_fwd (m/s)</th><th>γ median</th><th>Prediction</th></tr>
+      <tr><td class="num">λ0 drift</td><td class="num">|κ| ≤ 0.05</td><td class="num">—</td><td class="num">0.21–0.36</td><td class="num">0.25°</td><td>near-straight, wander both signs</td></tr>
+      <tr><td class="num">λ10 CL</td><td class="num">2.25</td><td class="num">2.38</td><td class="num">0.27–0.29</td><td class="num">11.6°</td><td>in-band arc</td></tr>
+      <tr><td class="num">λ15 CL</td><td class="num">2.43</td><td class="num">2.15</td><td class="num">0.23–0.30</td><td class="num">6.4°</td><td>in-band arc</td></tr>
+      <tr><td class="num">λ20 CL</td><td class="num">2.19</td><td class="num">2.10</td><td class="num">0.25–0.28</td><td class="num">8.7°</td><td>in-band arc</td></tr>
+      <tr><td class="num">diff (−0.09)</td><td class="num">2.27</td><td class="num">2.29</td><td class="num">0.19–0.23</td><td class="num">0.25°</td><td>in-band, ~0.05 m/s slower</td></tr>
+    </table></div>
+  </section>
+
+  <section class="phase" id="between">
+    <div class="phasehead"><span class="pnum">BETWEEN</span><h2>Between cells (not after) + abort criteria</h2></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="bt-media"><div><strong>Media between cells, not after</strong> (the paper's §IV-E is explicit): V1 = one continuous λ15 arc, 1080p landscape tripod (record <em>every</em> scored arc — the clean take is chosen in the edit, never at the tripod); V2 = one take per arm from the <em>same tripod position</em>; V4 = phone slow-mo of the ABAD leaning the leg, between cells.</div></li>
+      <li><input type="checkbox" data-k="bt-bearing"><div>Bearing play + foot-gear witness marks every ~10 arcs; <strong>log run IDs between checks</strong> so a discovered skip invalidates a bounded set. Offset &gt; ~1 tooth → re-time to C = 0 before the next cell.</div></li>
+      <li><input type="checkbox" data-k="bt-rsync"><div><code>rsync</code> pull after each cell — the session is never all on one machine.</div></li>
+      <li><input type="checkbox" data-k="bt-tread"><div>Tread-shoulder photos before AND after (D1).</div></li>
+    </ul>
+    <div class="callout danger"><span class="tag">Abort</span><div>
+      Bearing develops play → stop, photograph, swap spare · ABAD housing ~≥ 60 °C → cool-down; persistent → <strong>drop λ20 first</strong> (113% of stall design case, #15) · two consecutive collapses in one cell → skip the cell, note it, move on — <strong>the gate is the matrix, not any single cell</strong> · marker dropout recurs → contingency (re-position / court), don't burn arcs blind.
+    </div></div>
+  </section>
+
+  <section class="phase" id="stretch">
+    <div class="phasehead"><span class="pnum">TAIL</span><h2>Stretch cell + §301 gains block — only with margin</h2></div>
+    <h3>Combo (stretch) — n = 2 arcs, no retries; declared not load-bearing before it runs</h3>
+    <p class="note">Only if the matrix completes with time, battery, AND bearing-cycle margin. Job: confirm/kill the paper's crossover sentence (sim: arms fight, +12% ABAD effort/m, γ doubles). Score exactly as matrix cells; compare against this session's λ15 CL. CL + steering together at the CL rate:</p>
+    <div class="cmd"><pre><span class="hl">RUN=s2_combo_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  <span class="hl">turn_rate:=-0.115 gamma_acker_ff:=0.26180 k_acker_yaw:=0.5 d_acker_yaw:=0.15</span> \
+  <span class="hl">gamma_acker_hi:=0.34907 steer_offset:=0.04363 k_steer_yaw:=-0.8 steer_limit:=0.2094</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <p class="note">Banner: <code>ACKER CL set</code> at ff 15 <em>and</em> <code>k_steer_yaw=-0.800</code> together.</p>
+
+    <h3>§301 add-on — the adopted gains on hardware (~20–30 min; log §301 is the registration of record)</h3>
+    <p class="note">Only if the matrix completes; ranked BELOW the stretch. 3 + 3 interleaved trials. <strong>Banner discriminators:</strong> the new arm prints NO <code>K_TANGENTIAL OVERRIDDEN</code> line (1200 is the launch default) — confirm it on <code>LEG-FRAME GAINS: ... k_tangential=1200.0</code> plus <code>PITCH CHANNEL set: k_pitch=-0.300</code>; the old arm prints <code>K_TANGENTIAL OVERRIDDEN: 600.0</code>. (<code>pitch_limit:=0.05236</code> is the default — passed for explicitness only.)</p>
+    <h3 style="font-size:0.9rem">Old arm (= matrix config) — 3 trials, interleaved</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_g301old_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.30 d_pitch:=0.10 pitch_limit:=0.05236 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <h3 style="font-size:0.9rem">New arm (adopted gains, passed explicitly — works on any checkout) — 3 trials, interleaved</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s2_g301new_a1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  <span class="hl">k_tangential:=1200.0 k_pitch:=-0.30 pitch_limit:=0.05236</span> k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 gain_slew_ms:=30.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <p>Bars (directional screens, n = 3/arm, overlap = UNCERTIFIABLE): <strong>P-HWB-1</strong> new-arm torque p99.5 median ≤ old (<em>gating</em>); <strong>P-HWB-2</strong> new-arm v_fwd median &gt; old; <strong>P-HWB-3</strong> completion rate ≥ old. <strong>Live abort:</strong> ABAD demand trending toward the 44.25 N·m stall or any driver fault → stop the block. All pass → adoption is Alex's call at the bench; otherwise hardware stays pinned, revisit post-ICRA.</p>
+  </section>
+
+  <section class="phase" id="wrap">
+    <div class="phasehead"><span class="pnum">WRAP</span><h2>Data off + Stage 4 bookkeeping</h2><span class="tbox">hard reserve · ~35 min</span></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="w-rsync"><div>Final <code>rsync</code> of <code>output_data/</code> + bags; every tee'd <code>ctl_*.log</code>; Vicon C3D/CSV exports under matching run IDs; media offloaded.</div></li>
+      <li><input type="checkbox" data-k="w-table"><div><strong>Run-ID ↔ cell ↔ args ↔ gates ↔ Vicon table written at the bench.</strong></div></li>
+      <li><input type="checkbox" data-k="w-log"><div>Impl log: new §§ (grep the current max §N first) — session narrative, run table, per-cell verdicts vs §250, P-HW-ρ result.</div></li>
+      <li><input type="checkbox" data-k="w-stage"><div><strong>If the matrix is valid, Stage 4 closes</strong>: new note in <code>Stage Results/</code> (numbers with provenance), update the Index pipeline table, one-line pointer in the Timeline. Figures: R_yaw per cell with the §250 prediction band, per-arc dots not just medians, ρ vs λ with the sign bar.</div></li>
+      <li><input type="checkbox" data-k="w-issues"><div>Open Issues: per-cell closures/updates (#13 stands — no −1 cell ran; #15 current integrals; #36 annotation carried on every cambered arc; #31 witness-mark verdict).</div></li>
+      <li><input type="checkbox" data-k="w-handover"><div>Handover: successor written (paper state: §V-D numbers in hand, V1/V2/V4 footage status, teaser assembled?).</div></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Sources: Hardware Session Runbook (cells, ladder, scoring, aborts) · Session Launch Crib — 2026-08-31 (launch args; CL/diff rows corrected 2026-09-01) · log §§246/248/250 (predictions) · §301 (gains block registration) · sweep_cl_track.sh (arg composition, verified 2026-09-01). If this sheet and the log disagree, the log wins. Checkboxes save only on this device.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var KEY = "corgi-s2-runsheet-2026-09";
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+
+  var boxes = document.querySelectorAll('ul.steps input[type="checkbox"]');
+  boxes.forEach(function (box) {
+    var k = box.getAttribute("data-k");
+    if (state[k]) { box.checked = true; box.closest("li").classList.add("done"); }
+    box.addEventListener("change", function () {
+      box.closest("li").classList.toggle("done", box.checked);
+      state[k] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    });
+  });
+
+  document.querySelectorAll(".cmd").forEach(function (wrap) {
+    var pre = wrap.querySelector("pre");
+    if (!pre) return;
+    var btn = document.createElement("button");
+    btn.className = "copy";
+    btn.type = "button";
+    btn.textContent = "COPY";
+    btn.addEventListener("click", function () {
+      var text = pre.textContent;
+      function done() { btn.textContent = "COPIED"; setTimeout(function () { btn.textContent = "COPY"; }, 1400); }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+        } else { fallback(); }
+      } catch (e) { fallback(); }
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          done();
+        } catch (e2) {}
+      }
+    });
+    wrap.appendChild(btn);
+  });
+})();
+</script>

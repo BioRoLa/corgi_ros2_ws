@@ -1,0 +1,30 @@
+# ---- numbers HARDCODED from figs0906_vicon_hops.py output (scratchpad, 2026-09-06); never re-derived here ----
+# v = per-hop net horizontal displacement / hop duration (m/s), hop index from the Vicon window start;
+# full = hop period within 0.22-0.32 s (template 0.2642 s); launch/stop segments are False.
+# n_floor = registered first full hop < 0.257; n_floor3 = first of >=3 consecutive full hops < 0.257 (exploratory).
+HOPS = {
+ "L0_RA1": dict(v_arc=0.285, median=0.305, n_full=24, n_floor=2, n_floor3=None,
+   v=[0.307, 0.247, 0.365, 0.281, 0.297, 0.158, 0.275, 0.316, 0.328, 0.329, 0.321, 0.347, 0.336, 0.342, 0.315, 0.253, 0.329, 0.313, 0.330, 0.258, 0.285, 0.216, 0.263, 0.248, 0.106],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "L0RA2": dict(v_arc=0.320, median=0.332, n_full=26, n_floor=27, n_floor3=None,
+   v=[0.056, 0.477, 0.266, 0.360, 0.335, 0.394, 0.329, 0.372, 0.269, 0.318, 0.283, 0.313, 0.274, 0.334, 0.313, 0.400, 0.325, 0.407, 0.354, 0.372, 0.331, 0.356, 0.289, 0.378, 0.268, 0.350, 0.220],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL10_R1": dict(v_arc=0.262, median=0.286, n_full=21, n_floor=None, n_floor3=None,
+   v=[0.334, 0.298, 0.407, 0.286, 0.299, 0.293, 0.309, 0.283, 0.302, 0.278, 0.299, 0.285, 0.286, 0.281, 0.287, 0.277, 0.278, 0.281, 0.266, 0.292, 0.269, 0.333],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL10A2": dict(v_arc=0.168, median=0.120, n_full=15, n_floor=4, n_floor3=6,
+   v=[0.363, 0.343, 0.367, 0.246, 0.264, 0.220, 0.202, 0.142, 0.078, 0.117, 0.120, 0.063, 0.046, 0.118, 0.075, 0.110],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL10_NA2": dict(v_arc=0.309, median=0.320, n_full=19, n_floor=None, n_floor3=None,
+   v=[0.056, 0.492, 0.307, 0.353, 0.276, 0.295, 0.318, 0.339, 0.363, 0.376, 0.340, 0.355, 0.285, 0.359, 0.262, 0.320, 0.303, 0.336, 0.287, 0.288],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL15_A1": dict(v_arc=0.233, median=0.240, n_full=11, n_floor=2, n_floor3=2,
+   v=[0.323, 0.228, 0.239, 0.181, 0.174, 0.240, 0.270, 0.295, 0.276, 0.280, 0.241, 0.194],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL15_NA1": dict(v_arc=0.273, median=0.309, n_full=12, n_floor=12, n_floor3=None,
+   v=[0.331, 0.359, 0.395, 0.285, 0.313, 0.307, 0.330, 0.299, 0.319, 0.310, 0.269, 0.247, 0.163],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True]),
+ "OL10_A1": dict(v_arc=0.157, median=0.128, n_full=23, n_floor=6, n_floor3=6,
+   v=[0.324, 0.311, 0.408, 0.309, 0.259, 0.170, 0.177, 0.161, 0.128, 0.133, 0.126, 0.085, 0.113, 0.135, 0.169, 0.094, 0.088, 0.110, 0.150, 0.123, 0.104, 0.051, 0.124, 0.088],
+   full=[False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True]),
+}

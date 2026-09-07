@@ -1,0 +1,709 @@
+<title>Corgi Session 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F7;
+    --surface: #FFFFFF;
+    --ink: #1B2530;
+    --muted: #5A6B7C;
+    --line: #D8DFE6;
+    --accent: #0E7C86;
+    --accent-soft: #E2F0F1;
+    --danger: #B3382E;
+    --danger-bg: #F9ECEA;
+    --warn: #8A6100;
+    --warn-bg: #F7F0DC;
+    --ok: #2A7A45;
+    --ok-bg: #E7F3EB;
+    --code-bg: #1B2530;
+    --code-ink: #D9E4EE;
+    --code-accent: #7FD6DE;
+    --chip-bg: #E8ECEF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F141A;
+      --surface: #161D26;
+      --ink: #E4EAF1;
+      --muted: #93A3B4;
+      --line: #2A3542;
+      --accent: #4CC8D4;
+      --accent-soft: #12333A;
+      --danger: #F07A6C;
+      --danger-bg: #341D1A;
+      --warn: #E0B54F;
+      --warn-bg: #2E250E;
+      --ok: #74CE93;
+      --ok-bg: #142B1C;
+      --code-bg: #0B0F14;
+      --code-ink: #D9E4EE;
+      --code-accent: #7FD6DE;
+      --chip-bg: #1F2833;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F141A;
+    --surface: #161D26;
+    --ink: #E4EAF1;
+    --muted: #93A3B4;
+    --line: #2A3542;
+    --accent: #4CC8D4;
+    --accent-soft: #12333A;
+    --danger: #F07A6C;
+    --danger-bg: #341D1A;
+    --warn: #E0B54F;
+    --warn-bg: #2E250E;
+    --ok: #74CE93;
+    --ok-bg: #142B1C;
+    --code-bg: #0B0F14;
+    --code-ink: #D9E4EE;
+    --code-accent: #7FD6DE;
+    --chip-bg: #1F2833;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Public Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0 0 6rem;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 1rem; }
+
+  header.masthead { padding: 1.6rem 0 0.9rem; border-bottom: 2px solid var(--ink); }
+  .masthead .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-family: "Archivo", "Public Sans", sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.7rem, 5vw, 2.3rem);
+    letter-spacing: -0.01em;
+    margin: 0.15rem 0 0.4rem;
+    text-wrap: balance;
+  }
+  .masthead .sub { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.8rem; }
+  .locks { display: flex; flex-wrap: wrap; gap: 0.4rem; padding-bottom: 1rem; }
+  .locks .chip {
+    background: var(--chip-bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .locks .chip b { color: var(--accent); }
+
+  nav.phasenav {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  nav.phasenav .row { display: flex; gap: 0.25rem; padding: 0.45rem 1rem; width: max-content; }
+  nav.phasenav a {
+    font-family: "Archivo", sans-serif;
+    font-weight: 600; font-size: 0.8rem;
+    color: var(--muted); text-decoration: none;
+    padding: 0.22rem 0.55rem; border-radius: 3px;
+    white-space: nowrap;
+  }
+  nav.phasenav a:hover, nav.phasenav a:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+
+  section.phase { padding-top: 1.5rem; }
+  .phasehead {
+    display: flex; align-items: baseline; gap: 0.7rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.35rem; margin-bottom: 0.9rem;
+  }
+  .phasehead .pnum {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .phasehead h2 {
+    font-family: "Archivo", sans-serif; font-weight: 700;
+    font-size: 1.22rem; margin: 0; flex: 1; text-wrap: balance;
+  }
+  .phasehead .tbox {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem; color: var(--muted); white-space: nowrap;
+  }
+  h3 {
+    font-family: "Archivo", sans-serif; font-weight: 600;
+    font-size: 0.98rem; margin: 1.2rem 0 0.4rem;
+  }
+  p { margin: 0.5rem 0; }
+  .note { color: var(--muted); font-size: 0.88rem; }
+  strong { font-weight: 700; }
+  code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.84em;
+    background: var(--chip-bg);
+    border-radius: 3px;
+    padding: 0.06em 0.3em;
+  }
+
+  .cmd { position: relative; margin: 0.7rem 0; }
+  .cmd pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+    padding: 0.7rem 0.8rem;
+    overflow-x: auto;
+    margin: 0;
+  }
+  .cmd pre .hl { color: var(--code-accent); }
+  .cmd button.copy {
+    position: absolute; top: 0.4rem; right: 0.4rem;
+    font-family: "Archivo", sans-serif; font-size: 0.68rem; font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--code-ink);
+    background: rgba(127, 214, 222, 0.14);
+    border: 1px solid rgba(127, 214, 222, 0.4);
+    border-radius: 3px;
+    padding: 0.15rem 0.5rem;
+    cursor: pointer;
+  }
+  .cmd button.copy:hover, .cmd button.copy:focus-visible { background: rgba(127, 214, 222, 0.3); outline: none; }
+
+  ul.steps { list-style: none; margin: 0.5rem 0; padding: 0; }
+  ul.steps li { display: flex; gap: 0.55rem; padding: 0.28rem 0; align-items: flex-start; }
+  ul.steps input[type="checkbox"] {
+    flex: none; width: 1.05rem; height: 1.05rem; margin-top: 0.22rem;
+    accent-color: var(--accent); cursor: pointer;
+  }
+  ul.steps input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ul.steps li > div { flex: 1; min-width: 0; }
+  ul.steps li.done > div { color: var(--muted); }
+
+  .gate {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    background: var(--ok-bg);
+    border-left: 4px solid var(--ok);
+    border-radius: 0 4px 4px 0;
+    padding: 0.55rem 0.75rem;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+  }
+  .gate .tag, .callout .tag {
+    font-family: "Archivo", sans-serif; font-weight: 700; font-size: 0.72rem;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    white-space: nowrap; margin-top: 0.15rem;
+  }
+  .gate .tag { color: var(--ok); }
+  .callout {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    border-radius: 0 4px 4px 0;
+    padding: 0.55rem 0.75rem;
+    margin: 0.8rem 0;
+    font-size: 0.92rem;
+  }
+  .callout.danger { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+  .callout.danger .tag { color: var(--danger); }
+  .callout.warn { background: var(--warn-bg); border-left: 4px solid var(--warn); }
+  .callout.warn .tag { color: var(--warn); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    margin: 0.9rem 0;
+  }
+  .card h3 { margin-top: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+  .tablewrap { overflow-x: auto; margin: 0.7rem 0; }
+  th, td { text-align: left; padding: 0.38rem 0.55rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: "Archivo", sans-serif; font-weight: 600; font-size: 0.76rem;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+  }
+  td:first-child { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .fsm { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; font-size: 0.88rem; }
+  .fsm .st { font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; white-space: nowrap; }
+  .fsm .st.bad { color: var(--danger); font-weight: 500; }
+  .fsm .st.good { color: var(--ok); }
+
+  ol { padding-left: 1.3rem; margin: 0.5rem 0; }
+  ol li { margin: 0.25rem 0; }
+
+  footer { margin-top: 2.5rem; border-top: 1px solid var(--line); padding-top: 0.8rem; }
+  footer p { color: var(--muted); font-size: 0.8rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="kicker">Cambered G-SLIP · Corgi ABAD · Stage 4</div>
+    <h1>Hardware Session 1 — Run-Sheet</h1>
+
+    <div class="callout danger"><span class="tag">EXECUTED</span><div><strong>Session 1 ran across 2026-09-02, 09-03 and 09-06.</strong> Drop test and hop licence: log §325.11. Probe 3 / belt slip / link failure: §325.12. Ladder and gain slew (four commits on <code>gslip-hw-merge</code>): §325.13. Forward runs, pitch sign, front/rear split: §325.14. Straight baselines R3 = the λ0 cell of Session 2 (n=5 at k_roll 0.25, §325.20; n=2 at 0.60, §325.37). R4 lean cells subsumed by the open-loop λ sweep (§§325.31, 325.34). R5 wrap: all data off (13 GB, <code>~/corgi_runs/hw_2026-09-06</code>); link inspection done (play, none broken). Session summary: <strong>§325.39</strong>. This sheet is retired.</div></div>
+    <p class="sub">2026-09-01 · ICRA deadline Sep 15 · Session 2 target Sep 3–5 (book it first thing). Runbook owns protocol; the Crib is the bench copy; the log wins over both. This sheet only sequences them.</p>
+    <div class="locks">
+      <span class="chip">Straps first — <b>then floor</b></span>
+      <span class="chip">Gains <b>600 / 0.0</b> everywhere</span>
+      <span class="chip">Supply <b>2× PSW paralleled, 50.4 V</b> · tethers paralleled (§325.11)</span>
+      <span class="chip">Sink ready → <b>license obtainable</b></span>
+      <span class="chip">RustDesk A/B <b>shelved</b></span>
+    </div>
+  </header>
+</div>
+
+<nav class="phasenav" aria-label="Phases"><div class="row">
+  <a href="#pinned">Pinned</a>
+  <a href="#p0">0 · Pre-power</a>
+  <a href="#p1">1 · Init</a>
+  <a href="#p2">2 · Straps</a>
+  <a href="#p3">3 · Leans</a>
+  <a href="#p4">4 · Drop test</a>
+  <a href="#p5">5 · Dynamic</a>
+  <a href="#p6">6 · Wrap</a>
+  <a href="#triage">Triage</a>
+  <a href="#risks">Risks</a>
+  <a href="#book">Bookkeeping</a>
+</div></nav>
+
+<div class="wrap">
+
+  <section class="phase" id="pinned">
+    <div class="phasehead"><span class="pnum">PINNED</span><h2>Every run, all day</h2></div>
+
+    <div class="card">
+      <h3>The launch base (banner must read <code>K_TANGENTIAL OVERRIDDEN: 600.0</code> — proof of intent)</h3>
+      <div class="cmd"><pre><span class="hl">RUN=s1_run01</span>   # pick per run; set in EVERY terminal — same id in panel filename, bag, Vicon
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  <span class="hl">k_tangential:=600.0 k_pitch:=0.0</span> k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Never leave a literal <code>&lt;run_id&gt;</code> in a command — bash reads <code>&lt;</code> as a redirect. The launch records nothing: the tee is just the terminal log, and the CSV recorder writes only while the trigger is on.</p>
+      <p class="note">Banner set to verify before trusting any run: <code>K_TANGENTIAL OVERRIDDEN: 600.0</code> · <code>Loaded 265 template rows (0.2642 s stride)</code> · <code>SCHED_FIFO ... ACQUIRED</code> (if it reports NOT acquired, ignore its "sudo setcap" advice — stale; use <code>grant_realtime.sh</code> + relogin) · <code>BISECT SCALES: phi_pitch=1.00 coupling=1.00 inertia_ff=1.00</code> · slew OFF · live <code>IMP_CMD TX ~1000 / RX 926–999</code>. Tee every launch — on hardware the banners exist only in the terminal.</p>
+    </div>
+
+    <div class="card">
+      <h3>Per-run rhythm</h3>
+      <p><strong>Set <code>RUN</code> first, in each terminal</strong> (a shell variable doesn't carry across terminals). Then: panel filename = <code>$RUN</code> (<strong>no filename ⇒ no file</strong>) → rosbag start → Vicon armed, <em>same run ID</em> → <strong>two sharp body rocks</strong> (clock sync) → check <strong><code>/impedance/command</code> has 2 subscribers</strong> — 3 while a bag recording that topic is up, which the panel widget's default set does (1 = recorder down; trigger will be ignored, the 05:28 failure) → trigger → <strong>hold it: the first stride comes only after a 2.5 s settle</strong> (a 1.6 s trigger on 2026-09-02 produced zero strides — the robot just held and buzzed) → the strides you want (6–8 strides ≈ 5 s total from trigger) → trigger off, bag stop, Vicon stop.</p>
+      <div class="cmd"><pre>ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="gate"><span class="tag">Gate</span><div><strong>Every capture:</strong> <code>cmd_rate.py &lt;capture&gt;.csv</code> — mean ≥ 900 Hz <strong>and</strong> worst freeze ≤ 25 ms. Live: gate on the <strong>worst gap, not the mean</strong> — RX &lt; ~900 Hz or any gap &gt; 25 ms in the hold → abandon, re-take. A green gate does <em>not</em> exonerate the command (#36 is invisible to it).</div></div>
+    </div>
+
+    <div class="card">
+      <h3>FSM — the names lie; trust the actions</h3>
+      <div class="fsm">
+        <span class="st good">SYSTEM_ON</span><span>motors <strong>de-energised — limp, safe</strong></span>
+        <span class="st bad">INIT</span><span><strong>legs MOVE</strong> — hall-calibration velocity sweep, ~30 s, uninterruptible (#41)</span>
+        <span class="st">IDLE</span><span>soft hold (kp 50 / kd 1.5, inherited from calibration)</span>
+        <span class="st">STANDBY</span><span>commands accepted; gaits run here</span>
+        <span class="st good">Set Home</span><span>only this gives the <strong>firm</strong> hold (kp 85)</span>
+      </div>
+      <p class="note">PB1 = LEFT, PB2 = RIGHT (§319). The real e-stop is the <strong>bench supply output</strong> — software E-STOP cannot interrupt hall calibration.</p>
+    </div>
+
+    <div class="callout danger"><span class="tag">Never</span><div>
+      <code>ros2 param set</code> <code>k_flight</code>/<code>b_flight</code> to 0 (drops all four legs into kp-50 position control) · leave the gslip launch running during a CSV run (two writers on <code>motor/command</code>) · <code>setcap</code> a ROS node (bricks it, exit 127) · relax a <em>writer's</em> QoS (readers only) · <code>/imu_raw</code> (records nothing — the topic is <code>/imu</code>) · battery in parallel with the supply · analyse against <code>/mnt/c</code>.
+    </div></div>
+  </section>
+
+  <section class="phase" id="p0">
+    <div class="phasehead"><span class="pnum">PHASE 0</span><h2>Before power — inspect + sync</h2><span class="tbox">~40 min · 2 tracks</span></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p0-book"><div><strong>First action: send the Session 2 booking request (~Sep 3–5).</strong> Same message: Vicon operator + both PSW 80-40.5 units reserved.</div></li>
+      <li><input type="checkbox" data-k="p0-abad"><div><strong>ABAD joints, all four</strong> (#35 aftermath — driven ~30 s with no stopping condition): free rotation through γ, backlash, heat marks, connector seating. Photograph.</div></li>
+      <li><input type="checkbox" data-k="p0-bearing"><div><strong>Foot bearing play</strong> (#16) · <strong>ring-gear teeth + timing</strong> (foot-rim angle = β at a known pose) · <strong>scribe witness marks</strong> (#31). Media while open: D2 bearing balls, D4 witness marks, D1 tread "before".</div></li>
+      <li><input type="checkbox" data-k="p0-pull"><div>Orin: pull + build the branch of record, record the hash.</div></li>
+    </ul>
+    <div class="cmd"><pre>cd ~/corgi_ws/corgi_ros2_ws
+git fetch origin &amp;&amp; git checkout gslip-hw-merge &amp;&amp; colcon build</pre></div>
+    <p class="note">Stale-cache trap is <em>expected</em> on first build; then <strong>fresh terminals</strong>. Never <code>git submodule update</code> on the Orin.</p>
+    <div class="cmd"><pre>rm -rf build/corgi_force_estimation install/corgi_force_estimation \
+       build/corgi_force_control install/corgi_force_control
+colcon build</pre></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p0-accept"><div>Acceptance (expect <code>1</code>) + realtime + sbRIO key:</div></li>
+    </ul>
+    <div class="cmd"><pre>strings install/corgi_force_control/lib/corgi_force_control/gslip_pronk_node | grep -c "K_TANGENTIAL OVERRIDDEN"
+ulimit -r    <span class="hl"># want 99; else grant_realtime.sh + relogin. NEVER setcap.</span>
+ssh -o BatchMode=yes -i ~/.ssh/id_sbrio admin@192.168.0.104 true &amp;&amp; echo KEY_OK</pre></div>
+    <div class="gate"><span class="tag">Gate</span><div>ABAD joints + bearing pass <strong>and</strong> build clean with the banner string. Damage found → day converts to the salvage list (inspections, tread drag, Vicon prep, media); the finding is the product.</div></div>
+  </section>
+
+  <section class="phase" id="p1">
+    <div class="phasehead"><span class="pnum">PHASE 1</span><h2>Power, sbRIO, ONE Init</h2><span class="tbox">~30 min</span></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p1-supply"><div>Supply on, <strong>Config A</strong>. Robot <strong>in straps</strong>. Battery installed, disconnected.</div></li>
+      <li><input type="checkbox" data-k="p1-fpga"><div>sbRIO driver: panel button, or by hand (needs the interactive login shell):</div></li>
+    </ul>
+    <div class="cmd"><pre>ssh -t admin@192.168.0.104 'bash -lic "cd /home/admin &amp;&amp; ./run_fpga_driver.sh"'
+ssh admin@192.168.0.104 'ps ax | grep -c "[f]pga_driver"'   <span class="hl"># &gt;1 → Stop button, start once</span></pre></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p1-ver"><div><strong>Before Init — #35 discriminator 1:</strong> driver TUI, compare <code>[rx] Ver:</code> on <strong>motor[2]</strong> vs [0]/[1]. Difference = firmware skew = the answer.</div></li>
+      <li><input type="checkbox" data-k="p1-init"><div><strong>Init ONCE, hand on the supply output</strong> (~30 s uninterruptible, #41). Fail → <strong>one repeat only</strong>: identical failure = skew; wandering = comms → CAN wiring / 48 V rail. <strong>No third Init.</strong> Record outcomes verbatim.</div></li>
+      <li><input type="checkbox" data-k="p1-home"><div>Reference pose → <code>ros2 run corgi_homing homing</code> (the executable is <code>homing</code> — <code>corgi_homing corgi_homing</code> errors "No executable found") → <strong>Set Home</strong>.</div></li>
+      <li><input type="checkbox" data-k="p1-stack"><div>Stack, one terminal each: bridge → <code>ros2 launch corgi_imu imu.launch.py</code> (<code>/imu</code>; the launch does the chmod) → <code>corgi_control_panel</code> → <code>corgi_data_recorder</code>.</div></li>
+    </ul>
+    <div class="callout warn"><span class="tag">If blocked</span><div>#35 blocks Init entirely → no motion today. Salvage list + the <code>Ver:</code> diagnosis becomes the session's product and the top of the successor handover.</div></div>
+  </section>
+
+  <section class="phase" id="p2">
+    <div class="phasehead"><span class="pnum">PHASE 2</span><h2>Straps — measured confirmation</h2><span class="tbox">~40 min</span></div>
+    <p class="note">Visually clean already — this is the quick <em>scored</em> version, not debugging.</p>
+    <div class="callout danger"><span class="tag">Known</span><div><strong>Pitch-excited limit cycle on legs B/C (straps, 2026-09-02) — root cause is the bridge's torque frame; session workaround <code>coupling_scale:=0.0</code>.</strong> Under any held body pitch (not roll) the mirrored legs B/C oscillate, only with force_control live (limp and IDLE quiet). Bisected: removing the pitch term from <code>phi_fb</code> or the off-diagonal coupling term stops it; the inertia term doesn't. <code>corgi_ros_bridge.cpp</code> mirrors B/C's β but delivers their feedforward torque un-mirrored (<code>motor_dir</code> 1.0 on every leg) — the vault's Torque Frame Mismatch bug, now on hardware. The transform is <em>deliberately not adopted</em> (it un-masks B/C demand ~3×). <code>cf1c85c</code> (same pitch sign on all four legs) is a correctness fix, not the cure. <strong>Drop test and any pitch-in-straps work: <code>coupling_scale:=0.0</code>, logged as a deviation. Gait cells: start on the config of record with a bag running; fall back to <code>coupling_scale:=0.0</code> if B/C oscillate.</strong> Friction (#37) is exonerated for this symptom. Log §324.</div></div>
+    <h3>Run 2a — pre-trigger standup bag, NO trigger</h3>
+    <p class="note">The CSV recorder physically cannot see the standup (trigger-gated).</p>
+    <div class="cmd"><pre>ros2 bag record -o standup_$(date +%H%M%S) /impedance/command /motor/command /motor/state</pre></div>
+    <p>Then launch, let the standup run, <strong>send no trigger</strong>, Ctrl-C:</p>
+    <div class="cmd"><pre>ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_standup1.log</pre></div>
+    <p>One bag scores four things free:</p>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p2-gap"><div><code>gap_histogram.py --steps</code> → standup-jump verdict (§323.5 closes if clean).</div></li>
+      <li><input type="checkbox" data-k="p2-kph"><div><code>kp_h</code> from the bag (<code>gap_histogram.py --steps</code> prints it as <code>cmd kp_h A</code>; the CSV recorder has no kp columns) → #36 prediction: rise to ~500, cliff at t ≈ 1.43 s.</div></li>
+      <li><input type="checkbox" data-k="p2-trq"><div><code>cmd_trq_r_a</code> → #37: flat +0.625 N·m vs the toggling §320 saw — score and reconcile. <strong>No sign flip ships today.</strong></div></li>
+      <li><input type="checkbox" data-k="p2-t15"><div><code>|cmd_trq_h|/2.148</code> vs 20 → the #15 torque-field lead.</div></li>
+    </ul>
+    <h3>Run 2b — ONE clean end-to-end pronk → closes #39</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_pronk1</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+    <div class="cmd"><pre><span class="hl">RUN=s1_pronk1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p2-pronk"><div>Full rhythm (subscriber count = 2 before trigger), ~10+ strides, both <code>cmd_rate.py</code> bars green.</div></li>
+      <li><input type="checkbox" data-k="p2-pb"><div>Optional 1 min: <code>power_channels.py --watch</code>, push one leg per side → confirm the PB boards (crib §9 answered: PB1 = LEFT, PB2 = RIGHT).</div></li>
+    </ul>
+    <div class="callout warn"><span class="tag">Escape hatch</span><div>Only if the jerk reappears: append <code>cmd_slew_theta_deg_s:=1200.0 cmd_slew_beta_deg_s:=600.0</code>. <code>CMD SLEW BIT</code> runs are usable but <strong>not clean</strong> — #39 does not close on them, and the RustDesk A/B is promoted to first diagnostic.</div></div>
+  </section>
+
+  <section class="phase" id="p3">
+    <div class="phasehead"><span class="pnum">PHASE 3</span><h2>Lean cells — the lean runs only with the gait</h2><span class="tbox">~55 min</span></div>
+    <div class="callout danger"><span class="tag">Code fact</span><div><strong>Found at the bench 2026-09-02: there is no standing lean.</strong> <code>gamma_openloop()</code> is gated on <code>yaw_ref_set_</code> — the "template is actually running" flag (<code>gslip_pronk.cpp:2774</code> inside <code>gamma_openloop()</code>, deliberate: a held offset during the settle would twist the legs against the ground). A lean launch stands up perfectly straight and stays straight; the camber engages only <em>after the trigger</em> — and not immediately: <code>yaw_ref_set_</code> flips at the end of the 2500-tick settle, so the <code>ACKER CAMBER set</code> banner and the 500 ms lean ramp arrive <strong>~2.5 s after you trigger</strong>. Don't abort a lean cell for a missing banner before then. Consequences: <strong>on the floor, every lean cell is a gait arc and needs the hop license first</strong> — run the drop test (Phase 4) BEFORE these cells; the registered P-HW-ρ comparison is against gait-run sim numbers anyway, so nothing is lost. In straps, triggering a lean command is safe and is a good visual check that the args work.</div></div>
+    <p><strong>Marker test through 20° roll: tilt the robot physically</strong> (blocks under one side, or angled in the straps) — the markers don't care how the roll happened, no controller lean needed, no license needed. Do this and the D3 photo while the drop test is being set up.</p>
+    <p><strong>Feet on the bare floor — NOT on the four corner scales</strong> (contact migration was registered <em>for rubber</em>; platforms shift the surface and risk slip under camber thrust). Optional 30 s: re-weigh at λ0 upright to pin today's mass for drop-test <code>r = E_bus/mgh</code> (record: 30.0 kg measured vs 30.84 kg Webots).</p>
+    <p>Per licensed arc: panel filename = the <code>RUN</code> id → bag ("all topics" ticked) → Vicon same run ID → body rocks → launch → base-banner check → <strong>trigger</strong> → ~2.5 s settle → <code>ACKER CAMBER set</code> banner (only now) → arc → trigger off, stop everything. One complete command per cell:</p>
+
+    <h3>λ10, lean right</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_lean_l10p</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">gamma_acker_in:=0.17453 gamma_acker_out:=0.13765 gamma_acker_dir:=1.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ10, lean left (mirror)</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_lean_l10n</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">gamma_acker_in:=0.17453 gamma_acker_out:=0.13765 gamma_acker_dir:=-1.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ15, lean right</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_lean_l15p</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">gamma_acker_in:=0.26180 gamma_acker_out:=0.18727 gamma_acker_dir:=1.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ15, lean left (mirror)</h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_lean_l15n</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">gamma_acker_in:=0.26180 gamma_acker_out:=0.18727 gamma_acker_dir:=-1.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+
+    <h3>λ20 <span class="note">(uniform lean, §128-style — no Ackermann pair above 15° was ever banked; sits exactly at the 20° clamp; marker stress-test + extra ρ point only)</span></h3>
+    <div class="cmd"><pre><span class="hl">RUN=s1_lean_l20p</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">gamma_acker_in:=0.34907 gamma_acker_out:=0.34907 gamma_acker_dir:=1.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <p class="note">Banner per cell: <code>ACKER CAMBER set: in=... out=... dir=±1 (ramp 500 ms, clamp 20.0 deg)</code>. <strong>Recording with the panel's ROS Bag widget:</strong> its default topic set does NOT include <code>/imu</code> (verified from the 2026-09-02 air-test bag — 7 topics, no IMU), and P-HW-ρ scores from the IMU log — so for lean cells tick <strong>"all topics"</strong>, or use the terminal bag line. Either way confirm the saved bag lists <code>/imu</code> with a nonzero count before the next cell — a dead IMU node is silent otherwise.</p>
+    <p class="note"><strong>Control structure:</strong> these holds use the <em>open-loop</em> camber channel — <code>gamma_acker_in/out/dir</code> commands a fixed Ackermann lean pair with no yaw loop (the base attitude loop runs k_roll 0.25, k_yaw 0.00). The closed-loop channel (<code>gamma_acker_ff</code> + yaw PD) belongs to Session 2's matrix cells; never mix the two arg families — <code>ff</code> together with <code>dir</code> is fatal at startup by design, but <code>ff</code> with only in/out (dir left 0) is NOT caught: it starts and silently ignores in/out.</p>
+    <p>Each hold scores simultaneously:</p>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p3-rho"><div><strong>P-HW-ρ static arm</strong> — sign NEGATIVE, magnitude in [0.15, 0.65] °/° validates the entire sim roll story; positive quarantines it. Outranks everything except the matrix.</div></li>
+      <li><input type="checkbox" data-k="p3-vicon"><div><strong>Markers through 20° roll</strong> — dropout → re-position and re-test NOW, not in Session 2.</div></li>
+      <li><input type="checkbox" data-k="p3-mig"><div><strong>Contact migration</strong> free-rider — 5.0–5.5 mm/°, smooth and monotone.</div></li>
+      <li><input type="checkbox" data-k="p3-therm"><div><strong>#15 ABAD current/thermal</strong> — touch-check housings between cells; ~≥60 °C → pause.</div></li>
+      <li><input type="checkbox" data-k="p3-media"><div>Media at zero cost: <strong>S1 teaser</strong> (λ15 hold), S3 strip, D3 marker layout, lean-ramp slow-mo (V4 insurance).</div></li>
+    </ul>
+    <p class="note">Annotate every cambered capture "runs under #36" — the ABAD gain wraps the 12-bit CAN field at the config of record (667 → 166 on the wire) and no gate can see it.</p>
+  </section>
+
+  <section class="phase" id="p4">
+    <div class="phasehead"><span class="pnum">PHASE 4</span><h2>Regen drop test — the hop license</h2><span class="tbox">~60 min</span></div>
+    <div class="callout danger"><span class="tag">Done</span><div><strong>Run 2026-09-02, one drop per rung (log §325): regen never reaches the bus — r ≈ 0 at 1–10 cm, bus ΔV ≤ 0.1 V.</strong> A landing is a current <em>draw</em>: 6 / 11.5 / 19.5 / 35.5 / ≥48 A for 1 / 3 / 5 / 7.5 / 10 cm. At 10 cm the supply's 20 A CC limit folded back, the board rails sagged to ~15 V, the power boards dropped and the FSM went to SYSTEM_ON 56 ms after impact (not OVP, not damage in the data). A pronk touchdown ≈ the 10 cm rung (28 J ≈ 9.5 cm). <strong>The license is now a current-capability question</strong>: CC at the pair's 45 A + ride-through capacitance (§264), or the LiPo with a pulse-rated fuse. The chopper step is moot. Do not re-drop. <strong>Second ladder with OCP at max (~45 A): identical collapse at 10 cm, peak 56 A, and the supply never switched off — not OCP.</strong> The boards cut when their input sags to ≈43 V, the sag being ~0.09 Ω of tether at 56 A; no bench supply on this tether can carry the pulse. The pulse source must sit <em>at the robot</em>: the LiPo with a pulse-rated fuse, or ~0.25 F at the robot end (log §325.6). <strong>Third ladder 2026-09-03 (§325.11): two supplies paralleled at 50.4/50.2 V (bleeders off) and both tethers paralleled at the robot — 7.5 and 10 cm survived, 41 A / 1.95 kW peak, worst channel 47.3 V, boards up. Go/no-go line 1 passes on the pair.</strong></div></div>
+    <p>Config A, <strong>CC 20 A</strong>, controller ramped to <strong>Holding pose — do NOT trigger</strong> (the panel trigger would start the gait; the hold capture leans on the bag):</p>
+    <div class="cmd"><pre>ros2 bag record /motor/state /motor/command /imu /power/state /robot/state -o bag/droptest</pre></div>
+    <div class="cmd"><pre>ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">coupling_scale:=0.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_droptest.log</pre></div>
+    <p class="note">Banner: <code>BISECT SCALES: phi_pitch=1.00 coupling=0.00 inertia_ff=1.00</code> — the session workaround for the B/C pitch limit cycle (logged deviation; irrelevant to regen physics). One lift-and-slow-pitch check before the ladder: quiet on all four.</p>
+    <ol>
+      <li>Baselines: idle draw, standing-hold draw, post-peak decay slope (cap-drain correction).</li>
+      <li>Single-leg hand shove ×3 — uncontrolled spike → stop, chopper first.</li>
+      <li>Drops ×3 per rung: <span class="num"><strong>1 / 3 / 5 / 7.5 / 10 cm</strong></span> (3 / 9 / 15 / 23 / 30 J). Per drop: <code>E_bus = ½·0.0132·(V_peak² − V_base²) + drain</code>, <code>r = E_bus/mgh</code>.</li>
+      <li>Verdict: <code>V_pred = √(V_base² + 2·r·28/0.0132)</code> vs ceiling.</li>
+      <li><strong>Chopper/e-load connected, repeat 5–10 cm: fires, clamps, no trip = THE LICENSE</strong> — line 1 of the Session 2 go/no-go.</li>
+    </ol>
+    <div class="callout danger"><span class="tag">Abort</span><div>Within 2 V of OVP → stop the ladder. Gate the hold capture with <code>cmd_rate.py</code> too — a starved hold corrupts every r.</div></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p4-table"><div>Per-drop table written live at the bench (rung, drop #, V_base, V_peak, E_bus, r) — a log § deliverable.</div></li>
+      <li><input type="checkbox" data-k="p4-license"><div>License granted / explicitly not granted → sets Phase 5 branch.</div></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="p5">
+    <div class="phasehead"><span class="pnum">PHASE 5</span><h2>Licensed dynamic block</h2><span class="tbox">~60 min · elastic</span></div>
+    <div class="callout warn"><span class="tag">Licence</span><div><strong>Licensed on the paired supply, 2026-09-03 (log §325.11) — conditional on probe 3.</strong> One supply through one tether could not carry a push-off (51 A; boards cut 0.17 s into stride 1, §325.8 — and only one supply was ever connected, §325.9). With two PSW 80-40.5 paralleled at 50.4/50.2 V and both tethers paralleled at the robot, the 10 cm drop survived with 4.3 V of margin (R_eff 0.04 Ω vs 0.09–0.11 Ω). Probe 3 = the first pronk on this supply, robot on the floor, ropes slack as a catch, trigger held ~5 s (2.5 s settle + ~8 strides ≈ 0.5 m forward). Registered: worst channel ≥ 46 V through the push-off, boards up. Every floor launch from here carries <code>b_lateral:=12.0 coupling_scale:=0.0</code> (§325.10 confirmed, §324 workaround).</div></div>
+    <div class="cmd"><pre><span class="hl">RUN=s1_groundprobe3</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+    <div class="cmd"><pre><span class="hl">RUN=s1_groundprobe3</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">b_lateral:=12.0 coupling_scale:=0.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <div class="callout danger"><span class="tag">Result</span><div><strong>Probe 3 ran under the bag name <code>ladder_ramp1</code> (log §325.12): eleven strides, the pair carried it — peak 65.7 A / 3.08 kW, boards up — and a printed lower leg link (rear-left) failed over strides 1–9.</strong> PB1 input dipped to 44.68 V (below the 46 V bar in strides 2, 3 and 5; the motor rails to 38.9 V, no cut). The ramp never started. <strong>Hardware down until the link is replaced; after any repair the soft-start ladder below is the first floor run — no full-stiffness pronk before it (#44).</strong> Trigger-off snaps the legs to the hold pose mid-swing (17.5° of β in one message, #45): release the trigger at the end of a stride, never mid-flight, while a leg is fragile. Stop bags with Ctrl-C — the killed recorder left a malformed file that had to be carved (#46). <strong>Alex's account, later: the front-left (module A) started rotating and left the floor first — probably a slipped leg-drive belt in that module (#48) — and the three-legged, rolling robot then broke the rear-left (D) link.</strong> Both legs need work before any floor gait: A's belt identified, re-tensioned and re-timed against its encoder at the hold pose; D's link replaced; the other two modules' belts and links inspected.</div></div>
+    <div class="card">
+      <h3>Power ladder — staged, in place, on ropes (plan of record 2026-09-06; log §325.13)</h3>
+      <div class="callout danger"><span class="tag">Never ran</span><div><strong>The bag named <code>ladder_ramp1</code> is probe 3, not a ladder</strong> (log §325.12): its launch was the probe-3 line — v070 pronk, 265 rows, <code>k_radial</code> 8941 from the first stride — and the ramp script was never started (zero <code>LIVE GAIN SET</code> lines). The Orin has the script and the 269-row hop template, and the installed node answers live <code>ros2 param set</code>. The ladder starts at 2500 only if the <em>launch line below</em> is the one used; check the banner before triggering.</div></div>
+      <p class="note">Ramps the stance stiffness live while the hop template (β ≡ 0, in place) runs, so push-off and landing pulses grow gradually inside one bag. It is a <strong>mechanical ladder</strong> first (#44 links, #48 belts) and a power ladder second. Logged deviations ride along: <code>b_lateral:=12.0</code> (settle buzz, §325.10) and <code>coupling_scale:=0.0</code> (B/C pitch limit cycle, §324). Ropes ~1 m slack, feet on the floor.</p>
+      <p><strong>Stage 1 done 2026-09-06 (bag <code>ladder_ramp3v2</code>, 2500 → 4500, 200 hops, log §325.13):</strong> push-off (stance-set) peaks 13–28 N·m per leg, landings 29–36 m/s², PB1 ≥ 47.6 V, boards up, holds identical — but bar v1 (≤ 40 N·m per-leg peak) failed at every rung because the peak is the <em>flight-set engagement snap</em> (kp 20 → 171 at the switch, 40–45 N·m at any stiffness, #49), not the push-off. <strong>Bar v2 for stages 2–3:</strong> stance-set per-leg peak ≤ 45 N·m, landing |a| ≤ 45 m/s², PB1 ≥ 44 V, boards up, four legs identical at the hold before and after; the snap is reported per step and aborts at 50 N·m. A pushed 20 % less than D in stage 1 — look at A against D at the hold before triggering stage 2. <strong>Stage 2 attempt (<code>ladder_ramp4</code>, 4500, no ramp): drifted left out of the room in 26 strides</strong> — all four ABADs lean ≈ 1.5° the same way under #36's wrapped kp_h (requested 528–701, delivered 28–201), and a uniformly leaning robot thrusts sideways. <strong>Next run <code>ladder_ramp5</code> adds <code>k_lateral:=5300.0</code></strong> (kp_h ≈ 373–495, under the wrap, ≈ 3× stiffer) with <code>k_radial:=4500.0</code>; registered: γ deflection ≤ 0.6°, drift at least halved. If the ABAD rings after landings, <code>k_lateral:=4000.0</code>. Start from the right-hand edge of the floor. <strong><code>ladder_ramp5</code> (k_lateral 5300, 4500 → 5750, 106 strides): still drifted rear-left.</strong> The stance ABAD did stiffen (kp_h 460 unwrapped vs ≈ 124 delivered before) and the lean halved to ≈ 0.7°, but the <em>roll loop</em> ran away: roll −0.9 → −5.9° while its camber grew to ±1.4° — more camber, more roll, same sign (#32 on hardware). Loads passed bar v2 (push-off 17–25 N·m, landings 30 m/s², PB1 ≥ 47.2 V), but the flight-set snap reached 51 N·m at 5500 — the #49 abort rule fired; <strong>the ladder stops at 5500 until the gain switch is slewed</strong>. Zero offsets: the level hold reads γ 0.3–0.9° at command 0 (hall zeros, #35) — a per-leg γ trim is a small code change. <strong>Next run <code>ladder_ramp6</code>: no ramp, 20 strides at 4500 with <code>k_roll:=0.0 k_lateral:=5000.0</code></strong>; registered: roll within ±2°, yaw &lt; 1°/s, drift slower. New RUN name every launch — the tee overwrites. <strong><code>ladder_ramp6</code> (k_roll 0): worse — roll −3.3°, yaw +4°/s, left legs 55 % of the impulse: the roll loop was helping (prediction failed, withdrawn); <code>k_roll</code> stays 0.25.</strong> The drift is the ABAD zero offsets (γ +0.3 … +0.9° on all four at command 0, #35) plus β offsets — the fix is per-leg trims in <code>force_control</code> (<code>gamma_trim_a..d</code>, <code>beta_trim_a..d</code>), set from the level hold; on the branch after 2026-09-06, pull and build before the next floor run. <strong>Shipped (<code>402c6d9</code>, v2 after a 23-finding review): <code>gamma_trim_a..d_deg</code> and <code>gain_slew_ms</code></strong> — banners <code>ZERO TRIMS gamma</code>, <code>GAIN SLEW</code>, and a 1 s <code>MEASURED GAMMA state/cmd/torque_h</code> line. <strong>No β trims</strong> (the β offsets are friction deflection, opposite correction sign).</p>
+    <div class="cmd"><pre>cd ~/corgi_ws/corgi_ros2_ws &amp;&amp; git pull &amp;&amp; colcon build --packages-select corgi_force_control   <span class="hl"># then FRESH terminals</span></pre></div>
+    <p class="note">Measure the trims after the repair: robot standing level on the floor at the hold (any launch, no trigger), then in a ROS-sourced terminal:</p>
+    <div class="cmd"><pre>ros2 topic echo /motor/state --once | grep -E 'module_|gamma'   <span class="hl"># rad; × 57.3 = deg; that reading IS the gamma trim</span></pre></div>
+    <p class="note"><strong>How to know the trims are right (the state will NOT read zero afterwards):</strong> at the trimmed hold the <code>MEASURED GAMMA</code> banner shows state ≈ +trim, cmd ≈ +trim and torque_h dropping toward 0 on each leg (from today's ±3.5–6 N·m). If instead the state climbs to ≈ 2× trim with torque_h unchanged, the readings were a deflection, not a zero error — set the trims back to 0.0. Write decimals.</p>
+    <div class="cmd"><pre><span class="hl">RUN=ladder_ramp7</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_hop_template.csv \
+  k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  <span class="hl">gamma_trim_a_deg:=0.74 gamma_trim_b_deg:=0.36 gamma_trim_c_deg:=0.85 gamma_trim_d_deg:=0.30</span> \
+  <span class="hl">gain_slew_ms:=30.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+    <p class="note"><strong>2026-09-06, where the day landed.</strong> The trim test failed (a load deflection, not an encoder zero) — <strong>no γ trims</strong>. The post-repair baseline <code>ladder_ramp7</code> showed <strong>the drift was the damaged link</strong> (roll ±2°, shares even to 1 %, bar v2 passed). <code>ladder_slew1</code> (30 ms both directions) cut the peak per-leg load 48.8 → 34.5 N·m but lost a third of the hop; <code>ladder_slew2</code> (30 ms, liftoff only, <code>6eb8f17</code>) holds the cut (26.5–32.9 N·m, every window passes) and the hop still does not come back — so <strong>the flight-set spike is part of the push-off, and the slew is a trade: −33 % peak load for −21 % hop energy</strong> (#49 retitled). Which makes the ladder the way to buy the hop back with stiffness. <strong>Session config for every floor run from here:</strong> <code>k_lateral:=5000.0 b_lateral:=12.0 coupling_scale:=0.0 k_roll:=0.25 gain_slew_ms:=30.0</code>, no trims. Full plan: log §325.14.</p>
+      <p><strong>R1 — <code>ladder_slew3</code>: the run that sets the matrix stiffness.</strong> Hop template in place on ropes; raise <code>k_radial</code> under the slew until the load bar binds. Take the highest step whose window keeps peak per-leg ≤ 45 N·m, landings ≤ 45 m/s², PB1 ≥ 44 V.</p>
+      <div class="cmd"><pre><span class="hl">RUN=ladder_slew3</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=ladder_slew3</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_hop_template.csv \
+  k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  <span class="hl">gain_slew_ms:=30.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Trigger, ~4 s of bounces, then in the third terminal:</p>
+      <div class="cmd"><pre>bash /home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/scripts/diag/ramp_k_radial.sh 4500 6500 250 2.0</pre></div>
+      <p class="note"><strong>R1 done 2026-09-06 (<code>ladder_slew3v2</code>): the matrix stiffness is <code>k_radial:=6000.0</code>.</strong> At 6000 with the slew the hop energy is back to the no-slew baseline (landing 31.2 m/s² vs 28–30, peak 42.6 A vs 41.4) while the peak per-leg load is 36–41 N·m vs 44–49, −16 %, and bar v2 passes with margin. Above 6000 the energy collapses (22–24 m/s² at 6250–6500) — the leg is stiffer than the template's 0.267 s stride can pump, a physical ceiling. (The first try, <code>ladder_slew3</code>, recorded no <code>LIVE GAIN SET</code> lines — the ramp never reached the node; check for them in the tee before trusting a ladder bag.)</p>
+      <p><strong>R2 — <code>s1_fwd1</code>: the first forward pronk since the break.</strong> v070 template at 6000, ropes slack with ~1.5 m of travel, 10 strides. Gates: it pronks forward; peak per-leg ≤ 45 N·m; all four links intact afterwards. If it will not pronk, drop to <code>..._template_v045.csv</code> at the same gains before touching any gain (§325 rule).</p>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd1</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd1</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=6000.0</span> k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  gain_slew_ms:=30.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Banner: <code>Loaded 265 template rows (0.2642 s stride)</code>.</p>
+      <div class="callout danger"><span class="tag">R2 result</span><div><strong>It pronks — and the rear legs carry 1.7× the front's torque (61.3 vs 35.9 N·m peak) while both move identically.</strong> The front cycles nearly unloaded and the rear pushes the robot along; the body pitches to −2.9° at 54°/s rms with the pitch channel off. <strong>Peak per-leg 62.6 N·m (bar 45; probe 3 broke a link at 61), landings 38–42 m/s², ΣI 67.1 A and PB1 down to 45.5 V — the highest load and current of the campaign.</strong> Stopping early was right. <strong><code>k_radial</code> 6000 does not transfer from the hop template to the pronk</strong> (the pronk sweeps β ±7–9°, so the same stiffness lands 50 % more torque): every stiffness number from R1 is hop-only until the ladder is re-run on v070. Log §325.14.</div></div>
+      <p><strong>R2b — same pronk at <code>k_radial:=4500.0</code>, pitch channel still off.</strong> Does the rear come under 45 N·m, and is the 1.7× ratio constant or stiffness-dependent? 10 strides, ropes slack. <strong>Abort at the first stride with a rear peak above 55 N·m or PB1 below 45 V.</strong></p>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd2</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd2</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  <span class="hl">k_radial:=4500.0</span> k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  gain_slew_ms:=30.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <div class="callout danger"><span class="tag">R2b result</span><div><strong>The ratio is constant: 1.71 at 4500 against 1.70 at 6000.</strong> Rear peak only fell 61.3 → 57.1 N·m for a 25 % stiffness cut, so <strong>no stiffness in range puts the rear under the 45 N·m bar</strong>. Mechanism: the front legs reach load at θ ≈ 86.4° and the rear at θ ≈ 89.2° — <strong>the front rides ~8 mm higher</strong>, so the rear takes a sharp impact (loading rate 1.5 N·m/ms) while the front settles softly (0.4). Impulse is nearly even (1.12×): same work, different sharpness. In 4 of 13 sampled strides leg A is still loaded at stance onset — the front-left never left the ground. <strong>Also: <code>/imu</code> was missing from this bag</strong> — the IMU node was down, so the attitude loops had no input and there is no pitch/roll/landing data for it.</div></div>
+      <p><strong>Before R2c — restart the IMU node</strong> (its own terminal). The pitch channel needs it, and so does P-HW-ρ in R4.</p>
+      <div class="cmd"><pre>ros2 launch corgi_imu imu.launch.py</pre></div>
+      <p class="note">Confirm it is alive before triggering: <code>ros2 topic hz /imu</code> should show ~1000 Hz, and the bag must list <code>/imu</code> with a nonzero count afterwards.</p>
+      <p><strong>R2c — 4500 with the pitch channel closed.</strong> Registered: front/rear ratio below 1.3 and worst leg under 45 N·m. If the ratio does not move, the pitch loop is outgunned (#14) and the answer is mechanical; if it moves the wrong way, the pitch sign is #47's quaternion mirror and it flips. <strong>Abort at a rear peak above 55 N·m.</strong></p>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd3</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd3</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 <span class="hl">k_pitch:=-0.30 pitch_limit:=0.05236</span> k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  gain_slew_ms:=30.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <div class="callout danger"><span class="tag">R2c result</span><div><strong>Worse — the pitch channel's sign is inverted on hardware.</strong> At <code>k_pitch:=-0.30</code> the ratio went 1.71 → 1.93 (2.38 by the last stride), the front θ amplitude fell 14.8 → 13.3°, the front loading rate halved to 0.17–0.29 N·m/ms and by the end the front legs were taking load fully extended at 1–3 ms into stance — dragging, never leaving the ground. The channel levels the body with a <em>differential leg length</em>, and at −0.30 it shortened the already-high front, into its 3° clamp. <strong>Consequence for Session 2: the §301 gains block would run its new arm at −0.30 and make the hardware worse — re-register it at the corrected sign.</strong></div></div>
+      <p><strong>R2d — the same run with the sign flipped: <code>k_pitch:=+0.30</code>.</strong> Registered: ratio below 1.3, front θ amplitude back above 14.5°, front loading rate above 0.8 N·m/ms, worst leg under 45 N·m. <strong>Abort at a rear peak above 55 N·m, or if the ratio rises at all over the first five strides.</strong> If +0.30 also cannot get under 1.3, the loop is outgunned (#14) and the fix is mechanical — a fixed fore/aft θ offset sized from the 2.8° touchdown gap.</p>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd4</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=s1_fwd4</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 <span class="hl">k_pitch:=0.30 pitch_limit:=0.05236</span> k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_pronk_template_v070.csv \
+  k_radial:=4500.0 k_lateral:=5000.0 k_roll:=0.25 b_lateral:=12.0 coupling_scale:=0.0 \
+  gain_slew_ms:=30.0 \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Banner: <code>PITCH CHANNEL set: k_pitch=0.300</code>. R3/R4/R5 follow once a pronk config passes the load bar.</p>
+      <div class="callout warn"><span class="tag">Vicon</span><div><strong>Capture on: M0 (the 20° marker check — do it first), R3 (straight baselines) and R4 (lean cells); and every Session 2 cell.</strong> Not needed for R2, R5, or any in-place hop/ladder run. R3 is the one that cannot be replaced: <code>v_fwd</code> ground truth is the 0.85× validity floor every Session 2 cell is scored against. P-HW-ρ is IMU roll and survives a Vicon failure. <strong>Per capture:</strong> Vicon first, then the bag, then <strong>two sharp body rocks</strong> — no shared clock, that impulse is the alignment; same run ID on bag, panel filename and export; export before leaving the volume. The volume costs a move, so run R2 where the robot is now and take M0 + R3 + R4 in one visit. Log §325.14.</div></div>
+      <p class="note"><strong>Before the trigger, every stage:</strong> the four legs look identical at the hold (a slipped belt shows as one link rotated at identical encoder readings); the banner reads <code>LEG-FRAME GAINS: k_radial=2500.0</code> (or the stage's start value) and <code>Loaded 269 template rows</code>; and the third terminal answers <code>Double value is: 2500.0</code> to the param get below — that also warms the ros2 CLI daemon (if it hangs &gt; 10 s: <code>pkill -f ros2cli.daemon</code>).</p>
+      <div class="cmd"><pre><span class="hl">RUN=ladder_ramp2</span>
+ros2 bag record /motor/state /motor/command /imu /power/state /trigger /robot/state -o bag/$RUN</pre></div>
+      <div class="cmd"><pre><span class="hl">RUN=ladder_ramp2</span>
+ros2 launch corgi_force_control gslip_pronk.launch.py use_sim_time:=false \
+  k_tangential:=600.0 k_pitch:=0.0 k_flight:=7150.0 b_flight:=115.8 \
+  template_path:=/home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/config/gslip_hop_template.csv \
+  <span class="hl">k_radial:=2500.0 b_lateral:=12.0 coupling_scale:=0.0</span> \
+  2&gt;&amp;1 | tee ~/corgi_ws/corgi_ros2_ws/output_data/ctl_$RUN.log</pre></div>
+      <p class="note">Third terminal (ROS-sourced), before the trigger:</p>
+      <div class="cmd"><pre>ros2 param get /gslip_pronk_node k_radial</pre></div>
+      <p class="note">Trigger, wait for the settle and the first bounces (~4 s), then start the stage's ramp (each step prints <code>LIVE GAIN SET: k_radial = …</code> in the launch log; ~7 hops per step):</p>
+      <div class="cmd"><pre>bash /home/biorola/corgi_ws/corgi_ros2_ws/src/corgi_force_control/scripts/diag/ramp_k_radial.sh 2500 4500 250 2.0</pre></div>
+      <p class="note">When it prints <code>ramp complete</code>, or on any stop (Ctrl-C freezes the value): let the robot bounce two more hops, release the trigger with feet on the floor (#45: the stop snaps the legs to the hold pose in one message), then <strong>Ctrl-C the bag in its own terminal</strong> and check that <code>bag/ladder_ramp2/metadata.yaml</code> exists (#46). Stop early if the board input reads below ~44 V, a leg looks different from the other three, or anything sounds wrong. Next stages use the same three commands with <code>RUN=ladder_ramp3</code>, <code>k_radial:=4500.0</code> in the launch and <code>4500 6500 250 2.0</code> on the ramp; <code>ladder_ramp4</code>: <code>6500.0</code> and <code>6500 8941 250 2.0</code>.</p>
+    </div>
+    <p class="note">Full rhythm + gates every run; witness-mark/bearing glance every ~10 arcs. No license → skip to the grounded fallback: extend Phase 3 cells, tread friction, and the sink becomes tonight's critical path.</p>
+    <ol>
+      <li><strong>Entry transient</strong> (#24, 2–3 launches outside the volume) → decides Vicon arcs vs tennis court for Session 2. Pronk won't come: watch the <strong>supply for sag</strong> first, give 10 strides, drop to <code>..._template_v045.csv</code>; §301 rescue is Alex's call. Do NOT reach for kt 2400 / clock_ff / contact_align / phase correction.</li>
+      <li><strong>Straight baselines n = 3–5</strong> (pinned base, nothing appended) → 0.85× speed anchor, per-leg β_TD (#20), peak bus current (→ Session 2 CC ≥ 1.5×), rolling-radius free-rider.</li>
+      <li><strong>Coarse open-loop λ sweep</strong>, one speed (λ10 ±, λ15, λ20 if margin; 1–2 arcs each; same open-loop channel as Phase 3 — fixed lean, no yaw loop, so the radius comes from the raw λ→κ map) → P-HW-ρ gait arm, κ(λ) slope (expect smooth, <strong>don't hunt a knee</strong>), #15 under gait. Media between arcs: V4 proper, V1-insurance tripod take.</li>
+      <li>Tread friction drag (#5) only with real margin.</li>
+    </ol>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p5-entry"><div>Entry transient answered → Session 2 venue decided.</div></li>
+      <li><input type="checkbox" data-k="p5-base"><div>Baselines banked (anchor + β_TD + CC number).</div></li>
+      <li><input type="checkbox" data-k="p5-sweep"><div>λ sweep arcs banked with IMU.</div></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="p6">
+    <div class="phasehead"><span class="pnum">PHASE 6</span><h2>Wrap — data off, close out</h2><span class="tbox">hard reserve · ~35 min</span></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p6-photos"><div>Tread "after" photos; final witness-mark check; power down (FSM → Motors Off).</div></li>
+      <li><input type="checkbox" data-k="p6-rsync"><div>Data off the Orin (<code>hostname -I</code> there for the IP; RustDesk Path B if LAN blocks — never analyse against <code>/mnt/c</code>):</div></li>
+    </ul>
+    <div class="cmd"><pre>rsync -av biorola@&lt;orin-ip&gt;:~/corgi_ws/corgi_ros2_ws/output_data/ ~/corgi_runs/hw_2026-09-01/
+rsync -av biorola@&lt;orin-ip&gt;:~/corgi_ws/corgi_ros2_ws/bag/ ~/corgi_runs/hw_2026-09-01/bags/</pre></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="p6-vicon"><div>Vicon exports (C3D/CSV) under matching run IDs before leaving.</div></li>
+      <li><input type="checkbox" data-k="p6-table"><div><strong>Run-ID ↔ config ↔ gates ↔ Vicon table + per-drop table written at the bench</strong>, not from memory.</div></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="triage">
+    <div class="phasehead"><span class="pnum">TRIAGE</span><h2>When time shortens, drop from the top</h2></div>
+    <ol>
+      <li>Tread friction</li>
+      <li>Dedicated rolling-radius run (keep as baseline free-rider)</li>
+      <li>Extra λ20 cells / V1-insurance takes</li>
+      <li>λ sweep — but keep <strong>one λ10 cell</strong> if Phase 3 was cut (P-HW-ρ outranks every free item)</li>
+      <li>Entry transient + baselines (Session 2 can open with them)</li>
+      <li>Drop test — postponable <em>only</em> to a bench slot before Session 2; no license = no floor flight, full stop</li>
+    </ol>
+    <p><strong>Never dropped:</strong> Phase 0 inspections · the one clean pronk (#39) · per-capture gates · the Phase 6 reserve. Only ~90 min? Phases 0 → 1 → 2 → 3.</p>
+  </section>
+
+  <section class="phase" id="risks">
+    <div class="phasehead"><span class="pnum">RISKS</span><h2>What can kill the day</h2></div>
+    <div class="tablewrap"><table>
+      <tr><th>Risk</th><th>Mitigation baked in</th></tr>
+      <tr><td>#35 recurs, blocks Init</td><td><code>Ver:</code> check first; one-repeat rule; salvage list pre-agreed</td></tr>
+      <tr><td>#41 during calib</td><td>inspection before Init; hand on supply; straps; modest CC</td></tr>
+      <tr><td>Floor flight, no license</td><td>drop test before any floor gait; Phase 3 is holds-only</td></tr>
+      <tr><td>Perfect-looking worthless capture</td><td>live worst-gap gate + both cmd_rate bars; #36 annotation</td></tr>
+      <tr><td>Trigger ignored</td><td>subscriber count = 2 in the rhythm</td></tr>
+      <tr><td>Stale build/terminals</td><td>clear-cache recipe + banner grep + fresh terminals</td></tr>
+      <tr><td>Provenance loss</td><td>tee every launch; filename before bag; <code>/imu</code> not <code>/imu_raw</code></td></tr>
+    </table></div>
+  </section>
+
+  <section class="phase" id="book">
+    <div class="phasehead"><span class="pnum">CLOSE</span><h2>End-of-session bookkeeping</h2></div>
+    <ul class="steps">
+      <li><input type="checkbox" data-k="bk-log"><div><strong>Implementation log</strong>: new §§ (<strong>grep the current max §N first</strong> — sessions have collided): session narrative + run table; drop-test § with per-drop table; free-plot scores; P-HW-ρ static numbers. Figures (ρ vs λ with threshold lines, per-drop r scatter) + generators → <code>Research/SLIP/Figures/</code>.</div></li>
+      <li><input type="checkbox" data-k="bk-issues"><div><strong>Open Issues</strong>: close #39, #24; update #35, #36 (plot + clamp decision), #37, #15, #16/#31; #41 stands.</div></li>
+      <li><input type="checkbox" data-k="bk-handover"><div><strong>Handover</strong>: set the active one <code>status: executed</code>; write the successor (license status, go/no-go lines, Session 2 booking).</div></li>
+      <li><input type="checkbox" data-k="bk-timeline"><div><strong>Timeline</strong> only if the plan changed.</div></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Sources: Hardware Session Runbook — Integration and Matrix · Session Launch Crib — 2026-08-31 · Open Issues — State of Play · Implementation Log §§312–323. If this sheet and the log disagree, the log wins. Checkboxes save only on this device.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var KEY = "corgi-s1-runsheet-2026-09-01";
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+
+  var boxes = document.querySelectorAll('ul.steps input[type="checkbox"]');
+  boxes.forEach(function (box) {
+    var k = box.getAttribute("data-k");
+    if (state[k]) { box.checked = true; box.closest("li").classList.add("done"); }
+    box.addEventListener("change", function () {
+      box.closest("li").classList.toggle("done", box.checked);
+      state[k] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    });
+  });
+
+  document.querySelectorAll(".cmd").forEach(function (wrap) {
+    var pre = wrap.querySelector("pre");
+    if (!pre) return;
+    var btn = document.createElement("button");
+    btn.className = "copy";
+    btn.type = "button";
+    btn.textContent = "COPY";
+    btn.addEventListener("click", function () {
+      var text = pre.textContent;
+      function done() { btn.textContent = "COPIED"; setTimeout(function () { btn.textContent = "COPY"; }, 1400); }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+        } else { fallback(); }
+      } catch (e) { fallback(); }
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          done();
+        } catch (e2) {}
+      }
+    });
+    wrap.appendChild(btn);
+  });
+})();
+</script>
