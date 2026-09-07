@@ -1,6 +1,7 @@
 # hw0906 — analysers of Hardware Sessions 1–2 (2026-09-06, Vicon volume)
 
-Rescued 2026-09-07 from the session scratchpad (a temp directory). Every number in
+Rescued 2026-09-07 from the session scratchpad (a temp directory); `launch_check.py`
+and `ff_scan.py` were written the same day for the next session. Every number in
 log §§325.20–325.42 and the figures `Research/SLIP/Figures/*_2026-09-06.png` came
 from these. Data: WSL `~/corgi_runs/hw_2026-09-06/` (bags, logs, vicon c3d).
 
@@ -21,4 +22,7 @@ The `run_*.sh` files are the exact invocations used (paths are the WSL ones).
 | `figs0906_*` | per-hop speed, per-stride τ_h and roll, literals for the figure generators |
 | `exploratory_slope.py` (+ `.md`, `_strides.json`) | per-stride κ vs measured camber — exploratory, not a gate |
 | `imu_vs_vicon.py`, `imu_vs_vicon2.py`, `imu_vs_vicon3.json`, `imu_vs_vicon.md` | IMU vs Vicon attitude, 18 runs; only `imu_vs_vicon3.json` stands (§325.40) |
+| `launch_check.py` | **the registered launch-stride validity check** (log §325.43): VALID/VOID for one arc's bag, run between arcs |
+| `ff_scan.py` | per-stride flight fraction across many bags — the false-positive check behind that rule |
+| `run_launch_check.sh`, `run_ff_scan.sh` | their self-tests against the 2026-09-06 known answer |
 | `session1_runsheet.html`, `session2_runsheet.html` | the bench run-sheets; the launch line's base |
