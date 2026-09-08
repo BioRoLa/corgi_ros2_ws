@@ -1,0 +1,17 @@
+arithmetic (KP_MAX_fw 500):
+   kp   667.00 ->   166.79  (expected   166.79) ok
+   kp   500.12 ->   500.00  (expected   500.00) ok
+   kp   500.13 ->     0.00  (expected     0.00) ok
+   kp   745.00 ->   244.81  (expected   244.81) ok
+   kp   646.00 ->   145.79  (expected   145.79) ok
+   kp   700.00 ->   199.88  (expected   199.88) ok
+   kd    10.30 ->    0.297  (expected    0.297) ok
+   kd     8.90 ->    3.899  (expected    3.900) ok
+   kd     4.90 ->    4.900  (expected    4.900) ok
+   kd     0.80 ->    0.800  (expected    0.800) ok
+probe-3 pre-trigger hold 3-6 s (known answer of the 2026-09-03 verification pass):
+   A FL err +0.487 deg  tau_h -2.121 N.m  kp_cmd 638.4  ratio 0.391 (expected 0.391) ok | predicted kt*(1-500.122/kp) = 0.465
+   B FR err +0.742 deg  tau_h +4.365 N.m  kp_cmd 637.5  ratio 0.529 (expected 0.529) ok | predicted kt*(1-500.122/kp) = 0.463
+   C RR err +0.585 deg  tau_h -2.893 N.m  kp_cmd 635.6  ratio 0.446 (expected 0.446) ok | predicted kt*(1-500.122/kp) = 0.458
+   D RL err +0.738 deg  tau_h +3.817 N.m  kp_cmd 635.1  ratio 0.466 (expected 0.466) ok | predicted kt*(1-500.122/kp) = 0.456
+SELFTEST PASS

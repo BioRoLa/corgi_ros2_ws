@@ -1,0 +1,219 @@
+
+================ s2_l0_a1  (gait 11.5 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.907 deg  tau -4.490 N.m  kp_cmd 639.8 -> fw 139.7 (kd 10.36 -> 0.36)  ratio 0.444  pred 0.469  (-5 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.8 -> fw 139.7  pred 0.469
+   C RR err +1.071 deg  tau -5.187 N.m  kp_cmd 636.9 -> fw 136.6 (kd 10.31 -> 0.31)  ratio 0.436  pred 0.461  (-5 %)
+   D RL err +0.412 deg  tau +2.316 N.m  kp_cmd 638.0 -> fw 137.7 (kd 10.33 -> 0.33)  ratio 0.505  pred 0.464  (+9 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 367.0 / 546.9 / 697.2 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 19/129/197  stance 13/422/481
+   B FR cmd min/med/max 367.6 / 549.3 / 699.0 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 25/130/199  stance 16/408/480
+   C RR cmd min/med/max 372.5 / 571.6 / 697.4 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 30/132/197  stance 21/409/479
+   D RL cmd min/med/max 378.0 / 573.3 / 697.4 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 39/132/197  stance 30/438/481
+
+================ s2_l0_a2  (gait 10.8 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.907 deg  tau -3.989 N.m  kp_cmd 637.7 -> fw 137.5 (kd 10.33 -> 0.32)  ratio 0.395  pred 0.463  (-15 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.2 -> fw 138.9  pred 0.467
+   C RR err +0.907 deg  tau -4.167 N.m  kp_cmd 635.3 -> fw 135.2 (kd 10.29 -> 0.29)  ratio 0.415  pred 0.457  (-9 %)
+   D RL err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 636.9 -> fw 136.8  pred 0.461
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 367.1 / 541.2 / 696.9 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 26/129/197  stance 13/402/480
+   B FR cmd min/med/max 368.2 / 544.8 / 699.0 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 28/130/199  stance 16/425/480
+   C RR cmd min/med/max 372.2 / 568.2 / 697.8 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 28/132/198  stance 21/417/479
+   D RL cmd min/med/max 376.4 / 568.1 / 698.1 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 38/132/198  stance 27/434/480
+
+================ s2_l0_a3  (gait 9.5 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +1.236 deg  tau -5.704 N.m  kp_cmd 637.8 -> fw 137.6 (kd 10.33 -> 0.33)  ratio 0.415  pred 0.463  (-11 %)
+   B FR err +0.412 deg  tau +2.270 N.m  kp_cmd 638.8 -> fw 138.6 (kd 10.35 -> 0.34)  ratio 0.494  pred 0.466  (+6 %)
+   C RR err +1.071 deg  tau -5.182 N.m  kp_cmd 635.9 -> fw 135.7 (kd 10.30 -> 0.30)  ratio 0.436  pred 0.458  (-5 %)
+   D RL err +0.412 deg  tau +2.269 N.m  kp_cmd 638.0 -> fw 137.9 (kd 10.33 -> 0.33)  ratio 0.494  pred 0.464  (+6 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 364.8 / 546.1 / 696.8 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 21/129/197  stance 11/420/480
+   B FR cmd min/med/max 368.2 / 552.2 / 698.9 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 25/131/199  stance 16/406/480
+   C RR cmd min/med/max 372.7 / 563.0 / 696.9 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 28/131/197  stance 22/413/479
+   D RL cmd min/med/max 378.8 / 569.5 / 698.3 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 40/133/198  stance 31/442/479
+
+================ s2_l0_a4  (gait 10.0 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.907 deg  tau -4.498 N.m  kp_cmd 638.1 -> fw 137.9 (kd 10.33 -> 0.33)  ratio 0.445  pred 0.464  (-4 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 640.1 -> fw 139.9  pred 0.470
+   C RR err +1.236 deg  tau -5.729 N.m  kp_cmd 635.9 -> fw 135.8 (kd 10.30 -> 0.30)  ratio 0.418  pred 0.459  (-9 %)
+   D RL err +0.412 deg  tau +2.279 N.m  kp_cmd 638.0 -> fw 137.9 (kd 10.33 -> 0.33)  ratio 0.496  pred 0.464  (+7 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 365.4 / 535.6 / 698.6 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 19/125/198  stance 11/401/482
+   B FR cmd min/med/max 365.9 / 542.5 / 699.1 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 22/127/199  stance 13/430/481
+   C RR cmd min/med/max 371.2 / 561.9 / 697.9 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 26/128/198  stance 20/437/481
+   D RL cmd min/med/max 378.8 / 567.2 / 698.1 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 40/130/198  stance 31/422/479
+
+================ s2_l0_a5  (gait 9.3 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +1.071 deg  tau -5.019 N.m  kp_cmd 637.0 -> fw 136.8 (kd 10.32 -> 0.31)  ratio 0.421  pred 0.461  (-9 %)
+   B FR err -0.083 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 692.3 -> fw 192.1  pred 0.596
+   C RR err +1.565 deg  tau -7.168 N.m  kp_cmd 635.9 -> fw 135.8 (kd 10.30 -> 0.30)  ratio 0.413  pred 0.459  (-10 %)
+   D RL err +0.409 deg  tau +2.184 N.m  kp_cmd 637.2 -> fw 137.0 (kd 10.32 -> 0.32)  ratio 0.480  pred 0.462  (+4 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 364.1 / 538.2 / 696.8 | wrapped   57 % (flight  100 %, stance   14 %) | delivered flight 17/128/197  stance 9/412/480
+   B FR cmd min/med/max 364.1 / 544.9 / 698.8 | wrapped   57 % (flight  100 %, stance   14 %) | delivered flight 21/130/199  stance 10/423/480
+   C RR cmd min/med/max 369.0 / 555.7 / 697.0 | wrapped   57 % (flight  100 %, stance   14 %) | delivered flight 24/130/197  stance 17/425/480
+   D RL cmd min/med/max 377.8 / 562.5 / 697.5 | wrapped   57 % (flight  100 %, stance   14 %) | delivered flight 38/132/197  stance 29/435/480
+
+================ s2_l15_a1  (gait 5.4 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.740 deg  tau -3.067 N.m  kp_cmd 639.7 -> fw 139.6 (kd 10.36 -> 0.36)  ratio 0.371  pred 0.469  (-21 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.4 -> fw 139.2  pred 0.468
+   C RR err +0.907 deg  tau -4.318 N.m  kp_cmd 638.3 -> fw 138.1 (kd 10.34 -> 0.33)  ratio 0.427  pred 0.465  (-8 %)
+   D RL err +0.577 deg  tau +3.215 N.m  kp_cmd 638.6 -> fw 138.5 (kd 10.34 -> 0.34)  ratio 0.500  pred 0.466  (+7 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 370.0 / 581.4 / 644.8 | wrapped   61 % (flight  100 %, stance   11 %) | delivered flight 29/131/145  stance 0/408/499
+   B FR cmd min/med/max 409.2 / 621.9 / 697.5 | wrapped   61 % (flight  100 %, stance   12 %) | delivered flight 88/178/197  stance 80/448/484
+   C RR cmd min/med/max 412.1 / 649.6 / 697.0 | wrapped   61 % (flight  100 %, stance   12 %) | delivered flight 80/177/197  stance 114/447/485
+   D RL cmd min/med/max 378.4 / 599.7 / 645.9 | wrapped   61 % (flight  100 %, stance   12 %) | delivered flight 34/132/146  stance 9/402/443
+
+================ s2_l15_a2  (gait 5.6 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.822 deg  tau -3.831 N.m  kp_cmd 638.3 -> fw 138.1 (kd 10.34 -> 0.33)  ratio 0.418  pred 0.465  (-10 %)
+   B FR err +0.082 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.6 -> fw 139.3  pred 0.468
+   C RR err +1.071 deg  tau -5.262 N.m  kp_cmd 637.7 -> fw 137.6 (kd 10.33 -> 0.33)  ratio 0.441  pred 0.463  (-5 %)
+   D RL err +0.411 deg  tau +2.232 N.m  kp_cmd 639.6 -> fw 139.3 (kd 10.36 -> 0.36)  ratio 0.486  pred 0.468  (+4 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 364.9 / 548.5 / 646.2 | wrapped   58 % (flight  100 %, stance   13 %) | delivered flight 24/131/146  stance 1/405/500
+   B FR cmd min/med/max 405.5 / 602.2 / 699.2 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 82/179/199  stance 75/451/485
+   C RR cmd min/med/max 408.0 / 639.7 / 696.5 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 79/177/196  stance 63/449/485
+   D RL cmd min/med/max 377.5 / 582.7 / 645.5 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 39/133/145  stance 6/404/443
+
+================ s2_l15_b1  (gait 5.5 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.834 deg  tau -3.867 N.m  kp_cmd 639.3 -> fw 139.2 (kd 10.35 -> 0.35)  ratio 0.415  pred 0.468  (-11 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.3 -> fw 139.2  pred 0.468
+   C RR err +0.907 deg  tau -4.111 N.m  kp_cmd 636.7 -> fw 136.5 (kd 10.31 -> 0.31)  ratio 0.408  pred 0.461  (-11 %)
+   D RL err +0.412 deg  tau +2.922 N.m  kp_cmd 639.0 -> fw 138.8 (kd 10.35 -> 0.35)  ratio 0.636  pred 0.467  (+36 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 279.0 / 576.0 / 646.6 | wrapped   59 % (flight  100 %, stance   12 %) | delivered flight 26/131/146  stance 0/312/499
+   B FR cmd min/med/max 290.0 / 619.5 / 699.5 | wrapped   60 % (flight  100 %, stance   13 %) | delivered flight 84/178/199  stance 76/317/347
+   C RR cmd min/med/max 299.3 / 646.7 / 697.6 | wrapped   60 % (flight  100 %, stance   13 %) | delivered flight 77/178/197  stance 61/315/346
+   D RL cmd min/med/max 273.8 / 595.7 / 647.0 | wrapped   60 % (flight  100 %, stance   13 %) | delivered flight 38/134/147  stance 8/308/341
+
+================ s2_l10_a1  (gait 4.8 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.742 deg  tau -3.504 N.m  kp_cmd 638.8 -> fw 138.6 (kd 10.35 -> 0.34)  ratio 0.424  pred 0.466  (-9 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 638.2 -> fw 138.0  pred 0.464
+   C RR err +0.907 deg  tau -4.368 N.m  kp_cmd 638.0 -> fw 137.9 (kd 10.33 -> 0.33)  ratio 0.433  pred 0.464  (-7 %)
+   D RL err +0.577 deg  tau +3.182 N.m  kp_cmd 638.0 -> fw 137.9 (kd 10.33 -> 0.33)  ratio 0.495  pred 0.464  (+7 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 370.7 / 550.9 / 646.1 | wrapped   60 % (flight  100 %, stance   14 %) | delivered flight 26/126/146  stance 0/401/500
+   B FR cmd min/med/max 407.0 / 598.3 / 698.6 | wrapped   60 % (flight  100 %, stance   14 %) | delivered flight 83/172/198  stance 72/441/484
+   C RR cmd min/med/max 407.6 / 626.2 / 697.0 | wrapped   60 % (flight  100 %, stance   14 %) | delivered flight 58/174/197  stance 62/445/485
+   D RL cmd min/med/max 377.5 / 575.8 / 646.7 | wrapped   60 % (flight  100 %, stance   14 %) | delivered flight 39/129/147  stance 26/403/444
+
+================ s2_ol10_a1  (gait 8.9 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.730 deg  tau -3.049 N.m  kp_cmd 639.8 -> fw 139.6 (kd 10.36 -> 0.36)  ratio 0.374  pred 0.469  (-20 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 638.4 -> fw 138.2  pred 0.465
+   C RR err +1.071 deg  tau -5.043 N.m  kp_cmd 637.4 -> fw 137.2 (kd 10.32 -> 0.32)  ratio 0.423  pred 0.462  (-9 %)
+   D RL err +0.577 deg  tau +3.436 N.m  kp_cmd 639.2 -> fw 139.1 (kd 10.35 -> 0.35)  ratio 0.534  pred 0.467  (+14 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 370.5 / 556.4 / 646.2 | wrapped   59 % (flight  100 %, stance   12 %) | delivered flight 25/129/146  stance 5/406/445
+   B FR cmd min/med/max 402.6 / 602.7 / 698.9 | wrapped   59 % (flight  100 %, stance   12 %) | delivered flight 74/176/199  stance 65/442/484
+   C RR cmd min/med/max 404.7 / 640.8 / 697.7 | wrapped   59 % (flight  100 %, stance   12 %) | delivered flight 39/179/198  stance 57/446/485
+   D RL cmd min/med/max 375.7 / 588.4 / 646.3 | wrapped   59 % (flight  100 %, stance   12 %) | delivered flight 36/130/146  stance 24/405/446
+
+================ s2_ol10_roll1  (gait 8.2 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +1.071 deg  tau -5.337 N.m  kp_cmd 638.2 -> fw 138.0 (kd 10.34 -> 0.33)  ratio 0.447  pred 0.464  (-4 %)
+   B FR err +0.578 deg  tau +3.818 N.m  kp_cmd 639.0 -> fw 138.8 (kd 10.35 -> 0.35)  ratio 0.592  pred 0.467  (+27 %)
+   C RR err +0.907 deg  tau -3.970 N.m  kp_cmd 635.5 -> fw 135.4 (kd 10.29 -> 0.29)  ratio 0.395  pred 0.458  (-14 %)
+   D RL err +0.577 deg  tau +3.730 N.m  kp_cmd 638.2 -> fw 138.0 (kd 10.34 -> 0.33)  ratio 0.580  pred 0.464  (+25 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 368.0 / 550.6 / 646.6 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 28/131/146  stance 2/403/446
+   B FR cmd min/med/max 404.3 / 592.8 / 698.9 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 74/179/199  stance 66/438/483
+   C RR cmd min/med/max 403.1 / 618.0 / 697.1 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 45/181/197  stance 55/445/483
+   D RL cmd min/med/max 376.5 / 573.9 / 645.8 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 37/134/146  stance 25/406/445
+
+================ s2_l0r_a1  (gait 9.1 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.907 deg  tau -4.110 N.m  kp_cmd 639.9 -> fw 139.8 (kd 10.36 -> 0.36)  ratio 0.406  pred 0.469  (-13 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.9 -> fw 139.8  pred 0.469
+   C RR err +1.071 deg  tau -5.333 N.m  kp_cmd 637.3 -> fw 137.1 (kd 10.32 -> 0.32)  ratio 0.448  pred 0.462  (-3 %)
+   D RL err +0.577 deg  tau +3.365 N.m  kp_cmd 637.3 -> fw 137.1 (kd 10.32 -> 0.32)  ratio 0.524  pred 0.462  (+13 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 369.5 / 545.9 / 696.3 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 2/127/196  stance 3/404/480
+   B FR cmd min/med/max 370.2 / 555.8 / 698.7 | wrapped   59 % (flight  100 %, stance   15 %) | delivered flight 2/126/199  stance 17/431/495
+   C RR cmd min/med/max 371.6 / 568.6 / 698.2 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 11/128/198  stance 11/435/481
+   D RL cmd min/med/max 377.2 / 569.9 / 697.7 | wrapped   60 % (flight  100 %, stance   15 %) | delivered flight 17/130/198  stance 17/413/480
+
+================ s2_ol10n_a1  (gait 7.3 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.742 deg  tau -3.507 N.m  kp_cmd 638.6 -> fw 138.3 (kd 10.34 -> 0.34)  ratio 0.424  pred 0.465  (-9 %)
+   B FR err +0.412 deg  tau +2.346 N.m  kp_cmd 638.3 -> fw 138.1 (kd 10.34 -> 0.33)  ratio 0.511  pred 0.465  (+10 %)
+   C RR err +0.907 deg  tau -3.935 N.m  kp_cmd 635.9 -> fw 135.8 (kd 10.30 -> 0.30)  ratio 0.391  pred 0.459  (-15 %)
+   D RL err +0.577 deg  tau +3.273 N.m  kp_cmd 636.7 -> fw 136.5 (kd 10.31 -> 0.31)  ratio 0.510  pred 0.461  (+11 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 404.4 / 601.9 / 699.2 | wrapped   61 % (flight  100 %, stance   15 %) | delivered flight 80/180/199  stance 66/439/484
+   B FR cmd min/med/max 369.0 / 554.9 / 646.0 | wrapped   61 % (flight  100 %, stance   15 %) | delivered flight 26/130/146  stance 4/400/444
+   C RR cmd min/med/max 368.5 / 576.5 / 645.3 | wrapped   61 % (flight  100 %, stance   15 %) | delivered flight 25/132/145  stance 15/403/444
+   D RL cmd min/med/max 411.4 / 628.6 / 697.8 | wrapped   61 % (flight  100 %, stance   15 %) | delivered flight 40/182/198  stance 37/444/484
+
+================ s2_ol10n_a2  (gait 7.6 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.577 deg  tau -2.922 N.m  kp_cmd 638.6 -> fw 138.5 (kd 10.34 -> 0.34)  ratio 0.454  pred 0.466  (-3 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 638.6 -> fw 138.5  pred 0.466
+   C RR err +1.071 deg  tau -4.910 N.m  kp_cmd 636.5 -> fw 136.4 (kd 10.31 -> 0.31)  ratio 0.413  pred 0.460  (-10 %)
+   D RL err +0.412 deg  tau +2.687 N.m  kp_cmd 635.7 -> fw 135.5 (kd 10.30 -> 0.29)  ratio 0.588  pred 0.458  (+28 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 402.6 / 605.0 / 699.4 | wrapped   62 % (flight  100 %, stance   14 %) | delivered flight 76/179/199  stance 64/441/484
+   B FR cmd min/med/max 369.2 / 560.0 / 646.4 | wrapped   62 % (flight  100 %, stance   14 %) | delivered flight 27/130/146  stance 4/405/444
+   C RR cmd min/med/max 371.7 / 574.1 / 645.1 | wrapped   62 % (flight  100 %, stance   14 %) | delivered flight 27/132/145  stance 18/406/444
+   D RL cmd min/med/max 410.4 / 616.7 / 697.0 | wrapped   62 % (flight  100 %, stance   14 %) | delivered flight 41/181/197  stance 64/447/484
+
+================ s2_ol15_a1  (gait 5.7 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.742 deg  tau -3.129 N.m  kp_cmd 640.0 -> fw 139.8 (kd 10.37 -> 0.36)  ratio 0.378  pred 0.469  (-20 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 639.5 -> fw 139.3  pred 0.468
+   C RR err +0.907 deg  tau -4.441 N.m  kp_cmd 639.2 -> fw 139.1 (kd 10.35 -> 0.35)  ratio 0.439  pred 0.467  (-6 %)
+   D RL err +0.250 deg  tau +2.097 N.m  kp_cmd 638.7 -> fw 138.5 (kd 10.34 -> 0.34)  ratio 0.752  pred 0.466  (+62 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 370.3 / 564.2 / 646.5 | wrapped   62 % (flight  100 %, stance   15 %) | delivered flight 21/129/146  stance 1/406/499
+   B FR cmd min/med/max 409.2 / 607.0 / 699.0 | wrapped   62 % (flight  100 %, stance   15 %) | delivered flight 79/177/199  stance 76/445/484
+   C RR cmd min/med/max 407.0 / 634.4 / 697.1 | wrapped   62 % (flight  100 %, stance   15 %) | delivered flight 78/180/197  stance 62/447/484
+   D RL cmd min/med/max 374.3 / 585.8 / 646.0 | wrapped   62 % (flight  100 %, stance   15 %) | delivered flight 33/133/146  stance 21/405/443
+
+================ s2_ol15n_a1  (gait 6.0 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +1.236 deg  tau -6.261 N.m  kp_cmd 637.5 -> fw 137.4 (kd 10.33 -> 0.32)  ratio 0.455  pred 0.463  (-2 %)
+   B FR err +0.412 deg  tau +2.845 N.m  kp_cmd 639.1 -> fw 138.9 (kd 10.35 -> 0.35)  ratio 0.619  pred 0.467  (+32 %)
+   C RR err +2.060 deg  tau -9.725 N.m  kp_cmd 635.9 -> fw 135.8 (kd 10.30 -> 0.30)  ratio 0.425  pred 0.459  (-7 %)
+   D RL err +1.071 deg  tau +5.779 N.m  kp_cmd 637.0 -> fw 136.9 (kd 10.32 -> 0.31)  ratio 0.485  pred 0.462  (+5 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 406.0 / 591.2 / 699.1 | wrapped   59 % (flight  100 %, stance   14 %) | delivered flight 80/179/199  stance 72/444/485
+   B FR cmd min/med/max 369.0 / 544.5 / 646.5 | wrapped   59 % (flight  100 %, stance   14 %) | delivered flight 29/132/146  stance 0/403/499
+   C RR cmd min/med/max 369.6 / 564.8 / 645.2 | wrapped   59 % (flight  100 %, stance   14 %) | delivered flight 22/133/145  stance 14/403/443
+   D RL cmd min/med/max 412.5 / 619.9 / 697.3 | wrapped   59 % (flight  100 %, stance   14 %) | delivered flight 65/182/197  stance 68/447/485
+
+================ s2_l0r_a2  (gait 9.4 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.742 deg  tau -3.639 N.m  kp_cmd 639.1 -> fw 138.9 (kd 10.35 -> 0.35)  ratio 0.440  pred 0.467  (-6 %)
+   B FR err +0.277 deg  tau +2.142 N.m  kp_cmd 639.6 -> fw 139.4 (kd 10.36 -> 0.36)  ratio 0.692  pred 0.468  (+48 %)
+   C RR err +0.907 deg  tau -4.539 N.m  kp_cmd 637.8 -> fw 137.6 (kd 10.33 -> 0.33)  ratio 0.450  pred 0.463  (-3 %)
+   D RL err +0.412 deg  tau +2.559 N.m  kp_cmd 638.3 -> fw 138.1 (kd 10.34 -> 0.34)  ratio 0.557  pred 0.465  (+20 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 369.8 / 549.0 / 697.7 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 26/130/198  stance 18/417/481
+   B FR cmd min/med/max 368.8 / 548.2 / 698.4 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 25/129/198  stance 17/418/480
+   C RR cmd min/med/max 372.8 / 563.5 / 698.2 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 30/131/198  stance 23/418/480
+   D RL cmd min/med/max 377.1 / 562.4 / 697.9 | wrapped   60 % (flight  100 %, stance   16 %) | delivered flight 39/131/198  stance 28/435/481
+
+================ s2_ol10_a2  (gait 6.7 s)
+HOLD [T0-3.0, T0-0.2] s: readback ratio |tau|/|e| / kp_cmd vs prediction kt*(delivered/kp_cmd)
+   A FL err +0.742 deg  tau -3.202 N.m  kp_cmd 637.7 -> fw 137.6 (kd 10.33 -> 0.33)  ratio 0.388  pred 0.463  (-16 %)
+   B FR err +0.247 deg (UNRESOLVABLE, < 1.5 LSB)  kp_cmd 638.0 -> fw 137.7  pred 0.464
+   C RR err +1.071 deg  tau -5.279 N.m  kp_cmd 635.6 -> fw 135.4 (kd 10.29 -> 0.29)  ratio 0.444  pred 0.458  (-3 %)
+   D RL err +0.577 deg  tau +3.452 N.m  kp_cmd 636.9 -> fw 136.8 (kd 10.31 -> 0.31)  ratio 0.538  pred 0.461  (+17 %)
+GAIT [T0+2.6, TOFF]: kp_h command band / wrapped fraction (time-weighted) / delivered kp_h by gain set
+   A FL cmd min/med/max 372.4 / 547.2 / 646.7 | wrapped   58 % (flight  100 %, stance   14 %) | delivered flight 34/129/147  stance 12/406/446
+   B FR cmd min/med/max 406.5 / 595.2 / 699.3 | wrapped   58 % (flight  100 %, stance   14 %) | delivered flight 78/177/199  stance 69/443/483
+   C RR cmd min/med/max 408.1 / 630.9 / 697.0 | wrapped   58 % (flight  100 %, stance   14 %) | delivered flight 46/179/197  stance 61/445/484
+   D RL cmd min/med/max 378.4 / 580.9 / 645.9 | wrapped   58 % (flight  100 %, stance   14 %) | delivered flight 33/130/146  stance 27/406/445
+
+SUMMARY over 18 bags: 58 resolvable leg-holds; readback ratio median 0.444 (prediction median 0.464, ratio 0.96); wrapped fraction per arc 0.57-0.62
+wrote /home/alexc/gslip_merge_ws/src/corgi_force_control/scripts/diag/hw0906/wrap_delivered.json

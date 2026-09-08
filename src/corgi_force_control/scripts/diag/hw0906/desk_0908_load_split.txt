@@ -1,0 +1,24 @@
+per-leg median of per-stride PEAK |tau_h| over complete windows 1-6 (N.m); [n windows >= 39]
+run              cell  kroll        A      B      C      D
+s2_l0r_a1        l0     0.60    18.4[0]   19.3[0]   32.9[1]   22.6[0]   
+s2_l0r_a2        l0     0.60    17.7[0]   16.5[0]   25.6[0]   19.8[0]   
+s2_ol10_roll1    +10    0.60    25.5[0]   15.0[0]   27.7[0]   38.2[2]   
+s2_ol10_a2       +10    0.60    24.6[0]   13.7[0]   31.3[0]   39.3[3]   VOID (launch rule 325.43)
+s2_ol10_a1       +10    0.25    22.7[0]   14.5[0]   26.4[0]   38.7[3]   k_roll 0.25 (pre-freeze, not level-comparable)
+s2_ol15_a1       +15    0.60    24.2[0]   12.9[0]   27.5[0]   39.5[4]   
+s2_ol10n_a2      -10    0.60    13.2[0]   28.7[0]   33.4[0]   19.2[0]   
+s2_ol15n_a1      -15    0.60    12.1[0]   27.6[0]   35.4[0]   19.6[0]   
+lambda0 mean     l0             18.1      17.9      29.3      21.2   
+lambda0 |a1-a2|                  0.8       2.9       7.3       2.7   
+
+delta vs the lambda0 mean (N.m); D under +gamma is a censored LOWER bound where windows sit >= 39
+   s2_ol10_roll1    +10    dA  +7.4  dB  -3.0  dC  -1.6  dD +17.0   left pair  D/A = 2.30   
+   s2_ol15_a1       +15    dA  +6.1  dB  -5.0  dC  -1.8  dD +18.3   left pair  D/A = 2.99   
+   s2_ol10n_a2      -10    dA  -4.8  dB +10.8  dC  +4.2  dD  -2.0   right pair B/C = 2.61   
+   s2_ol15n_a1      -15    dA  -6.0  dB  +9.7  dC  +6.2  dD  -1.6   right pair B/C = 1.57   
+   s2_ol10_a1       +10    dA  +4.6  dB  -3.4  dC  -2.8  dD +17.5   left pair  D/A = 3.78   EXCLUDED: k_roll 0.25 (pre-freeze, not level-comparable)
+   s2_ol10_a2       +10    dA  +6.6  dB  -4.2  dC  +2.0  dD +18.1   left pair  D/A = 2.76   EXCLUDED: VOID (launch rule 325.43)
+
+SUMMARY (level-comparable, launch-valid arcs only): +gamma D +17.0..+18.3 vs A +6.1..+7.4 | -gamma B +9.7..+10.8 vs C +4.2..+6.2 (C lambda0 spread 7.3)
+SELFTEST PASS (lambda0 mean 18.05/17.91/29.26/21.18; D +gamma delta 17.0-18.3)
+wrote /home/alexc/gslip_merge_ws/src/corgi_force_control/scripts/diag/hw0906/load_split.json

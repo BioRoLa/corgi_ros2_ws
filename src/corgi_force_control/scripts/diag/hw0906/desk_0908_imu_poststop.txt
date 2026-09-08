@@ -1,0 +1,30 @@
+bag               in-arc | wy 2-7   wy 7-12  wy12-22  wy22-40  | dp 2-7   dp 7-12  dp12-22  dp22-40  | static blocks / coverage s
+                  excess | mean published wy after stop, deg/s | quaternion pitch slope after stop, deg/s |
+s2_l0_a1          -0.408 |   -0.002      nan      nan      nan |   +0.243      nan      nan      nan | 5/5 static, 8 s
+s2_l0_a2          -0.403 |   -0.008   +0.016   -0.006      nan |   +0.239   +0.151   +0.067      nan | 73/87 static, 90 s
+s2_l0_a3          -0.737 |   +0.027   -0.032      nan      nan |   +0.252   +0.175      nan      nan | 31/51 static, 53 s
+s2_l0_a4          -0.758 |   -0.007      nan      nan   +0.002 |   +0.362      nan      nan   +0.024 | 25/36 static, 39 s
+s2_l0_a5          -0.865 |   -0.002      nan      nan      nan |   +0.308      nan      nan      nan | 38/63 static, 65 s
+s2_l15_a1         +0.246 |   -0.002   -0.003      nan      nan |   -0.027   -0.015      nan      nan | 15/15 static, 17 s
+s2_l15_a2         -0.003 |   -0.002      nan      nan      nan |   +0.018      nan      nan      nan | 5/5 static, 7 s
+s2_l15_b1         +0.273 |   -0.005   -0.004   -0.001      nan |   -0.099   -0.061   -0.037      nan | 16/16 static, 19 s
+s2_l10_a1         -0.257 |   -0.005   +0.001      nan      nan |   +0.106   +0.064      nan      nan | 11/11 static, 13 s
+s2_ol10_a1        +0.105 |   -0.003   -0.002      nan      nan |   +0.032   +0.019      nan      nan | 8/8 static, 10 s
+s2_ol10_roll1     -0.492 |   -0.004   -0.000      nan      nan |   +0.213   +0.132      nan      nan | 9/9 static, 11 s
+s2_l0r_a1         -0.693 |   -0.006   -0.003   +0.000      nan |   +0.287   +0.173   +0.094      nan | 17/17 static, 19 s
+s2_ol10n_a1       -0.474 |   +0.001   +0.001      nan      nan |   +0.066   +0.040      nan      nan | 9/9 static, 12 s
+s2_ol10n_a2       -0.210 |   -0.002      nan      nan      nan |   +0.075      nan      nan      nan | 7/7 static, 10 s
+s2_ol15_a1        -0.581 |   -0.004      nan      nan      nan |   +0.146      nan      nan      nan | 4/4 static, 6 s
+s2_ol15n_a1       -0.151 |   +0.000      nan      nan      nan |   +0.014      nan      nan      nan | 6/6 static, 9 s
+s2_l0r_a2         -0.175 |   +0.001      nan      nan      nan |   +0.101      nan      nan      nan | 5/5 static, 8 s
+s2_ol10_a2        -0.264 |   -0.001   +0.006   +0.005   -0.003 |   +0.078   +0.041   +0.017   +0.000 | 31/38 static, 41 s
+
+POOLED medians after the stop (published wy, deg/s | quaternion pitch slope, deg/s):
+      2-7 s : wy  -0.002 (n=18) | pitch slope  +0.103 (n=18)
+     7-12 s : wy  -0.001 (n=10) | pitch slope  +0.052 (n=10)
+    12-22 s : wy  -0.000 (n= 4) | pitch slope  +0.042 (n= 4)
+    22-40 s : wy  -0.001 (n= 2) | pitch slope  +0.012 (n= 2)
+   pre-trigger wy median  -0.003 deg/s (n=18); in-arc quaternion excess median  -0.334 deg/s (n=18)
+Reading: a non-zero post-stop wy that decays over tens of seconds = a bias STATE relaxing (EKF gyro-bias estimator);
+         wy back at the pre-trigger level within the first window = a motion-instantaneous rate error.
+wrote /home/alexc/gslip_merge_ws/src/corgi_force_control/scripts/diag/hw0906/imu_poststop.json
