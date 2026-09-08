@@ -3,10 +3,15 @@
 
 Run right after the bag closes, before the next arc:
     python3 launch_check.py <bag>.db3
-Prints stride 1's flight fraction (IMU a_z < 0.5 g proxy, the same statistic as
-l_trend.py) and the per-leg peak loads of strides 1-3, then a one-word verdict:
-    VALID  - stride 1 flight fraction <= 0.9
-    VOID   - stride 1 flight fraction  > 0.9  (bad launch: re-run the id)
+Prints the flight fraction (IMU a_z < 0.5 g proxy, the same statistic as
+l_trend.py) and the per-leg peak loads of the first three complete stride
+windows, then a one-word verdict on the REGISTERED rule (log 325.43):
+    VALID    - no window among 1-3 has flight fraction > 0.9
+    VOID     - ANY window among 1-3 has flight fraction > 0.9 (bad launch: re-run the id)
+    UNSCORED - a window lacks IMU samples or fewer than 3 complete windows exist
+Until 2026-09-08 the verdict read window 1 only (the superseded 325.40 wording)
+and passed s2_ol10_a2 (0.68 / 0.99 / 0.72); see log 325.46. Self-test:
+run_launch_check.sh (roll1 VALID, a2 VOID at window 2).
 Needs ROS sourced (rclpy + the corgi_msgs). Read-only on the bag.
 """
 import sys, sqlite3
@@ -56,7 +61,7 @@ if n < 2:
     sys.exit("too few strides to score the launch")
 
 print(" stride | flight_frac | peak load A/B/C/D (N.m) | |tau_h| C / D")
-verdict = None
+ffs = []
 for i in range(min(3, n)):
     a, b = on_[i], on_[i + 1]
     w = (ts_ >= a) & (ts_ < b); wi = (ti >= a) & (ti < b)
@@ -64,7 +69,19 @@ for i in range(min(3, n)):
     pk = [(np.abs(tr[l][w]) + np.abs(tl[l][w])).max() for l in L4]
     print("   %d    |    %.2f     | %5.1f %5.1f %5.1f %5.1f      | %5.1f / %5.1f"
           % (i + 1, ff, pk[0], pk[1], pk[2], pk[3], np.abs(tH["c"][w]).max(), np.abs(tH["d"][w]).max()))
-    if i == 0:
-        verdict = "VOID (bad launch: stride 1 flight fraction %.2f > %.1f -- re-run the id)" % (ff, RULE) \
-            if ff > RULE else "VALID (stride 1 flight fraction %.2f <= %.1f)" % (ff, RULE)
-print(verdict)
+    ffs.append(ff)
+
+# Registered rule (log 325.43): VOID if ANY of the first three complete stride
+# windows has flight fraction > 0.90. Until 2026-09-08 this verdict was taken
+# from window 1 only (the superseded 325.40 wording) and passed s2_ol10_a2
+# (0.68 / 0.99 / 0.72) -- the arc the rule was written to catch (log 325.46).
+bad = [(k + 1, f) for k, f in enumerate(ffs) if not np.isnan(f) and f > RULE]
+unscored = [k + 1 for k, f in enumerate(ffs) if np.isnan(f)]
+if bad:
+    k, f = max(bad, key=lambda kf: kf[1])
+    print("VOID (bad launch: window %d flight fraction %.2f > %.1f -- re-run the id)" % (k, f, RULE))
+elif unscored or len(ffs) < 3:
+    print("UNSCORED (windows %s lack IMU samples, or fewer than 3 complete windows) -- not a VALID"
+          % (unscored if unscored else "n<3"))
+else:
+    print("VALID (max flight fraction %.2f over windows 1-3 <= %.1f)" % (max(ffs), RULE))

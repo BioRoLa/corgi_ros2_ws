@@ -1,0 +1,48 @@
+================ s2_ol10_roll1
+gait 8.2 s, 19 complete strides (controller count = 21)
+ stride | flight_frac | peak load A/B/C/D (N.m) | |tau_h| C / D
+   1    |    0.71     |  32.6  38.3  46.6  37.4      |  27.3 /  15.4
+   2    |    0.76     |  28.2  42.2  48.8  43.9      |  24.0 /  26.8
+   3    |    0.70     |  27.6  42.0  52.2  42.9      |  28.1 /  37.8
+VALID (max flight fraction 0.76 over windows 1-3 <= 0.9)
+================ s2_ol10_a2
+gait 6.7 s, 13 complete strides (controller count = 15)
+ stride | flight_frac | peak load A/B/C/D (N.m) | |tau_h| C / D
+   1    |    0.68     |  34.6  41.8  40.6  37.0      |  25.9 /  12.8
+   2    |    0.99     |  13.2  17.5  10.7  13.1      |  10.2 /  11.9
+   3    |    0.72     |  29.1  39.2  52.6  52.0      |  37.4 /  40.4
+VOID (bad launch: window 2 flight fraction 0.99 > 0.9 -- re-run the id)
+================ s2_ol10n_a2
+gait 7.6 s, 16 complete strides (controller count = 18)
+ stride | flight_frac | peak load A/B/C/D (N.m) | |tau_h| C / D
+   1    |    0.66     |  36.2  41.3  44.2  40.2      |  31.8 /  15.5
+   2    |    0.70     |  32.3  36.0  43.7  54.7      |  37.3 /  18.9
+   3    |    0.67     |  32.9  42.3  50.4  47.5      |  33.4 /  19.5
+VALID (max flight fraction 0.70 over windows 1-3 <= 0.9)
+================ s2_l0r_a1
+gait 9.1 s, 22 complete strides (controller count = 24)
+ stride | flight_frac | peak load A/B/C/D (N.m) | |tau_h| C / D
+   1    |    0.72     |  33.4  39.3  46.3  40.7      |  32.0 /  18.2
+   2    |    0.68     |  33.5  36.1  44.0  47.1      |  30.0 /  19.4
+   3    |    0.49     |  30.0  31.0  26.2  25.9      |  22.2 /  16.6
+VALID (max flight fraction 0.72 over windows 1-3 <= 0.9)
+--- ff_scan cross-check (first three windows) ---
+FIRST THREE WINDOWS ONLY (the launch): max ff, and the min per-leg peak load there
+  s2_l0_a1         max 0.71 at window 2, min peak load 33.2 N.m  -> valid
+  s2_l0_a2         max 0.73 at window 2, min peak load 32.6 N.m  -> valid
+  s2_l0_a3         max 0.69 at window 2, min peak load 33.2 N.m  -> valid
+  s2_l0_a4         max 0.69 at window 2, min peak load 33.3 N.m  -> valid
+  s2_l0_a5         max 0.77 at window 3, min peak load 35.0 N.m  -> valid
+  s2_l15_a1        max 0.90 at window 2, min peak load 24.7 N.m  -> valid
+  s2_l15_a2        max 0.73 at window 2, min peak load 33.1 N.m  -> valid
+  s2_l15_b1        max 0.73 at window 2, min peak load 27.8 N.m  -> valid
+  s2_l10_a1        max 0.79 at window 3, min peak load 27.3 N.m  -> valid
+  s2_ol10_a1       max 0.72 at window 3, min peak load 27.3 N.m  -> valid
+  s2_ol10_roll1    max 0.76 at window 2, min peak load 28.2 N.m  -> valid
+  s2_l0r_a1        max 0.72 at window 1, min peak load 33.4 N.m  -> valid
+  s2_ol10n_a1      max 0.71 at window 3, min peak load 32.8 N.m  -> valid
+  s2_ol10n_a2      max 0.70 at window 2, min peak load 32.3 N.m  -> valid
+  s2_ol15_a1       max 0.72 at window 2, min peak load 23.1 N.m  -> valid
+  s2_ol15n_a1      max 0.69 at window 3, min peak load 32.2 N.m  -> valid
+  s2_l0r_a2        max 0.73 at window 2, min peak load 32.2 N.m  -> valid
+  s2_ol10_a2       max 0.99 at window 2, min peak load 10.7 N.m  -> VOID
