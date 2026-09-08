@@ -41,7 +41,9 @@ SAT = 39.0
 FLOOR = 0.257
 MIRROR_PER_DEG = 0.0232     # whole-arc mirror-contrast camber term, log 325.31: 0.2318 /m per 10 deg
 L4 = "abcd"
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 GRID = 200.0                # Hz, common grid for the alignment cross-correlation
 
 

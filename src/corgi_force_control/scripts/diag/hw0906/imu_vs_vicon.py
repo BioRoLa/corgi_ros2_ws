@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """IMU attitude estimator against Vicon truth, every run tonight with both a bag and a c3d.
 
-Vicon: rigid-body attitude by Kabsch fit of B1..B6 against a reference frame near the hop
+Vicon: rigid-body attitude by Kabsch fit of B1..B5 against a reference frame near the hop
 start. Body axes at the reference: fore = PCA long axis of the marker cloud, sign-aligned to
 the direction of early travel (falls back to the travel direction itself if the cloud is
 not elongated); up = lab vertical; left = up x fore. Reported in PHYSICAL terms:
@@ -28,7 +28,9 @@ from rosidl_runtime_py.utilities import get_message
 
 D = "/home/alexc/corgi_runs/hw_2026-09-06/bags"
 V = "/home/alexc/corgi_runs/hw_2026-09-06/vicon"
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 
 # bag, vicon, lambda (deg, signed; CL = closed loop), k_roll, note
 RUNS = [

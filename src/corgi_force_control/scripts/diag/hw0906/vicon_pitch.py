@@ -10,7 +10,9 @@ import sys
 import numpy as np
 import c3d
 
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 
 
 def load(path):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """lambda-0 cell from Vicon: forward speed, heading rate, curvature, and marker dropout.
 
-Heading comes from a Kabsch fit of the six body markers against a reference frame, so it is
+Heading comes from a Kabsch fit of the five body markers against a reference frame, so it is
 the rigid-body yaw and not the direction of travel -- the two differ when the robot crabs.
 The gait window is found from the body's own vertical oscillation, so no trigger alignment
 with the bag is needed.
@@ -11,7 +11,9 @@ import sys
 import numpy as np
 import c3d
 
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 
 
 def load(path):

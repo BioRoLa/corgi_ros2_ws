@@ -12,7 +12,7 @@ Second pass. Changes from imu_vs_vicon.py:
     attitude and rate levels in the window, so the excess can be regressed on them.
 
 Conventions (physical): roll + = left side up, pitch + = nose up, yaw + = left turn (CCW).
-Vicon: Kabsch fit of B1..B6 vs a reference frame near the hop start; fore = PCA long axis
+Vicon: Kabsch fit of B1..B5 vs a reference frame near the hop start; fore = PCA long axis
 sign-aligned to early travel; up = lab vertical; left = up x fore.
 IMU quaternion: ZYX Euler with the formulas l15_diag/l_trend/pitch_clamp use (raw sign kept;
 the per-hop correlation with Vicon reports its physical sense).
@@ -27,7 +27,9 @@ from rosidl_runtime_py.utilities import get_message
 
 D = "/home/alexc/corgi_runs/hw_2026-09-06/bags"
 V = "/home/alexc/corgi_runs/hw_2026-09-06/vicon"
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 
 RUNS = [
     ("s2_l0_a1", "L0_ramp_1", "0", 0.25, "λ0 baseline set"),

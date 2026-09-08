@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Per-HOP forward speed from Vicon, for the per-stride speed figure (log 325.25 owes it).
 
-Hop window exactly as vicon_split.py / vicon_l0.py: body centroid of B1..B6, vertical axis =
+Hop window exactly as vicon_split.py / vicon_l0.py: body centroid of B1..B5, vertical axis =
 smallest marker spread, rolling 0.5 s RMS of vertical velocity > 0.35 x max, longest contiguous
 span with 0.4 s gap bridging. Inside the window the arc is split into individual hops at the
 UPWARD zero crossings of the (lightly smoothed) vertical velocity, i.e. at the bottom of each
@@ -14,7 +14,9 @@ import sys, json
 import numpy as np
 import c3d
 
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 FLOOR = 0.257            # registered 0.85 x baseline at k_roll 0.60 (log 325.37)
 SMOOTH_S = 0.04          # smoothing of vertical velocity before zero-crossing detection
 MIN_HOP_S = 0.20         # crossings closer than this are the same stance bottom

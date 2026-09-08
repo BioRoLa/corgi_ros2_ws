@@ -41,7 +41,9 @@ T_FIRST = 2.6            # strides start 2.6 s after trigger-on (l_trend.py)
 MIN_HOP_S = 0.15
 L4 = "abcd"
 NM = {"a": "A FL", "b": "B FR", "c": "C RR", "d": "D RL"}
-BODY = ["B1", "B2", "B3", "B4", "B5", "B6"]
+BODY = ["B1", "B2", "B3", "B4", "B5"]   # B6 dropped 2026-09-08: it IS rigid on the body
+# (|B6-B1| 346.8 +- 0.4 mm) but is visible in only ~95% of in-window frames, and the
+# varying-subset nanmean stepped the centroid by (B6-c5)/6 = 3.7 mm. B1-B5 are ~100%.
 
 HEADLINE = {"L0_RA1": 0.285, "L0RA2": 0.320, "OL10_R1": 0.262, "OL10A2": 0.168,
             "OL10_NA1": 0.212, "OL10_NA2": 0.309, "OL15_A1": 0.232, "OL15_NA1": 0.273}
