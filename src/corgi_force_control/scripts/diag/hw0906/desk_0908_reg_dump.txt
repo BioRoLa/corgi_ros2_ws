@@ -1,0 +1,611 @@
+reg_dump 20260908_222119 on agx-orin-ros2 -- READ only
+robot_mode=4(MOTORCONFIG)  PB1 d/s/p=111 PB2 d/s/p=111  [msgs robot 450 motor 457 power 470 config 0]
+
+== A:R ==
+  INT    0                  0
+  INT    1 CAN_ID           1
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  46487
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  -2.4098777770996094
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== A:H ==
+  INT    0                  0
+  INT    1 CAN_ID           3
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  22228
+  INT    6                  1
+  INT    7                  1
+  FLOAT  0                  -2.3795928955078125
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== B:H ==
+  INT    0                  0
+  INT    1 CAN_ID           3
+  INT    2                  0
+  INT    3                  0
+  INT    4                  63564
+  INT    5                  1079
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  nan
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        40.0
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.20000000298023224
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== C:H ==
+  INT    0                  0
+  INT    1 CAN_ID           3
+  INT    2                  0
+  INT    3                  0
+  INT    4                  10244
+  INT    5                  10740
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  5.622874736785889
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== D:H ==
+  INT    0                  1
+  INT    1 CAN_ID           3
+  INT    2                  0
+  INT    3                  0
+  INT    4                  50318
+  INT    5                  9748
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  2.061420440673828
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.20000000298023224
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== A:L ==
+  INT    0                  0
+  INT    1 CAN_ID           2
+  INT    2                  0
+  INT    3                  0
+  INT    4                  10544
+  INT    5                  61266
+  INT    6                  1
+  INT    7                  1
+  FLOAT  0                  2.4022774696350098
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== B:R ==
+  INT    0                  0
+  INT    1 CAN_ID           1
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  63375
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  0.1618947982788086
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== B:L ==
+  INT    0                  0
+  INT    1 CAN_ID           2
+  INT    2                  0
+  INT    3                  0
+  INT    4                  31831
+  INT    5                  5001
+  INT    6                  1
+  INT    7                  1
+  FLOAT  0                  -1.666633129119873
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== C:R ==
+  INT    0                  0
+  INT    1 CAN_ID           1
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  52382
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  -2.8345279693603516
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== C:L ==
+  INT    0                  0
+  INT    1 CAN_ID           2
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  37125
+  INT    6                  1
+  INT    7                  1
+  FLOAT  0                  -3.531421184539795
+  FLOAT  1                  0.0
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        nan
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.25
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== D:R ==
+  INT    0                  0
+  INT    1 CAN_ID           1
+  INT    2                  0
+  INT    3                  0
+  INT    4                  4483
+  INT    5                  32479
+  INT    6                  -1
+  INT    7                  1
+  FLOAT  0                  1.401298464324817e-45
+  FLOAT  1                  5.827901363372803
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        40.0
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.20000000298023224
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+== D:L ==
+  INT    0                  0
+  INT    1 CAN_ID           2
+  INT    2                  0
+  INT    3                  0
+  INT    4                  -1
+  INT    5                  56371
+  INT    6                  1
+  INT    7                  1
+  FLOAT  0                  nan
+  FLOAT  1                  1.7114176750183105
+  FLOAT  2 I_BW             1000.0
+  FLOAT  3 I_MAX            40.0
+  FLOAT  4 THETA_MIN        40.0
+  FLOAT  5 THETA_MAX        nan
+  FLOAT  6 I_FW_MAX         0.0
+  FLOAT  7 R_NOMINAL        0.0
+  FLOAT  8 TEMP_MAX         125.0
+  FLOAT  9 I_MAX_CONT       14.0
+  FLOAT 10 PPAIRS           21.0
+  FLOAT 11                  nan
+  FLOAT 12                  nan
+  FLOAT 13 R_PHASE          nan
+  FLOAT 14 KT               0.07999999821186066
+  FLOAT 15 R_TH             nan
+  FLOAT 16 C_TH             nan
+  FLOAT 17 GR               6.0
+  FLOAT 18 I_CAL            5.0
+  FLOAT 19 P_MIN            0.0
+  FLOAT 20 P_MAX            6.2829999923706055
+  FLOAT 21 V_MIN            -45.0
+  FLOAT 22 V_MAX            45.0
+  FLOAT 23 T_MIN            -20.0
+  FLOAT 24 T_MAX            20.0
+  FLOAT 25 KP_MAX           500.0
+  FLOAT 26 KI_MAX           0.0
+  FLOAT 27 KD_MAX           5.0
+  FLOAT 28 HALL_CAL_OFFSET  0.0
+  FLOAT 29 HALL_CAL_SPEED   0.20000000298023224
+  FLOAT 30 HALL_CAL_KP      50.0
+  FLOAT 31 HALL_CAL_KI      0.0
+  FLOAT 32 HALL_CAL_KD      1.5
+  FLOAT 33 MOTOR_MODE_KP    5.0
+  FLOAT 34 MOTOR_MODE_KI    0.0
+  FLOAT 35 MOTOR_MODE_KD    1.0
+  FLOAT 36 ABAD_CAL_OFFSET  0.0
+  FLOAT 37 ABAD_CAL_SPEED   0.25
+  FLOAT 38 ABAD_CAL_KP      50.0
+  FLOAT 39 ABAD_CAL_KI      0.0
+  FLOAT 40 ABAD_CAL_KD      1.5
+
+checks:
+  P-REG-1_A:H: PASS {'KP_MAX': 500.0, 'KD_MAX': 5.0}
+  P-REG-1_B:H: PASS {'KP_MAX': 500.0, 'KD_MAX': 5.0}
+  P-REG-1_C:H: PASS {'KP_MAX': 500.0, 'KD_MAX': 5.0}
+  P-REG-1_D:H: PASS {'KP_MAX': 500.0, 'KD_MAX': 5.0}
+  july_known_answers_A:L: PASS
+  july_known_answers_A:R: PASS

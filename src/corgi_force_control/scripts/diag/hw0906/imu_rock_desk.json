@@ -1,0 +1,82 @@
+{
+ "bag": "s3_imu_rock_desk_0.db3",
+ "bursts": [
+  {
+   "d_angle_deg": 12.552799340798122,
+   "mean_rate_degps": -9.579440397861104,
+   "move": "P-SIGN-1 nose-up",
+   "return_rate_degps": 0.49265703599040656,
+   "t0": 101.02042698860168,
+   "t1": 103.01034307479858
+  },
+  {
+   "d_angle_deg": -21.236008970890424,
+   "mean_rate_degps": -10.908642028136851,
+   "move": "P-SIGN-2 left-side-down roll",
+   "return_rate_degps": 0.04300115721388276,
+   "t0": 112.84184789657593,
+   "t1": 114.52073788642883
+  },
+  {
+   "d_angle_deg": 42.82628933778318,
+   "mean_rate_degps": -13.97171334802281,
+   "move": "P-SIGN-3 yaw left",
+   "return_rate_degps": 2.530178947288471,
+   "t0": 131.15430998802185,
+   "t1": 135.405916929245
+  }
+ ],
+ "checks": {
+  "P-ROCK-D1": "PASS worst=0.0007 deg/s",
+  "P-ROCK-D2": "UNSCORED (precondition: gy_rms 14.6 < 20 deg/s; rock 16 s < 45 s) offset=+0.256 deg",
+  "P-ROCK-D3": "UNSCORED (same precondition)",
+  "P-ROCK-D4": "UNSCORED (no offset to relax: +0.256 deg is already inside the 0.3 deg bar)",
+  "P-SIGN-1": "PASS d_pitch=+12.55 mean_wy=-9.58",
+  "P-SIGN-2": "PASS (agree) d_roll=-21.24 mean_wx=-10.91",
+  "P-SIGN-3": "FAIL d_yaw=+42.83 mean_wz=-13.97"
+ },
+ "dur_s": 236.52125692367554,
+ "frame": {
+  "pitch_vs_wy": {
+   "r": -0.917218439373402,
+   "slope": -1.0152917456167105
+  },
+  "roll_vs_wx": {
+   "r": 0.9627012774800363,
+   "slope": 0.9939755846438689
+  },
+  "yaw_vs_wz": {
+   "r": -0.9237633940832711,
+   "slope": -0.9771111199636173
+  }
+ },
+ "n": 232175,
+ "rock": {
+  "closure_deg": 0.24862767839288136,
+  "dur_s": 16.04453992843628,
+  "gy_rms_degps": 14.634532101673155,
+  "offset_deg": 0.2558397045187064,
+  "pitch_end_of_rock_deg": 1.7184902972295317,
+  "pitch_final_rest_deg": 1.7112782711037067,
+  "pitch_pre_deg": 1.4626505927108253,
+  "post_still_s": 64.42960286140442,
+  "relax_tau_s": NaN,
+  "t0": 138.6115961074829,
+  "t1": 154.6561360359192,
+  "t_within_0p3_s": 0.0
+ },
+ "still": [
+  {
+   "mean_wy_degps": -0.000730491313582885,
+   "pitch_slope_degps": -0.00021369439459782973,
+   "t0": 0.0,
+   "t1": 101.01942896842957
+  },
+  {
+   "mean_wy_degps": 0.00025274061107499664,
+   "pitch_slope_degps": -0.0001514621929336991,
+   "t0": 172.09165406227112,
+   "t1": 236.52125692367554
+  }
+ ]
+}
