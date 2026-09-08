@@ -22,6 +22,7 @@ The `run_*.sh` files are the exact invocations used (paths are the WSL ones).
 | `figs0906_*` | per-hop speed, per-stride τ_h and roll, literals for the figure generators |
 | `exploratory_slope.py` (+ `.md`, `_strides.json`) | per-stride κ vs measured camber — exploratory, not a gate |
 | `imu_vs_vicon.py`, `imu_vs_vicon2.py`, `imu_vs_vicon3.json`, `imu_vs_vicon.md` | IMU vs Vicon attitude, 18 runs; only `imu_vs_vicon3.json` stands (§325.40) |
+| `pull_session.sh` | **pull a whole session off the Orin and the Vicon PC** into `~/corgi_runs/hw_<DATE>/` — idempotent, skips an unreachable machine, flags malformed bags. Vault note: Reference/"Data Retrieval — Orin and Vicon PC" |
 | `launch_check.py` | **the registered launch-stride validity check** (log §325.43): VALID/VOID for one arc's bag, run between arcs |
 | `ff_scan.py` | per-stride flight fraction across many bags — the false-positive check behind that rule |
 | `run_launch_check.sh`, `run_ff_scan.sh` | their self-tests against the 2026-09-06 known answer |
