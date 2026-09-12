@@ -15,7 +15,13 @@ set -u
 
 DATE="${1:-$(date +%F)}"
 H="${ORIN_HOST:-biorola@192.168.30.244}"    # Ubuntu, has rsync
-VH="${VICON_HOST:-Biorolab@192.168.30.104}" # Windows, scp + PowerShell only
+VH="${VICON_HOST:-PC@192.168.30.245}"       # Windows, scp + PowerShell only
+                                            # MOVED 2026-09-12: was Biorolab@192.168.30.104,
+                                            # which STILL ANSWERS and still holds data ending
+                                            # 09-09 -- pointing here is not optional, it is the
+                                            # difference between a pull and a silent no-op.
+VROOT="${VICON_ROOT:-C:\\R14}"              # was F:\R14; the new PC has no F: drive
+VICON_EMPTY=0
 HOURS="${VICON_HOURS:-24}"                  # how far back to look on the Vicon PC
 D="$HOME/corgi_runs/hw_$DATE"
 
@@ -64,7 +70,7 @@ fi
 # and that nesting is not guaranteed to stay the same.
 vicon_pull () {          # $1 = comma-separated -Include list, $2 = destination
   local inc="$1" dest="$2" n=0
-  local ps="Get-ChildItem -Path F:\\R14 -Recurse -File -Include $inc -ErrorAction SilentlyContinue |
+  local ps="Get-ChildItem -Path $VROOT -Recurse -File -Include $inc -ErrorAction SilentlyContinue |
             Where-Object { \$_.LastWriteTime -gt (Get-Date).AddHours(-$HOURS) } |
             ForEach-Object { \$_.FullName }"
   while IFS= read -r p; do
@@ -77,7 +83,16 @@ vicon_pull () {          # $1 = comma-separated -Include list, $2 = destination
       echo "    ! FAILED $f"
     fi
   done < <(ssh "${SSH_OPTS[@]}" "$VH" "powershell -NoProfile -Command \"$ps\"" 2>/dev/null)
-  echo "    fetched $n, local total $(ls -1 "$dest" 2>/dev/null | wc -l)"
+  local have; have=$(ls -1 "$dest" 2>/dev/null | wc -l)
+  echo "    fetched $n, local total $have"
+  # A pull that fetches nothing AND finds nothing local is not a success.
+  # It is what a moved host, a wrong VROOT or a too-short window look like,
+  # and it is indistinguishable from "nothing new" unless it is said out loud.
+  if [ "$n" -eq 0 ] && [ "$have" -eq 0 ]; then
+    echo "    !! NOTHING FETCHED AND NOTHING LOCAL for [$inc]"
+    echo "    !! check: VICON_HOST=$VH  VICON_ROOT=$VROOT  window=${HOURS}h"
+    VICON_EMPTY=1
+  fi
 }
 
 if ssh "${SSH_OPTS[@]}" "$VH" "exit" 2>/dev/null; then
@@ -87,7 +102,9 @@ if ssh "${SSH_OPTS[@]}" "$VH" "exit" 2>/dev/null; then
   echo "=== 6. RAW Vicon captures (large; c3d rebuilds from these) ==="
   vicon_pull "*.x2d,*.x1d" "$D/vicon_raw"
 else
-  echo; echo "=== Vicon PC skipped (unreachable) ==="
+  echo; echo "=== Vicon PC skipped (UNREACHABLE at $VH) ==="
+  # Unreachable is not "nothing new" either -- same consequence, no ground truth.
+  VICON_EMPTY=1
 fi
 
 # ---------------------------------------------------------------- 3. verify
@@ -103,3 +120,10 @@ for b in "$D"/bags/*/; do
   [ -f "$b/metadata.yaml" ] || { echo "    ! ${b##*/bags/}"; bad=$((bad+1)); }
 done
 [ "$bad" -eq 0 ] && echo "    none" || echo "    $bad -- rebuild with scripts/diag/carve_bag.py"
+
+if [ "${VICON_EMPTY:-0}" -eq 1 ]; then
+  echo
+  echo "!!!! VICON PULL RETURNED NOTHING -- this session has NO ground truth."
+  echo "!!!! Do not treat it as pulled. See log 331.12 / 330."
+  exit 3
+fi
