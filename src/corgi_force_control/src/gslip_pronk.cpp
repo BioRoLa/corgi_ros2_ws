@@ -977,15 +977,34 @@ namespace {
 // declaration-order sensitive and a diagnostic must not perturb it.
 long g_trigger_msgs = 0;
 
+// /imu arrivals, and the node-clock time of the last one. A namespace static
+// for the same reason as g_trigger_msgs. 2026-09-13: a whole mirror block ran
+// with imu_node down and nothing said so -- update_attitude() reads the
+// zero-initialised quaternion as a level, zero-yaw body, so pitch, roll and
+// heading feedback went silently dead (log 331.13b).
+long g_imu_msgs = 0;
+double g_imu_last_s = 0.0;
+// Hardware only. The IMU publishes at ~1 kHz, so 100 ms of silence is a dead
+// node, not jitter.
+constexpr double kImuStaleS = 0.1;
+
 void note_imp_tx(const rclcpp::Logger& log, double now_s) {
     static long count = 0;
     static double t0 = 0.0;
     ++count;
     if (t0 == 0.0) { t0 = now_s; count = 0; return; }
     if (now_s - t0 >= 1.0) {
-        RCLCPP_WARN(log, "IMP_CMD TX: %.0f Hz  (this loop targets 1000 Hz; "
-                         "compare against force_control's IMP_CMD RX)",
-                    count / (now_s - t0));
+        // Measured every second, PRINTED every 10 s -- or at once when the
+        // rate is off by more than 1 %. At 1 Hz a healthy run buried its own
+        // banner under repeats of this line.
+        static double last_print = 0.0;
+        const double hz = count / (now_s - t0);
+        if (std::fabs(hz - 1000.0) > 10.0 || now_s - last_print >= 10.0) {
+            RCLCPP_WARN(log, "IMP_CMD TX: %.0f Hz  (this loop targets 1000 Hz; "
+                             "compare against force_control's IMP_CMD RX)",
+                        hz);
+            last_print = now_s;
+        }
         t0 = now_s;
         count = 0;
     }
@@ -1661,6 +1680,8 @@ void GslipPronkNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::Sh
 
 void GslipPronkNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
     imu_ = *msg;
+    ++g_imu_msgs;
+    g_imu_last_s = this->now().seconds();
 }
 
 bool GslipPronkNode::load_template(const std::string& path) {
@@ -3668,6 +3689,13 @@ void GslipPronkNode::execute_running_phase() {
 
     while (rclcpp::ok() && trigger_) {
         rclcpp::spin_some(this->get_node_base_interface());
+        if (!sim_ && (g_imu_msgs == 0 ||
+                      this->now().seconds() - g_imu_last_s > kImuStaleS)) {
+            // Reported, not acted on: stopping mid-pronk is its own hazard.
+            RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                  "IMU STALE MID-ARC: attitude feedback is dead "
+                                  "(log 331.13b) -- release the trigger");
+        }
         // Before apply_row, so a correction found this tick is used this tick.
         update_apex_feedback();
 
@@ -3748,23 +3776,72 @@ void GslipPronkNode::run() {
         }
     }
     double trig_report_t0 = this->now().seconds();
+    // A trigger pressed while the IMU is down is REFUSED, and stays refused
+    // until the trigger is released: the gait must never start by itself
+    // because imu_node came back while the button was still held.
+    bool imu_refused = false;
+    double imu_refuse_t0 = 0.0;
     while (rclcpp::ok()) {
         rclcpp::spin_some(this->get_node_base_interface());
 
-        if (trigger_) {
+        const double now_r = this->now().seconds();
+        const bool imu_fresh =
+            sim_ || (g_imu_msgs > 0 && now_r - g_imu_last_s <= kImuStaleS);
+        if (!trigger_) {
+            imu_refused = false;
+        } else if (!imu_fresh) {
+            imu_refused = true;
+        }
+
+        if (trigger_ && !imu_refused) {
             execute_running_phase();
+            // This loop's deadline is a whole arc stale by now. Without a
+            // fresh clock it publishes the hold pose unslept until it catches
+            // up -- IMP_CMD TX read 2750 and 5292 Hz after every stop.
+            next_time = this->now();
         } else {
-            // Every 5 s, state the situation rather than sitting silent.
-            // publishers==0 means nothing is wired; publishers>0 with msgs==0
-            // means the button never sent; msgs>0 with trigger_ still false
-            // means it sent enable=false and this node is behaving correctly.
-            const double now_r = this->now().seconds();
-            if (now_r - trig_report_t0 >= 5.0) {
+            if (imu_refused) {
+                if (now_r - imu_refuse_t0 >= 1.0) {
+                    imu_refuse_t0 = now_r;
+                    if (imu_fresh) {
+                        // Latched: the IMU came back while the button was held.
+                        RCLCPP_ERROR(this->get_logger(),
+                                     "TRIGGER STILL REFUSED: /imu is back, but "
+                                     "the trigger was pressed while it was "
+                                     "down. Release and press the trigger again.");
+                    } else if (g_imu_msgs == 0) {
+                        RCLCPP_ERROR(this->get_logger(),
+                                     "TRIGGER REFUSED: /imu has published NOTHING. "
+                                     "Without it the attitude reads a level, "
+                                     "zero-yaw body and pitch, roll and heading "
+                                     "feedback are silently dead (log 331.13b). "
+                                     "Start it: ros2 run corgi_imu imu_node ; "
+                                     "check: ros2 topic hz /imu ; then release "
+                                     "and press the trigger again.");
+                    } else {
+                        RCLCPP_ERROR(this->get_logger(),
+                                     "TRIGGER REFUSED: /imu is STALE (last "
+                                     "message %.2f s ago). Restart it: ros2 run "
+                                     "corgi_imu imu_node ; check: ros2 topic hz "
+                                     "/imu ; then release and press the trigger "
+                                     "again.",
+                                     now_r - g_imu_last_s);
+                    }
+                }
+            } else if (now_r - trig_report_t0 >= 5.0) {
+                // Every 5 s, state the situation rather than sitting silent.
+                // publishers==0 means nothing is wired; publishers>0 with
+                // msgs==0 means the button never sent; msgs>0 with trigger_
+                // still false means it sent enable=false and this node is
+                // behaving correctly.
                 trig_report_t0 = now_r;
                 RCLCPP_WARN(this->get_logger(),
                             "still waiting for trigger: %zu publisher(s) on "
-                            "/trigger, %ld message(s) received so far",
-                            this->count_publishers("trigger"), g_trigger_msgs);
+                            "/trigger, %ld message(s) received so far | /imu "
+                            "%ld message(s), last %.0f ms ago",
+                            this->count_publishers("trigger"), g_trigger_msgs,
+                            g_imu_msgs,
+                            g_imu_msgs > 0 ? (now_r - g_imu_last_s) * 1000.0 : -1.0);
             }
             TemplateRow hold = template_.front();
             hold.in_stance = hold_stance_;

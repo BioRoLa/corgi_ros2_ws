@@ -229,11 +229,18 @@ void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::Sh
 
     if (now_s - imp_rx_t0_ >= 1.0) {
         const double hz = imp_rx_count_ / (now_s - imp_rx_t0_);
-        RCLCPP_WARN(this->get_logger(),
-                    "IMP_CMD RX: %.0f Hz, worst gap %.1f ms  (producer runs at "
-                    "1000 Hz. The GAP is the number that matters: under ~5 ms "
-                    "is jitter, over ~25 ms the leg is being STEPPED)",
-                    hz, imp_rx_worst_gap_ * 1000.0);
+        // Measured every second, PRINTED every 10 s -- or at once when it
+        // matters: rate off by more than 1 %, or a gap over 5 ms.
+        static double last_print = 0.0;
+        if (std::fabs(hz - 1000.0) > 10.0 || imp_rx_worst_gap_ > 0.005 ||
+            now_s - last_print >= 10.0) {
+            RCLCPP_WARN(this->get_logger(),
+                        "IMP_CMD RX: %.0f Hz, worst gap %.1f ms  (producer runs at "
+                        "1000 Hz. The GAP is the number that matters: under ~5 ms "
+                        "is jitter, over ~25 ms the leg is being STEPPED)",
+                        hz, imp_rx_worst_gap_ * 1000.0);
+            last_print = now_s;
+        }
         imp_rx_t0_ = now_s;
         imp_rx_count_ = 0;
         imp_rx_worst_gap_ = 0.0;
@@ -831,26 +838,43 @@ void ForceControlNode::timer_cb() {
         } else if (now_s - state_probe_t0_ >= 1.0) {
             state_probe_t0_ = now_s;
             const double r2d = 180.0 / M_PI;
-            RCLCPP_WARN(this->get_logger(),
-                        "MEASURED THETA (deg): A %.2f  B %.2f  C %.2f  D %.2f"
-                        "  -- leg model accepts 16.9 to 160.0; the v070"
-                        " template spans 83.2 to 100.0",
-                        motor_state_.module_a.theta * r2d,
-                        motor_state_.module_b.theta * r2d,
-                        motor_state_.module_c.theta * r2d,
-                        motor_state_.module_d.theta * r2d);
-            RCLCPP_WARN(this->get_logger(),
-                        "MEASURED GAMMA (deg) state/cmd/torque_h(N.m): A %.2f/%.2f/%.1f  B %.2f/%.2f/%.1f  C %.2f/%.2f/%.1f  D %.2f/%.2f/%.1f"
-                        "  -- with trims the state stays at +trim; cmd -> +trim and torque_h -> 0 mean the trim sign is right",
-                        motor_state_.module_a.gamma * r2d, motor_cmd_.module_a.gamma * r2d, motor_state_.module_a.torque_h,
-                        motor_state_.module_b.gamma * r2d, motor_cmd_.module_b.gamma * r2d, motor_state_.module_b.torque_h,
-                        motor_state_.module_c.gamma * r2d, motor_cmd_.module_c.gamma * r2d, motor_state_.module_c.torque_h,
-                        motor_state_.module_d.gamma * r2d, motor_cmd_.module_d.gamma * r2d, motor_state_.module_d.torque_h);
-            if (gain_slew_s_ > 0.0) {
+            // Printed every 10 s, or at once when a leg leaves the leg model's
+            // range or a gain ramp is cut. At 1 Hz these three lines buried
+            // everything else in the launch log.
+            static double last_print = 0.0;
+            static long last_cut_n = 0;
+            const auto outside = [r2d](double th) {
+                return th * r2d < 16.9 || th * r2d > 160.0;
+            };
+            const bool alarm = outside(motor_state_.module_a.theta) ||
+                               outside(motor_state_.module_b.theta) ||
+                               outside(motor_state_.module_c.theta) ||
+                               outside(motor_state_.module_d.theta) ||
+                               slew_cut_n_ > last_cut_n;
+            if (alarm || now_s - last_print >= 10.0) {
+                last_print = now_s;
+                last_cut_n = slew_cut_n_;
                 RCLCPP_WARN(this->get_logger(),
-                            "GAIN SLEW: %ld gain-set switches so far, %ld ramps cut short by the next switch (shortest reached %.0f %% of %.0f ms)"
-                            " -- a cut ramp means the delivered stiffness never reached the request that phase",
-                            slew_switch_n_, slew_cut_n_, 100.0 * slew_cut_min_s_, gain_slew_s_ * 1000.0);
+                            "MEASURED THETA (deg): A %.2f  B %.2f  C %.2f  D %.2f"
+                            "  -- leg model accepts 16.9 to 160.0; the v070"
+                            " template spans 83.2 to 100.0",
+                            motor_state_.module_a.theta * r2d,
+                            motor_state_.module_b.theta * r2d,
+                            motor_state_.module_c.theta * r2d,
+                            motor_state_.module_d.theta * r2d);
+                RCLCPP_WARN(this->get_logger(),
+                            "MEASURED GAMMA (deg) state/cmd/torque_h(N.m): A %.2f/%.2f/%.1f  B %.2f/%.2f/%.1f  C %.2f/%.2f/%.1f  D %.2f/%.2f/%.1f"
+                            "  -- with trims the state stays at +trim; cmd -> +trim and torque_h -> 0 mean the trim sign is right",
+                            motor_state_.module_a.gamma * r2d, motor_cmd_.module_a.gamma * r2d, motor_state_.module_a.torque_h,
+                            motor_state_.module_b.gamma * r2d, motor_cmd_.module_b.gamma * r2d, motor_state_.module_b.torque_h,
+                            motor_state_.module_c.gamma * r2d, motor_cmd_.module_c.gamma * r2d, motor_state_.module_c.torque_h,
+                            motor_state_.module_d.gamma * r2d, motor_cmd_.module_d.gamma * r2d, motor_state_.module_d.torque_h);
+                if (gain_slew_s_ > 0.0) {
+                    RCLCPP_WARN(this->get_logger(),
+                                "GAIN SLEW: %ld gain-set switches so far, %ld ramps cut short by the next switch (shortest reached %.0f %% of %.0f ms)"
+                                " -- a cut ramp means the delivered stiffness never reached the request that phase",
+                                slew_switch_n_, slew_cut_n_, 100.0 * slew_cut_min_s_, gain_slew_s_ * 1000.0);
+                }
             }
         }
     }
