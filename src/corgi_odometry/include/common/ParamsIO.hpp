@@ -57,7 +57,6 @@ inline Params load_params(const std::string& yaml_path) {
     // ── Observer / filter ───────────────────────────────────────
     if (auto n = root["observer"]) {
         p.observer_cutoff_freq = detail::val(n, "cutoff_freq",        p.observer_cutoff_freq);
-        p.encoder_cutoff_freq  = detail::val(n, "encoder_cutoff_freq", p.encoder_cutoff_freq);
     }
 
     // ── Contact Schmitt trigger ────────────────────────────────
@@ -83,26 +82,8 @@ inline Params load_params(const std::string& yaml_path) {
     }
 
     // ── Logic switches ──────────────────────────────────────────
-    p.simulate_imu_noise = detail::val(root, "simulate_imu_noise", p.simulate_imu_noise);
-    p.use_esekf_state    = detail::val(root, "use_esekf_state",    p.use_esekf_state);
     p.use_bv_feedback    = detail::val(root, "use_bv_feedback",    p.use_bv_feedback);
-    p.quiet              = detail::val(root, "quiet",              p.quiet);
-
-    // ── Offline ─────────────────────────────────────────────────
-    if (auto n = root["offline"]) {
-        p.csv_filename   = detail::val<std::string>(n, "csv_filename", p.csv_filename);
-        p.start_index    = detail::val(n, "start_index",    p.start_index);
-        p.max_processed  = detail::val(n, "max_processed",  p.max_processed);
-        p.rmse_skip      = detail::val(n, "rmse_skip",      p.rmse_skip);
-        p.enable_logging = detail::val(n, "enable_logging", p.enable_logging);
-        p.log_details    = detail::val(n, "log_details",    p.log_details);
-        p.imu_noise_seed = detail::val(n, "imu_noise_seed", p.imu_noise_seed);
-        p.use_dynamic_dt = detail::val(n, "use_dynamic_dt", p.use_dynamic_dt);
-    }
-
-    // ── GT velocity filter ──────────────────────────────────────
-    p.gt_velocity_lpf_cutoff = detail::val(root, "gt_velocity_lpf_cutoff",
-                                           p.gt_velocity_lpf_cutoff);
+    p.use_dynamic_dt     = detail::val(root, "use_dynamic_dt",     p.use_dynamic_dt);
 
     return p;
 }

@@ -41,7 +41,7 @@ public:
                   return corgi::Params{};
               }
           }()),
-          processor_(corgi::Config::DT, params_.encoder_cutoff_freq),
+          processor_(),
           observer_(
               corgi::Config::DT,
               params_.observer_cutoff_freq,

@@ -4,8 +4,7 @@
  * @brief Shared fake-LiDAR noise model for simulation.
  *
  * Applies Gaussian position noise and small-angle orientation noise to a pose.
- * Used by both the online ROS2 node (fake_lidar_odom) and the offline test
- * runner (OfflineTestNode), keeping their noise behaviour identical.
+ * Used by the simulation ROS2 node (fake_lidar_odom).
  *
  * No ROS 2 dependencies — mirrors the pattern of ImuNoiseSimulator.hpp.
  *

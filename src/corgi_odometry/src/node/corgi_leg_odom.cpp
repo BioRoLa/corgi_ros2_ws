@@ -51,7 +51,7 @@ LegOdometryNode::LegOdometryNode()
               return corgi::Params{};
           }
       }()),
-      processor_(corgi::Config::DT, params_.encoder_cutoff_freq),
+      processor_(),
       observer_(
           corgi::Config::DT,
           params_.observer_cutoff_freq,
@@ -77,21 +77,9 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
-    // use_esekf_state is hard-coded true for the online real-robot node.
-    // On real hardware there is no ground-truth position/velocity, so the ESEKF
-    // state must always be used to feed the GMO pipeline.  This parameter is
-    // intentionally NOT read from config_online.yaml to prevent accidental
-    // misconfiguration.  (Sim / offline nodes set it via their own config.)
+    // Online leg odometry always feeds the ESEKF state into the GMO pipeline;
+    // real hardware has no external ground-truth position or velocity.
     use_esekf_state_ = true;
-    if (params_.use_esekf_state == false) {
-        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
-                    "config has use_esekf_state=false but it is ignored in the "
-                    "online node — always running with ESEKF state");
-    }
-    if (params_.simulate_imu_noise) {
-        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
-                    "simulate_imu_noise=true has no effect in online mode");
-    }
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         corgi::Config::TOPIC_MOTOR_STATE, corgi::Config::QUEUE_SIZE_SUB,
@@ -224,7 +212,7 @@ void LegOdometryNode::process() {
     if (esekf_tick_ >= static_cast<size_t>(corgi::Config::ESEKF_DECIMATION)) {
         esekf_tick_ = 0;
 
-        // --- Compute dynamic dt from IMU header.stamp (identical to offline pipeline) ---
+        // --- Compute dynamic dt from IMU header.stamp ---
         const int32_t  cur_imu_sec  = imu_.header.stamp.sec;
         const uint32_t cur_imu_nsec = imu_.header.stamp.nanosec;
         float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT);  // nominal fallback
@@ -462,7 +450,7 @@ void LegOdometryNode::cb_motor_state(const corgi_msgs::msg::MotorStateStamped::S
     motor_state_ = *msg;
     motor_state_received_ = true;
     // Drive the processing loop: one call per motor_state arrival
-    // (matches offline pipeline which processes every row exactly once)
+    // Each motor-state callback drives exactly one processing tick.
     process();
 }
 
@@ -511,7 +499,7 @@ void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPt
 }
 
 void LegOdometryNode::cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
-    if (imu_only_) return;
+    if (imu_only_ || !params_.use_bv_feedback) return;
 
     // Low-pass filter + hard clamp, then forward to ESEKF.
     // bv is in odom/world frame (as published by FusionNode).
@@ -660,7 +648,7 @@ int main(int argc, char** argv) {
     }
 
     // Event-driven: process() is called inside cb_motor_state, so each
-    // motor_state arrival triggers exactly one processing tick (same as offline).
+    // A motor_state arrival triggers exactly one processing tick.
     try {
         rclcpp::spin(g_node);
     } catch (const std::exception& e) {
