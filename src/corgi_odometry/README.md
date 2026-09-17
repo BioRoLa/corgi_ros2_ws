@@ -1,34 +1,34 @@
 # corgi_odometry
 
-`corgi_odometry` 是 CORGI 輪腳複合機器人的狀態估測 package，包含：
+`corgi_odometry` is the state-estimation package for the CORGI leg-wheel robot. It provides:
 
-- 以 Generalized Momentum Observer（GMO）進行觸地狀態判斷。
-- 使用 IMU propagation 與腿部速度約束的 inner ES-EKF。
-- 融合 inner ES-EKF 與 LiDAR odometry 的 outer ES-EKF。
-- 模擬用 IMU noise、fake LiDAR 與 ground-truth state 輔助節點。
+- Contact-state detection using a Generalized Momentum Observer (GMO).
+- An inner error-state extended Kalman filter (ES-EKF) with IMU propagation and leg-velocity constraints.
+- An outer ES-EKF that fuses the inner estimate with LiDAR odometry.
+- Simulation helpers for IMU noise, fake LiDAR odometry, and ground-truth state estimation.
 
-## 方法與程式來源
+## Method and Code Sources
 
-觸地狀態與接觸點估測方法來自：
+The contact-state and contact-point estimation method is based on:
 
 > “Proprioceptive Contact State and Contact Point Estimation for a Leg-Wheel
 > Transformable Robot,” in *2026 IEEE International Conference on Robotics and
 > Automation (ICRA)*, Vienna, Austria, 2026.
 
-GMO 動力學推導與原始實作來自：
+The GMO dynamics derivation and original implementation are available from:
 
-- Repository：<https://github.com/hiho817/ContactLegEstimator>
-- SSH：`git@github.com:hiho817/ContactLegEstimator.git`
+- Repository: <https://github.com/hiho817/ContactLegEstimator>
+- SSH: `git@github.com:hiho817/ContactLegEstimator.git`
 
-雙層狀態估測架構圖來自碩士論文《輪腳複合機器人之雙層狀態估測與速度偏差修正》。本圖由該論文的估測器架構圖轉製：
+The two-layer state-estimation diagram is adapted from the master's thesis 《輪腳複合機器人之雙層狀態估測與速度偏差修正》:
 
-![CORGI 雙層狀態估測架構](docs/estimator_architecture.png)
+![CORGI two-layer state-estimation architecture](docs/estimator_architecture.png)
 
-## 估測架構
+## Estimation Architecture
 
 ### Inner ES-EKF
 
-Inner ES-EKF 以 IMU 執行 prediction，並使用腿部運動學速度作為 observation。GMO 根據 IMU、馬達狀態與估測狀態判斷各腿是否接觸地面；只有通過觸地與 innovation reliability 判斷的腿部 observation 才用於更新。
+The inner ES-EKF performs prediction with IMU measurements and uses leg-kinematic velocity as an observation. The GMO determines whether each leg is in contact using IMU data, motor states, and the estimated state. Only leg observations that pass both the contact-state and innovation-reliability checks are used for filter updates.
 
 ```text
 /imu + /motor/state
@@ -42,7 +42,7 @@ Inner ES-EKF 以 IMU 執行 prediction，並使用腿部運動學速度作為 ob
 
 ### Outer ES-EKF
 
-Outer ES-EKF 使用 inner `/ekf` prediction，並以 `/lidar_odom` 更新 map-to-odom correction 與 velocity bias：
+The outer ES-EKF uses the inner `/ekf` output for prediction and `/lidar_odom` to update the map-to-odom correction and velocity bias:
 
 ```text
 /ekf ──────────► outer predict ─────┐
@@ -52,50 +52,50 @@ Outer ES-EKF 使用 inner `/ekf` prediction，並以 `/lidar_odom` 更新 map-to
                          └──► /fusion/bv ──► inner ES-EKF velocity correction
 ```
 
-`/odom_mapping` 是 outer fusion 結果；`/ekf` 是 inner leg ESEKF 結果，兩者不可混為同一個 estimator output。
+`/odom_mapping` is the outer-fusion result, while `/ekf` is the inner leg ES-EKF result. They are outputs from different estimator layers and should not be treated as the same estimate.
 
-## 節點功能
+## Nodes
 
-| Executable | 用途 | 主要輸入 | 主要輸出 |
+| Executable | Purpose | Main inputs | Main outputs |
 |---|---|---|---|
-| `corgi_leg_odom` | Inner ES-EKF、GMO、腿部更新 | `/imu`、`/motor/state`、`/trigger`、`/fusion/bv` | `/ekf`、`/gmo/contact_state`、`/ekf/ba`、`/ekf/bw` |
-| `corgi_fusion_node` | Outer ES-EKF | `/ekf`、`/lidar_odom`、`/trigger` | `/odom_mapping`、`/fusion/bv`、TF `map → odom` |
-| `corgi_contact_leg_est` | 獨立 GMO 接觸估測，僅供模擬與診斷 | `/imu`、`/motor/state`、`/trigger`、`/sim/position`、`/sim/velocity` | `/gmo/contact_state` |
-| `velocity_estimator` | 將模擬 TF 轉為 ground-truth state | TF `odom → base_link` | `/sim/position`、`/sim/velocity`、`/sim/body_velocity` |
-| `imu_noise_sim` | 注入可重現 IMU noise 與 bias | `/imu` | `/imu_noisy` |
-| `fake_lidar_odom` | 產生模擬 LiDAR odometry | `/sim/position` | `/lidar_odom` |
-| `odom_tf_relay.py` | 將 FAST-LIO `body` pose 轉成 `base_link` pose | `/Odometry` | `/lidar_odom` |
+| `corgi_leg_odom` | Inner ES-EKF, GMO, and leg updates | `/imu`, `/motor/state`, `/trigger`, `/fusion/bv` | `/ekf`, `/gmo/contact_state`, `/ekf/ba`, `/ekf/bw` |
+| `corgi_fusion_node` | Outer ES-EKF | `/ekf`, `/lidar_odom`, `/trigger` | `/odom_mapping`, `/fusion/bv`, TF `map → odom` |
+| `corgi_contact_leg_est` | Standalone GMO contact estimator for simulation and diagnostics | `/imu`, `/motor/state`, `/trigger`, `/sim/position`, `/sim/velocity` | `/gmo/contact_state` |
+| `velocity_estimator` | Converts simulation TF into ground-truth states | TF `odom → base_link` | `/sim/position`, `/sim/velocity`, `/sim/body_velocity` |
+| `imu_noise_sim` | Injects reproducible IMU noise and bias | `/imu` | `/imu_noisy` |
+| `fake_lidar_odom` | Generates simulated LiDAR odometry | `/sim/position` | `/lidar_odom` |
+| `odom_tf_relay.py` | Converts the FAST-LIO `body` pose into a `base_link` pose | `/Odometry` | `/lidar_odom` |
 
-### 為什麼獨立 contact estimator 僅支援模擬
+### Why the Standalone Contact Estimator Is Simulation-Only
 
-`corgi_contact_leg_est` 在開始計算前要求 position 與 velocity。模擬環境可由 `velocity_estimator` 從真值 TF 產生這兩項資料；實機沒有獨立 ground-truth position／velocity，因此不能把這個 standalone node 當作實機接觸估測入口。
+`corgi_contact_leg_est` requires position and velocity before it can start processing. In simulation, `velocity_estimator` derives both from the ground-truth TF. A real robot does not provide independent ground-truth position and velocity, so the standalone node is not a valid real-robot contact-estimation entry point.
 
-實機請使用 `corgi_leg_odom`。它以自身 ES-EKF state 提供 GMO 所需的 position／velocity，不依賴模擬 ground truth。
+Use `corgi_leg_odom` on the real robot. It supplies the GMO with position and velocity from its own ES-EKF state and does not depend on simulation ground truth.
 
-## Launch files
+## Launch Files
 
-目前 package 只保留五個 launch 入口，沒有 auto-trigger，也沒有 bag replay launch。`/trigger` 必須由 motor driver、實驗控制節點或使用者另外發布。
+The package provides five launch entry points. It does not provide auto-trigger or bag-replay launches. `/trigger` must be published by the motor driver, an experiment controller, or another external node.
 
-| Launch | 環境 | 功能 |
+| Launch file | Environment | Purpose |
 |---|---|---|
-| `contact_leg_estimator_sim.launch.py` | 模擬 | Ground-truth velocity estimator + standalone GMO contact estimator |
-| `leg_odom_real.launch.py` | 實機 | Raw IMU + inner ES-EKF，可選擇錄 bag |
-| `leg_odom_sim.launch.py` | 模擬 | Ground truth + deterministic IMU noise + inner ES-EKF |
-| `odom_fusion_real.launch.py` | 實機 | Inner ES-EKF + Livox + FAST-LIO + outer fusion，可選擇錄 bag |
-| `odom_fusion_sim.launch.py` | 模擬 | Inner ES-EKF + fake LiDAR + outer fusion |
+| `contact_leg_estimator_sim.launch.py` | Simulation | Ground-truth velocity estimator and standalone GMO contact estimator |
+| `leg_odom_real.launch.py` | Real robot | Raw IMU and inner ES-EKF, with optional bag recording |
+| `leg_odom_sim.launch.py` | Simulation | Ground truth, deterministic IMU noise, and inner ES-EKF |
+| `odom_fusion_real.launch.py` | Real robot | Inner ES-EKF, Livox, FAST-LIO, and outer fusion, with optional bag recording |
+| `odom_fusion_sim.launch.py` | Simulation | Inner ES-EKF, fake LiDAR, and outer fusion |
 
-### 1. 模擬獨立觸地判斷
+### 1. Standalone Contact Estimation in Simulation
 
 ```bash
 ros2 launch corgi_odometry contact_leg_estimator_sim.launch.py
 ```
 
-啟動：
+Starts:
 
 - `velocity_estimator`
 - `corgi_contact_leg_est`
 
-資料流：
+Data flow:
 
 ```text
 simulator TF odom→base_link
@@ -111,74 +111,74 @@ simulator TF odom→base_link
    corgi_contact_leg_est ──► /gmo/contact_state
 ```
 
-這個 launch 只適合模擬。若 TF `odom → base_link` 不存在，`velocity_estimator` 無法產生 position／velocity，contact estimator 會持續等待資料。
+This launch is simulation-only. If TF `odom → base_link` is unavailable, `velocity_estimator` cannot generate position and velocity, and the contact estimator will continue waiting for data.
 
-### 2. 實機 inner ES-EKF
+### 2. Inner ES-EKF on the Real Robot
 
 ```bash
 ros2 launch corgi_odometry leg_odom_real.launch.py
 ```
 
-啟動：
+Starts:
 
 - `corgi_imu/imu_raw_node`
 - `corgi_odometry/corgi_leg_odom`
 
-外部需求：
+External requirements:
 
-- motor driver 發布 `/motor/state`
-- 外部節點發布 `/trigger`
-- IMU driver 正常發布 `/imu_raw`
+- A motor driver publishing `/motor/state`.
+- An external node publishing `/trigger`.
+- A working IMU driver publishing `/imu_raw`.
 
-`/imu` 會 remap 至 `/imu_raw`。
+The estimator's `/imu` input is remapped to `/imu_raw`.
 
-可用參數：
+Available arguments:
 
-| Argument | Default | 說明 |
+| Argument | Default | Description |
 |---|---:|---|
-| `imu_only` | `false` | 只執行 IMU prediction；停用 GMO、腿部更新、ZUPT 與 fusion feedback |
-| `record_bag` | `false` | 啟動 `leg_odom_bag.sh` |
-| `record_delay` | `3.0` | 延遲多少秒後開始錄製 |
+| `imu_only` | `false` | Run IMU prediction only; disable the GMO, leg updates, ZUPT, and fusion feedback |
+| `record_bag` | `false` | Start `leg_odom_bag.sh` |
+| `record_delay` | `3.0` | Delay before starting bag recording, in seconds |
 
-範例：
+Example:
 
 ```bash
 ros2 launch corgi_odometry leg_odom_real.launch.py \
   record_bag:=true record_delay:=3.0
 ```
 
-IMU-only ablation：
+IMU-only ablation:
 
 ```bash
 ros2 launch corgi_odometry leg_odom_real.launch.py imu_only:=true
 ```
 
-### 3. 模擬 inner ES-EKF
+### 3. Inner ES-EKF in Simulation
 
 ```bash
 ros2 launch corgi_odometry leg_odom_sim.launch.py
 ```
 
-啟動：
+Starts:
 
-- `velocity_estimator`：發布模擬 ground truth，供分析或其他模擬節點使用
-- `imu_noise_sim`：將 `/imu` 轉成 `/imu_noisy`
-- `corgi_leg_odom`：使用 `/imu_noisy`
+- `velocity_estimator`: publishes simulation ground truth for analysis or other simulation nodes.
+- `imu_noise_sim`: converts `/imu` into `/imu_noisy`.
+- `corgi_leg_odom`: consumes `/imu_noisy`.
 
-可用參數：
+Available arguments:
 
-| Argument | Default | 說明 |
+| Argument | Default | Description |
 |---|---:|---|
-| `imu_only` | `false` | IMU-only ablation |
-| `imu_seed` | `42` | IMU noise／bias random seed；固定值可重現相同 noise realization |
+| `imu_only` | `false` | Enable the IMU-only ablation mode |
+| `imu_seed` | `42` | Random seed for IMU noise and bias; a fixed value reproduces the same noise realization |
 
-### 4. 實機 inner + outer fusion
+### 4. Inner and Outer Fusion on the Real Robot
 
 ```bash
 ros2 launch corgi_odometry odom_fusion_real.launch.py
 ```
 
-啟動：
+Starts:
 
 1. `imu_raw_node`
 2. `corgi_leg_odom`
@@ -189,25 +189,25 @@ ros2 launch corgi_odometry odom_fusion_real.launch.py
 7. Static TF `base_link → mid360_optical`
 8. Optional bag recorder
 
-FAST-LIO 輸出的 `/Odometry` 使用 `camera_init → body`；`odom_tf_relay.py` 使用已知安裝外參將 pose 轉成 `/lidar_odom` 的 `base_link` pose，再交給 outer fusion。
+FAST-LIO publishes `/Odometry` as `camera_init → body`. `odom_tf_relay.py` applies the known sensor extrinsics and republishes the pose as `/lidar_odom` in the `base_link` child frame for the outer fusion filter.
 
-可用參數：
+Available arguments:
 
-| Argument | Default | 說明 |
+| Argument | Default | Description |
 |---|---:|---|
-| `imu_only` | `false` | Inner estimator 使用 IMU-only mode |
-| `record_bag` | `false` | 錄製 odometry／fusion topics，不包含 point cloud |
-| `record_delay` | `15.0` | 等待 FAST-LIO 初始化後再開始錄製 |
+| `imu_only` | `false` | Run the inner estimator in IMU-only mode |
+| `record_bag` | `false` | Record odometry and fusion topics without point clouds |
+| `record_delay` | `15.0` | Delay recording until FAST-LIO has initialized, in seconds |
 
-實機 motor driver 與 `/trigger` publisher 仍需另外啟動。
+The real-robot motor driver and `/trigger` publisher must still be started separately.
 
-### 5. 模擬 inner + outer fusion
+### 5. Inner and Outer Fusion in Simulation
 
 ```bash
 ros2 launch corgi_odometry odom_fusion_sim.launch.py
 ```
 
-資料流：
+Data flow:
 
 ```text
 /imu ─► imu_noise_sim ─► /imu_noisy ─► corgi_leg_odom ─► /ekf
@@ -217,14 +217,14 @@ sim TF ─► velocity_estimator ─► /sim/position            ├─► fusio
                                   └─► fake_lidar ─► /lidar_odom
 ```
 
-可用參數：
+Available arguments:
 
-| Argument | Default | 說明 |
+| Argument | Default | Description |
 |---|---:|---|
-| `imu_only` | `false` | Inner estimator 使用 IMU-only mode |
+| `imu_only` | `false` | Run the inner estimator in IMU-only mode |
 | `imu_seed` | `42` | IMU noise seed |
-| `lidar_seed` | `12345` | Fake LiDAR noise seed |
-| `lidar_event_driven` | `false` | `true` 時依 simulation timestamp event 發布；`false` 時使用 wall timer |
+| `lidar_seed` | `12345` | Fake-LiDAR noise seed |
+| `lidar_event_driven` | `false` | Publish from simulation timestamp events when `true`; use a wall timer when `false` |
 
 ## Configuration
 
@@ -236,16 +236,16 @@ config/
     └── config_fusion.yaml
 ```
 
-Online nodes 在啟動時固定載入：
+The online nodes load these files at startup:
 
-- Inner ESEKF／GMO：`config/leg_odom/config_online.yaml`
-- Outer fusion：`config/fusion/config_fusion.yaml`
+- Inner ES-EKF and GMO: `config/leg_odom/config_online.yaml`
+- Outer fusion: `config/fusion/config_fusion.yaml`
 
-修改 YAML 後需重新啟動 node。非 symlink install 環境應重新執行 build，確保修改後的 YAML 被安裝到 package share directory。
+Restart the node after modifying a YAML file. When not using a symlink install, rebuild the package so that the updated YAML is copied into the package share directory.
 
-### Inner ES-EKF 與 GMO
+### Inner ES-EKF and GMO
 
-編輯：
+Edit:
 
 ```text
 config/leg_odom/config_online.yaml
@@ -253,96 +253,96 @@ config/leg_odom/config_online.yaml
 
 #### `esekf`
 
-| Parameter | 意義 | 調大時的效果 |
+| Parameter | Meaning | Effect of increasing the value |
 |---|---|---|
-| `sigma_a` | Accelerometer noise std，各軸 | 降低對 IMU acceleration propagation 的信任 |
-| `sigma_w` | Gyroscope noise std，各軸 | 降低對 IMU angular-rate propagation 的信任 |
-| `sigma_ba` | Accelerometer bias random walk | 允許 accelerometer bias 更快變化 |
-| `sigma_bw` | Gyroscope bias random walk | 允許 gyroscope bias 更快變化 |
-| `sigma_leg_vec` | 腿部速度 observation noise std `[x,y,z]` | 降低該軸腿部速度 observation 的權重 |
-| `mahalanobis_threshold` | 腿部 innovation rejection threshold | 放寬 outlier gate；較少 observation 被丟棄 |
+| `sigma_a` | Per-axis accelerometer noise standard deviation | Reduces trust in IMU acceleration propagation |
+| `sigma_w` | Per-axis gyroscope noise standard deviation | Reduces trust in IMU angular-rate propagation |
+| `sigma_ba` | Accelerometer-bias random walk | Allows accelerometer bias to change faster |
+| `sigma_bw` | Gyroscope-bias random walk | Allows gyroscope bias to change faster |
+| `sigma_leg_vec` | Leg-velocity observation noise standard deviation `[x,y,z]` | Reduces the weight of leg-velocity observations on that axis |
+| `mahalanobis_threshold` | Leg-innovation rejection threshold | Relaxes the outlier gate, so fewer observations are rejected |
 
-`sigma_leg_vec` 是標準差，不是 variance；程式內會平方後建立 observation covariance。`mahalanobis_threshold: 16.27` 對應三維 innovation 的 χ² 99.9% gate。設成非常大的數值可近似停用 rejection，但不建議作為正式設定。
+`sigma_leg_vec` contains standard deviations, not variances. The implementation squares these values when constructing the observation covariance. `mahalanobis_threshold: 16.27` corresponds to a 99.9% chi-squared gate for a three-dimensional innovation. A very large value approximately disables rejection, but this is not recommended for normal operation.
 
 #### `observer`
 
-| Parameter | 意義 | 調整原則 |
+| Parameter | Meaning | Tuning guidance |
 |---|---|---|
-| `cutoff_freq` | GMO disturbance observer LPF cutoff | 調高反應較快但 noise 增加；調低較平滑但觸地延遲增加 |
+| `cutoff_freq` | GMO disturbance-observer LPF cutoff | A higher value responds faster but admits more noise; a lower value is smoother but delays contact detection |
 
 #### `contact`
 
-觸地狀態使用 Schmitt trigger：
+Contact state uses a Schmitt trigger:
 
 ```text
-目前未接觸：|rm| > rm_high 或 |beta| > beta_high  → 接觸
-目前已接觸：|rm| < rm_low  且 |beta| < beta_low   → 離地
+Currently not in contact: |rm| > rm_high or |beta| > beta_high → contact
+Currently in contact:     |rm| < rm_low  and |beta| < beta_low → no contact
 ```
 
-因此必須維持：
+The thresholds must satisfy:
 
 ```text
 rm_threshold_high > rm_threshold_low
 beta_threshold_high > beta_threshold_low
 ```
 
-建議從 bag 中觀察 `/gmo/contact_state` 的 `rm_force` 與 `beta_torque`，分別統計 stance／swing 分布後再調整。不要同時修改 observer cutoff 與 contact thresholds，否則無法判斷改善來自哪一項。
+Use recorded `/gmo/contact_state` data to inspect the stance and swing distributions of `rm_force` and `beta_torque` before tuning. Avoid changing the observer cutoff and contact thresholds at the same time, or the source of an improvement will be unclear.
 
 #### `static_init`
 
-| Parameter | 說明 |
+| Parameter | Description |
 |---|---|
-| `window_ms` | Trigger 前用於初始 bias／姿態估計的 IMU window |
-| `motion_gyro_thresh` | Window 內平均角速度超過此值時提出非靜止警告 |
-| `initial_z` | Filter 初始機身高度 |
+| `window_ms` | IMU window before the trigger used to initialize bias and attitude |
+| `motion_gyro_thresh` | Warn if the average angular rate in the initialization window exceeds this value |
+| `initial_z` | Initial body height of the filter |
 
-初始化期間機器人應保持靜止。`initial_z` 應符合實際站立高度，不應只沿用預設 `0.2 m`。
+Keep the robot stationary during initialization. Set `initial_z` to the actual standing height instead of blindly retaining the default `0.2 m`.
 
 #### `zupt`
 
-| Parameter | 說明 |
+| Parameter | Description |
 |---|---|
-| `enabled` | 是否啟用 zero-velocity pseudo measurement |
-| `sigma_vec` | 各軸 ZUPT velocity noise std；越小約束越強 |
-| `gyro_thresh` | Bias-corrected gyro norm 超過此值時不執行 ZUPT |
+| `enabled` | Enable the zero-velocity pseudo-measurement |
+| `sigma_vec` | Per-axis ZUPT velocity-noise standard deviation; smaller values impose a stronger constraint |
+| `gyro_thresh` | Skip ZUPT when the bias-corrected gyroscope norm exceeds this value |
 
-#### Logic switches
+#### Logic Switches
 
-| Parameter | 說明 |
+| Parameter | Description |
 |---|---|
-| `use_dynamic_dt` | 使用 IMU timestamp 計算 propagation dt；online 預設啟用 |
-| `use_bv_feedback` | 接受 outer `/fusion/bv` velocity-bias feedback |
+| `use_dynamic_dt` | Compute propagation `dt` from IMU timestamps; enabled by default online |
+| `use_bv_feedback` | Accept velocity-bias feedback from outer `/fusion/bv` |
 
-Online `corgi_leg_odom` 的 `use_esekf_state` 固定為 `true`；實機不使用外部 `/sim/position` 或 `/sim/velocity`。
+Online `corgi_leg_odom` always uses its ES-EKF state for the GMO. The real-robot pipeline does not consume external `/sim/position` or `/sim/velocity` data.
 
-### Outer fusion
+### Outer Fusion
 
-編輯：
+Edit:
 
 ```text
 config/fusion/config_fusion.yaml
 ```
 
-| Parameter | 意義 | 調大時的效果 |
+| Parameter | Meaning | Effect of increasing the value |
 |---|---|---|
-| `q_p` | map-to-odom position process noise | 允許 position correction 更快漂移 |
-| `q_th` | map-to-odom orientation process noise | 允許 orientation correction 更快漂移 |
-| `q_bv` | velocity-bias process noise | 允許 velocity bias 更快改變 |
-| `r_p` | LiDAR position measurement variance | 降低對 LiDAR position 的信任 |
-| `r_th` | LiDAR orientation measurement variance | 降低對 LiDAR orientation 的信任 |
-| `map_frame` | Fusion global frame | 通常維持 `map` |
-| `odom_frame` | Inner odometry frame | 通常維持 `odom` |
+| `q_p` | Map-to-odom position process noise | Allows the position correction to drift faster |
+| `q_th` | Map-to-odom orientation process noise | Allows the orientation correction to drift faster |
+| `q_bv` | Velocity-bias process noise | Allows velocity bias to change faster |
+| `r_p` | LiDAR position measurement variance | Reduces trust in LiDAR position |
+| `r_th` | LiDAR orientation measurement variance | Reduces trust in LiDAR orientation |
+| `map_frame` | Fusion global frame | Normally remains `map` |
+| `odom_frame` | Inner odometry frame | Normally remains `odom` |
 
-注意：`q_*` 與 `r_*` 是 variance，不是 standard deviation。實機 FAST-LIO 與模擬 fake LiDAR 的 noise 特性不同，不應直接沿用同一組 `r_p`、`r_th` 而不驗證。
+The `q_*` and `r_*` values are variances, not standard deviations. Real FAST-LIO and simulated fake-LiDAR measurements have different noise characteristics, so do not reuse the same `r_p` and `r_th` values without validation.
 
-### 建議調參流程
+### Recommended Tuning Procedure
 
-1. 固定資料集、步態、速度與 random seed。
-2. 先確認 IMU、motor state、trigger 與 TF 時序正確。
-3. 先調 GMO cutoff 與 contact thresholds。
-4. 再調 `sigma_leg_vec` 與 Mahalanobis gate。
-5. 確認 inner `/ekf` 後，再調 outer `q_*`／`r_*`。
-6. 每次只改一組參數並保留 bag、config snapshot 與評估指標。
+1. Fix the dataset, gait, speed, and random seeds.
+2. Verify IMU, motor-state, trigger, and TF timing first.
+3. Tune the GMO cutoff and contact thresholds.
+4. Tune `sigma_leg_vec` and the Mahalanobis gate.
+5. Validate the inner `/ekf` output before tuning the outer `q_*` and `r_*` values.
+6. Change only one parameter group at a time, and retain the bag, configuration snapshot, and evaluation metrics.
 
 ## Build
 
@@ -353,7 +353,7 @@ colcon build --packages-select corgi_odometry --symlink-install
 source install/setup.bash
 ```
 
-檢查 launch arguments：
+Inspect launch arguments with:
 
 ```bash
 ros2 launch corgi_odometry leg_odom_real.launch.py --show-args
@@ -362,15 +362,15 @@ ros2 launch corgi_odometry odom_fusion_real.launch.py --show-args
 ros2 launch corgi_odometry odom_fusion_sim.launch.py --show-args
 ```
 
-## 常見問題
+## Troubleshooting
 
-### 一直顯示 `Waiting for trigger`
+### The Node Keeps Printing `Waiting for trigger`
 
-Package 不會自動發布 trigger。確認實驗控制節點或 motor driver 有發布 `/trigger`。
+The package does not publish a trigger automatically. Confirm that the experiment controller or motor driver publishes `/trigger`.
 
-### Contact estimator 一直等待 position／velocity
+### The Contact Estimator Keeps Waiting for Position or Velocity
 
-確認使用 `contact_leg_estimator_sim.launch.py`，且模擬器提供 TF `odom → base_link`：
+Confirm that you are using `contact_leg_estimator_sim.launch.py` and that the simulator provides TF `odom → base_link`:
 
 ```bash
 ros2 run tf2_ros tf2_echo odom base_link
@@ -378,9 +378,9 @@ ros2 topic info /sim/position --verbose
 ros2 topic info /sim/velocity --verbose
 ```
 
-### Inner ESEKF 沒有輸出
+### The Inner ES-EKF Produces No Output
 
-確認：
+Check:
 
 ```bash
 ros2 topic hz /imu_raw
@@ -388,10 +388,10 @@ ros2 topic hz /motor/state
 ros2 topic echo /trigger --once
 ```
 
-### Fusion 沒有輸出
+### Fusion Produces No Output
 
-Fusion 需要 trigger、inner `/ekf` 以及時間接近的 `/lidar_odom`。實機還需等待 FAST-LIO 完成初始化。
+Fusion requires a trigger, inner `/ekf` messages, and `/lidar_odom` messages with nearby timestamps. On the real robot, also wait for FAST-LIO to finish initialization.
 
-### 模擬結果無法重現
+### Simulation Results Are Not Reproducible
 
-固定 `imu_seed` 與 `lidar_seed`，並確保 source bag／模擬初始條件及 config 完全相同。
+Fix `imu_seed` and `lidar_seed`, and ensure that the source bag or simulation initial conditions and configuration are identical.
