@@ -229,9 +229,11 @@ void LegOdometryNode::process() {
             double cur_t  = cur_imu_sec  + cur_imu_nsec  * 1e-9;
             double prev_t = last_esekf_imu_sec_ + last_esekf_imu_nsec_ * 1e-9;
             double dt_sec = cur_t - prev_t;
-            constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
-            constexpr double dt_max = corgi::Config::ESEKF_DT * 2.0;
-            if (dt_sec > dt_min && dt_sec < dt_max) {
+            // Preserve elapsed sensor time across delayed/dropped callbacks.
+            // Falling back to 2 ms for every gap above 4 ms shortens the
+            // integrated trajectory during loaded simulation replays.
+            constexpr double dt_max_safe = 0.1;
+            if (dt_sec > 0.0 && dt_sec <= dt_max_safe) {
                 esekf_dt = static_cast<float>(dt_sec);
             }
         }
