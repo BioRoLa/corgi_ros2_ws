@@ -57,7 +57,6 @@ install(DIRECTORY script
 # Install Python nodes so they are runnable via `ros2 run corgi_odometry <script>`
 install(PROGRAMS
   script/odom_tf_relay.py
-  script/auto_trigger.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

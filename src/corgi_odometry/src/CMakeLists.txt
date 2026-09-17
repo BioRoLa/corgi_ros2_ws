@@ -16,32 +16,6 @@ target_link_libraries(simplify_dynamics
 )
 
 # Build executable
-add_executable(offline_test 
-  offline/offline_test.cpp
-  offline/OfflineTestNode.cpp
-  estimation/EstimationPipeline.cpp
-  fusion/OuterEKF.cpp
-)
-
-ament_target_dependencies(offline_test 
-  rclcpp 
-  std_msgs 
-  rosgraph_msgs 
-  geometry_msgs 
-  corgi_msgs
-)
-
-target_link_libraries(offline_test
-  simplify_dynamics
-  esekf_estimation
-  Eigen3::Eigen
-  yaml-cpp
-)
-
-install(TARGETS offline_test
-  DESTINATION lib/${PROJECT_NAME})
-
-# Build executable
 add_executable(corgi_contact_leg_est 
   node/corgi_contact_leg_est.cpp
 )

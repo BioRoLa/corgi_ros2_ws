@@ -1,7 +1,6 @@
 # ─────────────────────────────────────────────────────────────────
 # Outer Fusion EKF parameters — corgi_odometry
 # Loaded by corgi_fusion_node at startup via yaml-cpp.
-# Also used by OfflineTestNode when use_bv_feedback=true.
 # ─────────────────────────────────────────────────────────────────
 
 fusion:

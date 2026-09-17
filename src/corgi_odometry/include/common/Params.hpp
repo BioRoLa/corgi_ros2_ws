@@ -1,9 +1,6 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <string>
-#include <cstddef>
-#include <cstdint>
 
 namespace corgi {
 
@@ -25,7 +22,6 @@ struct Params {
 
     // ── Observer / filter ───────────────────────────────────────
     double observer_cutoff_freq = 15.0;   // Disturbance observer LPF [Hz]
-    double encoder_cutoff_freq  = 30.0;   // Encoder velocity LPF [Hz]
 
     // ── Contact Schmitt trigger ────────────────────────────────
     double contact_rm_threshold_high   = 25.0;
@@ -52,34 +48,8 @@ struct Params {
     float initial_z                  = 0.2f;
 
     // ── Logic switches ──────────────────────────────────────────
-    // simulate_imu_noise: offline_test only — adds synthetic noise to IMU.
-    // use_esekf_state: sim / offline nodes only — feeds ESEKF-estimated
-    //   position/velocity/orientation back into the GMO pipeline instead of
-    //   external ground-truth topics.  The online real-robot node (corgi_leg_odom)
-    //   hard-codes this to true and does NOT read it from config_online.yaml.
-    bool simulate_imu_noise = false;
-    bool use_esekf_state    = false;
     bool use_bv_feedback    = false;   // Phase 3: feed outer-EKF bv back to inner ESEKF
-    bool quiet              = false;
-
-    // ── Offline ─────────────────────────────────────────────────
-    std::string csv_filename = "walk_2m_01";
-    int    start_index       = 0;
-    size_t max_processed     = 12000;
-    size_t rmse_skip         = 0;
-    bool   enable_logging    = true;
-    bool   log_details       = false;
-    uint64_t imu_noise_seed  = 42;
-    bool   use_dynamic_dt    = true;   // use IMU timestamps for ESEKF dt (offline)
-
-    // ── GT velocity filter ──────────────────────────────────────
-    double gt_velocity_lpf_cutoff = 10.0;  // [Hz]
-
-    // ── Fake LiDAR (simulation/offline) ────────────────────────
-    float  fake_lidar_sigma_p    = 0.02f;   // position noise std dev [m]
-    float  fake_lidar_sigma_q    = 0.005f;  // orientation noise std dev [rad]
-    double fake_lidar_latency_ms = 80.0;    // publish latency [ms]
-    double fake_lidar_rate_hz    = 10.0;    // publish rate [Hz]
+    bool use_dynamic_dt     = true;    // use IMU timestamps for ESEKF propagation
 };
 
 }  // namespace corgi

@@ -51,7 +51,7 @@ LegOdometryNode::LegOdometryNode()
               return corgi::Params{};
           }
       }()),
-      processor_(corgi::Config::DT, params_.encoder_cutoff_freq),
+      processor_(),
       observer_(
           corgi::Config::DT,
           params_.observer_cutoff_freq,
@@ -61,6 +61,8 @@ LegOdometryNode::LegOdometryNode()
       ),
       esekf_()
 {
+    imu_only_ = this->declare_parameter<bool>("imu_only", false);
+
     // Apply YAML noise params to ESEKF (must be done before first predict/update)
     estimation_model::NoiseParams np;
     np.sigma_a               = params_.sigma_a;
@@ -75,21 +77,9 @@ LegOdometryNode::LegOdometryNode()
     contact_rm_threshold_low_    = params_.contact_rm_threshold_low;
     contact_beta_threshold_high_ = params_.contact_beta_threshold_high;
     contact_beta_threshold_low_  = params_.contact_beta_threshold_low;
-    // use_esekf_state is hard-coded true for the online real-robot node.
-    // On real hardware there is no ground-truth position/velocity, so the ESEKF
-    // state must always be used to feed the GMO pipeline.  This parameter is
-    // intentionally NOT read from config_online.yaml to prevent accidental
-    // misconfiguration.  (Sim / offline nodes set it via their own config.)
+    // Online leg odometry always feeds the ESEKF state into the GMO pipeline;
+    // real hardware has no external ground-truth position or velocity.
     use_esekf_state_ = true;
-    if (params_.use_esekf_state == false) {
-        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
-                    "config has use_esekf_state=false but it is ignored in the "
-                    "online node — always running with ESEKF state");
-    }
-    if (params_.simulate_imu_noise) {
-        RCLCPP_WARN(rclcpp::get_logger("leg_odometry"),
-                    "simulate_imu_noise=true has no effect in online mode");
-    }
     // --- Subscribers ---
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         corgi::Config::TOPIC_MOTOR_STATE, corgi::Config::QUEUE_SIZE_SUB,
@@ -128,7 +118,9 @@ LegOdometryNode::LegOdometryNode()
         corgi::Config::TOPIC_EKF_ODOM, corgi::Config::QUEUE_SIZE_PUB);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
-    RCLCPP_INFO(this->get_logger(), "Leg Odometry Node Started (event-driven, driven by motor_state)");
+    RCLCPP_INFO(this->get_logger(),
+                "Leg Odometry Node Started (event-driven, driven by motor_state, mode=%s)",
+                imu_only_ ? "IMU_ONLY" : "LEG_ESEKF");
 }
 
 // ============================================================
@@ -177,42 +169,41 @@ void LegOdometryNode::process() {
         return;
     }
 
-    // ==========================================================
-    // GMO pipeline (runs every tick @ 1000 Hz)
-    // ==========================================================
-    // When use_esekf_state is active and the filter has started, substitute
-    // the ESEKF-estimated orientation into the IMU message before passing it
-    // to DataProcessor.  This replaces the identity orientation published by
-    // imu_raw_node (real robot) with the filter's own roll/pitch estimate so
-    // that the GMO receives correct base orientation without requiring a
-    // hardware orientation source.  On sim/offline the ESEKF is also active
-    // after the first tick, so the same path is taken there as well.
-    corgi_msgs::msg::ImuStamped imu_for_gmo = imu_;
-    if (use_esekf_state_ && esekf_initialized_) {
-        const auto& q = esekf_.nominal().q;
-        imu_for_gmo.orientation.w = static_cast<double>(q.w());
-        imu_for_gmo.orientation.x = static_cast<double>(q.x());
-        imu_for_gmo.orientation.y = static_cast<double>(q.y());
-        imu_for_gmo.orientation.z = static_cast<double>(q.z());
+    // The prediction-only ablation must not execute the motor/GMO/contact
+    // pipeline.  Besides keeping the experiment semantically IMU-only, this
+    // prevents expensive GMO work from dropping depth-1 motor callbacks that
+    // provide the legacy event-loop cadence during bag replay.
+    if (!imu_only_) {
+        // ==========================================================
+        // GMO pipeline (runs every tick @ 1000 Hz)
+        // ==========================================================
+        corgi_msgs::msg::ImuStamped imu_for_gmo = imu_;
+        if (use_esekf_state_ && esekf_initialized_) {
+            const auto& q = esekf_.nominal().q;
+            imu_for_gmo.orientation.w = static_cast<double>(q.w());
+            imu_for_gmo.orientation.x = static_cast<double>(q.x());
+            imu_for_gmo.orientation.y = static_cast<double>(q.y());
+            imu_for_gmo.orientation.z = static_cast<double>(q.z());
+        }
+        auto processed = processor_.process_realtime_data(
+            position_, velocity_, imu_for_gmo, motor_state_);
+
+        // Override GMO inputs with ESEKF estimated state (previous tick).
+        if (use_esekf_state_ && esekf_initialized_) {
+            const auto& est = esekf_.nominal();
+            processed.q(0) = static_cast<double>(est.p.x());
+            processed.q(1) = static_cast<double>(est.p.z());
+            Eigen::Matrix3f R_est = est.q.toRotationMatrix();
+            Eigen::Vector3f v_world = R_est * est.v;
+            processed.q_dot(0) = static_cast<double>(v_world.x());
+            processed.q_dot(1) = static_cast<double>(v_world.z());
+        }
+
+        auto disturbance = observer_.estimate_disturbance(
+            processed.q, processed.q_dot, processed.tau, processed.I_c,
+            iteration_count_, false);
+        publish_contact_state(disturbance);
     }
-    auto processed = processor_.process_realtime_data(position_, velocity_, imu_for_gmo, motor_state_);
-
-    // Override GMO inputs with ESEKF estimated state (uses state from previous tick)
-    if (use_esekf_state_ && esekf_initialized_) {
-        const auto& est = esekf_.nominal();
-        processed.q(0) = static_cast<double>(est.p.x());
-        processed.q(1) = static_cast<double>(est.p.z());
-        Eigen::Matrix3f R_est = est.q.toRotationMatrix();
-        Eigen::Vector3f v_world = R_est * est.v;
-        processed.q_dot(0) = static_cast<double>(v_world.x());
-        processed.q_dot(1) = static_cast<double>(v_world.z());
-    }
-
-    auto disturbance = observer_.estimate_disturbance(
-        processed.q, processed.q_dot, processed.tau, processed.I_c,
-        iteration_count_, false);
-
-    publish_contact_state(disturbance);
 
     // ==========================================================
     // ES-EKF pipeline (runs every ESEKF_DECIMATION ticks @ 500 Hz)
@@ -221,7 +212,7 @@ void LegOdometryNode::process() {
     if (esekf_tick_ >= static_cast<size_t>(corgi::Config::ESEKF_DECIMATION)) {
         esekf_tick_ = 0;
 
-        // --- Compute dynamic dt from IMU header.stamp (identical to offline pipeline) ---
+        // --- Compute dynamic dt from IMU header.stamp ---
         const int32_t  cur_imu_sec  = imu_.header.stamp.sec;
         const uint32_t cur_imu_nsec = imu_.header.stamp.nanosec;
         float esekf_dt = static_cast<float>(corgi::Config::ESEKF_DT);  // nominal fallback
@@ -229,9 +220,11 @@ void LegOdometryNode::process() {
             double cur_t  = cur_imu_sec  + cur_imu_nsec  * 1e-9;
             double prev_t = last_esekf_imu_sec_ + last_esekf_imu_nsec_ * 1e-9;
             double dt_sec = cur_t - prev_t;
-            constexpr double dt_min = corgi::Config::ESEKF_DT * 0.5;
-            constexpr double dt_max = corgi::Config::ESEKF_DT * 2.0;
-            if (dt_sec > dt_min && dt_sec < dt_max) {
+            // Preserve elapsed sensor time across delayed/dropped callbacks.
+            // Falling back to 2 ms for every gap above 4 ms shortens the
+            // integrated trajectory during loaded simulation replays.
+            constexpr double dt_max_safe = 0.1;
+            if (dt_sec > 0.0 && dt_sec <= dt_max_safe) {
                 esekf_dt = static_cast<float>(dt_sec);
             }
         }
@@ -339,39 +332,37 @@ void LegOdometryNode::process() {
         // --- 2. Predict (IMU propagation with dynamic dt) ---
         esekf_.predict(a_pred, w_pred, esekf_dt);
 
-        // --- 3. Build per-leg observations ---
-        const corgi_msgs::msg::MotorState* modules[4] = {
-            &motor_state_.module_a,
-            &motor_state_.module_b,
-            &motor_state_.module_c,
-            &motor_state_.module_d
-        };
+        if (!imu_only_) {
+            // --- 3. Build per-leg observations ---
+            const corgi_msgs::msg::MotorState* modules[4] = {
+                &motor_state_.module_a,
+                &motor_state_.module_b,
+                &motor_state_.module_c,
+                &motor_state_.module_d
+            };
 
-        std::vector<estimation_model::LegObservation> observations;
-        observations.reserve(4);
-        std::array<bool, 4> exclude_flags{};
+            std::vector<estimation_model::LegObservation> observations;
+            observations.reserve(4);
+            std::array<bool, 4> exclude_flags{};
 
-        for (int i = 0; i < 4; ++i) {
-            auto obs = build_leg_observation(*modules[i], legs_[i], i);
-            exclude_flags[i] = !obs.in_contact;
-            observations.push_back(obs);
-        }
+            for (int i = 0; i < 4; ++i) {
+                auto obs = build_leg_observation(*modules[i], legs_[i], i);
+                exclude_flags[i] = !obs.in_contact;
+                observations.push_back(obs);
+            }
 
-        // --- 4. Update (sequential per-leg velocity constraint) ---
-        esekf_.update_all_legs(observations, w_m, exclude_flags);
+            // --- 4. Update (sequential per-leg velocity constraint) ---
+            esekf_.update_all_legs(observations, w_m, exclude_flags);
 
-        // --- 4b. ZUPT: zero-velocity update when all legs are off the ground ---
-        // All exclude_flags=true means no contact measurement was available.
-        // Apply a zero-velocity pseudo-observation to prevent IMU bias from
-        // accumulating unchecked during suspended / static-airborne states.
-        // Guard: skip if gyro norm exceeds threshold (robot is actually rotating).
-        if (params_.zupt_enabled) {
-            const bool all_off_ground = (exclude_flags[0] && exclude_flags[1] &&
-                                         exclude_flags[2] && exclude_flags[3]);
-            if (all_off_ground) {
-                const Eigen::Vector3f w_corr = w_m - esekf_.nominal().bw;
-                if (w_corr.norm() < params_.zupt_gyro_thresh) {
-                    esekf_.update_zupt(params_.zupt_sigma_vec);
+            // --- 4b. ZUPT: zero-velocity update when all legs are off the ground ---
+            if (params_.zupt_enabled) {
+                const bool all_off_ground = (exclude_flags[0] && exclude_flags[1] &&
+                                             exclude_flags[2] && exclude_flags[3]);
+                if (all_off_ground) {
+                    const Eigen::Vector3f w_corr = w_m - esekf_.nominal().bw;
+                    if (w_corr.norm() < params_.zupt_gyro_thresh) {
+                        esekf_.update_zupt(params_.zupt_sigma_vec);
+                    }
                 }
             }
         }
@@ -459,7 +450,7 @@ void LegOdometryNode::cb_motor_state(const corgi_msgs::msg::MotorStateStamped::S
     motor_state_ = *msg;
     motor_state_received_ = true;
     // Drive the processing loop: one call per motor_state arrival
-    // (matches offline pipeline which processes every row exactly once)
+    // Each motor-state callback drives exactly one processing tick.
     process();
 }
 
@@ -508,6 +499,8 @@ void LegOdometryNode::cb_trigger(const corgi_msgs::msg::TriggerStamped::SharedPt
 }
 
 void LegOdometryNode::cb_bv_outer(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
+    if (imu_only_ || !params_.use_bv_feedback) return;
+
     // Low-pass filter + hard clamp, then forward to ESEKF.
     // bv is in odom/world frame (as published by FusionNode).
     constexpr float LPF_ALPHA = 0.3f;    // smoothing factor [0=frozen, 1=no filter]
@@ -655,7 +648,7 @@ int main(int argc, char** argv) {
     }
 
     // Event-driven: process() is called inside cb_motor_state, so each
-    // motor_state arrival triggers exactly one processing tick (same as offline).
+    // A motor_state arrival triggers exactly one processing tick.
     try {
         rclcpp::spin(g_node);
     } catch (const std::exception& e) {

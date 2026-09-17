@@ -13,10 +13,9 @@ esekf:
   sigma_leg_vec: [0.02, 0.10, 0.8]
   mahalanobis_threshold: 16.27   # 16.27(default) // 1e+30(no_maha)
 
-# Disturbance observer / encoder filter
+# Disturbance observer
 observer:
-  cutoff_freq:         15.0   # Observer LPF [Hz]
-  encoder_cutoff_freq: 30.0   # Encoder velocity LPF [Hz]
+  cutoff_freq: 15.0   # Observer LPF [Hz]
 
 # Schmitt-trigger contact thresholds
 contact:
@@ -48,12 +47,7 @@ contact:
 
 
 # Logic switches
-# NOTE: use_esekf_state is intentionally absent here.  The online node
-# (corgi_leg_odom) hard-codes this to true because real hardware has no
-# ground-truth position/velocity.  This parameter is only meaningful for
-# sim and offline nodes, which load their own config files.
 use_dynamic_dt:  true
-quiet:           true
 use_bv_feedback: true
 
 # Static IMU initialization (bias calibration before first ESEKF tick)

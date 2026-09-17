@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real-robot launch: leg odometry + Livox MID-360 + FAST-LIO + fusion.
+"""Real-robot leg odometry + Livox MID-360 + FAST-LIO + fusion.
 
 Topic wiring
 ------------
@@ -52,11 +52,31 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+
+    imu_only = LaunchConfiguration('imu_only')
+    record_bag = LaunchConfiguration('record_bag')
+    record_delay = LaunchConfiguration('record_delay')
+
+    imu_only_arg = DeclareLaunchArgument(
+        'imu_only', default_value='false',
+        description='Run ESEKF prediction only; disable leg, GMO, ZUPT and fusion updates.',
+    )
+    record_bag_arg = DeclareLaunchArgument(
+        'record_bag', default_value='false',
+        description='Record odometry and fusion inputs and outputs.',
+    )
+    record_delay_arg = DeclareLaunchArgument(
+        'record_delay', default_value='15.0',
+        description='Seconds to wait before starting bag recording.',
+    )
 
     fast_lio_config_dir = os.path.join(
         get_package_share_directory('fast_lio'), 'config')
@@ -83,7 +103,10 @@ def generate_launch_description():
         executable='corgi_leg_odom',
         name='corgi_leg_odom',
         output='screen',
-        parameters=[{'use_sim_time': False}],
+        parameters=[{
+            'use_sim_time': False,
+            'imu_only': ParameterValue(imu_only, value_type=bool),
+        }],
         remappings=[
             ('/imu', '/imu_raw'),
         ]
@@ -195,23 +218,12 @@ def generate_launch_description():
     # causing TF2 to report disconnected trees.  The relay node uses a
     # hardcoded transform instead (see Node 4b above).
 
-    # ── Auto-trigger: send enable=true to /trigger after a short delay ──────
-    # corgi_leg_odom waits for a TriggerStamped on /trigger before processing.
-    # This node sends it once automatically so no manual command is needed.
-    auto_trigger_node = Node(
-        package='corgi_odometry',
-        executable='auto_trigger.py',
-        name='auto_trigger',
-        output='screen',
-        parameters=[{'delay_sec': 8.0}],
-    )
-
-    # ── Bag recorder: record fusion+EKF inputs/outputs (no point clouds) ─────
-    # Starts 15 s after launch (after auto_trigger has fired and EKF is up).
+    # ── Optional bag recorder: fusion+EKF inputs/outputs (no point clouds) ───
     bag_script = os.path.join(
         get_package_share_directory('corgi_odometry'), 'script', 'odom_fusion_bag.sh')
     bag_recorder = TimerAction(
-        period=15.0,
+        period=record_delay,
+        condition=IfCondition(record_bag),
         actions=[
             ExecuteProcess(
                 cmd=['bash', bag_script],
@@ -221,6 +233,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        imu_only_arg,
+        record_bag_arg,
+        record_delay_arg,
         imu_raw_node,
         corgi_leg_odom_node,
         livox_driver_node,
@@ -228,6 +243,5 @@ def generate_launch_description():
         odom_tf_relay_node,
         corgi_fusion_node,
         static_tf_base_to_lidar,
-        # auto_trigger_node,
         bag_recorder,
     ])

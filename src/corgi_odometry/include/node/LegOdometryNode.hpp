@@ -133,7 +133,7 @@ private:
 
     // ============================================================
     // IMU timestamp tracking (for dynamic ESEKF dt)
-    // Stored as raw sec/nsec to match offline pipeline arithmetic exactly.
+    // Stored as raw sec/nsec to preserve the sensor timestamp exactly.
     // ============================================================
     int32_t  last_esekf_imu_sec_  = 0;
     uint32_t last_esekf_imu_nsec_ = 0;
@@ -201,6 +201,9 @@ private:
     // Misc
     // ============================================================
     bool   use_esekf_state_ = false;
+    // Prediction-only ablation: preserve normal IMU initialization, timing,
+    // and publication, but skip leg/ZUPT updates and fusion feedback.
+    bool   imu_only_ = false;
     size_t iteration_count_ = 0;
 };
 

@@ -1,5 +1,10 @@
 #include "corgi_odometry.hpp"
 #include <geometry_msgs/msg/vector3.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
+
+#include <limits>
+#include <map>
+#include <optional>
 
 using namespace estimation_model;
 
@@ -88,11 +93,61 @@ Eigen::Matrix3f P_cov;
 corgi_msgs::msg::MotorStateStamped motor_state;
 corgi_msgs::msg::ImuStamped imu;
 
+bool deterministic_replay = false;
+std::map<int32_t, corgi_msgs::msg::MotorStateStamped> deterministic_motor_cache;
+std::map<int32_t, corgi_msgs::msg::ImuStamped> deterministic_imu_cache;
+std::optional<builtin_interfaces::msg::Time> deterministic_trigger_on_stamp;
+std::optional<builtin_interfaces::msg::Time> deterministic_trigger_off_stamp;
+int32_t deterministic_motor_watermark = std::numeric_limits<int32_t>::min();
+int32_t deterministic_imu_watermark = std::numeric_limits<int32_t>::min();
+int64_t deterministic_motor_stamp_watermark = std::numeric_limits<int64_t>::min();
+int64_t deterministic_imu_stamp_watermark = std::numeric_limits<int64_t>::min();
+std::string deterministic_error;
+
 rclcpp::Logger node_logger = rclcpp::get_logger("corgi_odometry_legacy");
+
+int64_t stamp_ns(const builtin_interfaces::msg::Time &stamp) {
+    return static_cast<int64_t>(stamp.sec) * 1000000000LL + stamp.nanosec;
+}
+
+bool stamps_equal(const builtin_interfaces::msg::Time &lhs,
+                  const builtin_interfaces::msg::Time &rhs) {
+    return lhs.sec == rhs.sec && lhs.nanosec == rhs.nanosec;
+}
+
+template<typename Left, typename Right>
+void verify_cached_pair(const Left &left, const Right &right) {
+    if (!stamps_equal(left.header.stamp, right.header.stamp) && deterministic_error.empty()) {
+        deterministic_error = "motor/IMU header stamp mismatch at seq " +
+            std::to_string(left.header.seq);
+    }
+}
+
+std::optional<int32_t> find_pair_at_stamp(const builtin_interfaces::msg::Time &stamp) {
+    for (const auto &[seq, motor] : deterministic_motor_cache) {
+        const auto imu_it = deterministic_imu_cache.find(seq);
+        if (imu_it != deterministic_imu_cache.end() &&
+            stamps_equal(motor.header.stamp, imu_it->second.header.stamp) &&
+            stamps_equal(motor.header.stamp, stamp)) {
+            return seq;
+        }
+    }
+    return std::nullopt;
+}
 
 // Callbacks
 void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
     trigger = msg->enable;
+
+    if (deterministic_replay) {
+        if (msg->enable && !deterministic_trigger_on_stamp) {
+            deterministic_trigger_on_stamp = msg->header.stamp;
+        }
+        else if (!msg->enable && deterministic_trigger_on_stamp &&
+                 !deterministic_trigger_off_stamp) {
+            deterministic_trigger_off_stamp = msg->header.stamp;
+        }
+    }
 
     if (RECORD_DATA){output_file_name = msg->output_filename;}
 
@@ -154,10 +209,30 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped::SharedPtr msg){
 }
 
 void motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg){
+    if (deterministic_replay) {
+        deterministic_motor_cache[msg->header.seq] = *msg;
+        deterministic_motor_watermark = std::max(deterministic_motor_watermark, msg->header.seq);
+        deterministic_motor_stamp_watermark =
+            std::max(deterministic_motor_stamp_watermark, stamp_ns(msg->header.stamp));
+        const auto imu_it = deterministic_imu_cache.find(msg->header.seq);
+        if (imu_it != deterministic_imu_cache.end()) {
+            verify_cached_pair(*msg, imu_it->second);
+        }
+    }
     motor_state = *msg;
 }
 
 void imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg){
+    if (deterministic_replay) {
+        deterministic_imu_cache[msg->header.seq] = *msg;
+        deterministic_imu_watermark = std::max(deterministic_imu_watermark, msg->header.seq);
+        deterministic_imu_stamp_watermark =
+            std::max(deterministic_imu_stamp_watermark, stamp_ns(msg->header.stamp));
+        const auto motor_it = deterministic_motor_cache.find(msg->header.seq);
+        if (motor_it != deterministic_motor_cache.end()) {
+            verify_cached_pair(motor_it->second, *msg);
+        }
+    }
     imu = *msg;
 }
 
@@ -209,6 +284,7 @@ void Encoder::init(float dt){
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<rclcpp::Node>("corgi_odometry_legacy");
+    deterministic_replay = node->declare_parameter<bool>("deterministic_replay", false);
     
     // Wait for clock synchronization
     RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -225,17 +301,27 @@ int main(int argc, char **argv) {
     auto velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/velocity", 10);
     auto position_pub = node->create_publisher<geometry_msgs::msg::Vector3>("odometry/legacy/position", 10);
     auto contact_pub = node->create_publisher<corgi_msgs::msg::ContactStateStamped>("odometry/legacy/contact", 10);
+    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr stamped_velocity_pub;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr stamped_position_pub;
+    if (deterministic_replay) {
+        stamped_velocity_pub = node->create_publisher<geometry_msgs::msg::Vector3Stamped>(
+            "/validation/legacy/velocity_stamped", 10);
+        stamped_position_pub = node->create_publisher<geometry_msgs::msg::Vector3Stamped>(
+            "/validation/legacy/position_stamped", 10);
+    }
 
     // ROS Subscribers
     auto trigger_sub = node->create_subscription<corgi_msgs::msg::TriggerStamped>(
         "trigger", 10, trigger_cb);
+    const auto input_qos = deterministic_replay ? rclcpp::QoS(rclcpp::KeepAll()) : rclcpp::QoS(10);
     auto motor_state_sub = node->create_subscription<corgi_msgs::msg::MotorStateStamped>(
-        "motor/state", 10, motor_state_cb);
+        "motor/state", input_qos, motor_state_cb);
     const bool use_sim_time = node->get_parameter("use_sim_time").as_bool();
     const std::string imu_topic = use_sim_time ? "imu/gravity_compensated" : "imu";
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>(
-        imu_topic, 10, imu_cb);
-    RCLCPP_INFO(node->get_logger(), "Subscribing IMU topic: %s (use_sim_time=%s)", imu_topic.c_str(), use_sim_time ? "true" : "false");
+        imu_topic, input_qos, imu_cb);
+    RCLCPP_INFO(node->get_logger(), "Subscribing IMU topic: %s (use_sim_time=%s, deterministic_replay=%s)",
+        imu_topic.c_str(), use_sim_time ? "true" : "false", deterministic_replay ? "true" : "false");
     auto contact_sub = node->create_subscription<corgi_msgs::msg::ContactStateStamped>(
         "odometry/legacy/contact", 10, contact_cb);
 
@@ -301,10 +387,87 @@ int main(int argc, char **argv) {
     filter.threshold = THRESHOLD;
     filter.init(x);
 
+    std::optional<int32_t> deterministic_init_seq;
+    std::optional<int32_t> deterministic_off_seq;
+    int32_t deterministic_next_seq = 0;
+    bool deterministic_initialization_selected = false;
+    bool deterministic_failed = false;
+
     while (rclcpp::ok()){
         rclcpp::spin_some(node);
 
-        if(trigger){
+        bool execute_tick = trigger;
+        if (deterministic_replay) {
+            execute_tick = false;
+
+            if (!deterministic_error.empty()) {
+                RCLCPP_FATAL(node_logger, "Deterministic replay failed: %s", deterministic_error.c_str());
+                deterministic_failed = true;
+                break;
+            }
+
+            if (deterministic_trigger_on_stamp && !deterministic_init_seq) {
+                deterministic_init_seq = find_pair_at_stamp(*deterministic_trigger_on_stamp);
+                const int64_t on_ns = stamp_ns(*deterministic_trigger_on_stamp);
+                if (!deterministic_init_seq &&
+                    deterministic_motor_stamp_watermark > on_ns &&
+                    deterministic_imu_stamp_watermark > on_ns) {
+                    RCLCPP_FATAL(node_logger, "No exact motor/IMU pair at trigger ON stamp");
+                    deterministic_failed = true;
+                    break;
+                }
+            }
+            if (deterministic_trigger_off_stamp && !deterministic_off_seq) {
+                deterministic_off_seq = find_pair_at_stamp(*deterministic_trigger_off_stamp);
+                const int64_t off_ns = stamp_ns(*deterministic_trigger_off_stamp);
+                if (!deterministic_off_seq &&
+                    deterministic_motor_stamp_watermark > off_ns &&
+                    deterministic_imu_stamp_watermark > off_ns) {
+                    RCLCPP_FATAL(node_logger, "No exact motor/IMU pair at trigger OFF stamp");
+                    deterministic_failed = true;
+                    break;
+                }
+            }
+
+            if (!deterministic_initialization_selected && deterministic_init_seq) {
+                const auto motor_it = deterministic_motor_cache.find(*deterministic_init_seq);
+                const auto imu_it = deterministic_imu_cache.find(*deterministic_init_seq);
+                motor_state = motor_it->second;
+                imu = imu_it->second;
+                deterministic_next_seq = *deterministic_init_seq + 5;
+                deterministic_initialization_selected = true;
+                execute_tick = true;
+            }
+            else if (deterministic_initialization_selected) {
+                if (deterministic_off_seq && deterministic_next_seq >= *deterministic_off_seq) {
+                    RCLCPP_INFO(node_logger,
+                        "Deterministic replay complete before OFF pair seq %d", *deterministic_off_seq);
+                    break;
+                }
+
+                const auto motor_it = deterministic_motor_cache.find(deterministic_next_seq);
+                const auto imu_it = deterministic_imu_cache.find(deterministic_next_seq);
+                if (motor_it != deterministic_motor_cache.end() && imu_it != deterministic_imu_cache.end()) {
+                    if (!stamps_equal(motor_it->second.header.stamp, imu_it->second.header.stamp)) {
+                        RCLCPP_FATAL(node_logger, "Header stamp mismatch at selected seq %d", deterministic_next_seq);
+                        deterministic_failed = true;
+                        break;
+                    }
+                    motor_state = motor_it->second;
+                    imu = imu_it->second;
+                    execute_tick = true;
+                }
+                else if (deterministic_motor_watermark > deterministic_next_seq &&
+                         deterministic_imu_watermark > deterministic_next_seq) {
+                    RCLCPP_FATAL(node_logger, "Missing exact motor/IMU pair at selected seq %d",
+                        deterministic_next_seq);
+                    deterministic_failed = true;
+                    break;
+                }
+            }
+        }
+
+        if(execute_tick){
             if (!initialized) {
 
                 /*Initialization : input first data*/
@@ -336,8 +499,10 @@ int main(int argc, char **argv) {
                 initialized = true;
                 // Skip filter update on the initialization tick; wait for next timer cycle
                 // so the first UpdateState computes a real derivative over a full dt interval.
-                next_time += period;
-                node->get_clock()->sleep_until(next_time);
+                if (!deterministic_replay) {
+                    next_time += period;
+                    node->get_clock()->sleep_until(next_time);
+                }
                 continue;
             }
             //Update encoder states
@@ -388,6 +553,20 @@ int main(int argc, char **argv) {
             position_msg.y = p(1);
             position_msg.z = p(2);
             position_pub->publish(position_msg);
+
+            if (deterministic_replay) {
+                geometry_msgs::msg::Vector3Stamped stamped_velocity_msg;
+                stamped_velocity_msg.header.stamp = imu.header.stamp;
+                stamped_velocity_msg.header.frame_id = "base_link";
+                stamped_velocity_msg.vector = velocity_msg;
+                stamped_velocity_pub->publish(stamped_velocity_msg);
+
+                geometry_msgs::msg::Vector3Stamped stamped_position_msg;
+                stamped_position_msg.header.stamp = imu.header.stamp;
+                stamped_position_msg.header.frame_id = "odom_initial";
+                stamped_position_msg.vector = position_msg;
+                stamped_position_pub->publish(stamped_position_msg);
+            }
 
             if (PUB_CONTACT){
                 // Publish contact state (1 for contact, 0 for no contact, higher score for non-contact)
@@ -455,20 +634,25 @@ int main(int argc, char **argv) {
             }
             q_prev = q;
             counter ++;
+            if (deterministic_replay) {
+                deterministic_next_seq += 5;
+            }
         }
         
-        if(counter > 0 && !trigger){
+        if(!deterministic_replay && counter > 0 && !trigger){
             break;
         }
         
-        next_time += period;
-        if(!node->get_clock()->sleep_until(next_time)){
-            RCLCPP_WARN(node_logger, "Sleep until failed!");
-            break;
+        if (!deterministic_replay) {
+            next_time += period;
+            if(!node->get_clock()->sleep_until(next_time)){
+                RCLCPP_WARN(node_logger, "Sleep until failed!");
+                break;
+            }
         }
     }
 
     rclcpp::shutdown();
     
-    return 0;
+    return deterministic_failed ? 1 : 0;
 }
