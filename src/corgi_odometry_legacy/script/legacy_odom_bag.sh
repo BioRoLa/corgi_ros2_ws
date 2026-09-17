@@ -21,4 +21,5 @@ ros2 bag record \
   /odometry/legacy/velocity \
   /odometry/legacy/position \
   /odometry/legacy/contact \
+  /odometry/legacy/z_position_hip \
   -o "$OUTPUT"

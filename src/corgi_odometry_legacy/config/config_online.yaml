@@ -1,0 +1,6 @@
+corgi_odometry_legacy:
+  ros__parameters:
+    # Enable only when replaying a bag that preserves matching motor/IMU
+    # sequence numbers and timestamps. Normal simulation and hardware runs
+    # should leave this disabled.
+    deterministic_replay: false
