@@ -55,27 +55,31 @@ public:
         this->declare_parameter("publish_rate",  10.0);
         this->declare_parameter("sigma_p",       0.02);
         this->declare_parameter("sigma_q",       0.005);
+        this->declare_parameter<int64_t>("seed", 12345);
         this->declare_parameter("latency_ms",    80.0);
         this->declare_parameter("parent_frame",  std::string("odom"));
         this->declare_parameter("child_frame",   std::string("base_link"));
         this->declare_parameter("output_topic",  std::string("/lidar_odom"));
         this->declare_parameter("gt_pos_topic",  std::string(""));
+        this->declare_parameter("event_driven",  false);
 
         publish_rate_  = this->get_parameter("publish_rate").as_double();
         sigma_p_       = static_cast<float>(this->get_parameter("sigma_p").as_double());
         sigma_q_       = static_cast<float>(this->get_parameter("sigma_q").as_double());
+        const auto seed = static_cast<uint64_t>(this->get_parameter("seed").as_int());
         latency_ms_    = this->get_parameter("latency_ms").as_double();
         parent_frame_  = this->get_parameter("parent_frame").as_string();
         child_frame_   = this->get_parameter("child_frame").as_string();
         output_topic_  = this->get_parameter("output_topic").as_string();
         gt_pos_topic_  = this->get_parameter("gt_pos_topic").as_string();
+        event_driven_  = this->get_parameter("event_driven").as_bool();
 
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             output_topic_, rclcpp::QoS(10));
 
         // Initialise shared noise model
         lidar_sim_ = sim::FakeLidarSimulator(sim::FakeLidarSimulator::Params{
-            sigma_p_, sigma_q_, 0u /* non-deterministic seed */});
+            sigma_p_, sigma_q_, seed});
 
         // Subscribe to GT position topic if requested
         if (!gt_pos_topic_.empty()) {
@@ -87,22 +91,29 @@ public:
                 gt_pos_topic_.c_str());
         }
 
-        auto period = std::chrono::duration<double>(1.0 / publish_rate_);
-        timer_ = this->create_wall_timer(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(period),
-            std::bind(&FakeLidarOdomNode::timer_cb, this));
+        if (!event_driven_) {
+            auto period = std::chrono::duration<double>(1.0 / publish_rate_);
+            timer_ = this->create_wall_timer(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(period),
+                std::bind(&FakeLidarOdomNode::timer_cb, this));
+        }
 
         RCLCPP_INFO(this->get_logger(),
             "FakeLidarOdom started: rate=%.1f Hz, sigma_p=%.4f m, "
-            "sigma_q=%.4f rad, latency=%.1f ms, topic=%s",
-            publish_rate_, sigma_p_, sigma_q_, latency_ms_,
-            output_topic_.c_str());
+            "sigma_q=%.4f rad, seed=%lu, latency=%.1f ms, topic=%s",
+            publish_rate_, sigma_p_, sigma_q_, static_cast<unsigned long>(seed),
+            latency_ms_, output_topic_.c_str());
     }
 
 private:
     // ── GT position subscriber (geometry_msgs/Vector3) ───────
     void cb_sim_pos(const geometry_msgs::msg::Vector3::SharedPtr msg) {
         const rclcpp::Time now = this->now();
+        if (!sim_pos_received_) {
+            RCLCPP_INFO(this->get_logger(),
+                "FakeLidar: first sim position at t=%.3f", now.seconds());
+            sim_pos_received_ = true;
+        }
 
         // Detect time jump backward (e.g. bag replay restarting with sim_time)
         if (!sim_pos_buffer_.empty() &&
@@ -124,6 +135,16 @@ private:
         while (!sim_pos_buffer_.empty() &&
                (now - sim_pos_buffer_.front().stamp).seconds() > 2.0)
             sim_pos_buffer_.pop_front();
+
+        // Bag replay may advance simulation time independently of wall time.
+        // Drive the 10 Hz sensor from simulation timestamps in that mode.
+        if (event_driven_ &&
+            (!last_event_stamp_valid_ ||
+             (now - last_event_stamp_).seconds() >= 1.0 / publish_rate_)) {
+            last_event_stamp_ = now;
+            last_event_stamp_valid_ = true;
+            timer_cb();
+        }
     }
 
     void timer_cb() {
@@ -272,6 +293,10 @@ private:
     std::string child_frame_;
     std::string output_topic_;
     std::string gt_pos_topic_;
+    bool        event_driven_ = false;
+    rclcpp::Time last_event_stamp_{0, 0, RCL_ROS_TIME};
+    bool last_event_stamp_valid_ = false;
+    bool sim_pos_received_ = false;
 };
 
 // ----------------------------------------------------------------

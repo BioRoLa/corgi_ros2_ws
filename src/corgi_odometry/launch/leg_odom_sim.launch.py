@@ -32,7 +32,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': True,
-            'seed': 0,
+            # Fixed seed makes the CX5 noise/bias realization reproducible.
+            'seed': 42,
             'sample_rate': 1000.0,
             'input_topic': '/imu',
             'output_topic': 'imu_noisy',
