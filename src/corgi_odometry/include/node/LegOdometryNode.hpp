@@ -201,6 +201,9 @@ private:
     // Misc
     // ============================================================
     bool   use_esekf_state_ = false;
+    // Prediction-only ablation: preserve normal IMU initialization, timing,
+    // and publication, but skip leg/ZUPT updates and fusion feedback.
+    bool   imu_only_ = false;
     size_t iteration_count_ = 0;
 };
 
