@@ -86,13 +86,45 @@ The closed-loop executables subscribe to all supported state topics; `state_sour
 
 ## Configuration
 
-Settings are in [config/config.yaml](config/config.yaml):
+The controllers read [config/config.yaml](config/config.yaml) when they start. Edit the source file, then restart the affected controller or launch; changing the YAML while a node is running does not update its active values. The current C++ code uses the fixed path `~/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml`. If the workspace is elsewhere, make that path resolve to the file or update the source path.
 
-- `common.walk` holds the closed-loop walking height, speed, step geometry, acceleration ramp, `target_loop`, `stop_x`, and `decel_margin`.
-- `common.trot` and `common.wlw` hold the respective open-loop gait settings.
-- `sim` and `real` hold profile-specific MPC weights, impedance gains, force bounds, and initial joint angles. The selected profile takes precedence over shared gait settings where the controller implements that lookup.
+### Select a profile and find the effective value
 
-For `walk_closed_time`, the default `target_loop` is 2200 cycles. With the controller's 100 Hz time step, this is 22 seconds after walking starts. For `walk_closed_dist`, the default `stop_x` is 3.0 m and `decel_margin` is 1.2. These are configuration values, not launch arguments. The H20/V10 open-loop controller still contains some gait values in its source, so the YAML file is not its complete configuration.
+`config_profile:=sim` selects the `sim:` section; `config_profile:=real` selects `real:`. The consolidated launch files use `config_profile:=auto` by default, which selects the profile named by `environment`. You can override it explicitly, for example `environment:=sim config_profile:=real`, if you intend to test real-robot gains in simulation.
+
+| Controller | YAML lookup for gait settings | Other YAML settings |
+|---|---|---|
+| `walk_closed_time`, `walk_closed_dist` | Selected profile first, then `common.walk` | MPC weights, gains, mass and force bounds: selected profile first, then `common` |
+| `trot_open` | Selected profile first, then `common.trot`; `init_eta` must be in the selected profile | Loads MPC model and gain settings from the selected profile and `common` |
+| `wlw_open` | `common.wlw` only | `config_profile` selects simulation or real behavior; it does not override `common.wlw` values |
+| `walk_h20_v10_open` | Gait timing and geometry are still set in its C++ source | Loads MPC model and gain settings from the selected profile and `common` |
+
+For example, adding `cruise_velocity: 0.08` directly under `real:` overrides `common.walk.cruise_velocity` only when the closed-loop controller runs with `config_profile:=real`. Keep all required YAML keys when editing the file; the controllers fail at startup if required values are missing or have the wrong type.
+
+### Closed-loop walking (`common.walk`)
+
+| Key | Current value | Use |
+|---|---:|---|
+| `stand_height` | 0.20 m | Target body height |
+| `cruise_velocity` | 0.10 m/s | Forward cruise speed |
+| `step_length` | 0.20 m | Nominal foot step length |
+| `step_height` | 0.08 m | Nominal swing clearance |
+| `ramp_loops` | 100 cycles | Acceleration and deceleration duration; 1 s at 100 Hz |
+| `target_loop` | 2200 cycles | Time-stop mode only; 22 s at 100 Hz |
+| `stop_x` | 3.0 m | Distance-stop mode only; target X position in the controller's odometry frame |
+| `decel_margin` | 1.2 | Distance-stop braking-distance multiplier |
+
+`walk_closed_time` uses `target_loop`; `walk_closed_dist` uses `stop_x` and `decel_margin`. With the current values, the distance controller begins deceleration at `stop_x - 0.5 × cruise_velocity × (ramp_loops / 100) × decel_margin`, or about **2.94 m**. `stop_x` is an absolute estimated X position, not a distance measured from the trigger point.
+
+To change the real-robot distance target, edit the existing `common.walk.stop_x` value in `config/config.yaml` (for example, from `3.0` to `2.0`), then restart `walk_closed.launch.py` with `environment:=real stop_mode:=distance`. No `stop_x` launch argument exists. A value placed directly under `real:` takes precedence over `common.walk.stop_x` for the real profile.
+
+### MPC and open-loop settings
+
+`common` contains shared physical constants such as `m` and the force bounds. `sim` and `real` contain the 13-element `Q_diagonal`, impedance stiffness (`Kx`, `Ky`) and damping (`Bx`, `By`) values for stance and swing, `fz_lower_bound`, and `init_eta`. The eight `init_eta` entries are the initial joint angles in the order `[theta_A, beta_A, theta_B, beta_B, theta_C, beta_C, theta_D, beta_D]`, in radians. Closed-loop walking and `trot_open` read `init_eta` from the selected profile; H20/V10 uses initial angles in its source, while WLW initializes from its Hybrid gait. Choose the profile with `config_profile`, then edit that profile's values to change the settings that its controller reads.
+
+`common.trot` controls the open-loop trot's velocity, body height, step geometry, ramp lengths, and duration. Its `target_loop` uses a legacy factor of 10: the current value `600` gives `600 × 10 / 1000 = 6` seconds at 1 kHz. `common.wlw` controls WLW velocity, body height, step length, first swinging leg (`swing_index`), ramp, and duration. Its current `target_loop` of `3000` gives 30 seconds by the same 1 kHz convention. WLW reads this block directly; changing `sim` or `real` gain values does not change its `common.wlw` gait settings.
+
+`contact_source` under `sim:` or `real:` is not loaded as the closed-loop controller's ROS parameter. To use GMO contact, pass `contact_source:=gmo` to `walk_closed.launch.py` with `state_source:=esekf`; otherwise the effective controller default is `gait`.
 
 ## Bag recording
 
