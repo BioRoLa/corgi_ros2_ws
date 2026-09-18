@@ -8,7 +8,7 @@ This package is retained for existing MPC workflows, reproduction of earlier exp
 
 The state-estimation method implemented in this package is based on:
 
-> *State Estimator for a Leg-Wheel Hybrid Platform*, master's thesis.
+> *應用於輪足複合平台之狀態估測器*, master's thesis.
 
 This cleanup only changes launch files, runtime configuration, build structure, and documentation. It does not modify the KLD filter, information filter, leg kinematics, contact detection, or height-estimation algorithms.
 
