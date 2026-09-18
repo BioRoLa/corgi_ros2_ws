@@ -10,6 +10,14 @@ The closed-loop MPC algorithm is based on Yi-Syuan Shen's 2025 master's thesis, 
 
 *System-level MPC architecture. Gait references and estimated body/contact states feed the MPC. Its force references pass through force control and the motor driver. The frequencies in the supplied diagram describe that architecture; this README does not assert that every current ROS node runs at the frequency shown.*
 
+## Launch files
+
+| File | Purpose |
+|---|---|
+| `walk_closed.launch.py` | Selects the closed-loop controller and its state-estimation and force-control nodes |
+| `walk_open.launch.py` | Selects the H20/V10 or WLW open-loop gait |
+| `esekf_stack.launch.py` | Support stack included automatically by `walk_closed.launch.py` when `state_source:=esekf` |
+
 ## Quick start
 
 Run these commands from a sourced ROS 2 workspace containing the required packages. Start the simulator separately for simulation modes. Start the motor driver separately before running a real-robot mode. The controller currently loads `config/config.yaml` from `~/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml`; check this path if the workspace is elsewhere.
@@ -145,19 +153,3 @@ To inspect a topic list without recording:
 ```bash
 python3 src/corgi_mpc/script/record_mpc_bag.py --controller closed --state-source esekf --print-topics
 ```
-
-## Legacy launch names
-
-The previous launch names remain as compatibility entry points:
-
-| Existing file | New selection |
-|---|---|
-| `walk_closed_sim.launch.py` | `walk_closed.launch.py environment:=sim stop_mode:=time state_source:=odom_legacy` |
-| `walk_closed_real.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=time state_source:=odom_legacy` |
-| `walk_closed_legacy.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=distance state_source:=odom_legacy` |
-| `walk_closed_esekf.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=distance state_source:=esekf` |
-| `walk_h20_v10_open_real.launch.py` | `walk_open.launch.py environment:=real gait:=h20_v10` |
-| `wlw_open_sim.launch.py` | `walk_open.launch.py environment:=sim gait:=wlw` |
-| `wlw_open_real.launch.py` | `walk_open.launch.py environment:=real gait:=wlw` |
-
-The ESEKF compatibility launch retains the controller's effective `contact_source:=gait` default. Use the new entry point with `contact_source:=gmo` when GMO contact should drive control. If an older setup ran `walk_closed_real.launch.py state_source:=esekf` beside a separately launched ESEKF stack, stop the separate stack: the consolidated entry point starts it automatically, and duplicate publishers would otherwise result. The unused `state_source` argument was removed from the H20/V10 open-loop compatibility entry point.
