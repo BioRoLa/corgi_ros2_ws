@@ -1,237 +1,131 @@
 # corgi_mpc
 
-Model Predictive Controller (MPC) for Corgi quadruped locomotion.  
-Supports closed-loop walking (time-driven or distance-driven stop) and open-loop walking.
+ROS 2 controllers for the Corgi leg-wheel robot. The closed-loop walking controllers use model predictive control (MPC) to compute contact-force references and publish impedance commands. The package also contains open-loop H20/V10, trot, and WLW gait controllers that publish motor commands directly.
 
----
+## Research basis and architecture
 
-## Executables
+The closed-loop MPC algorithm is based on Yi-Syuan Shen's 2025 master's thesis, [輪腳複合機器人上可變多觸地點之全機力控制架構開發](https://tdr.lib.ntu.edu.tw/jspui/handle/123456789/99482?mode=full) (National Taiwan University, DOI: [10.6342/NTU202502013](https://doi.org/10.6342/NTU202502013)). The thesis describes a whole-body force-control architecture for a leg-wheel robot with varying ground contact points. This package implements the MPC controller and the launch integrations documented below; the open-loop gait executables serve different control paths.
 
-| Executable | Node Name | Description |
-|---|---|---|
-| `walk_closed_time` | `corgi_mpc` | Closed-loop MPC, **time-driven stop**: walks for a fixed number of control cycles (`target_loop × dt` seconds) |
-| `walk_closed_dist` | `corgi_mpc` | Closed-loop MPC, **distance-driven stop**: decelerates and stops near a target X-axis position (`stop_x`) |
-| `walk_h20_v10_open` | `corgi_mpc` | Open-loop H20/V10 gait; sends motor commands directly |
-| `wlw_open` | `corgi_wlw_open` | Open-loop WLW Hybrid gait; sends motor commands directly |
+![MPC control architecture](docs/images/mpc_architecture.png)
 
-> **Migration note**: `walk_h20_v10_closed` has been replaced by `walk_closed_time` (same behaviour, all hardcoded values moved to `config/config.yaml`).
+*System-level MPC architecture. Gait references and estimated body/contact states feed the MPC. Its force references pass through force control and the motor driver. The frequencies in the supplied diagram describe that architecture; this README does not assert that every current ROS node runs at the frequency shown.*
 
----
+## Quick start
 
-## Launch Files
-
-The two main entry points select the controller and its support nodes. The seven older launch file names remain as compatibility entry points.
-
-### Closed-loop walking
+Run these commands from a sourced ROS 2 workspace containing the required packages. Start the simulator separately for simulation modes. Start the motor driver separately before running a real-robot mode. The controller currently loads `config/config.yaml` from `~/corgi_ws/corgi_ros2_ws/src/corgi_mpc/config/config.yaml`; check this path if the workspace is elsewhere.
 
 ```bash
-# Simulation, stop after target_loop control cycles
+# Simulation: closed-loop walking with legacy odometry; stop after a set time.
 ros2 launch corgi_mpc walk_closed.launch.py environment:=sim stop_mode:=time state_source:=odom_legacy
 
-# Real robot, stop near common.walk.stop_x using legacy odometry
+# Real robot: closed-loop walking with legacy odometry; stop near stop_x.
 ros2 launch corgi_mpc walk_closed.launch.py environment:=real stop_mode:=distance state_source:=odom_legacy
 
-# Real robot, ESEKF + FAST-LIO, distance stop and GMO contact
+# Real robot: ESEKF state, GMO contact, and distance-based stopping.
 ros2 launch corgi_mpc walk_closed.launch.py environment:=real stop_mode:=distance state_source:=esekf contact_source:=gmo
-```
 
-| Argument | Default | Meaning |
-|---|---|---|
-| `environment` | `sim` | `sim` or `real`; selects support nodes and automatic clock/profile/bag defaults |
-| `stop_mode` | `time` | `time` runs `walk_closed_time`; `distance` runs `walk_closed_dist` |
-| `state_source` | `odom_legacy` | `odom_legacy`, `sim_driver`, or `esekf` |
-| `contact_source` | `gait` | `gait` or `gmo`; GMO requires ESEKF |
-| `use_sim_time` | `auto` | `auto` follows environment; can be `true` or `false` |
-| `config_profile` | `auto` | `auto` follows environment; can be `sim` or `real` |
-| `record_bag` | `auto` | `auto` records on real robot and does not record in simulation |
-| `record_raw_lidar` | `false` | With ESEKF, also record raw Livox data and `/Odometry` for replay |
-
-`odom_legacy` starts the legacy odometry and height nodes, plus `imu_node` on the real robot. `sim_driver` is simulation-only and also starts legacy odometry for the controller's fallback state; the simulator must supply `/tf`, `/sim/body/velocity`, `/imu`, motor state and trigger. `esekf` is real-robot-only and includes `esekf_stack.launch.py` (raw IMU, leg ESEKF, Livox, FAST-LIO, relay, fusion and static TF). All closed-loop modes start force estimation and force control. The motor driver must be started separately on the real robot.
-
-The ESEKF compatibility entry point preserves the current effective `contact_source:=gait` default. Pass `contact_source:=gmo` to the new entry point when GMO should drive contact selection; the `real:` YAML `contact_source` field does not set this ROS parameter.
-
-If you previously ran `walk_closed_real.launch.py state_source:=esekf` alongside a separately launched ESEKF stack, stop the separate stack when using the consolidated entry point. It now starts the ESEKF nodes automatically, so running both would create duplicate publishers.
-
-### Open-loop walking
-
-```bash
-# Real H20/V10 (legacy sensor nodes retained for experiment data)
+# Real robot: open-loop H20/V10 walking.
 ros2 launch corgi_mpc walk_open.launch.py environment:=real gait:=h20_v10
 
-# Simulation or real WLW; only the WLW controller is launched
+# Simulation: open-loop WLW gait.
 ros2 launch corgi_mpc walk_open.launch.py environment:=sim gait:=wlw
-ros2 launch corgi_mpc walk_open.launch.py environment:=real gait:=wlw record_bag:=true
 ```
 
-`walk_open.launch.py` accepts `environment`, `gait`, `use_sim_time`, `config_profile`, and `record_bag`. Its automatic bag default preserves existing behavior: real H20/V10 records; WLW and simulation do not. Open-loop controllers publish `/motor/command` directly and do not launch force control. WLW has its own small bag topic set when recording is enabled.
+Real-robot closed-loop and H20/V10 launches record a bag by default. WLW and simulation do not; add `record_bag:=true` to enable recording. ESEKF starts its bag after 15 seconds, while other modes start after 3 seconds.
 
-### Compatibility entry points
+## Controllers and operating modes
 
-| Existing launch file | Equivalent new selection |
-|---|---|
-| `walk_closed_sim.launch.py` | `environment:=sim stop_mode:=time state_source:=odom_legacy` |
-| `walk_closed_real.launch.py` | `environment:=real stop_mode:=time state_source:=odom_legacy` |
-| `walk_closed_legacy.launch.py` | `environment:=real stop_mode:=distance state_source:=odom_legacy` |
-| `walk_closed_esekf.launch.py` | `environment:=real stop_mode:=distance state_source:=esekf` |
-| `walk_h20_v10_open_real.launch.py` | `environment:=real gait:=h20_v10` |
-| `wlw_open_sim.launch.py` | `environment:=sim gait:=wlw` |
-| `wlw_open_real.launch.py` | `environment:=real gait:=wlw` |
-
-The original clock, profile and state-source arguments on the applicable compatibility entry points are forwarded. The old H20/V10 `state_source` argument was removed because its controller never used it.
-
----
-
-## Topics
-
-### `walk_closed_time` / `walk_closed_dist` (Closed-loop)
-
-**Published:**
-
-| Topic | Type | Description |
-|---|---|---|
-| `/impedance/command` | `corgi_msgs/ImpedanceCmdStamped` | Impedance commands for all 4 modules |
-| `/walk/swing_phase` | `std_msgs/Int32MultiArray` | Swing phase flag per leg (size 4) |
-
-**Subscribed:**
-
-| Topic | Type | Description |
-|---|---|---|
-| `/trigger` | `corgi_msgs/TriggerStamped` | Enable/disable walking |
-| `/motor/state` | `corgi_msgs/MotorStateStamped` | Motor encoder states |
-| `/imu` | `corgi_msgs/ImuStamped` | IMU orientation and angular velocity |
-| `/odometry/legacy/position` | `geometry_msgs/Vector3` | Body position from legacy odometry |
-| `/odometry/legacy/velocity` | `geometry_msgs/Vector3` | Body velocity from legacy odometry |
-| `/odometry/legacy/z_position_hip` | `std_msgs/Float64` | Hip height from legacy odometry |
-| `/sim/body/velocity` | `geometry_msgs/Vector3` | Body velocity from simulator (`state_source:=sim_driver` only) |
-| `/tf` | `tf2_msgs/TFMessage` | `odom → base_link` transform (`state_source:=sim_driver` only) |
-| `/ekf` | `nav_msgs/Odometry` | Inner ESEKF pose + twist from `corgi_leg_odom` (`state_source:=esekf` only) |
-| `/imu_raw` | `corgi_msgs/ImuStamped` | Raw IMU gyro fallback (`state_source:=esekf` before `/ekf` is ready) |
-| `/gmo/contact_state` | `corgi_msgs/GMOContactStateStamped` | Sensor-based contact detection (`contact_source:=gmo`) |
-
----
-
-### `walk_h20_v10_open` (Open-loop)
-
-**Published:**
-
-| Topic | Type | Description |
-|---|---|---|
-| `/motor/command` | `corgi_msgs/MotorCmdStamped` | Direct motor angle commands |
-| `/walk/swing_phase` | `std_msgs/Int32MultiArray` | Swing phase flag per leg (size 4) |
-
-**Subscribed:**
-
-| Topic | Type | Description |
-|---|---|---|
-| `/trigger` | `corgi_msgs/TriggerStamped` | Enable/disable walking |
-
----
-
-## Parameters
-
-| Parameter | Values | Default | Applicable Executable |
+| Executable | Control path | Output | Stop or duration rule |
 |---|---|---|---|
-| `config_profile` | `sim` / `real` | `sim` | all |
-| `state_source` | `odom_legacy` / `sim_driver` / `esekf` | `odom_legacy` | closed-loop only |
-| `contact_source` | `gait` / `gmo` | `gait` | closed-loop only |
-| `use_sim_time` | `true` / `false` | `true` (sim) / `false` (real) | all |
+| `walk_closed_time` | Closed-loop MPC | `/impedance/command` | `common.walk.target_loop` control cycles |
+| `walk_closed_dist` | Closed-loop MPC | `/impedance/command` | Decelerate near `common.walk.stop_x` |
+| `walk_h20_v10_open` | Open-loop H20/V10 gait | `/motor/command` | Controller's internal `target_loop` |
+| `wlw_open` | Open-loop WLW Hybrid gait | `/motor/command` | `common.wlw.target_loop` duration setting |
+| `trot_open` | Open-loop trot gait | `/motor/command` | `common.trot.target_loop` duration setting |
 
-### `state_source` behaviour (closed-loop only)
+All five executables publish `/walk/swing_phase`. `trot_open` is built and installed but has no entry in the consolidated launch files; run it only with the supporting system required by that controller. The open-loop controllers do not use the `state_source` argument and do not launch force control.
 
-| Value | pos / vel source | ang / ang_vel source | when not ready |
+### Closed-loop launch arguments
+
+| Argument | Default | Purpose |
+|---|---|---|
+| `environment` | `sim` | `sim` or `real`; selects supporting nodes and automatic defaults |
+| `stop_mode` | `time` | `time` selects `walk_closed_time`; `distance` selects `walk_closed_dist` |
+| `state_source` | `odom_legacy` | `odom_legacy`, `sim_driver`, or `esekf` |
+| `contact_source` | `gait` | `gait` or `gmo`; GMO requires ESEKF |
+| `use_sim_time` | `auto` | `auto` follows `environment`, or set `true`/`false` |
+| `config_profile` | `auto` | `auto` follows `environment`, or set `sim`/`real` |
+| `record_bag` | `auto` | `auto` records on the real robot only, or set `true`/`false` |
+| `record_raw_lidar` | `false` | Include raw Livox topics in an ESEKF bag |
+
+The selected state source determines which support nodes start:
+
+| State source | Supported environment | State inputs | Launched support nodes |
 |---|---|---|---|
-| `odom_legacy` | `/odometry/legacy/position`, `/odometry/legacy/velocity` | `/imu` (CX5 AHRS) | — |
-| `sim_driver` | `/tf` (`odom→base_link`) + `/sim/body/velocity` | `/imu` | fallback to `odom_legacy` |
-| `esekf` | `/ekf` (nav_msgs/Odometry) | `/ekf` (bias-corrected) | fallback to `odom_legacy` + `/imu_raw` gyro |
+| `odom_legacy` | Simulation or real robot | Legacy position/velocity and `/imu` | Legacy odometry and height estimator; real robot also starts `imu_node` |
+| `sim_driver` | Simulation only | `/tf` (`odom` to `base_link`) and `/sim/body/velocity` | Legacy odometry and height estimator for controller fallback; the simulator supplies primary state and IMU |
+| `esekf` | Real robot only | `/ekf`, with `/imu_raw` available before EKF data | `esekf_stack.launch.py`: raw IMU, leg ESEKF, Livox, FAST-LIO, odometry relay, fusion, and static TF |
 
-**Switching usage:**
+Every closed-loop mode also launches force estimation and force control. The controller publishes `/impedance/command`; force control converts it to `/motor/command`. `contact_source:=gmo` selects measured contact when GMO data is available. The controller's default is `gait`: the `real.contact_source` value in `config.yaml` does not set this ROS parameter.
 
-```bash
-# Legacy odometry (default baseline)
-ros2 run corgi_mpc walk_closed_time --ros-args -p state_source:=odom_legacy
+### Open-loop launch arguments
 
-# ESEKF odometry (requires corgi_leg_odom to be running)
-ros2 run corgi_mpc walk_closed_time --ros-args \
-  -p state_source:=esekf -p contact_source:=gmo
+`walk_open.launch.py` accepts `environment:=sim/real`, `gait:=h20_v10/wlw`, `use_sim_time:=auto/true/false`, `config_profile:=auto/sim/real`, and `record_bag:=auto/true/false`. Real H20/V10 also launches IMU, force estimation, and legacy odometry nodes for experiment data. WLW launches only its controller node. Both publish `/motor/command` directly.
 
-# Distance-driven stop with ESEKF
-ros2 run corgi_mpc walk_closed_dist --ros-args \
-  -p config_profile:=real -p state_source:=esekf -p contact_source:=gmo
-```
+## ROS interfaces
 
-> **Note**: `esekf` requires `corgi_leg_odom` (inner ESEKF node) to be running.  
-> `contact_source:=gmo` is only meaningful when `state_source:=esekf` is active.
+| Controller | Subscribed topics | Published topics |
+|---|---|---|
+| Closed-loop, common | `/trigger`, `/motor/state` | `/impedance/command`, `/walk/swing_phase` |
+| Closed-loop, legacy state | `/imu`, `/odometry/legacy/position`, `/odometry/legacy/velocity`, `/odometry/legacy/z_position_hip` | Same closed-loop outputs |
+| Closed-loop, simulator state | `/tf`, `/sim/body/velocity`, `/imu`; legacy topics support fallback | Same closed-loop outputs |
+| Closed-loop, ESEKF state | `/ekf`, `/imu_raw`; `/gmo/contact_state` when GMO contact is selected | Same closed-loop outputs |
+| Open-loop H20/V10, trot, or WLW | `/trigger` | `/motor/command`, `/walk/swing_phase` |
 
----
+The closed-loop executables subscribe to all supported state topics; `state_source` selects which incoming data drives the controller. Topic names above are shown from the default root namespace.
 
 ## Configuration
 
-All gait and walk parameters are defined in `config/config.yaml`.  
-Lookup order: profile-specific section (`sim:` / `real:`) first, then `common:`.
+Settings are in [config/config.yaml](config/config.yaml):
 
-```
-common:       # physical constants + shared gait parameters
-sim:          # gains, bounds, and init_eta for Webots
-real:         # gains, bounds, and init_eta for the physical robot
-```
+- `common.walk` holds the closed-loop walking height, speed, step geometry, acceleration ramp, `target_loop`, `stop_x`, and `decel_margin`.
+- `common.trot` and `common.wlw` hold the respective open-loop gait settings.
+- `sim` and `real` hold profile-specific MPC weights, impedance gains, force bounds, and initial joint angles. The selected profile takes precedence over shared gait settings where the controller implements that lookup.
 
-### Gait parameters (`common:`)
+For `walk_closed_time`, the default `target_loop` is 2200 cycles. With the controller's 100 Hz time step, this is 22 seconds after walking starts. For `walk_closed_dist`, the default `stop_x` is 3.0 m and `decel_margin` is 1.2. These are configuration values, not launch arguments. The H20/V10 open-loop controller still contains some gait values in its source, so the YAML file is not its complete configuration.
 
-| Key | Default | Description |
-|---|---|---|
-| `stand_height` | `0.2` | Target body CoM height above ground (m) |
-| `cruise_velocity` | `0.1` | Maximum forward walking speed (m/s) |
-| `step_length` | `0.2` | Foot step length (m) |
-| `step_height` | `0.08` | Foot swing clearance height (m) |
-| `ramp_loops` | `100` | Velocity ramp-up/down duration in control cycles (= 1 s at 100 Hz) |
+## Bag recording
 
-### Time-driven stop (`walk_closed_time`, `common:`)
+`script/record_mpc_bag.py` selects the topic set from the controller mode. Every set includes `/trigger`, `/motor/state`, `/motor/command`, and `/walk/swing_phase`.
 
-| Key | Default | Description |
-|---|---|---|
-| `target_loop` | `2200` | Total MPC cycles before stopping (= 22 s at 100 Hz) |
-
-### Distance-driven stop (`walk_closed_dist`, `common:`)
-
-| Key | Default | Description |
-|---|---|---|
-| `stop_x` | `3.0` | Target stop position on X axis in odom/world frame (m) |
-| `decel_margin` | `1.2` | Safety multiplier on decel distance; `> 1.0` starts braking earlier |
-
-Deceleration starts at `stop_x − decel_dist`, where:
-
-$$\text{decel\_dist} = \tfrac{1}{2} \times \text{cruise\_velocity} \times (\text{ramp\_loops} \times dt) \times \text{decel\_margin}$$
-
-With defaults: $0.5 \times 0.1 \times 1.0 \times 1.2 = 0.06\ \text{m}$
-
-### Profile-specific parameters (`sim:` / `real:`)
-
-| Key | Description |
+| Mode | Additional recorded topics |
 |---|---|
-| `Q_diagonal` | MPC state cost weights (13 elements). **X/Y position weights are 0** — forward motion is controlled purely through `target_vel_x`; `target_pos_x` has no effect on force output |
-| `Bx/By_swing`, `Bx/By_stance` | Impedance damping coefficients |
-| `Kx/Ky_swing`, `Kx/Ky_stance` | Impedance stiffness coefficients |
-| `fz_lower_bound` | Lower bound on normal foot force (N) |
-| `init_eta` | Initial joint angles `[θ_A, β_A, θ_B, β_B, θ_C, β_C, θ_D, β_D]` (rad) |
-
----
-
-## Bag Recording
-
-`script/record_mpc_bag.py` builds the topic list from the selected controller mode. It records the common control topics `/trigger`, `/motor/state`, `/motor/command`, and `/walk/swing_phase` plus:
-
-| Mode | Additional topics |
-|---|---|
-| Closed, `odom_legacy` | `/force/state`, `/impedance/command`, `/imu`, `/odometry/legacy/position`, `/odometry/legacy/velocity`, `/odometry/legacy/contact`, `/odometry/legacy/z_position_hip` |
-| Closed, `sim_driver` | Closed legacy topics plus `/tf`, `/sim/body/velocity` for the primary simulated state |
+| Closed, `odom_legacy` | `/force/state`, `/impedance/command`, `/imu`, and `/odometry/legacy/{position,velocity,contact,z_position_hip}` |
+| Closed, `sim_driver` | Closed legacy set plus `/tf` and `/sim/body/velocity` |
 | Closed, `esekf` | `/force/state`, `/impedance/command`, `/imu_raw`, `/ekf`, `/gmo/contact_state`, `/lidar_odom`, `/odom_mapping`, `/fusion/bv` |
-| Open, `h20_v10` | `/force/state`, `/imu`, and legacy odometry topics (matching the existing real-robot experiment) |
+| Open, `h20_v10` | `/force/state`, `/imu`, and legacy odometry topics |
 | Open, `wlw` | No additional topics |
 
-`record_raw_lidar:=true` adds `/livox/lidar`, `/livox/imu`, and `/Odometry` to ESEKF bags for LiDAR reprocessing. Bags start 3 seconds after launch, or 15 seconds for ESEKF, so the initial 15 seconds are not captured. Output is `bag/mpc_<state_source_or_gait>_<timestamp>` in the source package when available. The older shell recorders remain in `script/` for manual use; new launch files use the Python recorder.
+Set `record_raw_lidar:=true` with ESEKF to add `/livox/lidar`, `/livox/imu`, and `/Odometry`. ESEKF recording starts 15 seconds after launch, so that initial period is not in the bag. The default output is `bag/mpc_<state_source_or_gait>_<timestamp>` in the source package when it is available. The older shell recorders remain available for manual use.
 
-To inspect a topic set without recording:
+To inspect a topic list without recording:
 
 ```bash
-python3 src/corgi_mpc/script/record_mpc_bag.py --controller open --gait wlw --print-topics
+python3 src/corgi_mpc/script/record_mpc_bag.py --controller closed --state-source esekf --print-topics
 ```
+
+## Legacy launch names
+
+The previous launch names remain as compatibility entry points:
+
+| Existing file | New selection |
+|---|---|
+| `walk_closed_sim.launch.py` | `walk_closed.launch.py environment:=sim stop_mode:=time state_source:=odom_legacy` |
+| `walk_closed_real.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=time state_source:=odom_legacy` |
+| `walk_closed_legacy.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=distance state_source:=odom_legacy` |
+| `walk_closed_esekf.launch.py` | `walk_closed.launch.py environment:=real stop_mode:=distance state_source:=esekf` |
+| `walk_h20_v10_open_real.launch.py` | `walk_open.launch.py environment:=real gait:=h20_v10` |
+| `wlw_open_sim.launch.py` | `walk_open.launch.py environment:=sim gait:=wlw` |
+| `wlw_open_real.launch.py` | `walk_open.launch.py environment:=real gait:=wlw` |
+
+The ESEKF compatibility launch retains the controller's effective `contact_source:=gait` default. Use the new entry point with `contact_source:=gmo` when GMO contact should drive control. If an older setup ran `walk_closed_real.launch.py state_source:=esekf` beside a separately launched ESEKF stack, stop the separate stack: the consolidated entry point starts it automatically, and duplicate publishers would otherwise result. The unused `state_source` argument was removed from the H20/V10 open-loop compatibility entry point.
