@@ -6,7 +6,7 @@ ROS 2 controllers for the Corgi leg-wheel robot. The closed-loop walking control
 
 The closed-loop MPC algorithm is based on Yi-Syuan Shen's 2025 master's thesis, [輪腳複合機器人上可變多觸地點之全機力控制架構開發](https://tdr.lib.ntu.edu.tw/jspui/handle/123456789/99482?mode=full) (National Taiwan University, DOI: [10.6342/NTU202502013](https://doi.org/10.6342/NTU202502013)). The thesis describes a whole-body force-control architecture for a leg-wheel robot with varying ground contact points. This package implements the MPC controller and the launch integrations documented below; the open-loop gait executables serve different control paths.
 
-![MPC control architecture](docs/images/mpc_architecture.png)
+![MPC control architecture](docs/images/mpc_architecture_white.png)
 
 *System-level MPC architecture. Gait references and estimated body/contact states feed the MPC. Its force references pass through force control and the motor driver. The frequencies in the supplied diagram describe that architecture; this README does not assert that every current ROS node runs at the frequency shown.*
 
