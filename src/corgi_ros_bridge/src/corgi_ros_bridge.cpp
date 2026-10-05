@@ -128,22 +128,19 @@ void load_real_axis_config(const std::string& path, const rclcpp::Logger& logger
     }
 }
 
-// Gain ranges of the 12-bit CAN fields (fpga_driver include/can_packet.h).
-// fpga_driver clamps too; clamping here as well makes an out-of-range gain
-// visible in the ROS log instead of silently saturating on the sbRIO.
-constexpr double BRIDGE_KP_MAX = 500.0;
-constexpr double BRIDGE_KI_MAX = 10.0;
-constexpr double BRIDGE_KD_MAX = 5.0;
-
-double clamp_gain(double value, double max, const char* name)
+// Gains must be finite and non-negative. There is deliberately no upper
+// bound here: the CAN field range applies AFTER fpga_driver divides each
+// gain by its motor's KT, which only the driver knows, so range saturation
+// (with its own warning) lives in fpga_driver.
+double sanitize_gain(double value, const char* name)
 {
-    double clamped = std::isfinite(value) ? std::min(std::max(value, 0.0), max) : 0.0;
-    if (clamped != value) {
+    double clean = (std::isfinite(value) && value > 0.0) ? value : 0.0;
+    if (clean != value) {
         static rclcpp::Clock steady_clock(RCL_STEADY_TIME);
         RCLCPP_WARN_THROTTLE(rclcpp::get_logger("corgi_ros_bridge"), steady_clock, 1000,
-            "%s=%g outside [0, %g], clamped to %g", name, value, max, clamped);
+            "%s=%g is negative or not finite, sent as 0", name, value);
     }
-    return clamped;
+    return clean;
 }
 
 void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
@@ -170,15 +167,15 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
         grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta * axis.theta, 17/180.0*M_PI), 160/180.0*M_PI));
         grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta * axis.beta);
         grpc_motor_modules[i]->set_gamma(ros_motor_modules[i].gamma * axis.gamma);
-        grpc_motor_modules[i]->set_kp_r(clamp_gain(ros_motor_modules[i].kp_r, BRIDGE_KP_MAX, "kp_r"));
-        grpc_motor_modules[i]->set_kp_l(clamp_gain(ros_motor_modules[i].kp_l, BRIDGE_KP_MAX, "kp_l"));
-        grpc_motor_modules[i]->set_kp_h(clamp_gain(ros_motor_modules[i].kp_h, BRIDGE_KP_MAX, "kp_h"));
-        grpc_motor_modules[i]->set_ki_r(clamp_gain(ros_motor_modules[i].ki_r, BRIDGE_KI_MAX, "ki_r"));
-        grpc_motor_modules[i]->set_ki_l(clamp_gain(ros_motor_modules[i].ki_l, BRIDGE_KI_MAX, "ki_l"));
-        grpc_motor_modules[i]->set_ki_h(clamp_gain(ros_motor_modules[i].ki_h, BRIDGE_KI_MAX, "ki_h"));
-        grpc_motor_modules[i]->set_kd_r(clamp_gain(ros_motor_modules[i].kd_r, BRIDGE_KD_MAX, "kd_r"));
-        grpc_motor_modules[i]->set_kd_l(clamp_gain(ros_motor_modules[i].kd_l, BRIDGE_KD_MAX, "kd_l"));
-        grpc_motor_modules[i]->set_kd_h(clamp_gain(ros_motor_modules[i].kd_h, BRIDGE_KD_MAX, "kd_h"));
+        grpc_motor_modules[i]->set_kp_r(sanitize_gain(ros_motor_modules[i].kp_r, "kp_r"));
+        grpc_motor_modules[i]->set_kp_l(sanitize_gain(ros_motor_modules[i].kp_l, "kp_l"));
+        grpc_motor_modules[i]->set_kp_h(sanitize_gain(ros_motor_modules[i].kp_h, "kp_h"));
+        grpc_motor_modules[i]->set_ki_r(sanitize_gain(ros_motor_modules[i].ki_r, "ki_r"));
+        grpc_motor_modules[i]->set_ki_l(sanitize_gain(ros_motor_modules[i].ki_l, "ki_l"));
+        grpc_motor_modules[i]->set_ki_h(sanitize_gain(ros_motor_modules[i].ki_h, "ki_h"));
+        grpc_motor_modules[i]->set_kd_r(sanitize_gain(ros_motor_modules[i].kd_r, "kd_r"));
+        grpc_motor_modules[i]->set_kd_l(sanitize_gain(ros_motor_modules[i].kd_l, "kd_l"));
+        grpc_motor_modules[i]->set_kd_h(sanitize_gain(ros_motor_modules[i].kd_h, "kd_h"));
         grpc_motor_modules[i]->set_torque_r(ros_motor_modules[i].torque_r * axis.motor_r);
         grpc_motor_modules[i]->set_torque_l(ros_motor_modules[i].torque_l * axis.motor_l);
         grpc_motor_modules[i]->set_torque_h(ros_motor_modules[i].torque_h * axis.motor_h);
