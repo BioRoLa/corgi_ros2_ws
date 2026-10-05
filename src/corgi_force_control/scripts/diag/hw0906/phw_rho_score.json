@@ -1,0 +1,64 @@
+{
+ "baseline_lambda0_roll_deg": 0.437,
+ "arcs": {
+  "s2_ol10_roll1": {
+   "lam": 10,
+   "roll_med": -2.494,
+   "roll_med_w1_6": -2.6155,
+   "d_roll": -2.931,
+   "ratio": -0.2931,
+   "excluded": false,
+   "reason": ""
+  },
+  "s2_ol10_a2": {
+   "lam": 10,
+   "roll_med": -3.54,
+   "roll_med_w1_6": -3.2525,
+   "d_roll": -3.977,
+   "ratio": -0.3977,
+   "excluded": true,
+   "reason": "VOID (launch rule 325.43)"
+  },
+  "s2_ol10_a1": {
+   "lam": 10,
+   "roll_med": -3.382,
+   "roll_med_w1_6": -2.9425,
+   "d_roll": -3.819,
+   "ratio": -0.3819,
+   "excluded": true,
+   "reason": "k_roll 0.25 (not level-comparable)"
+  },
+  "s2_ol15_a1": {
+   "lam": 15,
+   "roll_med": -4.0725,
+   "roll_med_w1_6": -4.0725,
+   "d_roll": -4.5095,
+   "ratio": -0.30063333333333336,
+   "excluded": false,
+   "reason": ""
+  },
+  "s2_ol10n_a2": {
+   "lam": -10,
+   "roll_med": 2.6925,
+   "roll_med_w1_6": 2.9065,
+   "d_roll": 2.2555,
+   "ratio": -0.22555,
+   "excluded": false,
+   "reason": ""
+  },
+  "s2_ol15n_a1": {
+   "lam": -15,
+   "roll_med": 4.057,
+   "roll_med_w1_6": 4.316000000000001,
+   "d_roll": 3.6200000000000006,
+   "ratio": -0.24133333333333337,
+   "excluded": false,
+   "reason": ""
+  }
+ },
+ "verdict": {
+  "n_scored": 4,
+  "sign_negative_and_in_runbook_band": true,
+  "inside_registered_sim_band_0p2_0p45": true
+ }
+}
