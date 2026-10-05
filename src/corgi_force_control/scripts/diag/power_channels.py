@@ -8,7 +8,7 @@ load one leg at a time and watch which channels answer.
 
 DETERMINING PB1/PB2 -> LEFT/RIGHT (about a minute, robot in the straps):
 
-    1. Bring the robot to Live (STANDBY) so the motors hold.
+    1. Bring the robot to Active (mode 3) so the motors hold.
     2. Run this with --watch.
     3. Push ONE leg against its hold, firmly, for a couple of seconds.
        The motors resisting will draw current.

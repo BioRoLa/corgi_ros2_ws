@@ -14,7 +14,7 @@ other mode is silently dropped and shows here as a timeout -- the path is
 self-gating. The published `motor_mode` field is NOT a check: the driver never
 calls set_motor_mode, so it is always 0/REST on this branch (verified by grep
 over fpga_driver/src). We therefore gate on robot/state robot_mode == 4
-(MOTORCONFIG, really published by robot_fsm) plus a live probe read.
+(CONFIG, really published by robot_fsm) plus a live probe read.
 
 Sub-commands (run on the Orin with the ROS env sourced):
   status                     print robot_mode / power switches / stream counts
@@ -36,7 +36,7 @@ import rclpy
 from corgi_msgs.msg import (ConfigStamped, MotorStateStamped,
                             PowerStateStamped, RobotStateStamped)
 
-ROBOT_MODE = {0: 'SYSTEM_ON', 1: 'INIT', 2: 'IDLE', 3: 'STANDBY', 4: 'MOTORCONFIG'}
+ROBOT_MODE = {0: 'UNINITIALIZED', 1: 'INIT', 2: 'IDLE', 3: 'ACTIVE', 4: 'CONFIG'}
 MODULE = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
 MOTOR = {'R': 0, 'L': 1, 'H': 2}          # Config.proto: MOTOR_R 0, MOTOR_L 1, MOTOR_H 2
 CONFIG_MODE_READ = 0                       # the ONLY mode this script uses
@@ -161,7 +161,7 @@ def cmd_probe(args):
     c.spin(3.0)
     print('precheck:', c.status_line())
     if not c.in_motorconfig():
-        print('REFUSED: robot/state robot_mode must be 4 (MOTORCONFIG). Nothing was sent.')
+        print('REFUSED: robot/state robot_mode must be 4 (CONFIG). Nothing was sent.')
         return 2
     val, err = c.read_retry(MODULE['A'], MOTOR['R'], TYPE_FLOAT, 25)
     print('probe A:R FLOAT 25 (KP_MAX) -> value=%s error=%s' % (val, err))
@@ -177,7 +177,7 @@ def cmd_dump(args):
     c.spin(3.0)
     print('precheck:', c.status_line())
     if not c.in_motorconfig():
-        print('REFUSED: robot/state robot_mode must be 4 (MOTORCONFIG). Nothing was sent.')
+        print('REFUSED: robot/state robot_mode must be 4 (CONFIG). Nothing was sent.')
         return 2
     targets = [t.strip().upper() for t in args.targets.split(',') if t.strip()]
     stamp = time.strftime('%Y%m%d_%H%M%S')

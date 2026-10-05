@@ -13,11 +13,11 @@ import os
 
 class ROBOTMODE(IntEnum):
     """Robot finite state machine modes"""
-    SYSTEM_ON = 0
+    UNINITIALIZED = 0
     INIT = 1
     IDLE = 2
-    STANDBY = 3
-    MOTORCONFIG = 4
+    ACTIVE = 3
+    CONFIG = 4
 
 
 class Module(IntEnum):

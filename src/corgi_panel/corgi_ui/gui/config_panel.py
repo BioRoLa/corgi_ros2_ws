@@ -120,7 +120,7 @@ class CorgiConfigPanel(QWidget):
     - Write individual parameters with validation
     - Progress indication during bulk read operations
     - Error handling and retry logic
-    - REST command to return to SYSTEM_ON mode
+    - REST command to return to UNINITIALIZED mode
     """
     
     def __init__(self):
@@ -689,7 +689,7 @@ class CorgiConfigPanel(QWidget):
     # ========================================================================
     
     def _send_rest_command(self):
-        """Send REST command to return to SYSTEM_ON mode"""
+        """Send REST command to return to UNINITIALIZED mode"""
         if not self.ros_worker.is_running:
             self._log(
                 "ROS Worker not running",
@@ -703,11 +703,11 @@ class CorgiConfigPanel(QWidget):
         robot_cmd.header.seq = self.robot_cmd_seq
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
         robot_cmd.header.frame_id = ''
-        robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        robot_cmd.request_robot_mode = int(ROBOTMODE.UNINITIALIZED)
         
         self.ros_worker.send_robot_command(robot_cmd)
         
-        self._log("Sent REST (SYSTEM_ON)", LOGLEVEL.INFO, "orin")
+        self._log("Sent REST (UNINITIALIZED)", LOGLEVEL.INFO, "orin")
         
         # Close window
         self.close()

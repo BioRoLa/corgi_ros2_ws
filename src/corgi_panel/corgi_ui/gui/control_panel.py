@@ -67,40 +67,43 @@ class CorgiControlPanel(QWidget):
     # Operator-facing names, taken from the FIRMWARE rather than inferred:
     # fpga_driver/src/robot_fsm.cpp and motor_fsm.cpp (read 2026-09-01).
     #
-    #   SYSTEM_ON (0)   switchMode(REST) + power switches OFF. REST zeroes
+    #   UNINITIALIZED (0)
+    #                   switchMode(REST) + power switches OFF. REST zeroes
     #                   every motor command, so the motors are DE-ENERGISED
-    #                   and the robot goes LIMP. The firmware's own name is
-    #                   the most misleading label in the stack.
+    #                   and the robot goes LIMP. (Was SYSTEM_ON.)
     #   INIT (1)        digital -> signal -> power, SET_ZERO, HALL_CALIBRATE
     #                   (a driven velocity sweep -- THE LEGS MOVE), MOTOR,
-    #                   then auto-enters IDLE. Not a button: SystemOn -> IDLE
+    #                   then auto-enters IDLE. Not a button: UNINITIALIZED -> IDLE
     #                   is routed through it.
     #   IDLE (2)        MOTOR mode, does NOT accept gRPC commands. Holds
     #                   position only SOFTLY -- observed on the robot, and it
     #                   follows: the gains still in force are HALL_CALIBRATE's
     #                   (kp 50, kd 1.5). Firm torque arrives after Set Home.
-    #   STANDBY (3)     MOTOR mode, commands accepted -- nothing moves on
+    #   ACTIVE (3)      MOTOR mode, commands accepted -- nothing moves on
     #                   entry, it only opens the door. Gaits run here; homing
     #                   is permitted here and is what produces firm torque.
-    #   MOTORCONFIG (4) switchMode(CONFIG), which sets REST: motors LIMP
+    #                   (Was STANDBY.)
+    #   CONFIG (4)      switchMode(CONFIG), which sets REST: motors LIMP
     #                   again while parameters are read/written.
+    #                   (Was MOTORCONFIG.)
     #
     # Three facts the old labels hid, the first two safety-relevant:
     # "Set Powered" DROPPED the legs, "Arm" MOVES them, and "Go Live - home
     # && run" neither homed nor produced holding torque. The buttons now say
     # what each one does.
     MODE_LABEL = {
-        ROBOTMODE.SYSTEM_ON:   'Motors Off',
-        ROBOTMODE.INIT:        'Initialising',
-        ROBOTMODE.IDLE:        'Energised (soft)',
-        ROBOTMODE.STANDBY:     'Commands Enabled',
-        ROBOTMODE.MOTORCONFIG: 'Motor Config',
+        ROBOTMODE.UNINITIALIZED: 'Uninitialized (motors off)',
+        ROBOTMODE.INIT:          'Initialising',
+        ROBOTMODE.IDLE:          'Idle (energised, soft)',
+        ROBOTMODE.ACTIVE:        'Active (commands enabled)',
+        ROBOTMODE.CONFIG:        'Config (motors limp)',
     }
 
     @classmethod
     def _mode_text(cls, mode) -> str:
-        """'Live \u00b7 STANDBY' -- friendly first, canonical alongside, so the
-        panel and the robot's own log lines can be matched up at a glance."""
+        """'Active (commands enabled) \u00b7 ACTIVE' -- friendly first,
+        canonical alongside, so the panel and the robot's own log lines can
+        be matched up at a glance."""
         try:
             enum = ROBOTMODE(mode)
         except ValueError:
@@ -526,13 +529,13 @@ class CorgiControlPanel(QWidget):
         self.btn_stop_gait.setEnabled(False)
         self.btn_stop_gait.setToolTip(
             'End the run and LEAVE THE ROBOT HOLDING.\n'
-            'Drops the gait trigger, then requests Energised (IDLE) -- the '
+            'Drops the gait trigger, then requests Idle (energised) -- the '
             'motors stay powered.\n'
             'Use this to finish a run. Use E-STOP when something is wrong.')
         self.btn_estop.setToolTip(
             'EMERGENCY STOP -- one press, one outcome, every time.\n'
             '  1. drops the gait trigger (the controller\'s own abort)\n'
-            '  2. requests Motors Off (SYSTEM_ON): motors DE-ENERGISED.\n'
+            '  2. requests Uninitialized (motors off): motors DE-ENERGISED.\n'
             '     THE ROBOT GOES LIMP and will fall if unsupported.\n'
             'Re-sent every 200 ms until the robot confirms. After 5 s with '
             'no confirmation it says so and tells you to cut the supply.\n'
@@ -540,33 +543,6 @@ class CorgiControlPanel(QWidget):
             'To end a run without dropping the robot, use Stop Gait.\n'
             'This is a gRPC REQUEST and needs the ROS bridge. The bench '
             'supply output-off is the real emergency stop.')
-        self._estop_timer = QTimer(self)
-        self._estop_timer.timeout.connect(self._estop_retry)
-        self._estop_deadline = 0.0
-
-        self.btn_stop_gait = QPushButton('Stop Gait')
-        self.btn_stop_gait.setObjectName("StopGaitBtn")
-        self.btn_stop_gait.setMinimumWidth(100)
-        self.btn_stop_gait.setMinimumHeight(50)
-        self.btn_stop_gait.clicked.connect(self._on_stop_gait_clicked)
-        self.btn_stop_gait.setEnabled(False)
-        self.btn_stop_gait.setToolTip(
-            'End the run and LEAVE THE ROBOT HOLDING.\n'
-            'Drops the gait trigger, then requests Energised (IDLE) -- the '
-            'motors stay powered.\n'
-            'Use this to finish a run. Use E-STOP when something is wrong.')
-        self.btn_estop.setToolTip(
-            'EMERGENCY STOP. Drops the gait trigger, then requests a mode '
-            'change:\n'
-            '  from Commands Enabled (STANDBY) -> Power Up && Hold (IDLE), '
-            'motors still holding\n'
-            '  from anywhere else -> Motors Off (SYSTEM_ON), MOTORS '
-            'DE-ENERGISED and the robot goes limp\n'
-            'A second press within 5 s asks before de-energising, so a '
-            'double-tap cannot drop a standing robot. The trigger is always '
-            'dropped first, unconditionally.\n'
-            'This is a REQUEST over gRPC: no ack, no retry, and it needs the '
-            'ROS bridge. The supply output-off is the real emergency stop.')
         self.btn_estop.setEnabled(False)
         
         top_bar.addStretch(1)
@@ -637,7 +613,7 @@ class CorgiControlPanel(QWidget):
         lbl_mode_title = QLabel("Current mode:")
         # Friendly name first, canonical second -- see MODE_LABEL. The
         # readout is the one place both have to be visible, because the
-        # robot's own log lines say STANDBY while this panel says Live.
+        # robot's own log lines use the bare enum name.
         lbl_mode_title.setStyleSheet("color: #888; font-size: 12px;")
         
         self.label_robot_mode_value = QLabel("no robot state")
@@ -662,21 +638,20 @@ class CorgiControlPanel(QWidget):
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('1 \u00b7 Motors Off  (safe)')
+        self.btn_systemon = QPushButton('1 \u00b7 Uninitialized  (motors off)')
         self.btn_systemon.setToolTip(
-            'SYSTEM_ON (0) — the firmware\'s "safe state", and NOT what its '
-            'name suggests.\nMotors go to REST (every command zeroed) and '
+            'UNINITIALIZED (0) — the firmware\'s "safe state".\nMotors go to REST (every command zeroed) and '
             'the power switches go OFF, so THE ROBOT GOES LIMP. Support it '
             'before pressing this.\nAlso where the e-stop retreats to from '
-            'anywhere but Standby.')
+            'anywhere.')
         self.btn_systemon.setObjectName("SystemOnBtn")
         self.btn_systemon.setCheckable(True)
-        self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.SYSTEM_ON))
+        self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.UNINITIALIZED))
         self.btn_systemon.setEnabled(False)
         
-        self.btn_idle = QPushButton('2 \u00b7 Power Up  \u2014  hall calib')
+        self.btn_idle = QPushButton('2 \u00b7 Idle  \u2014  power up + hall calib')
         self.btn_idle.setToolTip(
-            'IDLE (2). Coming from Motors Off this routes through INIT: '
+            'IDLE (2). Coming from Uninitialized this routes through INIT: '
             'power sequence, set-zero, then HALL CALIBRATION — a driven '
             'sweep, SO THE LEGS MOVE. Keep clear.\n'
             'It then settles into a closed pose, energised but only SOFTLY '
@@ -684,32 +659,32 @@ class CorgiControlPanel(QWidget):
             'are the calibration ones (kp 50, kd 1.5). Firm torque arrives '
             'after Set Home.\n'
             'Commands are NOT accepted in this state.\n'
-            'Also where the e-stop drops you from Commands Enabled.')
+            'Also where Stop Gait drops you from Active.')
         self.btn_idle.setCheckable(True)
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('3 \u00b7 Enable Commands')
+        self.btn_standby = QPushButton('3 \u00b7 Active  (commands enabled)')
         self.btn_standby.setToolTip(
-            'STANDBY (3). Motors accept commands. Nothing moves on entry — '
+            'ACTIVE (3). Motors accept commands. Nothing moves on entry — '
             'this only opens the door.\n'
             'It does NOT home: press "Set Home" for that (it runs '
             'corgi_homing), and the firm holding torque appears once homing '
             'has set the zero.\n'
-            'Gaits run in this state and nowhere else.\nDown: Power Up.')
+            'Gaits run in this state and nowhere else.\nDown: Idle, or straight to Uninitialized (motors off).')
         self.btn_standby.setCheckable(True)
-        self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
+        self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.ACTIVE))
         self.btn_standby.setEnabled(False)
         
-        self.btn_motorconfig = QPushButton('Enter Motor Config')
+        self.btn_motorconfig = QPushButton('Config')
         self.btn_motorconfig.setToolTip(
-            'MOTORCONFIG (4). Side branch off Motors Off / Power Up && Hold, '
+            'CONFIG (4). Side branch off Uninitialized / Idle, '
             'not a rung on the ladder.\nCONFIG sets the motors to REST, so '
             'THE ROBOT GOES LIMP here too while parameters are read and '
             'written.\nOpens the config panel on entry.')
         self.btn_motorconfig.setObjectName("ConfigBtn")
         self.btn_motorconfig.setCheckable(True)
-        self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.MOTORCONFIG))
+        self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.CONFIG))
         self.btn_motorconfig.setEnabled(False)
         
         grp_fsm_layout.addWidget(self.btn_systemon)
@@ -724,7 +699,7 @@ class CorgiControlPanel(QWidget):
         self.btn_home.setToolTip(
             'Runs corgi_homing, which drives the legs to the reference pose '
             'and sets the joint zero.\n'
-            'Only available in Commands Enabled (STANDBY).\n'
+            'Only available in Active.\n'
             'This is what produces the FIRM holding torque — before it, the '
             'motors are energised but softly held.')
         self.btn_home.clicked.connect(self._on_home_clicked)
@@ -1533,14 +1508,13 @@ class CorgiControlPanel(QWidget):
         # command source with the legs loaded. The e-stop is the control for
         # that situation; this button is for between runs.
         mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', -1)
-        if self.btn_trigger.isChecked() or mode == ROBOTMODE.STANDBY:
+        if self.btn_trigger.isChecked() or mode == ROBOTMODE.ACTIVE:
             why = []
             if self.btn_trigger.isChecked():
                 why.append('the trigger is ON')
-            if mode == ROBOTMODE.STANDBY:
-                why.append('the robot is in Commands Enabled (STANDBY)')
-            self._log('REFUSED to stop the FPGA driver: %s. Drop to Power '
-                      'Up (IDLE) and stop the trigger first -- pulling the command '
+            if mode == ROBOTMODE.ACTIVE:
+                why.append('the robot is in Active')
+            self._log('REFUSED to stop the FPGA driver: %s. Drop to Idle and stop the trigger first -- pulling the command '
                       'source out from under a running gait is not a stop. Use '
                       'E-STOP if you need the robot to stop NOW.'
                       % ' and '.join(why), LOGLEVEL.ERROR, 'fpga_driver')
@@ -1863,7 +1837,13 @@ class CorgiControlPanel(QWidget):
         """Request robot mode change"""
         if not self.ros_worker.is_running:
             return
-        
+
+        # Reachable straight from ACTIVE now, i.e. mid-gait: drop the
+        # trigger first, exactly as E-STOP and Stop Gait do.
+        if mode == ROBOTMODE.UNINITIALIZED and self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+
         robot_cmd = RobotCmdStamped()
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
@@ -1883,12 +1863,12 @@ class CorgiControlPanel(QWidget):
         self._update_button_states()
     
     def _estop_retry(self):
-        """Re-send SYSTEM_ON until the robot confirms it, or time out loudly."""
+        """Re-send UNINITIALIZED until the robot confirms it, or time out loudly."""
         mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', None)
-        if mode is not None and int(mode) == int(ROBOTMODE.SYSTEM_ON):
+        if mode is not None and int(mode) == int(ROBOTMODE.UNINITIALIZED):
             self._estop_timer.stop()
             self.log_widget.add_log(
-                'E-STOP CONFIRMED: robot reports Motors Off (SYSTEM_ON)',
+                'E-STOP CONFIRMED: robot reports Uninitialized (motors off)',
                 LOGLEVEL.WARN, 'orin')
             return
 
@@ -1896,7 +1876,7 @@ class CorgiControlPanel(QWidget):
             self._estop_timer.stop()
             self.log_widget.add_log(
                 'E-STOP NOT CONFIRMED after 5 s -- the robot has not reported '
-                'Motors Off. The gait trigger IS dropped, but do NOT assume '
+                'Uninitialized (motors off). The gait trigger IS dropped, but do NOT assume '
                 'the motors are de-energised: CUT THE BENCH SUPPLY OUTPUT.',
                 LOGLEVEL.FATAL, 'orin')
             return
@@ -1907,7 +1887,7 @@ class CorgiControlPanel(QWidget):
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
         robot_cmd.header.frame_id = ''
-        robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        robot_cmd.request_robot_mode = int(ROBOTMODE.UNINITIALIZED)
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
 
@@ -1936,7 +1916,7 @@ class CorgiControlPanel(QWidget):
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
         self.log_widget.add_log(
-            'STOP GAIT: trigger dropped, -> Energised (IDLE), motors still '
+            'STOP GAIT: trigger dropped, -> Idle (energised), motors still '
             'holding', LOGLEVEL.WARN, 'orin')
         self._update_button_states()
 
@@ -2018,15 +1998,15 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        # UNCONDITIONAL. Not "IDLE from STANDBY, SYSTEM_ON otherwise":
+        # UNCONDITIONAL. Not "IDLE from ACTIVE, UNINITIALIZED otherwise":
         # an emergency control whose action depends on invisible state is
         # not an emergency control. One press, one outcome, every time --
         # motors de-energised. The gentle variant is its own button.
         del current
-        robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-        self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
+        robot_cmd.request_robot_mode = int(ROBOTMODE.UNINITIALIZED)
+        self._pending_robot_mode = int(ROBOTMODE.UNINITIALIZED)
         self.log_widget.add_log(
-            'E-STOP: -> Motors Off (SYSTEM_ON), de-energising -- retrying '
+            'E-STOP: -> Uninitialized (motors off), de-energising -- retrying '
             'until the robot confirms', LOGLEVEL.WARN, 'orin')
 
         self._last_estop_at = time.monotonic()
@@ -2501,7 +2481,7 @@ class CorgiControlPanel(QWidget):
             self._pending_robot_mode = None
             
             # Launch config panel if entering CONFIG mode
-            if current_mode == ROBOTMODE.MOTORCONFIG:
+            if current_mode == ROBOTMODE.CONFIG:
                 self._launch_config_panel()
         
         self._last_confirmed_mode = current_mode
@@ -2531,11 +2511,11 @@ class CorgiControlPanel(QWidget):
         self.label_robot_mode_value.setText(mode_text)
         
         # Update mode display color
-        if state.robot_mode == ROBOTMODE.SYSTEM_ON:
+        if state.robot_mode == ROBOTMODE.UNINITIALIZED:
             color = COLORS.STATUS_SUCCESS
         elif state.robot_mode == ROBOTMODE.IDLE:
             color = "#2979ff"
-        elif state.robot_mode == ROBOTMODE.MOTORCONFIG:
+        elif state.robot_mode == ROBOTMODE.CONFIG:
             color = COLORS.STATUS_WARNING
         else:
             color = COLORS.STATUS_NEUTRAL
@@ -2545,10 +2525,10 @@ class CorgiControlPanel(QWidget):
         )
         
         # Update button checked states to reflect current mode
-        self.btn_systemon.setChecked(state.robot_mode == ROBOTMODE.SYSTEM_ON)
+        self.btn_systemon.setChecked(state.robot_mode == ROBOTMODE.UNINITIALIZED)
         self.btn_idle.setChecked(state.robot_mode == ROBOTMODE.IDLE)
-        self.btn_standby.setChecked(state.robot_mode == ROBOTMODE.STANDBY)
-        self.btn_motorconfig.setChecked(state.robot_mode == ROBOTMODE.MOTORCONFIG)
+        self.btn_standby.setChecked(state.robot_mode == ROBOTMODE.ACTIVE)
+        self.btn_motorconfig.setChecked(state.robot_mode == ROBOTMODE.CONFIG)
         
         # Refreshed on the 5 Hz paint timer, not here: robot/state also
         # streams at 1 kHz, so this call site doubled the ~19,000
@@ -2931,17 +2911,17 @@ class CorgiControlPanel(QWidget):
         self.btn_csv_select.setEnabled(enable_basic)
         self.btn_csv_run.setEnabled(enable_basic)
         
-        # Set zero button (only in STANDBY mode)
+        # Set zero button (only in ACTIVE mode)
         if hasattr(self, 'robot_state') and hasattr(self.robot_state, 'robot_mode'):
             current = self.robot_state.robot_mode
         else:
             current = -1
         
-        # STANDBY gate kept (homing outside STANDBY is unsafe), but a
+        # ACTIVE gate kept (homing outside ACTIVE is unsafe), but a
         # live homing run also holds the button down: this is called on
         # every robot-state update and used to re-enable it mid-run.
         self.btn_home.setEnabled(bridge_on
-                                 and current == ROBOTMODE.STANDBY
+                                 and current == ROBOTMODE.ACTIVE
                                  and not self._homing_active)
         
         # FSM buttons - disable in simulation mode or when bridge is off
@@ -2959,20 +2939,23 @@ class CorgiControlPanel(QWidget):
                 self.btn_motorconfig.setEnabled(True)
             else:
                 # FSM Transition Logic:
-                # SYSTEM_ON (0) <=> IDLE (2)
-                # SYSTEM_ON (0) <=> MOTORCONFIG (4)
-                # IDLE (2) <=> STANDBY (3)
-                # IDLE (2) -> MOTORCONFIG (4)
+                # UNINITIALIZED (0) <=> IDLE (2)
+                # UNINITIALIZED (0) <=> CONFIG (4)
+                # IDLE (2) <=> ACTIVE (3)
+                # IDLE (2) -> CONFIG (4)
+                # ACTIVE (3) -> UNINITIALIZED (0)  (firmware allows it; the
+                #   safe direction should never need two clicks)
                 
                 self.btn_systemon.setEnabled(
-                    current in [ROBOTMODE.INIT, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
+                    current in [ROBOTMODE.INIT, ROBOTMODE.IDLE,
+                                ROBOTMODE.ACTIVE, ROBOTMODE.CONFIG]
                 )
                 self.btn_idle.setEnabled(
-                    current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.STANDBY]
+                    current in [ROBOTMODE.UNINITIALIZED, ROBOTMODE.ACTIVE]
                 )
                 self.btn_standby.setEnabled(current == ROBOTMODE.IDLE)
                 self.btn_motorconfig.setEnabled(
-                    current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
+                    current in [ROBOTMODE.UNINITIALIZED, ROBOTMODE.IDLE, ROBOTMODE.CONFIG]
                 )
     
     def _on_homing_completed(self):
