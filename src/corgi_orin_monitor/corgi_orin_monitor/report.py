@@ -164,17 +164,25 @@ def boot_info_section(boot: dict, title_prefix: str) -> str:
         txt = open(p, errors='replace').read()
     except Exception:
         return ''
-    m = re.search(r'^### ' + re.escape(title_prefix) + r'.*?\n(.*?)(?=^### |\Z)', txt, re.S | re.M)
-    return m.group(1).strip() if m else ''
+    ms = re.findall(r'^### ' + re.escape(title_prefix) + r'.*?\n(.*?)(?=^### |^===== |\Z)', txt, re.S | re.M)
+    return ms[-1].strip() if ms else ''  # a restart re-reads some sections; the latest wins
 
 
 def reset_reason(boot: dict) -> str:
     sec = boot_info_section(boot, 'reset_reason')
     if not sec:
         return '-'
-    keep = [ln for ln in sec.splitlines() if re.search(r'reset-source|reset-level|reason', ln, re.I)]
-    keep = keep or sec.splitlines()[:3]
-    return '; '.join(re.sub(r'^.*?/', '', ln, count=1) if '/' in ln else ln for ln in keep)[:160]
+    keep = [ln for ln in sec.splitlines()
+            if re.search(r'reset[-_](source|level|reason)', ln, re.I) and not re.search(r'no reset_reason|no \*reset\*', ln)]
+    keep = keep or sec.splitlines()[:2]
+    short = []
+    for ln in keep:
+        ln = ln.strip()
+        if ':' in ln:
+            path, _, val = ln.partition(':')
+            ln = f'{path.rstrip().rsplit("/", 1)[-1]}={val.strip()}'
+        short.append(ln)
+    return '; '.join(short)[:160]
 
 
 def shutdown_evidence(boot: dict) -> str:

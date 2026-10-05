@@ -195,15 +195,34 @@ def decode_dt_value(raw: bytes) -> str:
 
 
 def dump_reset_reason() -> str:
-    """Everything under /proc/device-tree/chosen whose path mentions 'reset'.
+    """Where the bootloader / PMC driver recorded why this boot happened.
 
-    On Tegra (JetPack 5/6) the bootloader records the PMC reset source here,
-    e.g. chosen/reset/pmc-reset-reason/reset-source and reset-level.
+    JetPack 4 (cboot) writes /proc/device-tree/chosen/reset/pmc-reset-reason/*.
+    JetPack 5/6 (UEFI) do not; there the tegra-pmc driver exposes
+    /sys/devices/platform/.../c360000.pmc/reset_reason and reset_level.
+    Both are dumped; whichever exists is the answer.
     """
     out: List[str] = []
+    # sysfs (PMC driver)
+    found = []
+    for pat in ('/sys/bus/platform/devices/*pmc*/reset_reason', '/sys/bus/platform/devices/*pmc*/reset_level',
+                '/sys/devices/platform/*/reset_reason', '/sys/devices/platform/*/reset_level',
+                '/sys/devices/platform/*/*/reset_reason', '/sys/devices/platform/*/*/reset_level',
+                '/sys/devices/platform/*/*/*/reset_reason', '/sys/devices/platform/*/*/*/reset_level'):
+        for f in glob.glob(pat):
+            real = os.path.realpath(f)
+            if real not in found:
+                found.append(real)
+    for f in sorted(found):
+        out.append(f'{f}: {read_text(f, "[unreadable]")}')
+    if not found:
+        out.append('sysfs: no reset_reason/reset_level attribute under /sys/devices/platform')
+    # device tree (cboot era)
     root = '/proc/device-tree/chosen'
     if not os.path.isdir(root):
-        return f'{root}: absent (not a Tegra device-tree system?)'
+        out.append(f'{root}: absent (not a Tegra device-tree system?)')
+        return '\n'.join(out)
+    dt = []
     for dirpath, _dirs, files in os.walk(root):
         for fn in sorted(files):
             p = os.path.join(dirpath, fn)
@@ -211,11 +230,18 @@ def dump_reset_reason() -> str:
                 continue
             try:
                 with open(p, 'rb') as f:
-                    out.append(f'{p[len(root) + 1:]}: {decode_dt_value(f.read())}')
+                    dt.append(f'{p[len(root) + 1:]}: {decode_dt_value(f.read())}')
             except Exception as e:
-                out.append(f'{p[len(root) + 1:]}: [error {e}]')
-    if not out:
-        out.append('(no *reset* entries under /proc/device-tree/chosen)')
+                dt.append(f'{p[len(root) + 1:]}: [error {e}]')
+    if dt:
+        out.append('device-tree chosen/:')
+        out.extend('  ' + ln for ln in dt)
+    else:
+        try:
+            names = sorted(os.listdir(root))
+        except Exception:
+            names = []
+        out.append(f'device-tree chosen/: no *reset* entries (has: {", ".join(names)[:300]})')
     return '\n'.join(out)
 
 
@@ -360,7 +386,7 @@ def discover_rails() -> Tuple[List[Rail], str]:
         for lab in sorted(glob.glob(os.path.join(h, 'in*_label'))):
             n = re.search(r'in(\d+)_label$', lab).group(1)
             label = (read_text(lab, '') or '').strip().replace(' ', '_')
-            if not label or label.upper() == 'NC':
+            if not label or label.upper() == 'NC' or label.lower().startswith('sum_of_shunt'):
                 continue
             if label in seen:
                 seen[label] += 1
@@ -756,6 +782,10 @@ class Monitor:
         if not self.new_boot:
             bi.write(f'\n===== monitor restarted {iso()} (same boot, seq {self.seq}) =====')
             bi.write(f'uptime_s: {boottime():.1f}  ntp_synced: {ntp_synced()}')
+            try:
+                bi.write(f'\n### reset_reason (re-read at monitor restart)\n{dump_reset_reason()}', force_sync=True)
+            except Exception as e:
+                bi.write(f'\n### reset_reason (re-read at monitor restart)\n[probe failed: {e!r}]', force_sync=True)
             return
 
         def sec(title: str, fn) -> None:
