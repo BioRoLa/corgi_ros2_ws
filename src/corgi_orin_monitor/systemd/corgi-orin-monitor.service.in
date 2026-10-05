@@ -1,0 +1,18 @@
+# Installed by scripts/install_service.sh -- @MONITOR_PY@ / @LOG_DIR@ are filled in there.
+[Unit]
+Description=Corgi Orin always-on health/power logger (post-mortem for unexpected reboots)
+Documentation=file://@PKG_DIR@/README.md
+After=local-fs.target systemd-journald.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u @MONITOR_PY@ --log-dir @LOG_DIR@ @EXTRA_ARGS@
+Restart=always
+RestartSec=3
+Nice=-5
+OOMScoreAdjust=-900
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -202,6 +202,7 @@ For more details on a specific package, please see its respective `README.md` fi
   - [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
   - [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
   - [`corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
+  - [`corgi_orin_monitor`](src/corgi_orin_monitor): Always-on Orin health/power logger (systemd, no ROS needed) and a post-mortem report for unexpected reboots.
 
 - **Sensing & Estimation**
 
