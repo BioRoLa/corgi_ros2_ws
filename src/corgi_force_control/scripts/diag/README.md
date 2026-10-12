@@ -45,6 +45,11 @@ Templates are installed at
 | `check_yaw_phase.py` | *where in the stride* the yaw accumulates — offline, from a `check_ramp.py --dump` |
 | `ramp_segments.py` | recovers the ramp's segment / stride boundaries from the CSV |
 | `check_gains.sh` | reads back the gains actually in effect on the running node |
+| `measure_kt.py` | a motor's true KT from a lever and known masses (hardware, robot on a stand) |
+| `measure_friction.py` | per-motor Coulomb + viscous friction from a slow beta roll, vs `friction_` and its sign (hardware, feet clear) |
+| `force_plate_track.py` | scores an `exp_h24 rock_mode:=...` run: command vs `/force/state` vs plates (sim topics in the bag, or `--plate-c3d` from Vicon) -- gain, lag, offset per leg; `--self-test` |
+| `pitch_sign_check.py` | whether `force_estimation`'s per-leg pitch sign is right, from a pitched-stance plate run (`stance_pitch_dz`) |
+| `rock_cycle.sh` | one scored force rock on the simulated plates (`Corgi_ABAD_force_plate.wbt`): `rock_cycle.sh diag_fz rock_amp:=15.0` |
 | `net_probe.sh` | whether WSL can reach the Windows-side Webots on 1234 |
 | `check_port_1234.sh` | distinguishes "can't reach Webots" from "Webots isn't there" |
 
