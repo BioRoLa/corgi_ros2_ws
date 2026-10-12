@@ -374,9 +374,15 @@ void ForceEstimationNode::timer_cb() {
                                             motor_state_modules[i]->torque_h);
         }
 
-        if (i == 1 || i == 2) { 
-            force_state_modules[i]->fx = -force_est(0, 0); 
-            force_state_modules[i]->fy = -force_est(1, 0);
+        // B and C are the left module turned 180 deg about vertical, so BOTH
+        // horizontal axes reverse, not just x. fy used to keep the left-side
+        // sign here; against the sim force plates (Corgi_ABAD_force_plate.wbt,
+        // 2026-10-12, diag_fz and lateral_fy bags) B/C fy anti-correlated with
+        // the plate (r -0.63..-0.90) with opposite-sign means of matching size,
+        // while A/D correlated +0.70..+0.89 and fx/fz were right on all four.
+        if (i == 1 || i == 2) {
+            force_state_modules[i]->fx = -force_est(0, 0);
+            force_state_modules[i]->fy = force_est(1, 0);
         }
         else { 
             force_state_modules[i]->fx = force_est(0, 0); 
