@@ -1,6 +1,7 @@
 #include <iostream>
 #include <array>
 #include <cmath>
+#include <string>
 #include "rclcpp/rclcpp.hpp"
 #include "corgi_msgs/msg/impedance_cmd_stamped.hpp"
 #include "corgi_msgs/msg/trigger_stamped.hpp"
@@ -16,6 +17,7 @@ private:
     void initialize_impedance_command();
     void execute_initialization_phase();
     void execute_control_phase();
+    void execute_rock_phase();
     
     // ROS2 interfaces
     rclcpp::Publisher<corgi_msgs::msg::ImpedanceCmdStamped>::SharedPtr imp_cmd_pub_;
@@ -38,14 +40,24 @@ private:
     double h_;
     double b_value_;
     double k_value_;
-    
+
+    // Force-tracking rock (calibration). "legacy" = the original walk + 6-10 s
+    // diagonal rock, unchanged. Any other mode stands still at the init pose
+    // and adds rock_amp * sin(2 pi rock_hz t) * pattern[leg] to one force axis.
+    std::string rock_mode_;
+    double rock_amp_;
+    double rock_hz_;
+    int rock_cycles_;
+    double rock_ramp_s_;
+    double rock_hold_s_;
+    double stance_pitch_dz_;
 };
 
 ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     : Node("exp_h24"),
     sim_(false),
     trigger_(false),
-    mg_(23.05 * 9.81),
+    mg_(0.0),
     s_(0.0),
     h_(0.0),
     b_value_(0.0),
@@ -75,6 +87,46 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     b_value_ = this->declare_parameter<double>("b", default_b);
     k_value_ = this->declare_parameter<double>("k", default_k);
     RCLCPP_INFO(this->get_logger(), "Using impedance params: b=%.2f, k=%.2f", b_value_, k_value_);
+
+    // 30.00 kg is the ABAD robot on scales (gslip_pronk.cpp; the proto sums to
+    // 30.84 and the sim force plates read 31.0). The old 23.05 was pre-ABAD.
+    const double mass_kg = this->declare_parameter<double>("mass_kg", 30.0);
+    mg_ = mass_kg * 9.81;
+    RCLCPP_INFO(this->get_logger(), "Robot mass %.2f kg (weight %.1f N split over the legs)", mass_kg, mg_);
+
+    rock_mode_ = this->declare_parameter<std::string>("rock_mode", "legacy");
+    rock_amp_ = this->declare_parameter<double>("rock_amp", 10.0);
+    rock_hz_ = this->declare_parameter<double>("rock_hz", 1.0);
+    rock_cycles_ = this->declare_parameter<int>("rock_cycles", 10);
+    rock_ramp_s_ = this->declare_parameter<double>("rock_ramp_s", 1.0);
+    // sim: the trigger also removes the support box, so the robot settles
+    // onto the plates during the first hold -- give it longer there
+    rock_hold_s_ = this->declare_parameter<double>("rock_hold_s", 2.0);
+    // Pitch the stance for the rock: front feet extend by +dz/2, hind by -dz/2
+    // (m, + = nose up), ramped over 1 s starting halfway through the first
+    // hold, so the first half is a level reference (in sim, after the support
+    // box has gone).
+    // 0.045 m over the 0.51 m wheelbase is ~5 deg. For checking anything that
+    // uses the body pitch (force_estimation's per-leg pitch sign).
+    stance_pitch_dz_ = this->declare_parameter<double>("stance_pitch_dz", 0.0);
+    if (rock_mode_ != "legacy" && rock_mode_ != "diag_fz" && rock_mode_ != "pitch_fz" &&
+        rock_mode_ != "roll_fz" && rock_mode_ != "fore_fx" && rock_mode_ != "lateral_fy") {
+        RCLCPP_ERROR(this->get_logger(), "Unknown rock_mode '%s', using legacy", rock_mode_.c_str());
+        rock_mode_ = "legacy";
+    }
+    if (rock_mode_ != "legacy" && (rock_amp_ < 0.0 || rock_hz_ <= 0.0 || rock_cycles_ < 1 || rock_ramp_s_ < 0.0 || rock_hold_s_ < 0.0)) {
+        RCLCPP_ERROR(this->get_logger(), "Bad rock params (amp >= 0, hz > 0, cycles >= 1, ramp >= 0, hold >= 0), using legacy");
+        rock_mode_ = "legacy";
+    }
+    RCLCPP_INFO(this->get_logger(), "rock_mode=%s amp=%.1f N hz=%.2f cycles=%d ramp=%.1f s hold=%.1f s",
+                rock_mode_.c_str(), rock_amp_, rock_hz_, rock_cycles_, rock_ramp_s_, rock_hold_s_);
+    if (rock_mode_ != "legacy" && stance_pitch_dz_ != 0.0) {
+        if (rock_hold_s_ < 3.0) {
+            RCLCPP_WARN(this->get_logger(), "stance_pitch_dz needs rock_hold_s >= 3 (level half, 1 s ramp, settle); raising it to 3");
+            rock_hold_s_ = 3.0;
+        }
+        RCLCPP_INFO(this->get_logger(), "stance_pitch_dz=%.3f m (front +dz/2, hind -dz/2)", stance_pitch_dz_);
+    }
 
     imp_cmd_pub_ = this->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
     trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -266,6 +318,80 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
     }
 }
 
+// Stand still at the init pose and rock one force axis with a known sinusoid,
+// for scoring commanded vs estimated vs force-plate force (force_plate_track.py).
+// Patterns are per leg A, B, C, D; each sums to zero, so the body is not pushed
+// off its stance, only rocked:
+//   diag_fz    + - + -  diagonal load shift (Eason 2025-03, exp_h24 legacy)
+//   pitch_fz   + + - -  front vs hind
+//   roll_fz    + - - +  A+D side vs B+C side
+//   fore_fx    + + - -  front vs hind fore-aft (exp_sim_stay's rock, in 3D axes)
+//   lateral_fy + - - +  A+D side vs B+C side lateral, loads the ABAD
+// Timeline: rock_hold_s hold, ramp in, rock_cycles full cycles, ramp out, rock_hold_s hold.
+void ImpedanceCmdPublisherNode::execute_rock_phase() {
+    double pattern[4] = {1.0, 1.0, -1.0, -1.0};
+    if (rock_mode_ == "diag_fz") { pattern[1] = -1.0; pattern[2] = 1.0; }
+    else if (rock_mode_ == "roll_fz" || rock_mode_ == "lateral_fy") { pattern[1] = -1.0; pattern[3] = 1.0; }
+
+    const int hold_ticks = static_cast<int>(rock_hold_s_ * 1000.0);
+    const int ramp_ticks = static_cast<int>(rock_ramp_s_ * 1000.0);
+    const int rock_ticks = static_cast<int>(rock_cycles_ * 1000.0 / rock_hz_);
+    const int total_ticks = 2 * hold_ticks + 2 * ramp_ticks + rock_ticks;
+
+    // Base fz is the init phase's front/hind split; the pose does not move.
+    double base_fz[4];
+    for (int i = 0; i < 4; i++) base_fz[i] = imp_cmd_modules_[i]->fz;
+
+    RCLCPP_INFO(this->get_logger(), "Rock phase: %s, %.1f s", rock_mode_.c_str(), total_ticks / 1000.0);
+    LegModel& legmodel = kinematics_->get_leg_model();
+
+    rclcpp::Duration period(0, 1000000); // 1ms
+    rclcpp::Time next_time = this->now();
+
+    for (int loop_count = 0; loop_count < total_ticks && rclcpp::ok(); loop_count++) {
+        // envelope: 0 during holds, raised-cosine ramps, 1 while rocking
+        const int t = loop_count - hold_ticks;
+        double env = 0.0;
+        if (t >= 0 && t < ramp_ticks) env = 0.5 - 0.5 * cos(M_PI * t / ramp_ticks);
+        else if (t >= ramp_ticks && t < ramp_ticks + rock_ticks) env = 1.0;
+        else if (t >= ramp_ticks + rock_ticks && t < 2 * ramp_ticks + rock_ticks)
+            env = 0.5 + 0.5 * cos(M_PI * (t - ramp_ticks - rock_ticks) / ramp_ticks);
+        const double u = (t >= 0) ? rock_amp_ * env * sin(2.0 * M_PI * rock_hz_ * t / 1000.0) : 0.0;
+
+        // stance pitch ramp: 1000 equal steps starting halfway through the hold.
+        // B carries the front pose and C the hind; A and D mirror beta, as in
+        // the init phase.
+        if (stance_pitch_dz_ != 0.0 && loop_count >= hold_ticks / 2 && loop_count < hold_ticks / 2 + 1000) {
+            const double step = stance_pitch_dz_ / 2.0 / 1000.0;
+            const std::array<double, 3> front = legmodel.move_3d(
+                imp_cmd_modules_[1]->theta, imp_cmd_modules_[1]->beta, imp_cmd_modules_[1]->gamma, {0.0, 0.0, step});
+            const std::array<double, 3> hind = legmodel.move_3d(
+                imp_cmd_modules_[2]->theta, imp_cmd_modules_[2]->beta, imp_cmd_modules_[2]->gamma, {0.0, 0.0, -step});
+            imp_cmd_modules_[0]->theta = front[0]; imp_cmd_modules_[0]->beta = -front[1]; imp_cmd_modules_[0]->gamma = front[2];
+            imp_cmd_modules_[1]->theta = front[0]; imp_cmd_modules_[1]->beta =  front[1]; imp_cmd_modules_[1]->gamma = front[2];
+            imp_cmd_modules_[2]->theta = hind[0];  imp_cmd_modules_[2]->beta =  hind[1];  imp_cmd_modules_[2]->gamma = hind[2];
+            imp_cmd_modules_[3]->theta = hind[0];  imp_cmd_modules_[3]->beta = -hind[1];  imp_cmd_modules_[3]->gamma = hind[2];
+        }
+
+        for (int i = 0; i < 4; i++) {
+            if (rock_mode_ == "fore_fx") imp_cmd_modules_[i]->fx = pattern[i] * u;
+            else if (rock_mode_ == "lateral_fy") imp_cmd_modules_[i]->fy = pattern[i] * u;
+            else imp_cmd_modules_[i]->fz = base_fz[i] + pattern[i] * u;
+        }
+
+        imp_cmd_.header.seq = loop_count;
+        imp_cmd_.header.stamp = this->now();
+        imp_cmd_pub_->publish(imp_cmd_);
+
+        next_time += period;
+        if (!this->get_clock()->sleep_until(next_time)) {
+            RCLCPP_WARN(this->get_logger(), "Sleep until failed!");
+            break;
+        }
+    }
+    RCLCPP_INFO(this->get_logger(), "Rock phase finished");
+}
+
 void ImpedanceCmdPublisherNode::run() {
     execute_initialization_phase();
     
@@ -277,7 +403,8 @@ void ImpedanceCmdPublisherNode::run() {
         
         if (trigger_){
             RCLCPP_INFO(this->get_logger(), "Trigger latched, entering control phase");
-            execute_control_phase();
+            if (rock_mode_ == "legacy") execute_control_phase();
+            else execute_rock_phase();
             break;
         }
 
