@@ -249,6 +249,15 @@ ForceEstimationNode::ForceEstimationNode()
 
     this->get_parameter_or("use_sim_time", sim_, false);
     mass_ = 0.9;
+    // The ABAD motor holds the leg's own weight, which hangs outboard of its
+    // axis; that holding torque is not a ground force. Removed from torque_h
+    // as abad_gravity_moment * cos(gamma) before the Jacobian. Sim value
+    // measured on the force plates (2026-10-13): with the flat-band contact
+    // model the remaining standing lateral bias was 2.1-2.5 N outward on every
+    // leg, load-independent, = 0.65 N.m at 3.4 N per N.m. Hardware: 0 until
+    // measured (hold a lifted leg at a few gamma and read torque_h).
+    abad_gravity_moment_ = this->declare_parameter<double>("abad_gravity_moment", sim_ ? 0.65 : 0.0);
+    RCLCPP_INFO(this->get_logger(), "abad_gravity_moment %.3f N.m", abad_gravity_moment_);
     estimator_ = std::make_unique<ForceEstimator>(sim_);
 
     if (sim_) {
@@ -385,7 +394,8 @@ void ForceEstimationNode::timer_cb() {
                                             motor_state_modules[i]->gamma,
                                             motor_state_modules[i]->torque_l, 
                                             motor_state_modules[i]->torque_r,
-                                            motor_state_modules[i]->torque_h);
+                                            motor_state_modules[i]->torque_h
+                                                - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
         }
         else {
             force_est = estimator_->estimate(motor_state_modules[i]->theta, 
@@ -393,7 +403,8 @@ void ForceEstimationNode::timer_cb() {
                                             motor_state_modules[i]->gamma,
                                             motor_state_modules[i]->torque_l, 
                                             motor_state_modules[i]->torque_r,
-                                            motor_state_modules[i]->torque_h);
+                                            motor_state_modules[i]->torque_h
+                                                - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
         }
 
         // Only the lateral axis differs by side. motor/state is frame-

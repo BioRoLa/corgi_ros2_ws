@@ -108,6 +108,7 @@ private:
     // Physical parameters
     bool sim_;
     double mass_;
+    double abad_gravity_moment_;  // N.m at gamma = 0, removed from torque_h (see the .cpp)
     const double gravity_ = -9.81;
     
     // Dynamic friction compensation coefficients (AR, AL, BR, BL, CR, CL, DR, DL)
