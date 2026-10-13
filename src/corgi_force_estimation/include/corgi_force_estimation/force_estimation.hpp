@@ -114,8 +114,13 @@ private:
     const std::vector<double> friction_ = {0.625, 0.44, 0.662, 0.499, 0.623, 0.409, 0.677, 0.356};
     
     
-    // Previous phi values for each module [phi_r, phi_l]
+    // Last phi at which each motor's direction was decided, per module [phi_l, phi_r]
     std::vector<Eigen::MatrixXd> phi_prev_modules_;
+    // Latched direction per module [l, r]: +1 / -1, 0 = not moved yet (no bias)
+    int fric_dir_[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+    bool phi_prev_seeded_ = false;
+    // One CAN LSB is 0.1648 deg; same deadband as force_control
+    const double friction_deadband_ = 0.00288;
 };
 
 #endif

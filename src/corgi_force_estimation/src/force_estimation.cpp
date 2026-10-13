@@ -313,11 +313,15 @@ void ForceEstimationNode::timer_cb() {
     double yaw = 0;
     quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
 
+    // A COPY: friction is compensated per tick, and this loop is not
+    // synchronised with motor/state. Editing the cached motor_state_ in place
+    // re-applied the term on every tick that saw the same message.
+    corgi_msgs::msg::MotorStateStamped state = motor_state_;
     std::vector<corgi_msgs::msg::MotorState*> motor_state_modules = {
-        &motor_state_.module_a,
-        &motor_state_.module_b,
-        &motor_state_.module_c,
-        &motor_state_.module_d
+        &state.module_a,
+        &state.module_b,
+        &state.module_c,
+        &state.module_d
     };
 
     std::vector<corgi_msgs::msg::ForceState*> force_state_modules = {
@@ -336,22 +340,40 @@ void ForceEstimationNode::timer_cb() {
             double phi_l = motor_state_modules[i]->theta + motor_state_modules[i]->beta - 17/180.0*M_PI;
             double phi_r = motor_state_modules[i]->beta - motor_state_modules[i]->theta + 17/180.0*M_PI;
 
-            if (phi_r > phi_prev_modules_[i](1, 0)){
-                motor_state_modules[i]->torque_r += friction_[2*i];
-            }
-            else {
-                motor_state_modules[i]->torque_r -= friction_[2*i];
-            }
+            // Deadband + direction latch, as force_control (dd4f0e6): the raw
+            // phi > phi_prev read CAN quantisation (0.1648 deg) rather than
+            // direction and chattered +/-friction, and a parked motor fell to
+            // the else branch and carried a permanent bias. The direction only
+            // changes on a decisive move; before any move there is no term.
+            // Sign unchanged: added while phi rises, the mirror of
+            // force_control subtracting it from the command.
+            // Seed from the first real reading: phi_prev starts at 0, so the
+            // first tick otherwise "moves" by the whole startup angle and
+            // latches that direction until the motor really reverses.
+            if (!phi_prev_seeded_) phi_prev_modules_[i] << phi_l, phi_r;
 
-            if (phi_l > phi_prev_modules_[i](0, 0)){
-                motor_state_modules[i]->torque_l += friction_[2*i+1];
+            const double d_r = phi_r - phi_prev_modules_[i](1, 0);
+            if (d_r > friction_deadband_) {
+                fric_dir_[i][1] = +1;
+                phi_prev_modules_[i](1, 0) = phi_r;
+            } else if (d_r < -friction_deadband_) {
+                fric_dir_[i][1] = -1;
+                phi_prev_modules_[i](1, 0) = phi_r;
             }
-            else {
-                motor_state_modules[i]->torque_l -= friction_[2*i+1];
-            }
+            motor_state_modules[i]->torque_r += fric_dir_[i][1] * friction_[2*i];
 
-            phi_prev_modules_[i] << phi_l, phi_r;
+            const double d_l = phi_l - phi_prev_modules_[i](0, 0);
+            if (d_l > friction_deadband_) {
+                fric_dir_[i][0] = +1;
+                phi_prev_modules_[i](0, 0) = phi_l;
+            } else if (d_l < -friction_deadband_) {
+                fric_dir_[i][0] = -1;
+                phi_prev_modules_[i](0, 0) = phi_l;
+            }
+            motor_state_modules[i]->torque_l += fric_dir_[i][0] * friction_[2*i+1];
         }
+        // only once a real state has arrived (an all-default message has stamp 0)
+        if (state.header.stamp.sec != 0 || state.header.stamp.nanosec != 0) phi_prev_seeded_ = true;
     }
 
     for (int i=0; i<4; i++){
@@ -374,14 +396,18 @@ void ForceEstimationNode::timer_cb() {
                                             motor_state_modules[i]->torque_h);
         }
 
-        // B and C are the left module turned 180 deg about vertical, so BOTH
-        // horizontal axes reverse, not just x. fy used to keep the left-side
-        // sign here; against the sim force plates (Corgi_ABAD_force_plate.wbt,
-        // 2026-10-12, diag_fz and lateral_fy bags) B/C fy anti-correlated with
-        // the plate (r -0.63..-0.90) with opposite-sign means of matching size,
-        // while A/D correlated +0.70..+0.89 and fx/fz were right on all four.
+        // Only the lateral axis differs by side. motor/state is frame-
+        // consistent (beta reads the same sign on all four legs -- see
+        // force_control's 2026-09-02 pitch note), so x is the same body axis
+        // on every leg; the lateral axis is mirrored on the right pair.
+        // Checked against the sim force plates (Corgi_ABAD_force_plate.wbt)
+        // on the plant of record, CORGI_DIRBETA_TRANSFORM=1, 2026-10-12: with
+        // the old B/C mapping (fx negated, fy as A/D) B/C fx anti-correlated
+        // with the plate (r -0.92 / -0.83) and fy did too. Runs without the
+        // transform had shown the opposite fx result -- B/C torques are not
+        // in the ROS frame there, so they are not evidence for this mapping.
         if (i == 1 || i == 2) {
-            force_state_modules[i]->fx = -force_est(0, 0);
+            force_state_modules[i]->fx = force_est(0, 0);
             force_state_modules[i]->fy = force_est(1, 0);
         }
         else { 
