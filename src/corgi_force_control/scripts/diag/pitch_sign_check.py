@@ -16,10 +16,15 @@ the pitch over 1 s and rocks. Find the windows from the pitch column of
 --timeline, then:
   pitch_sign_check.py <bag> --level 3.8 5.6 --pitched 7.5
 
-Needs /force/state, /sensor/force_plate_1..4 and /imu in the bag. The pitch is
-computed exactly as force_estimation does in sim; on hardware it negates it
-(pitch *= -1), so pass --hardware for a real-plate run. Plates come from the bag
-only (sim); see force_plate_track.py for the plate frame and leg mapping.
+Needs /force/state and /imu in the bag, and plates: /sensor/force_plate_1..4
+in the bag (sim) or --plate-c3d (the Vicon Nexus capture of the Bertecs). A
+c3d has no ROS clock; it is aligned by cross-correlating each leg's estimated
+fz with its plate fz (they agree to ~1 ms in sim), which the session's two
+sharp body rocks make unambiguous -- the windows here are seconds long. The
+pitch is computed exactly as force_estimation does in sim; on hardware it
+negates it (pitch *= -1), so pass --hardware for a real-plate run. Plate
+frames and the leg mapping follow force_plate_track.py (--robot-yaw-deg,
+--plate-map).
 
 2026-10-12, sim, 5.6 deg pitch: misses at k = -2 / 0 / +2 were
 B 12.6 / 2.9 / 6.8 N, C 12.1 / 1.2 / 13.5 N -> B/C's "beta - pitch" is right.
@@ -58,6 +63,21 @@ def read_pitch(path, hardware):
     return a
 
 
+def align_on_fz(est, legs, dt=0.002):
+    """Bag time of plate t = 0: the lag maximising the summed per-leg fz correlation."""
+    te = np.arange(est["t"][0], est["t"][-1], dt)
+    tp = np.arange(legs["t"][0], legs["t"][-1], dt)
+    xc = None
+    for l in fpt.LEGS:
+        a = np.interp(te, est["t"], est[l + "fz"]); a = a - a.mean()
+        b = np.interp(tp, legs["t"], legs[l + "fz"]); b = b - b.mean()
+        b = b * np.sign(np.mean(legs[l + "fz"]) * np.mean(est[l + "fz"]) or 1.0)
+        c = np.correlate(a, b, mode="full")
+        xc = c if xc is None else xc + c
+    k = int(np.argmax(xc)) - (len(tp) - 1)
+    return te[0] - tp[0] + k * dt
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("bag")
@@ -65,19 +85,34 @@ def main():
     ap.add_argument("--pitched", type=float, metavar="T0", help="pitched stance from this bag time s to the end")
     ap.add_argument("--timeline", action="store_true", help="print pitch and total plate load every 0.5 s")
     ap.add_argument("--hardware", action="store_true", help="negate pitch as force_estimation does off-sim")
-    ap.add_argument("--plate-map", default="a=1,b=4,c=3,d=2")
+    ap.add_argument("--plate-map", help="leg=plate (default: nearest plate to each hip)")
+    ap.add_argument("--plate-c3d", help="Vicon Nexus capture of the Bertec plates (hardware)")
+    ap.add_argument("--robot-yaw-deg", type=float, default=0.0, help="robot heading in the plate/lab frame")
     args = ap.parse_args()
 
     b = fpt.read_bag(args.bag)
-    if "plate" not in b:
-        sys.exit("no /sensor/force_plate_1..4 in the bag")
+    yaw = np.radians(args.robot_yaw_deg)
+    if args.plate_c3d:
+        raw, centres = fpt.read_c3d(args.plate_c3d)
+        legs = fpt.plates_to_legs(raw, fpt.plate_map(centres, yaw, args.plate_map), yaw)
+        offset = align_on_fz(b["est"], legs)
+        legs["t"] = legs["t"] + offset
+        print("c3d aligned: plate t = 0 is bag time %.3f s" % offset)
+    elif "plate" in b:
+        legs = fpt.plates_to_legs(b["plate"], fpt.plate_map(fpt.DEFAULT_CENTRES, yaw, args.plate_map), yaw)
+    else:
+        sys.exit("no plates: no /sensor/force_plate_1..4 in the bag and no --plate-c3d")
     imu = read_pitch(args.bag, args.hardware)
-    t0 = max(b["est"]["t"][0], b["plate"]["t"][0], imu[0, 0])
-    t1 = min(b["est"]["t"][-1], b["plate"]["t"][-1], imu[-1, 0])
+    t0 = max(b["est"]["t"][0], legs["t"][0], imu[0, 0])
+    t1 = min(b["est"]["t"][-1], legs["t"][-1], imu[-1, 0])
     g = np.arange(t0, t1, 0.002)
     pitch = np.interp(g, imu[:, 0], imu[:, 1])
     est = fpt.resample(b["est"], g)
-    plate = fpt.plates_to_legs(fpt.resample(b["plate"], g), fpt.plate_map(None, 0.0, args.plate_map), 0.0)
+    plate = fpt.resample(legs, g)
+    # the plates may report the reaction; a standing leg must read fz < 0
+    if np.mean([plate[l + "fz"].mean() for l in fpt.LEGS]) > 0:
+        plate = {k: (v if k == "t" else -v) for k, v in plate.items()}
+        print("plate sign flipped to the command's convention (standing fz < 0)")
 
     if args.timeline or args.level is None or args.pitched is None:
         tot = sum(plate[l + "fz"] for l in fpt.LEGS)
