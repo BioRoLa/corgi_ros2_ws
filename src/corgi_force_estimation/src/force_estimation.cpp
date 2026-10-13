@@ -415,7 +415,12 @@ void ForceEstimationNode::timer_cb() {
             force_state_modules[i]->fy = -force_est(1, 0);
         }
         
-        force_state_modules[i]->fz = -force_est(2, 0) - mass_ * gravity_;
+        // The foot pushes on the ground with the force the linkage transmits
+        // PLUS the leg's own weight below the motors, so the weight makes fz
+        // more negative (gravity_ is -9.81). The old "- mass_ * gravity_" added
+        // it the other way: against the sim force plates every leg read
+        // +18.3 N light (2 x 8.83) at gain 1.00 (2026-10-13).
+        force_state_modules[i]->fz = -force_est(2, 0) + mass_ * gravity_;
     }
 
     force_state_.header.stamp = this->now();
