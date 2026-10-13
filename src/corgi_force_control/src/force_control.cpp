@@ -794,6 +794,14 @@ void ForceControlNode::timer_cb() {
             // phi_prev advances ONLY on a decisive move, so slow real
             // motion accumulates instead of being lost to rounding, and the
             // direction starts at 0 so a parked leg carries no bias.
+            // Seed from the first real reading: phi_prev starts at 0, so the
+            // first tick otherwise "moves" by the whole startup angle and
+            // latches that direction until the motor really reverses.
+            if (!phi_prev_seeded_) {
+                phi_prev_modules_[i](0, 0) = phi_l;
+                phi_prev_modules_[i](1, 0) = phi_r;
+            }
+
             const double d_r = phi_r - phi_prev_modules_[i](1, 0);
             if (d_r > friction_deadband_) {
                 fric_dir_[i][1] = +1;
@@ -823,6 +831,8 @@ void ForceControlNode::timer_cb() {
             // gamma has no friction term specified; only its history is kept.
             phi_prev_modules_[i](2, 0) = gamma_fb;
         }
+        // only once a real state has arrived (an all-default message has stamp 0)
+        if (motor_state_.header.stamp.sec != 0 || motor_state_.header.stamp.nanosec != 0) phi_prev_seeded_ = true;
     }
 
     // WHICH legs are outside the leg model's range. leg_model cannot say:

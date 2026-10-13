@@ -82,6 +82,7 @@ private:
     // fric_dir_[module][0]=left, [1]=right. 0 until real motion is seen,
     // so a parked leg carries no bias.
     int fric_dir_[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}};
+    bool phi_prev_seeded_ = false;  // phi_prev starts at 0; seeded from the first real state
     // Slew limit on the PUBLISHED command, deg/s. 0 disables an axis.
     // Off by default -- see slew.py. Limits the consequence (a
     // full-range step in one tick) rather than the cause.
