@@ -28,6 +28,12 @@ mkdir -p "$OUT"
 # (see sim_cycle.sh).
 export TMPDIR=/mnt/c/Users/alexc/AppData/Local/Temp/webots_ws
 export CORGI_EXPERIMENT_MODE=1
+# The plant of record is two env vars (see repeat_gain_regime.sh): B/C
+# torques converted at the ROS<->module boundary (corgi_driver convert_torque;
+# without it B and C are fed un-mirrored feedforward and report module-frame
+# torques), and the theta linkage stop. Override with =0 on purpose only.
+export CORGI_DIRBETA_TRANSFORM=${CORGI_DIRBETA_TRANSFORM:-1}
+export CORGI_THETA_STOP=${CORGI_THETA_STOP:-1}
 mkdir -p "$TMPDIR"
 
 RUN_START=$(date +%s)
@@ -72,6 +78,13 @@ done
 if ! fresh_grep "$OUT/sim.log" "publishing 4 force plates"; then
     echo "SIM OR PLATES FAILED TO START -- see $OUT/sim.log"; finish; exit 1
 fi
+echo "CORGI_DIRBETA_TRANSFORM=$CORGI_DIRBETA_TRANSFORM CORGI_THETA_STOP=$CORGI_THETA_STOP" | tee "$OUT/plant.txt"
+if [ "$CORGI_DIRBETA_TRANSFORM" = "1" ] && ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
+    sleep 3   # the banner is logged just after the plates come up
+    if ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
+        echo "TRANSFORM REQUESTED BUT THE DRIVER DID NOT ENABLE IT -- see $OUT/sim.log"; finish; exit 1
+    fi
+fi
 sleep 3
 
 # --- estimation + control + rock publisher -------------------------------------
@@ -93,7 +106,7 @@ if grep -q "using legacy" "$OUT/exp.log"; then
 fi
 
 # --- record, trigger, wait for the rock to finish -----------------------------
-setsid nohup ros2 bag record -o "$OUT/bag" /impedance/command /force/state /motor/state /imu \
+setsid nohup ros2 bag record -o "$OUT/bag" /impedance/command /force/state /motor/state /motor/command /imu \
     /sensor/force_plate_1 /sensor/force_plate_2 /sensor/force_plate_3 /sensor/force_plate_4 \
     > "$OUT/bag.log" 2>&1 < /dev/null &
 sleep 3
