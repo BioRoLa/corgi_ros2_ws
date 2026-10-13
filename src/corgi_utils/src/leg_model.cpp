@@ -351,12 +351,22 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
     
     // Step 4: Determine contact lateral distance from the ABAD axis.
     // The fixed offset is from the ABAD axis to the wheel/leg plane; the
-    // edge offset selects the lower wheel edge when gamma tilts the wheel.
-    double half_wheel_width = wheel_thickness / 2.0;
-    double contact_edge_offset = 0.0;
-    if (std::abs(sin_g) >= 1e-4) {
-        contact_edge_offset = (sin_g > 0) ? -half_wheel_width : half_wheel_width;
-    }
+    // edge offset follows the contact toward the lower side when gamma tilts
+    // the wheel. Tread cross-section (LegWheel flat-band model, confirmed on
+    // the robot 2026-08-09): half-width 20 mm, shoulder fillet 15 mm
+    // (tyre_thickness), so a flat band |w| <= 5 mm. Tipped, the contact sits
+    // at the band edge and then rolls around the fillet: w = 5 mm +
+    // 15 mm * sin|gamma|. The band-edge jump is ramped in over 5 deg (tread
+    // compliance) instead of the old step to the 20 mm FACE at 0.006 deg,
+    // which put the contact 2 cm off sideways at the 0.5-1 deg of a normal
+    // stance: on the sim force plates that read as 1.6-2.6 N.m of ABAD torque
+    // and 5-8 N of false lateral force per leg (2026-10-13).
+    const double band_half_width = wheel_thickness / 2.0 - tyre_thickness;  // 5 mm
+    const double band_ramp = 5.0 * M_PI / 180.0;
+    const double g_abs = std::min(std::abs(gamma), M_PI / 2.0);
+    const double w_contact = band_half_width * std::min(1.0, g_abs / band_ramp)
+                             + tyre_thickness * std::sin(g_abs);
+    double contact_edge_offset = (sin_g > 0) ? -w_contact : w_contact;
     d_wheel = abad_axis_to_wheel_plane + contact_edge_offset;
     
     // Step 5: Get 2D contact point from rim_point (Leg Frame)
