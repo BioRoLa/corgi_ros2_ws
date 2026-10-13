@@ -78,7 +78,7 @@ done
 if ! fresh_grep "$OUT/sim.log" "publishing 4 force plates"; then
     echo "SIM OR PLATES FAILED TO START -- see $OUT/sim.log"; finish; exit 1
 fi
-echo "CORGI_DIRBETA_TRANSFORM=$CORGI_DIRBETA_TRANSFORM CORGI_THETA_STOP=$CORGI_THETA_STOP CORGI_G_JOINT_PASSIVE=${CORGI_G_JOINT_PASSIVE:-1 (default)}" | tee "$OUT/plant.txt"
+echo "CORGI_DIRBETA_TRANSFORM=$CORGI_DIRBETA_TRANSFORM CORGI_THETA_STOP=$CORGI_THETA_STOP CORGI_G_JOINT_MODE=${CORGI_G_JOINT_MODE:-gear (default)}" | tee "$OUT/plant.txt"
 if [ "$CORGI_DIRBETA_TRANSFORM" = "1" ] && ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
     sleep 3   # the banner is logged just after the plates come up
     if ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
