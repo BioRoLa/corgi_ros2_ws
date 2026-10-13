@@ -40,6 +40,8 @@ private:
     double h_;
     double b_value_;
     double k_value_;
+    double b_lateral_;
+    double k_lateral_;
 
     // Force-tracking rock (calibration). "legacy" = the original walk + 6-10 s
     // diagonal rock, unchanged. Any other mode stands still at the init pose
@@ -86,7 +88,13 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     const double default_k = sim_ ? 2000.0 : 4000.0;
     b_value_ = this->declare_parameter<double>("b", default_b);
     k_value_ = this->declare_parameter<double>("k", default_k);
-    RCLCPP_INFO(this->get_logger(), "Using impedance params: b=%.2f, k=%.2f", b_value_, k_value_);
+    // Lateral (body y, the ABAD direction) gains on their own; default = b / k.
+    // A soft lateral spring lets a commanded fy reach the ground instead of
+    // being cancelled by the spring as the leg yields sideways.
+    b_lateral_ = this->declare_parameter<double>("b_lateral", b_value_);
+    k_lateral_ = this->declare_parameter<double>("k_lateral", k_value_);
+    RCLCPP_INFO(this->get_logger(), "Using impedance params: b=%.2f, k=%.2f, lateral b=%.2f, k=%.2f",
+                b_value_, k_value_, b_lateral_, k_lateral_);
 
     // 30.00 kg is the ABAD robot on scales (gslip_pronk.cpp; the proto sums to
     // 30.84 and the sim force plates read 31.0). The old 23.05 was pre-ABAD.
@@ -163,10 +171,10 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
         cmd->my = 0;
         cmd->mz = 0;
         cmd->bx = b_value_;
-        cmd->by = b_value_;
+        cmd->by = b_lateral_;
         cmd->bz = b_value_;
         cmd->kx = k_value_;
-        cmd->ky = k_value_;
+        cmd->ky = k_lateral_;
         cmd->kz = k_value_;
     }
 }

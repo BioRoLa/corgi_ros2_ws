@@ -56,10 +56,15 @@ ExpSimStayNode::ExpSimStayNode()
       trigger_(false),
       sim_(false),
       exp_case_(2),
-      mg_(-19.5 * 9.81),
-      f_init_(mg_ / 4.0)
+      mg_(0.0),
+      f_init_(0.0)
 {
     RCLCPP_INFO(this->get_logger(), "Simulation Stay Experiment Starts");
+
+    // 30.00 kg is the ABAD robot on scales (see exp_h24); 19.5 was pre-ABAD.
+    // Negative: the leg pushes DOWN on the ground (command fz < 0).
+    mg_ = -this->declare_parameter<double>("mass_kg", 30.0) * 9.81;
+    f_init_ = mg_ / 4.0;
 
     this->get_parameter_or("use_sim_time", sim_, false);
     kinematics_ = std::make_unique<KinematicsHelper>(sim_);
@@ -153,12 +158,15 @@ void ExpSimStayNode::initialize_impedance_command() {
         cmd->mx = 0.0;
         cmd->my = 0.0;
         cmd->mz = 0.0;
+        // 3D axes: x fore-aft, y lateral (ABAD), z vertical. This node was
+        // written for the 2D controller, where y was vertical and there was
+        // no lateral axis; ported 2026-10-12 so vertical gets the stiffness.
         cmd->bx = 100.0;
         cmd->by = 100.0;
-        cmd->bz = 0.0;
+        cmd->bz = 100.0;
         cmd->kx = 2000.0;
         cmd->ky = 2000.0;
-        cmd->kz = 0.0;
+        cmd->kz = 2000.0;
     }
 }
 
@@ -213,7 +221,7 @@ void ExpSimStayNode::execute_initialization_phase() {
         std::cout << forces[0] << ", " << forces[1] << ", " << forces[2] << ", " << forces[3] << std::endl << std::endl;
 
         for (int module_index = 0; module_index < 4; module_index++) {
-            imp_cmd_modules_[module_index]->fy = forces[module_index];
+            imp_cmd_modules_[module_index]->fz = forces[module_index];
         }
 
         imp_cmd_.header.seq = -1;
@@ -310,7 +318,7 @@ void ExpSimStayNode::execute_control_phase() {
         std::cout << forces[0] << ", " << forces[1] << ", " << forces[2] << ", " << forces[3] << std::endl << std::endl;
 
         for (int module_index = 0; module_index < 4; module_index++) {
-            imp_cmd_modules_[module_index]->fy = forces[module_index];
+            imp_cmd_modules_[module_index]->fz = forces[module_index];
         }
 
         if (loop_count > 2000 && loop_count < 13000) {
