@@ -194,27 +194,31 @@ void ExpSimStayNode::execute_initialization_phase() {
             imp_cmd_modules_[1]->theta += 23 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[2]->theta += 23 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[3]->theta += 23 / 2000.0 / 180.0 * M_PI;
-            imp_cmd_modules_[0]->beta += 25 / 2000.0 / 180.0 * M_PI;
+            imp_cmd_modules_[0]->beta -= 25 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[1]->beta -= 25 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[2]->beta -= 25 / 2000.0 / 180.0 * M_PI;
-            imp_cmd_modules_[3]->beta += 25 / 2000.0 / 180.0 * M_PI;
+            imp_cmd_modules_[3]->beta -= 25 / 2000.0 / 180.0 * M_PI;
         }
         if (exp_case_ == 2) {
             imp_cmd_modules_[0]->theta += 43 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[1]->theta += 43 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[2]->theta += 43 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[3]->theta += 43 / 2000.0 / 180.0 * M_PI;
-            imp_cmd_modules_[0]->beta += 80 / 2000.0 / 180.0 * M_PI;
+            imp_cmd_modules_[0]->beta -= 80 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[1]->beta -= 80 / 2000.0 / 180.0 * M_PI;
             imp_cmd_modules_[2]->beta -= 80 / 2000.0 / 180.0 * M_PI;
-            imp_cmd_modules_[3]->beta += 80 / 2000.0 / 180.0 * M_PI;
+            imp_cmd_modules_[3]->beta -= 80 / 2000.0 / 180.0 * M_PI;
         }
 
+        // Same beta on all four legs (frame-consistent; was A/D = -B/C, which
+        // canted the left and right pairs opposite ways). sa / sd keep their
+        // old meaning: contact x is odd in beta for the symmetric leg, so the
+        // old A/D value x(b) is -x(-b).
         legmodel.contact_map(motor_state_modules_[0]->theta, motor_state_modules_[0]->beta);
-        sa = legmodel.contact_p[0];
+        sa = -legmodel.contact_p[0];
 
         legmodel.contact_map(motor_state_modules_[3]->theta, motor_state_modules_[3]->beta);
-        sd = legmodel.contact_p[0];
+        sd = -legmodel.contact_p[0];
 
         forces = distribute_forces_(-sa / 2.0, -sd / 2.0, mg_, 0.222, f_init_);
 
@@ -299,8 +303,9 @@ void ExpSimStayNode::execute_control_phase() {
         Eigen::Vector3d euler = robot_ang.normalized().toRotationMatrix().eulerAngles(0, 1, 2);
         pitch = euler.y();
 
-        legmodel.contact_map(motor_state_modules_[0]->theta, motor_state_modules_[0]->beta + pitch);
-        sa = legmodel.contact_p[0];
+        // A / D: old x(b + pitch) with b = -beta is -x(beta - pitch)
+        legmodel.contact_map(motor_state_modules_[0]->theta, motor_state_modules_[0]->beta - pitch);
+        sa = -legmodel.contact_p[0];
 
         legmodel.contact_map(motor_state_modules_[1]->theta, motor_state_modules_[1]->beta - pitch);
         sb = legmodel.contact_p[0];
@@ -308,8 +313,8 @@ void ExpSimStayNode::execute_control_phase() {
         legmodel.contact_map(motor_state_modules_[2]->theta, motor_state_modules_[2]->beta - pitch);
         sc = legmodel.contact_p[0];
 
-        legmodel.contact_map(motor_state_modules_[3]->theta, motor_state_modules_[3]->beta + pitch);
-        sd = legmodel.contact_p[0];
+        legmodel.contact_map(motor_state_modules_[3]->theta, motor_state_modules_[3]->beta - pitch);
+        sd = -legmodel.contact_p[0];
 
         std::cout << sa << ", " << sb << ", " << sc << ", " << sd << std::endl << std::endl;
 

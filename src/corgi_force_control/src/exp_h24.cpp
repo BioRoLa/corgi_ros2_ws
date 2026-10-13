@@ -205,18 +205,27 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
         imp_cmd_modules_[2]->theta = eta[0];
         imp_cmd_modules_[3]->theta = eta[0];
 
-        imp_cmd_modules_[0]->beta = -eta[1];
+        // Same beta on all four legs: motor/state and the command are frame-
+        // consistent (force_control's 2026-09-02 note; gslip_pronk sends one
+        // beta to every leg). The old A/D = -beta mirror was the 2D-era
+        // convention and canted the left pair forward and the right pair back
+        // (a +/-20 N static fore-aft twist on the force plates).
+        imp_cmd_modules_[0]->beta = eta[1];
         imp_cmd_modules_[1]->beta = eta[1];
         imp_cmd_modules_[2]->beta = eta[1];
-        imp_cmd_modules_[3]->beta = -eta[1];
+        imp_cmd_modules_[3]->beta = eta[1];
 
         imp_cmd_modules_[0]->gamma = eta[2];
         imp_cmd_modules_[1]->gamma = eta[2];
         imp_cmd_modules_[2]->gamma = eta[2];
         imp_cmd_modules_[3]->gamma = eta[2];
 
+        // Front lever arm to the centre of mass. contact_p_3d[0] is positive
+        // when the foot is BEHIND the hip for this beta (the force plates read
+        // the front legs heavier with the feet back); with the old A/D beta
+        // mirror the sign was never exercised.
         legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-        double s_front = 0.255 + legmodel.contact_p_3d[0];
+        double s_front = 0.255 - legmodel.contact_p_3d[0];
         double f_hind = -mg_/2.0*(s_front/0.510);
         imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
         imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
@@ -282,10 +291,10 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
             imp_cmd_modules_[2]->theta = eta[0];
             imp_cmd_modules_[3]->theta = eta[0];
 
-            imp_cmd_modules_[0]->beta = -eta[1];
+            imp_cmd_modules_[0]->beta = eta[1];
             imp_cmd_modules_[1]->beta = eta[1];
             imp_cmd_modules_[2]->beta = eta[1];
-            imp_cmd_modules_[3]->beta = -eta[1];
+            imp_cmd_modules_[3]->beta = eta[1];
 
             imp_cmd_modules_[0]->gamma = eta[2];
             imp_cmd_modules_[1]->gamma = eta[2];
@@ -293,7 +302,7 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
             imp_cmd_modules_[3]->gamma = eta[2];
 
             legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-            double s_front = 0.255 + legmodel.contact_p_3d[0];
+            double s_front = 0.255 - legmodel.contact_p_3d[0];
             double f_hind = -mg_/2.0*(s_front/0.510);
             imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
             imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
@@ -367,18 +376,18 @@ void ImpedanceCmdPublisherNode::execute_rock_phase() {
         const double u = (t >= 0) ? rock_amp_ * env * sin(2.0 * M_PI * rock_hz_ * t / 1000.0) : 0.0;
 
         // stance pitch ramp: 1000 equal steps starting halfway through the hold.
-        // B carries the front pose and C the hind; A and D mirror beta, as in
-        // the init phase.
+        // B carries the front pose and C the hind; same beta on every leg, as
+        // in the init phase.
         if (stance_pitch_dz_ != 0.0 && loop_count >= hold_ticks / 2 && loop_count < hold_ticks / 2 + 1000) {
             const double step = stance_pitch_dz_ / 2.0 / 1000.0;
             const std::array<double, 3> front = legmodel.move_3d(
                 imp_cmd_modules_[1]->theta, imp_cmd_modules_[1]->beta, imp_cmd_modules_[1]->gamma, {0.0, 0.0, step});
             const std::array<double, 3> hind = legmodel.move_3d(
                 imp_cmd_modules_[2]->theta, imp_cmd_modules_[2]->beta, imp_cmd_modules_[2]->gamma, {0.0, 0.0, -step});
-            imp_cmd_modules_[0]->theta = front[0]; imp_cmd_modules_[0]->beta = -front[1]; imp_cmd_modules_[0]->gamma = front[2];
+            imp_cmd_modules_[0]->theta = front[0]; imp_cmd_modules_[0]->beta =  front[1]; imp_cmd_modules_[0]->gamma = front[2];
             imp_cmd_modules_[1]->theta = front[0]; imp_cmd_modules_[1]->beta =  front[1]; imp_cmd_modules_[1]->gamma = front[2];
             imp_cmd_modules_[2]->theta = hind[0];  imp_cmd_modules_[2]->beta =  hind[1];  imp_cmd_modules_[2]->gamma = hind[2];
-            imp_cmd_modules_[3]->theta = hind[0];  imp_cmd_modules_[3]->beta = -hind[1];  imp_cmd_modules_[3]->gamma = hind[2];
+            imp_cmd_modules_[3]->theta = hind[0];  imp_cmd_modules_[3]->beta =  hind[1];  imp_cmd_modules_[3]->gamma = hind[2];
         }
 
         for (int i = 0; i < 4; i++) {
