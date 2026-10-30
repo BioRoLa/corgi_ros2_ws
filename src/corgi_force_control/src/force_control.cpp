@@ -2,6 +2,7 @@
 
 ForceControlNode::ForceControlNode()
     : Node("force_control"),
+      sim_(this->get_parameter_or<bool>("use_sim_time", false)),
       kinematics_(sim_),
       phi_vel_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1)),
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1))
