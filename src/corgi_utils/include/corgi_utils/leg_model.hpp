@@ -16,8 +16,10 @@ public:
     // Rotation matrix helper
     std::array<std::array<double, 2>, 2> rot(double ang);
 
-    // Rim point calculation
+    // 3D rim parameter in degrees. An explicit rim resolves shared endpoints:
+    // 1 = foot, 2 = right upper, 3 = left upper; 0 selects by alpha.
     std::array<double, 2> rim_point(double alpha = 0.0);
+    std::array<double, 2> rim_point(double alpha, int rim_in);
 
     // Inverse kinematics
     std::array<double, 2> inverse(const std::array<double, 2> &pos, const std::string &joint = "G");
@@ -29,6 +31,9 @@ public:
     // Contact map
     void contact_map(double theta_in, double beta_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
     void contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope = 0.0, bool contact_upper = true, bool contact_lower = true);
+    // Ground normal expressed in the frame before the ABAD rotation.
+    // In 3D, contact_lower enables the foot; contact_upper enables both upper rims.
+    void contact_map_3d(double theta_in, double beta_in, double gamma_in, const std::array<double, 3>& ground_normal, bool contact_upper = true, bool contact_lower = true);
 
     // Move
     std::array<double, 2> move(double theta_in, double beta_in, std::array<double, 2> move_vec, double slope = 0.0, bool contact_upper = true, bool contact_lower = true, double tol = 1e-14, size_t max_iter = 100);
@@ -71,6 +76,10 @@ public:
     // Contact map variable
     int rim = 3; // 1 -> 2 -> 3 -> 4 -> 5 -> 0:
                  // U_l -> L_l -> G -> L_r -> U_r -> None
+    // contact_map: legacy rim IDs above and alpha in radians.
+    // contact_map_3d: 1 = foot, 2 = right upper, 3 = left upper, 0 = disabled;
+    // alpha in degrees, contact_p in the wheel plane (x,z), contact_p_3d
+    // relative to the ABAD axis in the frame before the ABAD rotation.
     double alpha;
     std::array<double, 2> contact_p;
     std::array<double, 3> contact_p_3d;
@@ -99,6 +108,7 @@ private:
     void symmetry();
     void to_vector();
     std::array<double, 3> arc_min(const std::complex<double> &p1, const std::complex<double> &p2, const std::complex<double> &O, const std::string &rim);
+    std::array<double, 3> arc_min_3d(const std::complex<double> &p1, const std::complex<double> &p2, const std::complex<double> &O, const std::string &rim);
     std::array<double, 2> objective(const std::array<double, 2> &d_q, const std::array<double, 2> &current_q, const std::array<double, 2> &move_vec, int contact_rim);
     std::array<double, 3> objective_3d(const std::array<double, 3> &d_q, const std::array<double, 3> &current_q, const std::array<double, 3> &move_vec, double slope = 0.0);
 

@@ -28,6 +28,16 @@ ForceControlNode::ForceControlNode()
         "force/state", 10, 
         std::bind(&ForceControlNode::force_state_cb, this, std::placeholders::_1));
     
+    for (int i = 0; i < 4; ++i) leg_frames_[i] = corgi_force::leg_frame(i, sim_);
+    if (sim_) {
+        directions_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
+            "motor/directions", rclcpp::QoS(1).transient_local(),
+            [this](const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+                directions_received_ = corgi_force::update_directions(msg->data, leg_frames_);
+                if (!directions_received_) RCLCPP_ERROR(this->get_logger(), "Invalid motor/directions: expected 20 signs (+1 or -1)");
+            });
+    }
+
     motor_state_sub_ = this->create_subscription<corgi_msgs::msg::MotorStateStamped>(
         "motor/state", 10, 
         std::bind(&ForceControlNode::motor_state_cb, this, std::placeholders::_1));
@@ -42,6 +52,7 @@ ForceControlNode::ForceControlNode()
 
 void ForceControlNode::imp_cmd_cb(const corgi_msgs::msg::ImpedanceCmdStamped::SharedPtr msg) {
     imp_cmd_ = *msg;
+    imp_cmd_received_ = true;
 }
 
 void ForceControlNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::SharedPtr msg) {
@@ -50,22 +61,12 @@ void ForceControlNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::
 
 void ForceControlNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
     motor_state_ = *msg;
+    motor_state_received_ = true;
 }
 
 void ForceControlNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
     imu_ = *msg;
-}
-
-void ForceControlNode::quaternion_to_euler(const Eigen::Quaterniond& q, double& roll, double& pitch, double& yaw) {
-    Eigen::Quaterniond q_norm = q.normalized();
-
-    roll = std::atan2(2.0 * (q_norm.w() * q_norm.x() + q_norm.y() * q_norm.z()),
-                      1.0 - 2.0 * (q_norm.x() * q_norm.x() + q_norm.y() * q_norm.y()));
-
-    pitch = std::asin(2.0 * (q_norm.w() * q_norm.y() - q_norm.z() * q_norm.x()));
-
-    yaw = std::atan2(2.0 * (q_norm.w() * q_norm.z() + q_norm.x() * q_norm.y()),
-                     1.0 - 2.0 * (q_norm.y() * q_norm.y() + q_norm.z() * q_norm.z()));
+    imu_received_ = true;
 }
 
 void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
@@ -73,7 +74,8 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                        corgi_msgs::msg::MotorState* motor_state_, 
                                        corgi_msgs::msg::ForceState* force_state_, 
                                        corgi_msgs::msg::MotorCmd* motor_cmd_, 
-                                       double pitch) {
+                                       const Eigen::Matrix3d& world_from_leg,
+                                       const corgi_force::LegFrame& frame) {
     // force command (3D)
     Eigen::MatrixXd force_des(3, 1);
     force_des << imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz;
@@ -83,9 +85,6 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                  force_des(1, 0)-force_state_->fy, 
                  force_des(2, 0)-force_state_->fz;
     
-    // position command and state (3D)
-    Eigen::MatrixXd pos_des(3, 1);
-
     LegModel& legmodel = kinematics_.get_leg_model();
             
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
@@ -94,34 +93,23 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
     
     // Use contact_map_3d to get alpha and contact point
-    legmodel.contact_map_3d(motor_state_->theta, motor_state_->beta + pitch, motor_state_->gamma);
+    Eigen::Vector3d normal = world_from_leg.transpose() * Eigen::Vector3d::UnitZ();
+    Eigen::Vector3d model = frame.model_angles(motor_state_->theta, motor_state_->beta, motor_state_->gamma);
+    double model_beta = model.y();
+    double model_gamma = model.z();
+    legmodel.contact_map_3d(model.x(), model_beta, model_gamma,
+                           std::array<double, 3>{normal.x(), normal.y(), normal.z()});
     
     // calculate jacobian
-    P_poly = kinematics_.calculate_P_poly_3d(legmodel.alpha);
+    P_poly = kinematics_.calculate_P_poly_3d(legmodel.rim, legmodel.alpha);
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
-    for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(motor_state_->theta, i); 
-    for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(motor_state_->theta, i);
+    for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(model.x(), i);
+    for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(model.x(), i);
 
-    double beta_fb = motor_state_->beta + pitch;
-    double gamma_fb = motor_state_->gamma;
-    double cos_beta = std::cos(beta_fb);
-    double sin_beta = std::sin(beta_fb);
-    double cos_gamma = std::cos(gamma_fb);
-    double sin_gamma = std::sin(gamma_fb);
-
-    double p_poly_x = P_theta(0, 0);
-    double p_poly_z = P_theta(1, 0);
-    double p_beta_x = p_poly_x * cos_beta - p_poly_z * sin_beta;
-    double p_beta_z = p_poly_x * sin_beta + p_poly_z * cos_beta;
-    double p_expected_x = p_beta_x;
-    double p_expected_y = legmodel.d_wheel * cos_gamma - p_beta_z * sin_gamma;
-    double p_expected_z = legmodel.d_wheel * sin_gamma + p_beta_z * cos_gamma;
-    double err_x = legmodel.contact_p_3d[0] - p_expected_x;
-    double err_y = legmodel.contact_p_3d[1] - p_expected_y;
-    double err_z = legmodel.contact_p_3d[2] - p_expected_z;
-
-    Eigen::MatrixXd J_fb(3, 3);
-    J_fb = kinematics_.calculate_jacobian_3d(P_theta, P_theta_deriv, motor_state_->beta + pitch, motor_state_->gamma, legmodel.d_wheel);
+    Eigen::Matrix3d J_leg = kinematics_.calculate_jacobian_3d(
+        P_theta, P_theta_deriv, model_beta, model_gamma, legmodel.d_wheel);
+    // Cartesian commands and impedance axes are world-frame; columns are [L,R,H].
+    Eigen::Matrix3d J_fb = world_from_leg * corgi_force::motor_jacobian(J_leg, frame);
 
     Eigen::MatrixXd phi_vel(3, 1);
     phi_vel << motor_state_->velocity_l, motor_state_->velocity_r, motor_state_->velocity_h;
@@ -140,7 +128,9 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     B(0, 0) = imp_cmd_->bx; B(1, 1) = imp_cmd_->by; B(2, 2) = imp_cmd_->bz;
     K(0, 0) = imp_cmd_->kx; K(1, 1) = imp_cmd_->ky; K(2, 2) = imp_cmd_->kz;
 
-    eta_cmd << imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma;
+    Eigen::Vector3d target_model = frame.model_angles(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
+    target_model.x() = std::max(target_model.x(), 17.0 / 180.0 * M_PI);
+    eta_cmd = frame.motor_angles(target_model);
     trq_cmd_base = J_fb.transpose() * (force_des + M*(-acc_fb));
 
     // calculate phi command
@@ -149,9 +139,10 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                eta_cmd(1, 0) - eta_cmd(0, 0) + 17/180.0*M_PI,
                eta_cmd(2, 0);
 
+    // Use body-relative motor angles, matching the low-level PD feedback.
     Eigen::MatrixXd phi_fb(3, 1);
-    phi_fb << motor_state_->beta + pitch + motor_state_->theta - 17/180.0*M_PI,
-              motor_state_->beta + pitch - motor_state_->theta + 17/180.0*M_PI,
+    phi_fb << motor_state_->beta + motor_state_->theta - 17/180.0*M_PI,
+              motor_state_->beta - motor_state_->theta + 17/180.0*M_PI,
               motor_state_->gamma;
 
     Eigen::MatrixXd phi_err = phi_des-phi_fb;
@@ -214,13 +205,11 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 }
 
 void ForceControlNode::timer_cb() {
-    Eigen::Quaterniond body_angle_quat;
-    double roll = 0;
-    double pitch = 0;
-    double yaw = 0;
-
-    body_angle_quat = {imu_.orientation.w, imu_.orientation.x, imu_.orientation.y, imu_.orientation.z};
-    quaternion_to_euler(body_angle_quat, roll, pitch, yaw);
+    // Do not publish default zero-angle commands before all required inputs arrive.
+    if (!motor_state_received_ || !imu_received_ || !imp_cmd_received_ || (sim_ && !directions_received_)) return;
+    Eigen::Quaterniond quaternion(imu_.orientation.w, imu_.orientation.x, imu_.orientation.y, imu_.orientation.z);
+    Eigen::Matrix3d world_from_body;
+    if (!corgi_force::body_rotation(quaternion, sim_, world_from_body)) return;
 
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules = {
         &imp_cmd_.module_a,
@@ -256,15 +245,11 @@ void ForceControlNode::timer_cb() {
             position_control(imp_cmd_modules[i], motor_cmd_modules[i]);
         }
         else {
-            if (imp_cmd_modules[i]->theta < 17/180.0*M_PI) { imp_cmd_modules[i]->theta = 17/180.0*M_PI; }
+            const auto& frame = leg_frames_[i];
+            Eigen::Matrix3d world_from_leg = world_from_body * frame.body_from_leg;
+            force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i],
+                          force_state_modules[i], motor_cmd_modules[i], world_from_leg, frame);
 
-            if (i == 1 || i == 2) {
-                force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], -pitch);
-            }
-            else {
-                force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i], force_state_modules[i], motor_cmd_modules[i], pitch);
-            }
-            
         }
         phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;
     }

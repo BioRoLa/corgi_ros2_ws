@@ -32,7 +32,7 @@ Start the simulation in Webots before continuing.
 ros2 launch corgi_force_control force_control.launch.py
 ```
 
-This launch file sets `use_sim_time=true` for both nodes.
+This launch file sets `use_sim_time=true` for both nodes. Rebuild and restart `corgi_sim` together with the control packages so they share the active motor direction config.
 
 ### Terminal 3: Start an experiment
 
@@ -47,13 +47,7 @@ ros2 run corgi_force_control exp_h24_node --ros-args \
   -p use_sim_time:=true -p b:=200.0 -p k:=2000.0
 ```
 
-Alternatively, run the standing experiment instead:
-
-```bash
-ros2 run corgi_force_control exp_sim_stay_node --ros-args -p use_sim_time:=true
-```
-
-Run only one experiment publisher. Initialization starts immediately; wait for it to finish before sending the trigger.
+Run only one experiment publisher. Initialization starts immediately after the simulator's active motor directions are received; wait for it to finish before triggering the experiment.
 
 ### Trigger the experiment
 

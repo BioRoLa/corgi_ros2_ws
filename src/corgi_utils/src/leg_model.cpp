@@ -6,6 +6,7 @@
 #include <array>
 #include <Eigen/Dense>
 #include <string>
+#include <limits>
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/fitted_coefficient.hpp"
 
@@ -186,34 +187,44 @@ std::array<std::array<double, 2>, 2> LegModel::rot(double ang) {
 }
 
 std::array<double, 2> LegModel::rim_point(double alpha) {
+    return this->rim_point(alpha, 0);
+}
+
+std::array<double, 2> LegModel::rim_point(double alpha, int rim_in) {
     // Calculates point on the wheel rim for given alpha angle (degrees).
-    // Alpha: Angle in degrees, where 0 degrees is directly in front of the wheel,
-    //        and positive angles rotate counterclockwise.
+    // Alpha is the material parameter: foot [-40,40], right upper [40,180],
+    // left upper [-180,-40]. It is not a world-frame bearing.
     
     this->forward(theta, beta, true);
-    double alpha_rad = alpha * M_PI / 180.0;
-    double a_mod = std::fmod((alpha + 180.0), 360.0) - 180.0;
+    double a_mod = std::remainder(alpha, 360.0);
+    double alpha_rad = a_mod * M_PI / 180.0;
     
     // Select rim segment and center point
     std::array<double, 2> center;
     std::array<double, 2> direction_point;
     double angle = 0.0;
     
-    if (a_mod >= -40.0 && a_mod <= 40.0) {
+    if (rim_in == 0) {
+        rim_in = (a_mod >= -40.0 && a_mod <= 40.0) ? 1 : (a_mod > 40.0 ? 2 : 3);
+    }
+
+    if (rim_in == 1) {
         // Foot rim
         center = O_r;
         direction_point = G;
         angle = alpha_rad;
-    } else if (a_mod > 40.0 && a_mod <= 180.0) {
+    } else if (rim_in == 2) {
         // Upper rim RHS
         center = U_r;
         direction_point = J_r;
         angle = (a_mod - 40.0) * M_PI / 180.0;
-    } else {
+    } else if (rim_in == 3) {
         // Upper rim LHS
         center = U_l;
         direction_point = J_l;
         angle = (a_mod + 40.0) * M_PI / 180.0;
+    } else {
+        throw std::invalid_argument("3D rim must be 1 (foot), 2 (right upper), or 3 (left upper).");
     }
     
     // Compute unit direction vector
@@ -282,40 +293,132 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope, bool c
             contact_p = {x_new, y_new};
         }//end if
 }//end contact_mapcontact_map_3d
-// TODO: Consider the other two rims
 void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, double slope, bool contact_upper, bool contact_lower) {
-    // Step 1: Forward kinematics in Leg Frame
-    this->forward(theta_in, beta_in, false);
-    this->gamma = gamma_in;
-    
-    // Step 2: Calculate alpha from ground slope (in degrees)
-    alpha = (slope - beta_in) * 180.0 / M_PI;
-    
-    // Step 3: Calculate sin(γ) and cos(γ)
+    // As in contact_map(), slope describes ground inclination in the x-z plane.
+    this->contact_map_3d(theta_in, beta_in, gamma_in,
+                        std::array<double, 3>{-std::sin(slope), 0.0, std::cos(slope)},
+                        contact_upper, contact_lower);
+}
+
+void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, const std::array<double, 3>& ground_normal, bool contact_upper, bool contact_lower) {
+    using namespace std::complex_literals;
+    double normal_norm = std::hypot(std::hypot(ground_normal[0], ground_normal[1]), ground_normal[2]);
+    if (!std::isfinite(normal_norm) || normal_norm == 0.0) {
+        throw std::invalid_argument("Ground normal must be finite and nonzero.");
+    }
+
+    gamma = gamma_in;
     double sin_g = std::sin(gamma);
     double cos_g = std::cos(gamma);
-    
-    // Step 4: Determine contact lateral distance from the ABAD axis.
-    // The fixed offset is from the ABAD axis to the wheel/leg plane; the
-    // edge offset selects the lower wheel edge when gamma tilts the wheel.
-    double half_wheel_width = wheel_thickness / 2.0;
+
+    // Project the ground normal into the wheel frame: R_x(gamma)^T * normal.
+    double normal_x = ground_normal[0] / normal_norm;
+    double normal_y = (ground_normal[1] * cos_g + ground_normal[2] * sin_g) / normal_norm;
+    double normal_z = (-ground_normal[1] * sin_g + ground_normal[2] * cos_g) / normal_norm;
+    double normal_plane = std::hypot(normal_x, normal_z);
+    double slope_adjusted = normal_plane > 1e-12 ? std::atan2(-normal_x, normal_z) : 0.0;
+    double beta_adjusted = beta_in - slope_adjusted;
+
+    // Work in a ground-aligned 2D frame, following contact_map() on dev.
+    this->forward(theta_in, beta_adjusted, false);
+    double scaled_radius = foot_radius / (R + foot_offset);
+    std::complex<double> OI_l = (I_l_c - O_r_c) * scaled_radius + O_r_c;
+    std::complex<double> OI_r = (I_r_c - O_r_c) * scaled_radius + O_r_c;
+    std::complex<double> UJ_r = (J_r_c - U_r_c) * scaled_radius + U_r_c;
+    std::complex<double> UH_r = (H_extend_r_c - U_r_c) * scaled_radius + U_r_c;
+    std::complex<double> UH_l = (H_extend_l_c - U_l_c) * scaled_radius + U_l_c;
+    std::complex<double> UJ_l = (J_l_c - U_l_c) * scaled_radius + U_l_c;
+
+    // Each result is {lowest height, alpha in radians, contact x}, as on dev.
+    // The last entry represents no enabled rim; it must not clip positive heights.
+    double no_contact = std::numeric_limits<double>::infinity();
+    std::array<std::array<double, 3>, 4> arc_list = {
+        this->arc_min_3d(OI_l, OI_r, O_r_c, "foot"),
+        this->arc_min_3d(UJ_r, UH_r, U_r_c, "right upper"),
+        this->arc_min_3d(UH_l, UJ_l, U_l_c, "left upper"),
+        {no_contact, 0.0, 0.0}
+    };
+    if (!contact_upper) {
+        arc_list[1][0] = no_contact;
+        arc_list[2][0] = no_contact;
+    }
+    if (!contact_lower) {
+        arc_list[0][0] = no_contact;
+    }
+
+    // Pick the lower wheel edge using the normal, including ground inclination.
     double contact_edge_offset = 0.0;
-    if (std::abs(sin_g) >= 1e-4) {
-        contact_edge_offset = (sin_g > 0) ? -half_wheel_width : half_wheel_width;
+    if (std::abs(normal_y) > 1e-12) {
+        contact_edge_offset = normal_y > 0.0 ? -wheel_thickness / 2.0 : wheel_thickness / 2.0;
     }
     d_wheel = abad_axis_to_wheel_plane + contact_edge_offset;
-    
-    // Step 5: Get 2D contact point from rim_point (Leg Frame)
-    auto contact_2d = rim_point(alpha);
-    
-    // Step 6: Apply axis rotation matrix
-    // [X]   [1   0        0    ] [x_2D  ]
-    // [Y] = [0  cos(γ) -sin(γ)] [d_wheel ]
-    // [Z]   [0  sin(γ)  cos(γ)] [z_2D  ]
-    contact_p_3d[0] = contact_2d[0];                            // X
-    contact_p_3d[1] = d_wheel * cos_g - contact_2d[1] * sin_g;  // Y
-    contact_p_3d[2] = d_wheel * sin_g + contact_2d[1] * cos_g;  // Z
+
+    double min_value = no_contact;
+    int min_index = 3;
+    for (int i = 0; i < 3; i++) {
+        if (!std::isfinite(arc_list[i][0])) continue;
+        double height = normal_plane * arc_list[i][0] + normal_y * d_wheel;
+        if (height < min_value) {
+            min_value = height;
+            min_index = i;
+        }
+    }
+
+    rim = min_index == 3 ? 0 : min_index + 1;
+    alpha = arc_list[min_index][1] * 180.0 / M_PI;
+    contact_p = {0.0, 0.0};
+    contact_p_3d = {0.0, 0.0, 0.0};
+    if (rim != 0) {
+        std::complex<double> contact = std::complex<double>(arc_list[min_index][2], arc_list[min_index][0])
+                                       * std::exp(1i * slope_adjusted);
+        contact_p = {contact.real(), contact.imag()};
+        contact_p_3d = {contact_p[0],
+                        d_wheel * cos_g - contact_p[1] * sin_g,
+                        d_wheel * sin_g + contact_p[1] * cos_g};
+    }
+
+    // Leave joint positions and beta in the input frame, not the search frame.
+    this->forward(theta_in, beta_in, true);
 }//end contact_map_3d
+
+std::array<double, 3> LegModel::arc_min_3d(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
+    using namespace std::complex_literals;
+    double lowest_point = 0.0;
+    double alpha = 0.0;
+    double contact_x = 0.0;
+    double bias_alpha = 0.0;
+    if (rim == "foot") {
+        bias_alpha = -40.0 * M_PI / 180.0;
+    } else if (rim == "right upper") {
+        bias_alpha = 40.0 * M_PI / 180.0;
+    } else if (rim == "left upper") {
+        bias_alpha = -M_PI;
+    }
+
+    // All three arcs run counterclockwise from p1 to p2, including wraparound.
+    double arc_angle = std::arg((p2 - O) / (p1 - O));
+    if (arc_angle < 0.0) arc_angle += 2.0 * M_PI;
+    double down_angle = std::arg(-1i / (p1 - O));
+    if (down_angle < 0.0) down_angle += 2.0 * M_PI;
+    double cal_err = 1e-12;
+    if (2.0 * M_PI - down_angle < cal_err) down_angle = 0.0;
+    bool in_range = down_angle <= arc_angle + cal_err;
+
+    if (in_range) {
+        lowest_point = O.imag() - foot_radius;
+        alpha = std::min(down_angle, arc_angle);
+        contact_x = O.real();
+    } else {
+        // A finite arc can also touch at an endpoint; keep its actual height.
+        bool first_lower = p1.imag() <= p2.imag();
+        std::complex<double> smaller = first_lower ? p1 : p2;
+        lowest_point = smaller.imag();
+        alpha = first_lower ? 0.0 : arc_angle;
+        contact_x = smaller.real();
+    }
+
+    return {lowest_point, alpha + bias_alpha, contact_x};
+}//end arc_min_3d
 
 std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
         using namespace std::complex_literals;

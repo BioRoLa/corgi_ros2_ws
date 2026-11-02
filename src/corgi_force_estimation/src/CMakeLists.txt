@@ -5,6 +5,7 @@ add_executable(force_estimation_node
 
 ament_target_dependencies(force_estimation_node
   rclcpp
+  std_msgs
   Eigen3
   corgi_utils
   corgi_msgs
@@ -22,6 +23,7 @@ target_link_libraries(exp_walk_node
 
 ament_target_dependencies(exp_walk_node
   rclcpp
+  std_msgs
   Eigen3
   corgi_utils
   corgi_msgs

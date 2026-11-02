@@ -11,6 +11,7 @@
 #include <Eigen/Geometry>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 
 #include "corgi_force_estimation/force_estimation.hpp"
 
@@ -40,15 +41,11 @@ private:
                       corgi_msgs::msg::MotorState* motor_state_, 
                       corgi_msgs::msg::ForceState* force_state_, 
                       corgi_msgs::msg::MotorCmd* motor_cmd_, 
-                      double pitch);
+                      const Eigen::Matrix3d& world_from_leg,
+                      const corgi_force::LegFrame& frame);
     
     void position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                          corgi_msgs::msg::MotorCmd* motor_cmd_);
-    
-    static void quaternion_to_euler(const Eigen::Quaterniond& q, 
-                                    double& roll, 
-                                    double& pitch, 
-                                    double& yaw);
     
     // Initialize the mode before the kinematics helper that consumes it.
     const bool sim_;
@@ -68,6 +65,13 @@ private:
     rclcpp::Subscription<corgi_msgs::msg::ImuStamped>::SharedPtr imu_sub_;
     rclcpp::Publisher<corgi_msgs::msg::MotorCmdStamped>::SharedPtr motor_cmd_pub_;
     
+    std::array<corgi_force::LegFrame, 4> leg_frames_;
+    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr directions_sub_;
+    bool directions_received_ = false;
+    bool motor_state_received_ = false;
+    bool imu_received_ = false;
+    bool imp_cmd_received_ = false;
+
     // State variables
     std::vector<Eigen::MatrixXd> phi_vel_prev_modules_;
     std::vector<Eigen::MatrixXd> phi_prev_modules_;

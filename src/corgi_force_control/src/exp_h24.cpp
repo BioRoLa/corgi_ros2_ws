@@ -33,11 +33,15 @@ private:
     
     // State variables
     bool trigger_;
+    std::array<corgi_force::LegFrame, 4> leg_frames_;
+    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr directions_sub_;
+    bool directions_received_ = false;
     double mg_;
     double s_;
     double h_;
     double b_value_;
     double k_value_;
+    std::array<double, 3> model_target_ = {17.0 / 180.0 * M_PI, 0.0, 0.0};
     
 };
 
@@ -68,6 +72,15 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
         }
     } else {
         RCLCPP_INFO(this->get_logger(), "Real hardware mode: using system wall clock.");
+    }
+
+    for (int i = 0; i < 4; ++i) leg_frames_[i] = corgi_force::leg_frame(i, sim_);
+    if (sim_) {
+        directions_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
+            "motor/directions", rclcpp::QoS(1).transient_local(),
+            [this](const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+                directions_received_ = corgi_force::update_directions(msg->data, leg_frames_);
+            });
     }
 
     const double default_b = sim_ ? 200.0 : 300.0;
@@ -129,34 +142,32 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
     rclcpp::Duration period(0, 1000000); // 1ms
     rclcpp::Time next_time = this->now();
 
-    for (int i=0; i<2000; i++){
+    for (int i=0; i<2000 && rclcpp::ok(); i++){
+        rclcpp::spin_some(this->get_node_base_interface());
         s_ = 0.12;
         h_ = 0.12;
 
         eta = legmodel.move_3d(
-            imp_cmd_modules_[1]->theta,
-            imp_cmd_modules_[1]->beta,
-            imp_cmd_modules_[1]->gamma,
+            model_target_[0],
+            model_target_[1],
+            model_target_[2],
             {-s_ / 2000.0, 0.0, h_ / 2000.0}
         );
 
-        imp_cmd_modules_[0]->theta = eta[0];
-        imp_cmd_modules_[1]->theta = eta[0];
-        imp_cmd_modules_[2]->theta = eta[0];
-        imp_cmd_modules_[3]->theta = eta[0];
-
-        imp_cmd_modules_[0]->beta = -eta[1];
-        imp_cmd_modules_[1]->beta = eta[1];
-        imp_cmd_modules_[2]->beta = eta[1];
-        imp_cmd_modules_[3]->beta = -eta[1];
-
-        imp_cmd_modules_[0]->gamma = eta[2];
-        imp_cmd_modules_[1]->gamma = eta[2];
-        imp_cmd_modules_[2]->gamma = eta[2];
-        imp_cmd_modules_[3]->gamma = eta[2];
+        model_target_ = eta;
+        for (int module = 0; module < 4; ++module) {
+            const auto& frame = leg_frames_[module];
+            double model_beta = (module == 0 || module == 3) ? -eta[1] : eta[1];
+            Eigen::Vector3d target = frame.motor_angles({eta[0], model_beta, eta[2]});
+            imp_cmd_modules_[module]->theta = target.x();
+            imp_cmd_modules_[module]->beta = target.y();
+            imp_cmd_modules_[module]->gamma = target.z();
+        }
 
         legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-        double s_front = 0.255 + legmodel.contact_p_3d[0];
+        const auto& frame_b = leg_frames_[1];
+        Eigen::Vector3d contact_body = frame_b.body_from_leg * Eigen::Map<Eigen::Vector3d>(legmodel.contact_p_3d.data());
+        double s_front = 0.255 + contact_body.x();
         double f_hind = -mg_/2.0*(s_front/0.510);
         imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
         imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
@@ -165,6 +176,7 @@ void ImpedanceCmdPublisherNode::execute_initialization_phase() {
 
         imp_cmd_.header.seq = -1;
         imp_cmd_.header.stamp = this->now();
+        imp_cmd_.header.frame_id = "world";
 
         imp_cmd_pub_->publish(imp_cmd_);
 
@@ -193,6 +205,7 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
     
     int loop_count = 0;
     while (rclcpp::ok()) {
+        rclcpp::spin_some(this->get_node_base_interface());
         if (loop_count < 2000) {
             ds = 0.0;
         }
@@ -211,29 +224,26 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
             else if (loop_count < 10000) { ds += 2*s_/2000.0/200.0; }
 
             eta = legmodel.move_3d(
-                imp_cmd_modules_[1]->theta,
-                imp_cmd_modules_[1]->beta,
-                imp_cmd_modules_[1]->gamma,
+                model_target_[0],
+                model_target_[1],
+                model_target_[2],
                 {ds, 0.0, 0.0}
             );
 
-            imp_cmd_modules_[0]->theta = eta[0];
-            imp_cmd_modules_[1]->theta = eta[0];
-            imp_cmd_modules_[2]->theta = eta[0];
-            imp_cmd_modules_[3]->theta = eta[0];
-
-            imp_cmd_modules_[0]->beta = -eta[1];
-            imp_cmd_modules_[1]->beta = eta[1];
-            imp_cmd_modules_[2]->beta = eta[1];
-            imp_cmd_modules_[3]->beta = -eta[1];
-
-            imp_cmd_modules_[0]->gamma = eta[2];
-            imp_cmd_modules_[1]->gamma = eta[2];
-            imp_cmd_modules_[2]->gamma = eta[2];
-            imp_cmd_modules_[3]->gamma = eta[2];
+            model_target_ = eta;
+            for (int module = 0; module < 4; ++module) {
+                const auto& frame = leg_frames_[module];
+                double model_beta = (module == 0 || module == 3) ? -eta[1] : eta[1];
+                Eigen::Vector3d target = frame.motor_angles({eta[0], model_beta, eta[2]});
+                imp_cmd_modules_[module]->theta = target.x();
+                imp_cmd_modules_[module]->beta = target.y();
+                imp_cmd_modules_[module]->gamma = target.z();
+            }
 
             legmodel.contact_map_3d(eta[0], eta[1], eta[2]);
-            double s_front = 0.255 + legmodel.contact_p_3d[0];
+            const auto& frame_b = leg_frames_[1];
+            Eigen::Vector3d contact_body = frame_b.body_from_leg * Eigen::Map<Eigen::Vector3d>(legmodel.contact_p_3d.data());
+            double s_front = 0.255 + contact_body.x();
             double f_hind = -mg_/2.0*(s_front/0.510);
             imp_cmd_modules_[0]->fz = -mg_/2.0 - f_hind;
             imp_cmd_modules_[1]->fz = -mg_/2.0 - f_hind;
@@ -253,6 +263,7 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
 
         imp_cmd_.header.seq = loop_count;
         imp_cmd_.header.stamp = this->now();
+        imp_cmd_.header.frame_id = "world";
 
         imp_cmd_pub_->publish(imp_cmd_);
 
@@ -267,6 +278,14 @@ void ImpedanceCmdPublisherNode::execute_control_phase() {
 }
 
 void ImpedanceCmdPublisherNode::run() {
+    if (sim_) {
+        RCLCPP_INFO(this->get_logger(), "Waiting for motor/directions from the simulator...");
+        while (rclcpp::ok() && !directions_received_) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            rclcpp::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!rclcpp::ok()) return;
+    }
     execute_initialization_phase();
     
     rclcpp::Duration period(0, 1000000); // 1ms

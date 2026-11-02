@@ -13,6 +13,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(corgi_utils REQUIRED)
 find_package(corgi_msgs REQUIRED)
@@ -33,6 +34,7 @@ add_library(${PROJECT_NAME} SHARED
 
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
+  std_msgs
   Eigen3
   corgi_utils
   corgi_msgs
@@ -43,6 +45,7 @@ ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(
   rclcpp
+  std_msgs
   Eigen3
   corgi_utils
   corgi_msgs
