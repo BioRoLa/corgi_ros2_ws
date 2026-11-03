@@ -84,7 +84,7 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     }
 
     const double default_b = sim_ ? 200.0 : 300.0;
-    const double default_k = sim_ ? 2000.0 : 4000.0;
+    const double default_k = 4000.0;
     b_value_ = this->declare_parameter<double>("b", default_b);
     k_value_ = this->declare_parameter<double>("k", default_k);
     RCLCPP_INFO(this->get_logger(), "Using impedance params: b=%.2f, k=%.2f", b_value_, k_value_);

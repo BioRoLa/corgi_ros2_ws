@@ -40,12 +40,7 @@ This launch file sets `use_sim_time=true` for both nodes. Rebuild and restart `c
 ros2 run corgi_force_control exp_h24_node --ros-args -p use_sim_time:=true
 ```
 
-To specify damping and stiffness:
-
-```bash
-ros2 run corgi_force_control exp_h24_node --ros-args \
-  -p use_sim_time:=true -p b:=200.0 -p k:=2000.0
-```
+This command uses the simulation defaults: stiffness `k=4000.0` and damping `b=200.0`. No `k` or `b` arguments are needed.
 
 Run only one experiment publisher. Initialization starts immediately after the simulator's active motor directions are received; wait for it to finish before triggering the experiment.
 
