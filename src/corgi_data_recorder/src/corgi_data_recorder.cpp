@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
 #include <sys/stat.h>
@@ -129,18 +130,22 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         << "imp_cmd_Fx_a"    << "," << "imp_cmd_Fy_a"   << "," << "imp_cmd_Fz_a"   << ","
                         << "imp_cmd_kx_a"    << "," << "imp_cmd_ky_a"   << "," << "imp_cmd_kz_a"   << ","
                         << "imp_cmd_bx_a"    << "," << "imp_cmd_by_a"   << "," << "imp_cmd_bz_a"   << ","
+                        << "imp_cmd_dbeta_ref_a" << ","
                         << "imp_cmd_theta_b" << "," << "imp_cmd_beta_b" << ","
                         << "imp_cmd_Fx_b"    << "," << "imp_cmd_Fy_b"   << "," << "imp_cmd_Fz_b"   << ","
                         << "imp_cmd_kx_b"    << "," << "imp_cmd_ky_b"   << "," << "imp_cmd_kz_b"   << ","
                         << "imp_cmd_bx_b"    << "," << "imp_cmd_by_b"   << "," << "imp_cmd_bz_b"   << ","
+                        << "imp_cmd_dbeta_ref_b" << ","
                         << "imp_cmd_theta_c" << "," << "imp_cmd_beta_c" << ","
                         << "imp_cmd_Fx_c"    << "," << "imp_cmd_Fy_c"   << "," << "imp_cmd_Fz_c"   << ","
                         << "imp_cmd_kx_c"    << "," << "imp_cmd_ky_c"   << "," << "imp_cmd_kz_c"   << ","
                         << "imp_cmd_bx_c"    << "," << "imp_cmd_by_c"   << "," << "imp_cmd_bz_c"   << ","
+                        << "imp_cmd_dbeta_ref_c" << ","
                         << "imp_cmd_theta_d" << "," << "imp_cmd_beta_d" << ","
                         << "imp_cmd_Fx_d"    << "," << "imp_cmd_Fy_d"   << "," << "imp_cmd_Fz_d"   << ","
                         << "imp_cmd_kx_d"    << "," << "imp_cmd_ky_d"   << "," << "imp_cmd_kz_d"   << ","
                         << "imp_cmd_bx_d"    << "," << "imp_cmd_by_d"   << "," << "imp_cmd_bz_d"   << ","
+                        << "imp_cmd_dbeta_ref_d" << ","
 
                         << "force_state_seq" << "," << "force_state_sec" << "," << "force_state_nsec" << ","
                         << "force_state_module_a_fx" << "," << "force_state_module_a_fy" << "," << "force_state_module_a_fz" << ","
@@ -155,18 +160,24 @@ void trigger_cb(const corgi_msgs::msg::TriggerStamped msg){
                         // << "sim_dst_lf" << "," << "sim_dst_lh" << "," << "sim_dst_rf" << "," << "sim_dst_rh" << ","
 
                         << "power_seq" << "," << "power_sec" << "," << "power_nsec" << ","
-                        << "v_0" << "," << "i_0" << ","
-                        << "v_1" << "," << "i_1" << ","
-                        << "v_2" << "," << "i_2" << ","
-                        << "v_3" << "," << "i_3" << ","
-                        << "v_4" << "," << "i_4" << ","
-                        << "v_5" << "," << "i_5" << ","
-                        << "v_6" << "," << "i_6" << ","
-                        << "v_7" << "," << "i_7" << ","
-                        << "v_8" << "," << "i_8" << ","
-                        << "v_9" << "," << "i_9" << ","
-                        << "v_10" << "," << "i_10" << ","
-                        << "v_11" << "," << "i_11"<< ","
+                        << "pb1_digital" << "," << "pb1_signal" << "," << "pb1_power" << ","
+                        << "pb2_digital" << "," << "pb2_signal" << "," << "pb2_power" << "," << "power_clean" << ","
+                        << "pb1_v_0" << "," << "pb1_i_0" << ","
+                        << "pb1_v_1" << "," << "pb1_i_1" << ","
+                        << "pb1_v_2" << "," << "pb1_i_2" << ","
+                        << "pb1_v_3" << "," << "pb1_i_3" << ","
+                        << "pb1_v_4" << "," << "pb1_i_4" << ","
+                        << "pb1_v_5" << "," << "pb1_i_5" << ","
+                        << "pb1_v_6" << "," << "pb1_i_6" << ","
+                        << "pb1_v_7" << "," << "pb1_i_7" << ","
+                        << "pb2_v_0" << "," << "pb2_i_0" << ","
+                        << "pb2_v_1" << "," << "pb2_i_1" << ","
+                        << "pb2_v_2" << "," << "pb2_i_2" << ","
+                        << "pb2_v_3" << "," << "pb2_i_3" << ","
+                        << "pb2_v_4" << "," << "pb2_i_4" << ","
+                        << "pb2_v_5" << "," << "pb2_i_5" << ","
+                        << "pb2_v_6" << "," << "pb2_i_6" << ","
+                        << "pb2_v_7" << "," << "pb2_i_7" << ","
 
                         << "sim_force_plate_1_sec" << "," << "sim_force_plate_1_nsec" << ","
                         << "sim_force_plate_1_fx" << "," << "sim_force_plate_1_fy" << "," << "sim_force_plate_1_fz" << ","
@@ -277,7 +288,14 @@ void write_data(rclcpp::Node::SharedPtr node) {
         return;
     }
 
-    output_file << node->now().nanoseconds() / 1e9 << ","
+    // The epoch is ~1.79e9; at the default 6 significant digits it
+    // printed as 1.78817e+09 on EVERY row -- the time column was
+    // dead (found 2026-08-31 on the first hardware captures).
+    // Microsecond resolution here, default formatting restored
+    // immediately so the data columns are unchanged.
+    output_file << std::fixed << std::setprecision(6)
+                << node->now().nanoseconds() / 1e9
+                << std::defaultfloat << ","
                 << motor_cmd.header.seq << "," << motor_cmd.header.stamp.sec << "," << motor_cmd.header.stamp.nanosec << ","
                 << motor_cmd.module_a.theta << "," << motor_cmd.module_a.beta << "," << motor_cmd.module_a.gamma << ","
                 << motor_cmd.module_a.torque_r << "," << motor_cmd.module_a.torque_l << "," << motor_cmd.module_a.torque_h << ","
@@ -312,18 +330,22 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << imp_cmd.module_a.fx    << "," << imp_cmd.module_a.fy << "," << imp_cmd.module_a.fz << ","
                 << imp_cmd.module_a.kx    << "," << imp_cmd.module_a.ky << "," << imp_cmd.module_a.kz << ","
                 << imp_cmd.module_a.bx    << "," << imp_cmd.module_a.by << "," << imp_cmd.module_a.bz << ","
+                << imp_cmd.module_a.dbeta_ref << ","
                 << imp_cmd.module_b.theta << "," << imp_cmd.module_b.beta << ","
                 << imp_cmd.module_b.fx    << "," << imp_cmd.module_b.fy << "," << imp_cmd.module_b.fz << ","
                 << imp_cmd.module_b.kx    << "," << imp_cmd.module_b.ky << "," << imp_cmd.module_b.kz << ","
                 << imp_cmd.module_b.bx    << "," << imp_cmd.module_b.by << "," << imp_cmd.module_b.bz << ","
+                << imp_cmd.module_b.dbeta_ref << ","
                 << imp_cmd.module_c.theta << "," << imp_cmd.module_c.beta << ","
                 << imp_cmd.module_c.fx    << "," << imp_cmd.module_c.fy << "," << imp_cmd.module_c.fz << ","
                 << imp_cmd.module_c.kx    << "," << imp_cmd.module_c.ky << "," << imp_cmd.module_c.kz << ","
                 << imp_cmd.module_c.bx    << "," << imp_cmd.module_c.by << "," << imp_cmd.module_c.bz << ","
+                << imp_cmd.module_c.dbeta_ref << ","
                 << imp_cmd.module_d.theta << "," << imp_cmd.module_d.beta << ","
                 << imp_cmd.module_d.fx    << "," << imp_cmd.module_d.fy << "," << imp_cmd.module_d.fz << ","
                 << imp_cmd.module_d.kx    << "," << imp_cmd.module_d.ky << "," << imp_cmd.module_d.kz << ","
                 << imp_cmd.module_d.bx    << "," << imp_cmd.module_d.by << "," << imp_cmd.module_d.bz << ","
+                << imp_cmd.module_d.dbeta_ref << ","
 
                 << force_state.header.seq << "," << force_state.header.stamp.sec << "," << force_state.header.stamp.nanosec << ","
                 << force_state.module_a.fx    << "," << force_state.module_a.fy << "," << force_state.module_a.fz << ","
@@ -341,18 +363,24 @@ void write_data(rclcpp::Node::SharedPtr node) {
                 << sim_leg_contact_state.module_d.contact << ","
 
                 << power_state.header.seq << "," << power_state.header.stamp.sec << "," << power_state.header.stamp.nanosec << ","
-                << power_state.v_0 << "," << power_state.i_0 << ","
-                << power_state.v_1 << "," << power_state.i_1 << ","
-                << power_state.v_2 << "," << power_state.i_2 << ","
-                << power_state.v_3 << "," << power_state.i_3 << ","
-                << power_state.v_4 << "," << power_state.i_4 << ","
-                << power_state.v_5 << "," << power_state.i_5 << ","
-                << power_state.v_6 << "," << power_state.i_6 << ","
-                << power_state.v_7 << "," << power_state.i_7 << ","
-                << power_state.v_8 << "," << power_state.i_8 << ","
-                << power_state.v_9 << "," << power_state.i_9 << ","
-                << power_state.v_10 << "," << power_state.i_10 << ","
-                << power_state.v_11 << "," << power_state.i_11 << ","
+                << power_state.pb1_digital << "," << power_state.pb1_signal << "," << power_state.pb1_power << ","
+                << power_state.pb2_digital << "," << power_state.pb2_signal << "," << power_state.pb2_power << "," << power_state.clean << ","
+                << power_state.pb1_v_0 << "," << power_state.pb1_i_0 << ","
+                << power_state.pb1_v_1 << "," << power_state.pb1_i_1 << ","
+                << power_state.pb1_v_2 << "," << power_state.pb1_i_2 << ","
+                << power_state.pb1_v_3 << "," << power_state.pb1_i_3 << ","
+                << power_state.pb1_v_4 << "," << power_state.pb1_i_4 << ","
+                << power_state.pb1_v_5 << "," << power_state.pb1_i_5 << ","
+                << power_state.pb1_v_6 << "," << power_state.pb1_i_6 << ","
+                << power_state.pb1_v_7 << "," << power_state.pb1_i_7 << ","
+                << power_state.pb2_v_0 << "," << power_state.pb2_i_0 << ","
+                << power_state.pb2_v_1 << "," << power_state.pb2_i_1 << ","
+                << power_state.pb2_v_2 << "," << power_state.pb2_i_2 << ","
+                << power_state.pb2_v_3 << "," << power_state.pb2_i_3 << ","
+                << power_state.pb2_v_4 << "," << power_state.pb2_i_4 << ","
+                << power_state.pb2_v_5 << "," << power_state.pb2_i_5 << ","
+                << power_state.pb2_v_6 << "," << power_state.pb2_i_6 << ","
+                << power_state.pb2_v_7 << "," << power_state.pb2_i_7 << ","
 
                 << force_plate_1.header.stamp.sec << "," << force_plate_1.header.stamp.nanosec << ","
                 << force_plate_1.wrench.force.x << "," << force_plate_1.wrench.force.y << "," << force_plate_1.wrench.force.z << ","
@@ -412,7 +440,14 @@ int main(int argc, char **argv) {
     auto power_cmd_sub = node->create_subscription<corgi_msgs::msg::PowerCmdStamped>("power/command", 100, power_cmd_cb);
     auto power_state_sub = node->create_subscription<corgi_msgs::msg::PowerStateStamped>("power/state", 100, power_state_cb);
     auto imu_sub = node->create_subscription<corgi_msgs::msg::ImuStamped>("imu", 100, imu_cb);
-    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 100, imp_cmd_cb);
+    // BEST_EFFORT, KEEP_LAST(1) -- same reasoning as force_control. A
+    // RELIABLE reader with a 100-deep queue on a 1 kHz stream asks for
+    // retransmissions of samples that are already worthless, and this
+    // recorder was one of the subscribers measured at ~45 Hz on
+    // 2026-09-01 while the producer ran at 1 kHz.
+    rclcpp::QoS imp_qos(rclcpp::KeepLast(1));
+    imp_qos.best_effort();
+    auto imp_cmd_sub = node->create_subscription<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", imp_qos, imp_cmd_cb);
     auto force_state_sub = node->create_subscription<corgi_msgs::msg::ForceStateStamped>("force/state", 100, force_state_cb);
     auto sim_leg_contact_state_sub = node->create_subscription<corgi_msgs::msg::SimLegContactStamped>("sim/leg_contact", 100, sim_leg_contact_state_cb);
     // TF listener for odom -> base_link transform
