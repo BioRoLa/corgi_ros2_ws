@@ -5,44 +5,118 @@ Refactored version with modular architecture (MVC pattern)
 """
 import os
 import sys
+import time
 import logging
+import threading
 import yaml
 import numpy as np
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication
+    QGroupBox, QLineEdit, QGridLayout, QFrame, QFileDialog, QApplication,
+    QMessageBox, QSizePolicy, QCheckBox
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QFontMetrics
 
 from corgi_msgs.msg import RobotCmdStamped, TriggerStamped
 
 # Import from corgi_ui package
 from corgi_ui.core.constants import (
-    ROBOTMODE, LOGLEVEL, COLORS, PATHS,
+    ROBOTMODE, LOGLEVEL, COLORS, PATHS, TOUCHDOWN,
     LOGLEVEL_TO_LOGGING_MAP,
     setup_file_logger, log_to_file, close_file_logger
 )
+from corgi_ui.core import sbrio
 from corgi_ui.core.ros_worker import ControlPanelRosWorker
 from corgi_ui.core.process_manager import ProcessManager
 from corgi_ui.gui.widgets.log_widget import LogWidget
 
-# GPIO Support (optional)
+# GPIO Support (optional) -- used only to mirror the software trigger onto a
+# hardware pin, for syncing external instruments. Everything else works
+# without it, because the trigger is published on ROS regardless.
+#
+# On the Orin, importing this prints
+#     UserWarning: Could not open /dev/mem for pinmux check ... Permission
+#     denied: '/dev/mem'
+# That is Jetson.GPIO skipping an OPTIONAL sanity check (is this pin actually
+# muxed as GPIO?) which needs root to read physical memory. It is a warning,
+# not a failure: the library drives the pin through /dev/gpiochip* instead,
+# and that path does not need /dev/mem. Nothing is disabled by it.
 GPIO_defined = True
 try:
     import Jetson.GPIO as GPIO
 except ImportError:
+    # Library not installed at all (a dev box without Jetson.GPIO).
+    GPIO_defined = False
+except RuntimeError as exc:
+    # Library installed but the platform cannot drive GPIO: Jetson.GPIO raises
+    # RuntimeError at IMPORT time when /dev/gpiochip0 is absent or unreadable,
+    # which is every non-Jetson machine (laptops) and any Jetson where the user
+    # is not in the gpio group. Catching only ImportError let that escape and
+    # took the whole panel down, so the panel could not be used off-robot.
+    logging.getLogger(__name__).warning("GPIO support disabled: %s", exc)
     GPIO_defined = False
 
-
 class CorgiControlPanel(QWidget):
+
+    # Emitted from the status worker thread; Qt delivers it to the GUI
+    # thread, which is the only thread allowed to touch widgets.
+    fpga_status_ready = pyqtSignal(str, object)
+
+    # Operator-facing names, taken from the FIRMWARE rather than inferred:
+    # fpga_driver/src/robot_fsm.cpp and motor_fsm.cpp (read 2026-09-01).
+    #
+    #   UNINITIALIZED (0)
+    #                   switchMode(REST) + power switches OFF. REST zeroes
+    #                   every motor command, so the motors are DE-ENERGISED
+    #                   and the robot goes LIMP. (Was SYSTEM_ON.)
+    #   INIT (1)        digital -> signal -> power, SET_ZERO, HALL_CALIBRATE
+    #                   (a driven velocity sweep -- THE LEGS MOVE), MOTOR,
+    #                   then auto-enters IDLE. Not a button: UNINITIALIZED -> IDLE
+    #                   is routed through it.
+    #   IDLE (2)        MOTOR mode, does NOT accept gRPC commands. Holds
+    #                   position only SOFTLY -- observed on the robot, and it
+    #                   follows: the gains still in force are HALL_CALIBRATE's
+    #                   (kp 50, kd 1.5). Firm torque arrives after Set Home.
+    #   ACTIVE (3)      MOTOR mode, commands accepted -- nothing moves on
+    #                   entry, it only opens the door. Gaits run here; homing
+    #                   is permitted here and is what produces firm torque.
+    #                   (Was STANDBY.)
+    #   CONFIG (4)      switchMode(CONFIG), which sets REST: motors LIMP
+    #                   again while parameters are read/written.
+    #                   (Was MOTORCONFIG.)
+    #
+    # Three facts the old labels hid, the first two safety-relevant:
+    # "Set Powered" DROPPED the legs, "Arm" MOVES them, and "Go Live - home
+    # && run" neither homed nor produced holding torque. The buttons now say
+    # what each one does.
+    MODE_LABEL = {
+        ROBOTMODE.UNINITIALIZED: 'Uninitialized (motors off)',
+        ROBOTMODE.INIT:          'Initialising',
+        ROBOTMODE.IDLE:          'Idle (energised, soft)',
+        ROBOTMODE.ACTIVE:        'Active (commands enabled)',
+        ROBOTMODE.CONFIG:        'Config (motors limp)',
+    }
+
+    @classmethod
+    def _mode_text(cls, mode) -> str:
+        """'Active (commands enabled) \u00b7 ACTIVE' -- friendly first,
+        canonical alongside, so the panel and the robot's own log lines can
+        be matched up at a glance."""
+        try:
+            enum = ROBOTMODE(mode)
+        except ValueError:
+            return '---'
+        return '%s \u00b7 %s' % (cls.MODE_LABEL.get(enum, enum.name), enum.name)
+
     """
     Main Control Panel for Corgi Robot
     
     Features:
     - ROS Bridge control
     - Robot FSM management
-    - Process management (IMU, CSV control, set_zero)
+    - Process management (IMU, CSV control, homing)
     - Data recording trigger
     - Real-time monitoring (power, motor states)
     - Logging system with file output
@@ -62,6 +136,25 @@ class CorgiControlPanel(QWidget):
         self._robot_cmd_seq = 0
         self._pending_robot_mode = None
         self._last_confirmed_mode = None
+        # None = not yet known (the panel does not ssh at startup just to
+        # find out); True/False only ever set from what the sbRIO reported.
+        self._fpga_running = None
+        # When the last e-stop press was, so a rapid second one can be
+        # recognised as a double-tap rather than a decision.
+        self._last_estop_at = 0.0
+        # Power badges: accumulate at 1 kHz, paint the mean at 5 Hz. Defined
+        # here, before _connect_ros_signals, so a message arriving early
+        # cannot hit an attribute that does not exist yet.
+        self._power_accum = {'n': 0, 'pb1_v': 0.0, 'pb1_i': 0.0,
+                             'pb2_v': 0.0, 'pb2_i': 0.0}
+        # Peaks come from the RAW samples, not the painted mean.
+        self._peak_i = 0.0
+        self._peak_w = 0.0
+        # When each 1 kHz stream last delivered. 0.0 = nothing ever arrived,
+        # which must not be reported as "stale" before the bridge is up.
+        self._last_power_at = 0.0
+        self._last_motor_at = 0.0
+        self._streams_stale = False
         
         # Check if running in simulation mode
         self.use_sim_time = self._check_use_sim_time()
@@ -89,6 +182,28 @@ class CorgiControlPanel(QWidget):
         # Connect ROS signals
         self._connect_ros_signals()
 
+        # Ask the sbRIO what is actually running, rather than assuming the
+        # driver is down because this panel has not started one.
+        self._power_paint_timer = QTimer(self)
+        self._power_paint_timer.timeout.connect(self._repaint_power_badges)
+        self._power_paint_timer.timeout.connect(self._repaint_cmd_source)
+        self._power_paint_timer.timeout.connect(self._repaint_bag_status)
+        # _update_button_states is driven by the 5 Hz paint timer rather
+        # than by the 1 kHz state callbacks. It makes nineteen setEnabled()
+        # calls and depends on nothing that changes faster than a user can
+        # act; every user action also calls it directly, so the only
+        # latency added is up to 200 ms on an FSM-driven enable.
+        self._power_paint_timer.timeout.connect(self._update_button_states)
+        self._power_paint_timer.start(200)
+
+        self._fpga_busy = False
+        self.fpga_status_ready.connect(self._on_fpga_status)
+        if not self.use_sim_time:
+            self._fpga_poll_timer = QTimer(self)
+            self._fpga_poll_timer.timeout.connect(self._poll_fpga_status)
+            self._fpga_poll_timer.start(30000)
+            QTimer.singleShot(300, self._poll_fpga_status)
+
         # Start ROS worker in simulation mode (no bridge)
         if self.use_sim_time:
             if self.ros_worker.start_ros():
@@ -103,8 +218,28 @@ class CorgiControlPanel(QWidget):
         # Sim time tracking for clock jump detection
         self._last_sim_time_sec = 0.0
 
+        # Homing in progress. Tracked as REAL STATE, not inferred from
+        # the button's text: the completion poller used to key on
+        # text == 'Homing...', so any handler that reset the text (a
+        # failed second press did exactly that) silently disabled
+        # completion detection for the rest of the session.
+        self._homing_active = False
+        # Did the homing node actually report completion? It has abort
+        # paths (theta below the 17 deg target, or no motor/state), and
+        # the panel used to announce 'home position set successfully'
+        # whenever the PROCESS EXITED -- abort included. Believing that
+        # leaves the zero unset while you think it is set, corrupting
+        # every theta/beta reference downstream.
+        self._homing_saw_complete = False
+
         # Auto-start data recorder
         self._start_data_recorder()
+
+        # Auto-start the IMU alongside it: every capture should carry
+        # IMU data, and the roll channel is what the hardware roll
+        # prediction is scored on. Real hardware only -- the simulator
+        # publishes its own IMU.
+        self._start_imu()
     
     def _check_use_sim_time(self) -> bool:
         """Check if use_sim_time parameter is set to true"""
@@ -162,6 +297,7 @@ class CorgiControlPanel(QWidget):
         
         # Top Bar (Power + E-Stop)
         main_layout.addLayout(self._create_top_bar())
+        main_layout.addWidget(self._create_stale_banner())
         
         # Middle Area (Controls + Monitor)
         main_layout.addLayout(self._create_middle_area())
@@ -183,6 +319,35 @@ class CorgiControlPanel(QWidget):
         
         self.show()
     
+    def _create_stale_banner(self):
+        """A permanently reserved one-line row for the stream-staleness warning.
+
+        Reserved rather than shown-on-demand, and that is the whole point.
+        Toggling a widget's visibility is a layout change, and a layout change
+        is what the complaint was about: this label used to live in the top
+        bar, where making it visible raised the layout's minimum width by 889
+        px (measured) and Qt force-grew the window, because a window cannot be
+        drawn narrower than its layout demands.
+
+        Always present, empty when healthy, so the panel's geometry never
+        moves in either axis whatever the streams do. Costs ~18 px of height,
+        permanently, which is a fair price for a warning that cannot be
+        missed and cannot shove the window around.
+
+        Horizontally Ignored so its text still cannot raise the minimum width,
+        and elided rather than wrapped in _repaint_stream_staleness -- wrapping
+        would grow the row to two lines on a narrow window and reintroduce the
+        same complaint in the other axis.
+        """
+        self.lbl_stream_stale.setSizePolicy(QSizePolicy.Ignored,
+                                            QSizePolicy.Preferred)
+        self.lbl_stream_stale.setMinimumWidth(0)
+        self.lbl_stream_stale.setWordWrap(False)
+        fm = QFontMetrics(self.lbl_stream_stale.font())
+        self.lbl_stream_stale.setFixedHeight(fm.height() + 4)
+        self.lbl_stream_stale.setVisible(True)
+        return self.lbl_stream_stale
+
     def _create_top_bar(self) -> QHBoxLayout:
         """Create top bar with power display and E-Stop button"""
         top_bar = QHBoxLayout()
@@ -190,31 +355,198 @@ class CorgiControlPanel(QWidget):
         # Power summary badges
         power_box = QHBoxLayout()
         power_box.setSpacing(8)
+
+        pb1_container = QVBoxLayout()
+        pb1_container.setSpacing(3)
+        # Which board is which side, established on the robot 2026-09-01
+        # (Alex). Correlating the banked runs could not separate them -- in an
+        # air pronk all four legs move in phase.
+        pb1_title = QLabel("PB1  —  LEFT side")
+        pb1_title.setObjectName("PowerBoardTitle")
+        pb1_title.setAlignment(Qt.AlignCenter)
+        pb1_frame = QFrame()
+        pb1_frame.setObjectName("PowerBoardFrame")
+        pb1_frame_layout = QHBoxLayout()
+        pb1_frame_layout.setSpacing(10)
+        pb1_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        pb2_container = QVBoxLayout()
+        pb2_container.setSpacing(3)
+        pb2_title = QLabel("PB2  —  RIGHT side")
+        pb2_title.setObjectName("PowerBoardTitle")
+        pb2_title.setAlignment(Qt.AlignCenter)
+        pb2_frame = QFrame()
+        pb2_frame.setObjectName("PowerBoardFrame")
+        pb2_frame_layout = QHBoxLayout()
+        pb2_frame_layout.setSpacing(10)
+        pb2_frame_layout.setContentsMargins(8, 8, 8, 8)
         
-        self.lbl_voltage = QLabel('--.- V')
-        self.lbl_voltage.setObjectName('PowerBadge')
-        self.lbl_soc = QLabel('-- %')
-        self.lbl_soc.setObjectName('PowerBadge')
-        self.lbl_current = QLabel('-.-- A')
-        self.lbl_current.setObjectName('PowerBadge')
-        self.lbl_power = QLabel('--.- W')
-        self.lbl_power.setObjectName('PowerBadge')
+        self.lbl_pb1_voltage = QLabel('--.- V')
+        self.lbl_pb1_voltage.setObjectName('PowerBadge')
+        self.lbl_pb1_current = QLabel('-.-- A')
+        self.lbl_pb1_current.setObjectName('PowerBadge')
+        self.lbl_pb1_power = QLabel('--.- W')
+        self.lbl_pb1_power.setObjectName('PowerBadge')
+
+        self.lbl_pb2_voltage = QLabel('--.- V')
+        self.lbl_pb2_voltage.setObjectName('PowerBadge')
+        self.lbl_pb2_current = QLabel('-.-- A')
+        self.lbl_pb2_current.setObjectName('PowerBadge')
+        self.lbl_pb2_power = QLabel('--.- W')
+        self.lbl_pb2_power.setObjectName('PowerBadge')
         
-        power_box.addWidget(self.lbl_voltage)
-        power_box.addWidget(self.lbl_soc)
-        power_box.addWidget(self.lbl_current)
-        power_box.addWidget(self.lbl_power)
+        pb1_frame_layout.addWidget(self.lbl_pb1_voltage)
+        pb1_frame_layout.addWidget(self.lbl_pb1_current)
+        pb1_frame_layout.addWidget(self.lbl_pb1_power)
+        pb1_frame.setLayout(pb1_frame_layout)
+        pb1_container.addWidget(pb1_title)
+        pb1_container.addWidget(pb1_frame)
+
+        pb2_frame_layout.addWidget(self.lbl_pb2_voltage)
+        pb2_frame_layout.addWidget(self.lbl_pb2_current)
+        pb2_frame_layout.addWidget(self.lbl_pb2_power)
+        pb2_frame.setLayout(pb2_frame_layout)
+        pb2_container.addWidget(pb2_title)
+        pb2_container.addWidget(pb2_frame)
+
+        # TOTAL -- what the bench supply is actually delivering, which is
+        # the number worth watching against its current limit. Neither
+        # per-board badge answers that on its own.
+        total_container = QVBoxLayout()
+        total_container.setSpacing(3)
+        total_title = QLabel("TOTAL  (both boards)")
+        total_title.setObjectName("PowerBoardTitle")
+        total_title.setAlignment(Qt.AlignCenter)
+        total_frame = QFrame()
+        total_frame.setObjectName("PowerBoardFrame")
+        total_frame_layout = QHBoxLayout()
+        total_frame_layout.setSpacing(10)
+        total_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        self.lbl_total_current = QLabel('-.-- A')
+        self.lbl_total_current.setObjectName('PowerBadge')
+        self.lbl_total_power = QLabel('--.- W')
+        self.lbl_total_power.setObjectName('PowerBadge')
+        for lbl in (self.lbl_total_current, self.lbl_total_power):
+            lbl.setToolTip(
+                'PB1 + PB2, load channels i_1..i_7 only.\n'
+                'Channel 0 is excluded: a near-constant ~13.5 A that does '
+                'not track load and correlates negatively with torque.\n'
+                '200 ms mean, painted at 5 Hz.')
+            total_frame_layout.addWidget(lbl)
+
+        total_frame.setLayout(total_frame_layout)
+        total_container.addWidget(total_title)
+        total_container.addWidget(total_frame)
+
+        # One block, not four floating stacks. PB1/PB2/TOTAL/PEAK are one
+        # family of readings and nothing said so; the eye had to infer it.
+        # Same numbers, same tooltips, same painting -- one visual object.
+        power_block = QFrame()
+        power_block.setObjectName("PowerBlock")
+        power_block.setStyleSheet(
+            "#PowerBlock { border: 1px solid #3a3a3a; border-radius: 6px; }")
+        power_block_layout = QHBoxLayout()
+        power_block_layout.setSpacing(14)
+        power_block_layout.setContentsMargins(10, 6, 10, 8)
+        power_block_layout.addLayout(pb1_container)
+        power_block_layout.addLayout(pb2_container)
+        power_block_layout.addLayout(total_container)
+
+        # PEAK -- the largest single sample since the last reset. Sizing the
+        # supply and reading a pronk both depend on the spike, not the mean.
+        peak_container = QVBoxLayout()
+        peak_container.setSpacing(3)
+        peak_header = QHBoxLayout()
+        peak_header.setSpacing(4)
+        peak_title = QLabel("PEAK")
+        peak_title.setObjectName("PowerBoardTitle")
+        peak_title.setAlignment(Qt.AlignCenter)
+        self.btn_peak_reset = QPushButton('\u21ba')
+        self.btn_peak_reset.setMaximumWidth(28)
+        self.btn_peak_reset.setToolTip('Reset the peak readings')
+        self.btn_peak_reset.clicked.connect(lambda: self._reset_power_peaks('manual'))
+        peak_header.addStretch(1)
+        peak_header.addWidget(peak_title)
+        peak_header.addWidget(self.btn_peak_reset)
+        peak_header.addStretch(1)
+
+        peak_frame = QFrame()
+        peak_frame.setObjectName("PowerBoardFrame")
+        peak_frame_layout = QHBoxLayout()
+        peak_frame_layout.setSpacing(10)
+        peak_frame_layout.setContentsMargins(8, 8, 8, 8)
+
+        self.lbl_peak_current = QLabel('-.-- A')
+        self.lbl_peak_current.setObjectName('PowerBadge')
+        self.lbl_peak_power = QLabel('--.- W')
+        self.lbl_peak_power.setObjectName('PowerBadge')
+        for lbl in (self.lbl_peak_current, self.lbl_peak_power):
+            lbl.setToolTip(
+                'Largest SINGLE SAMPLE of PB1+PB2 since the last reset, at '
+                'the full 1 kHz \u2014 not the largest painted average.\n'
+                'A 20 ms spike barely moves the 200 ms mean shown under '
+                'TOTAL, and the spike is the point.\n'
+                'Resets automatically when the trigger goes ON, so it reads '
+                '"peak during this run"; the outgoing value is logged first.')
+            peak_frame_layout.addWidget(lbl)
+
+        peak_frame.setLayout(peak_frame_layout)
+        peak_container.addLayout(peak_header)
+        peak_container.addWidget(peak_frame)
+        power_block_layout.addLayout(peak_container)
+        power_block.setLayout(power_block_layout)
+        power_box.addWidget(power_block)
+
+        # Shown only while a 1 kHz stream has stopped. Placed with the power
+        # row because that is where a frozen number is most believable.
+        self.lbl_stream_stale = QLabel('')
+        self.lbl_stream_stale.setStyleSheet(
+            'color: #ffa726; font-weight: bold; padding-left: 10px;')
+        # Geometry and size policy are set in _create_stale_banner().
         top_bar.addLayout(power_box)
+        # The staleness banner is NOT in this bar. Measured: at the default
+        # 1024-wide window the power boxes and buttons claim ~892 px, leaving
+        # ~130 px of slack, so a label here was allocated 63 px of a
+        # 90-character warning. It lives on its own reserved row instead --
+        # see _create_stale_banner().
         
         # E-Stop Button
-        self.btn_estop = QPushButton('< ! >')
+        self.btn_estop = QPushButton('E-STOP')
         self.btn_estop.setObjectName("EstopBtn")
         self.btn_estop.setMinimumWidth(100)
         self.btn_estop.setMinimumHeight(50)
         self.btn_estop.clicked.connect(self._on_estop_clicked)
+        self._estop_timer = QTimer(self)
+        self._estop_timer.timeout.connect(self._estop_retry)
+        self._estop_deadline = 0.0
+
+        self.btn_stop_gait = QPushButton('Stop Gait')
+        self.btn_stop_gait.setObjectName("StopGaitBtn")
+        self.btn_stop_gait.setMinimumWidth(100)
+        self.btn_stop_gait.setMinimumHeight(50)
+        self.btn_stop_gait.clicked.connect(self._on_stop_gait_clicked)
+        self.btn_stop_gait.setEnabled(False)
+        self.btn_stop_gait.setToolTip(
+            'End the run and LEAVE THE ROBOT HOLDING.\n'
+            'Drops the gait trigger, then requests Idle (energised) -- the '
+            'motors stay powered.\n'
+            'Use this to finish a run. Use E-STOP when something is wrong.')
+        self.btn_estop.setToolTip(
+            'EMERGENCY STOP -- one press, one outcome, every time.\n'
+            '  1. drops the gait trigger (the controller\'s own abort)\n'
+            '  2. requests Uninitialized (motors off): motors DE-ENERGISED.\n'
+            '     THE ROBOT GOES LIMP and will fall if unsupported.\n'
+            'Re-sent every 200 ms until the robot confirms. After 5 s with '
+            'no confirmation it says so and tells you to cut the supply.\n'
+            'No dialog, and no dependence on the current mode.\n'
+            'To end a run without dropping the robot, use Stop Gait.\n'
+            'This is a gRPC REQUEST and needs the ROS bridge. The bench '
+            'supply output-off is the real emergency stop.')
         self.btn_estop.setEnabled(False)
         
         top_bar.addStretch(1)
+        top_bar.addWidget(self.btn_stop_gait)
         top_bar.addWidget(self.btn_estop)
         
         return top_bar
@@ -239,6 +571,23 @@ class CorgiControlPanel(QWidget):
         sidebar = QVBoxLayout()
         sidebar.setSpacing(15)
         
+        # sbRIO FPGA driver -- the bottom of the stack, and the one step
+        # that used to be a hand-typed ssh session left open in a terminal.
+        # It sits above the bridge button because that is the order: driver,
+        # then bridge, then everything else.
+        # One driver, one button. Not setCheckable: the checked state would
+        # flip on the click, before the sbRIO has said anything, so a failed
+        # start would sit there looking started.
+        self.btn_fpga_driver = QPushButton()
+        self.btn_fpga_driver.clicked.connect(self._on_fpga_driver_clicked)
+        self._refresh_fpga_button()
+
+        if hasattr(self, 'use_sim_time') and self.use_sim_time:
+            self.btn_fpga_driver.setEnabled(False)
+            self.btn_fpga_driver.setToolTip('No sbRIO in simulation mode')
+
+        sidebar.addWidget(self.btn_fpga_driver)
+
         # ROS Bridge button
         self.btn_ros_bridge = QPushButton('Run ROS Bridge')
         self.btn_ros_bridge.setCheckable(True)
@@ -262,40 +611,80 @@ class CorgiControlPanel(QWidget):
         mode_h_layout.setContentsMargins(5, 5, 5, 5)
         
         lbl_mode_title = QLabel("Current mode:")
+        # Friendly name first, canonical second -- see MODE_LABEL. The
+        # readout is the one place both have to be visible, because the
+        # robot's own log lines use the bare enum name.
         lbl_mode_title.setStyleSheet("color: #888; font-size: 12px;")
         
-        self.label_robot_mode_value = QLabel("---")
+        self.label_robot_mode_value = QLabel("no robot state")
         self.label_robot_mode_value.setObjectName("StatusLabel")
         self.label_robot_mode_value.setAlignment(Qt.AlignCenter)
         self.label_robot_mode_value.setStyleSheet(
-            "color: #bdbdbd; font-weight: bold; font-size: 20px;"
+            "color: #bdbdbd; font-weight: bold; font-size: 16px;"
         )
         
+        # Every FSM button is gated on a mode arriving on /robot/state. When
+        # none ever does, all four sit greyed out with nothing saying why --
+        # and the cause is upstream of the panel every time.
+        self.label_robot_mode_value.setToolTip(
+            'The mode comes from /robot/state, via the bridge, from the '
+            'sbRIO.\nWhile this reads "no robot state" the FSM buttons stay '
+            'disabled and the fault is upstream of the panel:\n'
+            '  - is the FPGA driver up AND STAYING up on the sbRIO?\n'
+            '  - is the ROS bridge running?\n'
+            'Mode commands are still sent -- they are simply never confirmed.')
         mode_h_layout.addWidget(lbl_mode_title)
         mode_h_layout.addWidget(self.label_robot_mode_value)
         grp_fsm_layout.addWidget(mode_container)
         
         # FSM Buttons
-        self.btn_systemon = QPushButton('Set to System ON')
+        self.btn_systemon = QPushButton('1 \u00b7 Uninitialized  (motors off)')
+        self.btn_systemon.setToolTip(
+            'UNINITIALIZED (0) — the firmware\'s "safe state".\nMotors go to REST (every command zeroed) and '
+            'the power switches go OFF, so THE ROBOT GOES LIMP. Support it '
+            'before pressing this.\nAlso where the e-stop retreats to from '
+            'anywhere.')
         self.btn_systemon.setObjectName("SystemOnBtn")
         self.btn_systemon.setCheckable(True)
-        self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.SYSTEM_ON))
+        self.btn_systemon.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.UNINITIALIZED))
         self.btn_systemon.setEnabled(False)
         
-        self.btn_idle = QPushButton('Set to IDLE')
+        self.btn_idle = QPushButton('2 \u00b7 Idle  \u2014  power up + hall calib')
+        self.btn_idle.setToolTip(
+            'IDLE (2). Coming from Uninitialized this routes through INIT: '
+            'power sequence, set-zero, then HALL CALIBRATION — a driven '
+            'sweep, SO THE LEGS MOVE. Keep clear.\n'
+            'It then settles into a closed pose, energised but only SOFTLY '
+            'held — no firm holding torque, because the gains still in force '
+            'are the calibration ones (kp 50, kd 1.5). Firm torque arrives '
+            'after Set Home.\n'
+            'Commands are NOT accepted in this state.\n'
+            'Also where Stop Gait drops you from Active.')
         self.btn_idle.setCheckable(True)
         self.btn_idle.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.IDLE))
         self.btn_idle.setEnabled(False)
         
-        self.btn_standby = QPushButton('Set STANDBY')
+        self.btn_standby = QPushButton('3 \u00b7 Active  (commands enabled)')
+        self.btn_standby.setToolTip(
+            'ACTIVE (3). Motors accept commands. Nothing moves on entry — '
+            'this only opens the door.\n'
+            'It does NOT home: press "Set Home" for that (it runs '
+            'corgi_homing), and the firm holding torque appears once homing '
+            'has set the zero.\n'
+            'Gaits run in this state and nowhere else.\nDown: Idle, or straight to Uninitialized (motors off).')
         self.btn_standby.setCheckable(True)
-        self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.STANDBY))
+        self.btn_standby.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.ACTIVE))
         self.btn_standby.setEnabled(False)
         
-        self.btn_motorconfig = QPushButton('Set to CONFIG')
+        self.btn_motorconfig = QPushButton('Config')
+        self.btn_motorconfig.setToolTip(
+            'CONFIG (4). Side branch off Uninitialized / Idle, '
+            'not a rung on the ladder.\nCONFIG sets the motors to REST, so '
+            'THE ROBOT GOES LIMP here too while parameters are read and '
+            'written.\nOpens the config panel on entry.')
         self.btn_motorconfig.setObjectName("ConfigBtn")
         self.btn_motorconfig.setCheckable(True)
-        self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.MOTORCONFIG))
+        self.btn_motorconfig.clicked.connect(lambda: self._request_robot_mode(ROBOTMODE.CONFIG))
         self.btn_motorconfig.setEnabled(False)
         
         grp_fsm_layout.addWidget(self.btn_systemon)
@@ -305,11 +694,17 @@ class CorgiControlPanel(QWidget):
         grp_fsm.setLayout(grp_fsm_layout)
         sidebar.addWidget(grp_fsm)
         
-        # Set Zero button
-        self.btn_set_zero = QPushButton('Set Zero')
-        self.btn_set_zero.clicked.connect(self._on_set_zero_clicked)
-        self.btn_set_zero.setEnabled(False)
-        sidebar.addWidget(self.btn_set_zero)
+        # Homing button
+        self.btn_home = QPushButton('Set Home')
+        self.btn_home.setToolTip(
+            'Runs corgi_homing, which drives the legs to the reference pose '
+            'and sets the joint zero.\n'
+            'Only available in Active.\n'
+            'This is what produces the FIRM holding torque — before it, the '
+            'motors are energised but softly held.')
+        self.btn_home.clicked.connect(self._on_home_clicked)
+        self.btn_home.setEnabled(False)
+        sidebar.addWidget(self.btn_home)
         
         sidebar.addStretch(1)
         return sidebar
@@ -342,11 +737,45 @@ class CorgiControlPanel(QWidget):
         csv_btn_layout.addWidget(self.btn_csv_select)
         csv_btn_layout.addWidget(self.btn_csv_run)
         
+        # Phase sidecar status. corgi_csv_control softens the landing leg's kp only
+        # when "<name>_phase.csv" sits next to the trajectory CSV; without it the node
+        # silently falls back to constant gains, so surface the state before Run.
+        self.label_phase_status = QLabel('')
+        self.label_phase_status.setStyleSheet('font-size: 11px;')
+        self.label_phase_status.setWordWrap(True)
+        
+        self.label_td = QLabel('Touchdown softening:')
+        self.label_td.setStyleSheet('color: #aaa; font-size: 12px;')
+        
+        td_layout = QGridLayout()
+        td_layout.setContentsMargins(0, 0, 0, 0)
+        self.edit_td_kp_scale = QLineEdit(str(TOUCHDOWN.KP_SCALE))
+        self.edit_td_lead_ms = QLineEdit(str(TOUCHDOWN.LEAD_MS))
+        self.edit_td_hold_ms = QLineEdit(str(TOUCHDOWN.HOLD_MS))
+        self.edit_td_ramp_ms = QLineEdit(str(TOUCHDOWN.RAMP_MS))
+        for col, (text, widget) in enumerate((
+            ('kp x', self.edit_td_kp_scale),
+            ('lead ms', self.edit_td_lead_ms),
+            ('hold ms', self.edit_td_hold_ms),
+            ('ramp ms', self.edit_td_ramp_ms),
+        )):
+            caption = QLabel(text)
+            caption.setStyleSheet('color: #aaa; font-size: 11px;')
+            widget.setFixedWidth(46)
+            td_layout.addWidget(caption, 0, col)
+            td_layout.addWidget(widget, 1, col)
+        
         grp_csv_layout.addWidget(self.label_csv)
         grp_csv_layout.addWidget(self.edit_csv)
         grp_csv_layout.addLayout(csv_btn_layout)
+        grp_csv_layout.addWidget(self.label_phase_status)
+        grp_csv_layout.addWidget(self.label_td)
+        grp_csv_layout.addLayout(td_layout)
         grp_csv.setLayout(grp_csv_layout)
         sidebar.addWidget(grp_csv)
+        
+        self.edit_csv.textChanged.connect(self._refresh_phase_status)
+        self._refresh_phase_status()
         
         # Recorder Group
         grp_rec = QGroupBox("Recorder")
@@ -359,12 +788,58 @@ class CorgiControlPanel(QWidget):
         self.btn_trigger = QPushButton('Start Trigger')
         self.btn_trigger.setCheckable(True)
         self.btn_trigger.clicked.connect(self._on_trigger_clicked)
+        # toggled, not clicked: seven places call setChecked() on this button
+        # (e-stop, stop-gait, the filename shortcut, two FSM paths). clicked
+        # fires only for the user; toggled fires for all of them, so the label
+        # can never disagree with the state.
+        self.btn_trigger.toggled.connect(
+            lambda on: self.btn_trigger.setText(
+                'Stop Trigger' if on else 'Start Trigger'))
         self.btn_trigger.setEnabled(False)
         
         grp_rec_layout.addWidget(self.edit_output)
         grp_rec_layout.addWidget(self.btn_trigger)
         grp_rec.setLayout(grp_rec_layout)
         sidebar.addWidget(grp_rec)
+
+        # ---- ROS Bag ---------------------------------------------------
+        # Separate from Recorder above: that one is corgi_data_recorder,
+        # which is trigger-gated and writes CSV, and therefore CANNOT see
+        # the standup. This records the raw topics, which is what
+        # gap_histogram.py reads.
+        grp_bag = QGroupBox("ROS Bag")
+        grp_bag_layout = QVBoxLayout()
+
+        self.edit_bag = QLineEdit()
+        self.edit_bag.setPlaceholderText("bag name (default: run_HHMMSS)")
+
+        self.chk_bag_all = QCheckBox("all topics")
+        self.chk_bag_all.setToolTip(
+            "Off: record the six topics the diagnostics read.\n"
+            "On: every topic. Much larger, and slower to analyse -- the extra "
+            "streams are not ones anything scores.")
+        self.chk_bag_all.setStyleSheet("font-size: 11px;")
+
+        self.btn_bag = QPushButton('Record Bag')
+        self.btn_bag.setCheckable(True)
+        self.btn_bag.clicked.connect(self._on_bag_record_clicked)
+        self.btn_bag.toggled.connect(
+            lambda on: self.btn_bag.setText(
+                'Stop Recording' if on else 'Record Bag'))
+
+        self.lbl_bag_status = QLabel("idle")
+        self.lbl_bag_status.setStyleSheet("color: #aaa; font-size: 11px;")
+        self.lbl_bag_status.setWordWrap(True)
+
+        grp_bag_layout.addWidget(self.edit_bag)
+        grp_bag_layout.addWidget(self.chk_bag_all)
+        grp_bag_layout.addWidget(self.btn_bag)
+        grp_bag_layout.addWidget(self.lbl_bag_status)
+        grp_bag.setLayout(grp_bag_layout)
+        sidebar.addWidget(grp_bag)
+
+        self._bag_started_at = 0.0
+        self._bag_path = ''
         
         # IMU button
         self.btn_imu = QPushButton('IMU')
@@ -376,6 +851,119 @@ class CorgiControlPanel(QWidget):
         sidebar.addStretch(1)
         return sidebar
     
+    def _create_command_source(self) -> QGroupBox:
+        """What is commanding the robot, for the monitor column.
+
+        Lives here rather than in the tools sidebar for two reasons. The
+        tools column was the tallest of the three and therefore set the
+        height of the whole middle row, leaving the other two showing
+        several hundred pixels of nothing; taking ~130 px out of the tallest
+        column is what reclaims that space. And it belongs here: this column
+        already answers "what is the robot doing" and "how is it wired", and
+        "what is commanding it" is read in the same glance -- a leg behaving
+        oddly next to a source reading POSITION FALLBACK is one question,
+        not two.
+
+        Laid out horizontally because this column is wide; the original was
+        a tall narrow stack built for a narrow one.
+        """
+        grp_src = QGroupBox("Command Source")
+        row = QHBoxLayout()
+        row.setSpacing(16)
+
+        self._cmd_mode_label = QLabel("no command stream")
+        self._cmd_mode_label.setStyleSheet(
+            "color: #888; font-size: 13px; font-weight: bold;")
+        # NOT word-wrapped. Wrapping gives a QLabel a tiny minimum width and
+        # an unbounded minimum HEIGHT; beside two labels that do not wrap it
+        # was squeezed into a narrow column, a long message became six lines,
+        # this group grew ~90 px, and the column took that height out of the
+        # config table above -- whose rows then overlapped. Reported from a
+        # screenshot 2026-09-01. The real fix is the shorter text below; this
+        # makes the failure mode unreachable.
+        self._cmd_mode_label.setWordWrap(False)
+        self._cmd_mode_label.setSizePolicy(QSizePolicy.Ignored,
+                                           QSizePolicy.Preferred)
+
+        self._cmd_gain_label = QLabel("kp  -  /  -  /  -")
+        self._cmd_gain_label.setStyleSheet(
+            "color: #aaa; font-size: 11px; font-family: monospace;")
+
+        self._cmd_pub_label = QLabel("publishers on motor/command: -")
+        self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._cmd_pub_label.setWordWrap(True)
+
+        self._cmd_pub_label.setWordWrap(False)
+        self._cmd_pub_label.setSizePolicy(QSizePolicy.Ignored,
+                                          QSizePolicy.Preferred)
+
+        row.addWidget(self._cmd_mode_label, 4)
+        row.addWidget(self._cmd_gain_label, 2)
+        row.addWidget(self._cmd_pub_label, 3)
+        grp_src.setLayout(row)
+        # One line, always. Nothing this group displays can change the
+        # column's height, so nothing above it can be compressed.
+        fm = QFontMetrics(self._cmd_mode_label.font())
+        grp_src.setFixedHeight(fm.height() + 34)
+
+        # Stored by the callback, painted at 5 Hz. Never paint per message:
+        # motor/command runs at 1 kHz and repainting a QLabel that often
+        # wedges the GUI thread -- the trap the power readout already solved.
+        self._last_cmd = None
+        self._last_cmd_t = 0.0
+        self._cmd_pub_count = -1
+        self._cmd_pub_poll = 0
+        return grp_src
+
+    def _on_symbols_help(self):
+        """What the six per-leg symbols mean.
+
+        A dialog rather than the strip it replaces, because the two things
+        that actually mislead people need a sentence each and a strip had
+        room for neither: theta is an EXTENSION that sets leg length, not a
+        pointing direction, and tau R / tau L are two motors of ONE leg.
+        """
+        QMessageBox.information(
+            self, 'What the symbols mean',
+            '<b>Angles</b>'
+            '<p><b>&theta; &nbsp; leg EXTENSION</b> &mdash; the included '
+            'angle of the five-bar linkage: how <i>open</i> the leg is, not '
+            'where it points.<br>'
+            '17&deg; = folded shut, 160&deg; = fully extended. It sets the '
+            'leg <b>length</b>: hip-to-contact is 0.145 m at 17&deg; and '
+            '0.293 m at 100&deg;.<br>'
+            'The v070 stride template spans 83.2&ndash;100.0&deg;.</p>'
+            '<p><b>&beta; &nbsp; leg SWING</b> about the hip, in the '
+            'sagittal plane &mdash; where the leg points fore/aft. This is '
+            'what sweeps through a stride; v070 spans &plusmn;9.25&deg;.</p>'
+            '<p><b>&gamma; &nbsp; CAMBER</b> (ab/adduction) &mdash; the leg '
+            'tilting out of the sagittal plane, driven by the ABAD motor. '
+            'Zero in the template of record, so non-zero here means the '
+            'roll/steering channels are acting, or the leg is loaded '
+            'sideways.</p>'
+            '<hr><b>Torques</b>'
+            '<p><b>&tau; R</b> and <b>&tau; L</b> are the two motors of '
+            '<b>ONE leg\'s</b> five-bar pair &mdash; <i>not</i> a right leg '
+            'and a left leg.<br>'
+            '&theta; and &beta; come out of them differentially:<br>'
+            '&nbsp;&nbsp;<tt>&phi;_l = &theta; + &beta; &minus; 17&deg;'
+            '&nbsp;&nbsp;&nbsp;&nbsp;&phi;_r = &beta; &minus; &theta; + '
+            '17&deg;</tt><br>'
+            'so &theta; is their <i>difference</i> and &beta; their '
+            '<i>common mode</i>. That is why the 17&deg; linkage limit '
+            'constrains a difference and cannot be written as a per-joint '
+            'stop. Stall 29.5 N&middot;m.</p>'
+            '<p><b>&tau; H</b> &mdash; the <b>ABAD (hip) motor</b>, the one '
+            'that produces &gamma;. Called "ABAD motor dir" in the Motor '
+            'Direction Config below. 9:1 gearbox, stall 44.25 N&middot;m '
+            '&mdash; though Issue #15 has it clipping silently well below '
+            'that.</p>'
+            '<hr><p>The four boxes are a <b>plan view</b>: front at the top, '
+            'left on the left. Module letters run <i>round</i> the robot, so '
+            'the rear pair is D (left) and C (right).</p>'
+            '<p style="color:#888">Every label carries this as a tooltip '
+            'too.</p>')
+
     def _create_motor_monitor(self) -> QVBoxLayout:
         """Create motor status monitor"""
         monitor_layout = QVBoxLayout()
@@ -383,68 +971,251 @@ class CorgiControlPanel(QWidget):
         grid_motors = QGridLayout()
         self.motor_labels = {}
 
-        # Define legs: (name, row, col, motors)
+        # Define legs: (name, row, col, module state fields)
+        # Angles in degrees, then the three motor torques in N*m. The
+        # torques are what say whether a leg is WORKING -- a pose alone
+        # cannot distinguish holding gently from grinding into a stop,
+        # which is exactly the state the home pose used to sit in.
+        # What the six symbols actually mean. None of them is guessable and
+        # two are actively misleading -- theta is not a pointing direction,
+        # and tau R / tau L are not two different legs.
+        SYMBOL_HELP = {
+            'theta':
+                'θ — LEG EXTENSION, the included angle of the five-bar '
+                'linkage.\n'
+                'How OPEN the leg is, not where it points. 17° = folded shut, '
+                '160° = fully extended.\n'
+                'It sets the leg LENGTH: hip-to-contact is 0.145 m at 17° and '
+                '0.293 m at 100°.\n'
+                'The v070 stride template spans 83.2–100.0°.',
+            'beta':
+                'β — LEG SWING about the hip, in the sagittal plane.\n'
+                'Where the leg points fore/aft. This is the one that sweeps '
+                'through a stride;\n'
+                'the v070 template spans ±9.25°.',
+            'gamma':
+                'γ — CAMBER (ab/adduction), the leg tilting out of the '
+                'sagittal plane.\n'
+                'Driven by the ABAD motor (τ H below). Zero in the template of '
+                'record;\n'
+                'non-zero here means the roll/steering channels are acting, or '
+                'the leg is loaded sideways.',
+            'torque_r':
+                'τ R — the RIGHT motor of THIS leg\'s five-bar pair. Not a '
+                'different leg.\n'
+                'θ and β come out of the two motors differentially:\n'
+                '    φ_l = θ + β − 17°        φ_r = β − θ + 17°\n'
+                'so θ is their DIFFERENCE and β their common mode. Stall 29.5 '
+                'N·m.',
+            'torque_l':
+                'τ L — the LEFT motor of THIS leg\'s five-bar pair. Not a '
+                'different leg.\n'
+                'θ and β come out of the two motors differentially:\n'
+                '    φ_l = θ + β − 17°        φ_r = β − θ + 17°\n'
+                'so θ is their DIFFERENCE and β their common mode. Stall 29.5 '
+                'N·m.',
+            'torque_h':
+                'τ H — the ABAD (hip) motor, the one that produces γ.\n'
+                'Called "ABAD motor dir" in the Motor Direction Config below. '
+                '9:1 gearbox,\n'
+                'stall 44.25 N·m — but Issue #15 has it clipping silently well '
+                'below that.',
+        }
+
+        ANG = [('theta', 'θ'), ('beta', 'β'), ('gamma', 'γ')]
+        TRQ = [('torque_r', 'τ R'), ('torque_l', 'τ L'), ('torque_h', 'τ H')]
+        # Keyed by MODULE LETTER, which is what every other surface uses:
+        # the topics are module_a..d, the controller logs "MEASURED THETA
+        # (deg): A .. B .. C .. D", the zero-gain warning names "leg(s) AB",
+        # and every analyser column is cmd_theta_a. The old LF/RF/LH/RH was a
+        # third dialect -- the config display below already says A (FL) etc.,
+        # with the letters in the opposite order.
+        #
+        # The mapping is NOT guessable and was never written down on screen:
+        # the letters go round the robot, so LH was module_D and RH module_C.
+        # Grid position is a plan view, front at the top.
         legs = [
-            ('LF', 0, 0, ['M1', 'M2']),
-            ('RF', 0, 1, ['M3', 'M4']),
-            ('LH', 1, 0, ['M5', 'M6']),
-            ('RH', 1, 1, ['M7', 'M8'])
+            ('A', 'A  \u00b7  Front Left',  0, 0, ANG + TRQ),
+            ('B', 'B  \u00b7  Front Right', 0, 1, ANG + TRQ),
+            ('D', 'D  \u00b7  Rear Left',   1, 0, ANG + TRQ),
+            ('C', 'C  \u00b7  Rear Right',  1, 1, ANG + TRQ),
         ]
 
-        for leg_name, r, c, motors in legs:
-            leg_group = QGroupBox(leg_name)
-            leg_layout = QVBoxLayout()
+        for leg_name, leg_title, r, c, fields in legs:
+            leg_group = QGroupBox(leg_title)
+            leg_group.setToolTip(
+                'module_%s. The four boxes are laid out as a PLAN VIEW: '
+                'front at the top, left on the left. The module letters run '
+                'round the robot rather than across it, so the rear pair is '
+                'D (left) and C (right).' % leg_name.lower())
+            # Two columns of three: angles left, torques right. Stacked, the
+            # six labels made each leg box tall enough to shove the rest of
+            # the column around, and the reading that matters is per row --
+            # theta against tau R, and so on.
+            leg_layout = QGridLayout()
+            leg_layout.setHorizontalSpacing(18)
+            leg_layout.setVerticalSpacing(2)
 
-            for motor_key in motors:
-                lbl = QLabel(f"{motor_key}: --")
+            for idx, (field_name, display_name) in enumerate(fields):
+                label_key = f"{leg_name}_{field_name}"
+                lbl = QLabel(f"{display_name}: --")
                 lbl.setObjectName("MotorLabel")
-                leg_layout.addWidget(lbl)
-                self.motor_labels[motor_key] = lbl
+                lbl.setToolTip(SYMBOL_HELP.get(field_name, ''))
+                col = idx // 3
+                if col:
+                    # Fixed width so the column does not twitch as the sign
+                    # and digit count change on every repaint.
+                    lbl.setMinimumWidth(120)
+                leg_layout.addWidget(lbl, idx % 3, col)
+                self.motor_labels[label_key] = lbl
 
             leg_group.setLayout(leg_layout)
             grid_motors.addWidget(leg_group, r, c)
 
         monitor_layout.addLayout(grid_motors)
-        monitor_layout.addWidget(self._create_motor_config_display())
+
+        # The symbol legend was a permanent two-line strip spending real
+        # estate on something read once. A button costs one line, and the
+        # dialog has room for what the strip had to cut.
+        help_row = QHBoxLayout()
+        help_row.addStretch(1)
+        btn_symbols = QPushButton("?  what the symbols mean")
+        btn_symbols.setFlat(True)
+        btn_symbols.setStyleSheet(
+            "color: #7d9dc4; font-size: 11px; border: none;")
+        btn_symbols.setCursor(Qt.PointingHandCursor)
+        btn_symbols.clicked.connect(self._on_symbols_help)
+        help_row.addWidget(btn_symbols)
+        monitor_layout.addLayout(help_row)
+
+        cfg = self._create_motor_config_display()
+        # Belt and braces: six rows, a header and a button. With the Command
+        # Source group now fixed-height nothing should compete for this
+        # space, but a squashed table is unreadable rather than merely ugly.
+        cfg.setMinimumHeight(200)
+        monitor_layout.addWidget(cfg)
+        monitor_layout.addWidget(self._create_command_source())
         monitor_layout.addStretch(1)
 
         return monitor_layout
 
-    def _load_motor_config(self) -> dict:
-        """Load motor_config.yaml from the corgi_driver_pkg directory.
+    # Direction-table rows. Each row lists the key under BOTH schemas, because
+    # there are two of these files and they do not agree on names:
+    #
+    #   hardware  corgi_ros_bridge/config/real_motor_config.yaml
+    #             joint_dir{theta, beta, gamma}   motor_dir{R, L, H}
+    #   sim       corgi_driver_pkg/motor_config.yaml
+    #             joint_dir{theta, beta, g_joint_beta}  motor_dir{L, R, ABAD}
+    CONFIG_FIELDS = [
+        ('joint_dir', ('theta',),                'θ  joint dir'),
+        ('joint_dir', ('beta',),                 'β  joint dir'),
+        ('joint_dir', ('gamma', 'g_joint_beta'), 'γ / G-joint dir'),
+        ('motor_dir', ('L',),                    'Motor L dir'),
+        ('motor_dir', ('R',),                    'Motor R dir'),
+        ('motor_dir', ('H', 'ABAD'),             'ABAD motor dir'),
+    ]
 
-        Uses importlib to locate the installed (or symlinked) package so the
-        YAML is read directly from source — no rebuild needed.
+    def _load_motor_config(self) -> dict:
+        """Load the direction config that is ACTUALLY IN EFFECT.
+
+        The hardware file is read from the SOURCE tree, because that is the
+        path corgi_ros_bridge defaults to; override with
+        CORGI_REAL_MOTOR_CONFIG if the bridge was launched with a
+        real_motor_config_path parameter pointing elsewhere.
+
+        This used to look only for the simulator's motor_config.yaml inside
+        corgi_driver_pkg, a package that does not exist on the robot — so on
+        hardware every cell rendered '?'. Had it resolved, it would have been
+        worse: the panel would have shown the SIMULATOR's mirror signs while
+        the bridge was applying the real robot's. Load the file matching the
+        current mode first, and remember which one won so the group box can
+        name it.
         """
         import importlib.util
-        # Primary: find via the installed Python package (works with --symlink-install)
-        try:
+        self._config_source = None
+        self._config_source_kind = None
+
+        def _real_source():
+            # What corgi_ros_bridge ACTUALLY reads: its
+            # default_real_motor_config_path() points into the source tree, not
+            # the installed share, so the bridge picks up an edit without a
+            # rebuild. The panel has to read the same file or it can show
+            # yesterday's signs while the robot uses today's.
+            override = os.environ.get('CORGI_REAL_MOTOR_CONFIG')
+            if override:
+                return override, 'CORGI_REAL_MOTOR_CONFIG'
+            return (os.path.join(
+                os.path.expanduser('~'),
+                'corgi_ws/corgi_ros2_ws/src/corgi_ros_bridge/config',
+                'real_motor_config.yaml'), 'bridge source')
+
+        def _real_share():
+            from ament_index_python.packages import get_package_share_directory
+            share = get_package_share_directory('corgi_ros_bridge')
+            return (os.path.join(share, 'config', 'real_motor_config.yaml'),
+                    'installed share — the bridge may be reading a newer source copy')
+
+        def _sim():
             spec = importlib.util.find_spec('corgi_driver_pkg')
             if spec and spec.origin:
-                pkg_dir = os.path.dirname(spec.origin)
-                yaml_path = os.path.join(pkg_dir, 'motor_config.yaml')
-                with open(yaml_path, 'r') as f:
-                    return yaml.safe_load(f)
-        except Exception as e:
-            print(f"Warning: importlib path failed: {e}")
-
-        # Fallback: ament share directory (requires colcon build)
-        try:
+                return (os.path.join(os.path.dirname(spec.origin),
+                                     'motor_config.yaml'), 'simulator')
             from ament_index_python.packages import get_package_share_directory
-            share = get_package_share_directory('corgi_sim')
-            yaml_path = os.path.join(share, 'motor_config.yaml')
-            with open(yaml_path, 'r') as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            print(f"Warning: could not load motor_config.yaml from share: {e}")
+            return (os.path.join(get_package_share_directory('corgi_sim'),
+                                 'motor_config.yaml'), 'simulator')
+
+        order = ([_sim, _real_source, _real_share] if self.use_sim_time
+                 else [_real_source, _real_share, _sim])
+        for getter in order:
+            try:
+                path, kind = getter()
+                with open(path, 'r') as f:
+                    cfg = yaml.safe_load(f) or {}
+                if cfg:
+                    self._config_source = path
+                    self._config_source_kind = kind
+                    return cfg
+            except Exception as e:
+                print(f"Warning: direction config not readable ({e})")
 
         return {}
+
+    @staticmethod
+    def _config_value(cfg, mod_id, section, keys):
+        """First key present under this schema, or None when the row simply
+        does not exist in the file that was loaded (rendered as a dash, which
+        is a different statement from '?')."""
+        sect = (cfg or {}).get(mod_id, {}).get(section, {}) or {}
+        for k in keys:
+            if k in sect:
+                return sect[k]
+        return None
+
+    def _set_config_title(self):
+        """Name the loaded file on the group box. Which file it is matters
+        more than the signs it carries: an unlabelled direction table invites
+        reading the wrong robot's mirror convention."""
+        src = getattr(self, '_config_source', None)
+        kind = getattr(self, '_config_source_kind', None)
+        if src:
+            self._config_grp.setTitle(
+                "Motor Direction Config  —  %s  [%s]"
+                % (os.path.basename(src), kind or '?'))
+            self._config_grp.setToolTip(src)
+        else:
+            self._config_grp.setTitle(
+                "Motor Direction Config  —  NOT LOADED (no yaml found)")
+            self._config_grp.setToolTip(
+                'Looked for the bridge config in the source tree, then the '
+                'installed share, then the simulator package.')
 
     def _create_motor_config_display(self) -> QGroupBox:
         """Create a read-only display of the motor direction config (motor_config.yaml)."""
         cfg = self._load_motor_config()
 
-        grp = QGroupBox("Motor Direction Config  (motor_config.yaml)")
+        self._config_grp = QGroupBox()
+        grp = self._config_grp
+        self._set_config_title()
         outer = QVBoxLayout()
 
         # Reload button
@@ -459,14 +1230,7 @@ class CorgiControlPanel(QWidget):
 
         # Map module id → friendly leg label
         MODULE_LABEL = {'A': 'A (FL)', 'B': 'B (FR)', 'C': 'C (RR)', 'D': 'D (RL)'}
-        FIELDS = [
-            ('joint_dir',  'theta',        'θ  joint dir'),
-            ('joint_dir',  'beta',         'β  joint dir'),
-            ('joint_dir',  'g_joint_beta', 'G-joint β dir'),
-            ('motor_dir',  'L',            'Motor L dir'),
-            ('motor_dir',  'R',            'Motor R dir'),
-            ('motor_dir',  'ABAD',         'ABAD dir'),
-        ]
+        FIELDS = self.CONFIG_FIELDS
 
         # Header row
         self._config_grid.addWidget(QLabel(""), 0, 0)
@@ -478,18 +1242,18 @@ class CorgiControlPanel(QWidget):
 
         # Data rows
         self._config_value_labels = {}
-        for row, (section, key, label_text) in enumerate(FIELDS, start=1):
+        for row, (section, keys, label_text) in enumerate(FIELDS, start=1):
             row_lbl = QLabel(label_text)
             row_lbl.setStyleSheet("color: #aaa;")
             self._config_grid.addWidget(row_lbl, row, 0)
 
             for col, mod_id in enumerate(('A', 'B', 'C', 'D'), start=1):
-                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                val = self._config_value(cfg, mod_id, section, keys)
                 lbl = QLabel(self._fmt_dir(val))
                 lbl.setAlignment(Qt.AlignCenter)
                 lbl.setStyleSheet(self._dir_style(val))
                 self._config_grid.addWidget(lbl, row, col)
-                self._config_value_labels[(mod_id, section, key)] = lbl
+                self._config_value_labels[(mod_id, section, keys)] = lbl
 
         outer.addLayout(self._config_grid)
         grp.setLayout(outer)
@@ -497,7 +1261,10 @@ class CorgiControlPanel(QWidget):
 
     @staticmethod
     def _fmt_dir(val) -> str:
-        """Format a direction value as +1 / -1 / ?"""
+        """+1 / -1; an em dash when the row does not exist in the loaded
+        schema; '?' only when the value is there but unreadable."""
+        if val is None:
+            return '—'
         try:
             v = float(val)
             return '+1' if v > 0 else '-1'
@@ -515,25 +1282,24 @@ class CorgiControlPanel(QWidget):
         return f"color: {colour}; font-weight: bold; font-size: 14px;"
 
     def _reload_motor_config_display(self):
-        """Reload motor_config.yaml and refresh every label in the grid."""
+        """Reload the direction config and refresh every label in the grid."""
         cfg = self._load_motor_config()
-        FIELDS = [
-            ('joint_dir',  'theta',        ),
-            ('joint_dir',  'beta',         ),
-            ('joint_dir',  'g_joint_beta', ),
-            ('motor_dir',  'L',            ),
-            ('motor_dir',  'R',            ),
-            ('motor_dir',  'ABAD',         ),
-        ]
+        self._set_config_title()
         for mod_id in ('A', 'B', 'C', 'D'):
-            for section, key in FIELDS:
-                lbl = self._config_value_labels.get((mod_id, section, key))
+            for section, keys, _label in self.CONFIG_FIELDS:
+                lbl = self._config_value_labels.get((mod_id, section, keys))
                 if lbl is None:
                     continue
-                val = cfg.get(mod_id, {}).get(section, {}).get(key, '?')
+                val = self._config_value(cfg, mod_id, section, keys)
                 lbl.setText(self._fmt_dir(val))
                 lbl.setStyleSheet(self._dir_style(val))
-        self._log("Motor config reloaded from YAML", LOGLEVEL.INFO, "system")
+        src = getattr(self, '_config_source', None)
+        if src:
+            self._log(f"Direction config reloaded from {src}",
+                      LOGLEVEL.INFO, "system")
+        else:
+            self._log("No direction config found — table shows nothing",
+                      LOGLEVEL.WARN, "system")
 
     
     def _create_log_area(self) -> QGroupBox:
@@ -556,6 +1322,7 @@ class CorgiControlPanel(QWidget):
         self.ros_worker.power_state_updated.connect(self._handle_power_state_update)
         self.ros_worker.robot_state_updated.connect(self._handle_robot_state_update)
         self.ros_worker.motor_state_updated.connect(self._handle_motor_state_update)
+        self.ros_worker.motor_cmd_updated.connect(self._handle_motor_cmd_update)
         self.ros_worker.log_updated.connect(self._handle_log_update)
     
     def _start_data_recorder(self):
@@ -580,6 +1347,56 @@ class CorgiControlPanel(QWidget):
             self._log(f'Data recorder started ({mode_str} mode)', LOGLEVEL.INFO, 'system')
         else:
             self._log('Failed to start data recorder', LOGLEVEL.ERROR, 'system')
+
+    def _start_imu(self):
+        """Auto-start the IMU node so recordings always contain IMU data.
+
+        Mirrors _start_data_recorder. Skipped under use_sim_time (the
+        simulator publishes its own IMU). Reflects the state on the IMU
+        button so the operator sees it is live; the button still stops
+        and restarts it by hand.
+        """
+        if self.use_sim_time:
+            return
+
+        if self.process_manager.is_running('imu'):
+            self.btn_imu.setChecked(True)
+            self.btn_imu.setText('Stop IMU')
+            self._log('IMU already running', LOGLEVEL.INFO, 'system')
+            return
+
+        # The CV7 hangs off /dev/ttyTHS1 and the packaged imu_node.sh opens
+        # with `sudo chmod 777` on it -- so the port is NOT reliably writable
+        # after a boot. ProcessManager only reports whether the spawn
+        # succeeded; a node that starts and then dies on the port looks
+        # identical to a healthy one from here, and the result is a capture
+        # with silently empty IMU columns. Check the port first and say what
+        # to do, rather than discovering it when P-HW-rho turns out unscoreable.
+        imu_port = os.environ.get('CORGI_IMU_PORT', '/dev/ttyTHS1')
+        if not os.path.exists(imu_port):
+            self._log('IMU port %s not present -- IMU columns will be empty'
+                      % imu_port, LOGLEVEL.WARN, 'system')
+        elif not os.access(imu_port, os.R_OK | os.W_OK):
+            self._log('IMU port %s is not writable; run  sudo chmod 777 %s  '
+                      '(once per boot) or the IMU node will die on startup'
+                      % (imu_port, imu_port), LOGLEVEL.WARN, 'system')
+
+        success = self.process_manager.start_process(
+            'imu',
+            ['ros2', 'run', 'corgi_imu', 'imu_node'],
+            capture_output=False
+        )
+
+        if success:
+            self.btn_imu.setChecked(True)
+            self.btn_imu.setText('Stop IMU')
+            self._log('IMU started (auto, with recorder)', LOGLEVEL.INFO, 'system')
+        else:
+            self.btn_imu.setChecked(False)
+            self.btn_imu.setText('IMU')
+            self._log('Failed to auto-start IMU -- start it by hand before '
+                      'recording, or the IMU columns will be empty',
+                      LOGLEVEL.ERROR, 'system')
     
     def _log(self, message: str, level=LOGLEVEL.INFO, source: str = "system"):
         """Unified logging method that writes to both GUI and file"""
@@ -606,6 +1423,340 @@ class CorgiControlPanel(QWidget):
         return LOGLEVEL.DEBUG
     
     # ========================================================================
+    # Event Handlers - sbRIO FPGA driver
+    # ========================================================================
+
+    def _poll_fpga_status(self):
+        """Kick off a status check on a worker thread. Never blocks the GUI."""
+        if self.use_sim_time or self._fpga_busy:
+            return
+        self._fpga_busy = True
+
+        def work():
+            try:
+                token, lines = sbrio.fpga_driver_status()
+            except Exception as exc:                        # pragma: no cover
+                token, lines = 'FAILED', ['status check raised: %s' % exc]
+            self.fpga_status_ready.emit(token, lines)
+
+        threading.Thread(target=work, daemon=True,
+                         name='fpga-status').start()
+
+    def _on_fpga_status(self, token, lines):
+        """Apply a status result on the GUI thread."""
+        self._fpga_busy = False
+        was = self._fpga_running
+
+        if token == 'ALREADY_RUNNING':
+            self._fpga_running = True
+        elif token == 'NOT_RUNNING':
+            self._fpga_running = False
+        else:
+            # NO_KEY / UNREACHABLE / TIMEOUT: we do not know, and saying
+            # "not running" would be a guess that invites a duplicate.
+            self._fpga_running = None
+
+        self._refresh_fpga_button()
+
+        if was is not self._fpga_running:
+            if self._fpga_running is True:
+                self._log('FPGA driver is already running on %s'
+                          % sbrio.SBRIO_HOST, LOGLEVEL.INFO, 'fpga_driver')
+            elif self._fpga_running is False and was is True:
+                self._log('FPGA driver is NO LONGER running on %s — the '
+                          'terminal window was closed, or it exited'
+                          % sbrio.SBRIO_HOST, LOGLEVEL.WARN, 'fpga_driver')
+            elif self._fpga_running is None and was is not None:
+                self._log('cannot check the FPGA driver (%s) — its state is '
+                          'now unknown' % token, LOGLEVEL.WARN, 'fpga_driver')
+
+    def _refresh_fpga_button(self):
+        """Label and tooltip follow _fpga_running, which follows the sbRIO."""
+        if self._fpga_running:
+            self.btn_fpga_driver.setText('Stop FPGA Driver (sbRIO)')
+            self.btn_fpga_driver.setToolTip(
+                'Stop grpccore + fpga_driver on %s.\n'
+                'SIGTERM first so the FPGA session is released cleanly.\n'
+                'Refused while the robot is Live or the trigger is on.'
+                % sbrio.SBRIO_HOST)
+        else:
+            self.btn_fpga_driver.setText('Start FPGA Driver (sbRIO)')
+            tip = ('ssh to %s and run the FPGA driver.\n'
+                   'Needs key-based ssh; see corgi_ui/core/sbrio.py for the '
+                   'one-time setup.' % sbrio.target_description())
+            if self._fpga_running is None:
+                tip += ('\nState not yet known — the panel does not ssh at '
+                        'startup. Pressing this is safe either way: a driver '
+                        'that is already up reports so and is left alone.')
+            self.btn_fpga_driver.setToolTip(tip)
+
+    def _on_fpga_driver_clicked(self):
+        """One driver, one button: start it, or stop it."""
+        if self.use_sim_time:
+            self._log('No sbRIO in simulation mode', LOGLEVEL.WARN, 'fpga_driver')
+            return
+        if self._fpga_running:
+            self._request_fpga_stop()
+        else:
+            self._start_fpga_driver(manual=True)
+
+    def _request_fpga_stop(self):
+        """Stop grpccore + fpga_driver on the sbRIO."""
+
+        # Refuse under a live gait. Taking the FPGA layer away from a robot
+        # that is running is not a stop, it is a fall: the motors lose their
+        # command source with the legs loaded. The e-stop is the control for
+        # that situation; this button is for between runs.
+        mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', -1)
+        if self.btn_trigger.isChecked() or mode == ROBOTMODE.ACTIVE:
+            why = []
+            if self.btn_trigger.isChecked():
+                why.append('the trigger is ON')
+            if mode == ROBOTMODE.ACTIVE:
+                why.append('the robot is in Active')
+            self._log('REFUSED to stop the FPGA driver: %s. Drop to Idle and stop the trigger first -- pulling the command '
+                      'source out from under a running gait is not a stop. Use '
+                      'E-STOP if you need the robot to stop NOW.'
+                      % ' and '.join(why), LOGLEVEL.ERROR, 'fpga_driver')
+            return
+
+        answer = QMessageBox.question(
+            self, 'Stop the FPGA driver?',
+            'This stops grpccore and fpga_driver on the sbRIO (%s).\n\n'
+            'The ROS bridge will lose its gRPC server, and nothing can '
+            'command the motors until the driver is started again.\n\n'
+            'Continue?' % sbrio.SBRIO_HOST,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            self._log('FPGA driver stop cancelled', LOGLEVEL.INFO, 'fpga_driver')
+            return
+
+        self._stop_fpga_driver()
+
+    def _stop_fpga_driver(self) -> bool:
+        """SIGTERM on the sbRIO, escalating only if it will not go."""
+        self._fpga_busy = True
+        self.btn_fpga_driver.setEnabled(False)
+        self.btn_fpga_driver.setText('Stopping FPGA driver…')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            token, lines = sbrio.stop_fpga_driver()
+        finally:
+            QApplication.restoreOverrideCursor()
+            self._fpga_busy = False
+            self.btn_fpga_driver.setEnabled(True)
+
+        ok = token in ('STOPPED', 'STOPPED_HARD', 'NOT_RUNNING')
+        headline = {
+            'STOPPED':      'FPGA driver stopped on %s' % sbrio.SBRIO_HOST,
+            'STOPPED_HARD': 'FPGA driver KILLED on %s -- it ignored SIGTERM; if '
+                            'the next start fails, reboot the sbRIO'
+                            % sbrio.SBRIO_HOST,
+            'NOT_RUNNING':  'FPGA driver was not running on %s' % sbrio.SBRIO_HOST,
+            'NO_KEY':       'sbRIO refused key-based ssh',
+            'UNREACHABLE':  'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
+            'TIMEOUT':      'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
+            'NO_SSH':       'no ssh client on this machine',
+        }.get(token, 'FPGA driver did not stop')
+
+        level = LOGLEVEL.INFO if token in ('STOPPED', 'NOT_RUNNING') else (
+            LOGLEVEL.WARN if token == 'STOPPED_HARD' else LOGLEVEL.ERROR)
+        self._log(headline, level, 'fpga_driver')
+        for line in lines[:12]:
+            self._log('  ' + line,
+                      LOGLEVEL.INFO if ok else LOGLEVEL.WARN, 'fpga_driver')
+        if ok:
+            self._fpga_running = False
+        self._refresh_fpga_button()
+        return ok
+
+    def _stray_bridges(self):
+        """PIDs of corgi_ros_bridge processes this panel did not start.
+
+        A bridge outliving the panel that spawned it is easy to produce --
+        close the panel uncleanly and ProcessManager never gets to clean up
+        -- and it keeps trying to reach the sbRIO forever.
+        """
+        import subprocess as sp
+        try:
+            out = sp.run(['pgrep', '-f', 'corgi_ros_bridge'],
+                         capture_output=True, text=True, timeout=5)
+        except Exception:
+            return []
+
+        # `ros2 run corgi_ros_bridge corgi_ros_bridge` is a WRAPPER: the
+        # actual node is its child, with a different pid. ProcessManager
+        # tracks the wrapper, so excluding only that pid leaves our own
+        # bridge looking like someone else's. Exclude the children too.
+        mine = {os.getpid()}
+        tracked = self.process_manager.get_pid('ros_bridge')
+        if tracked:
+            mine.add(tracked)
+            try:
+                kids = sp.run(['pgrep', '-P', str(tracked)],
+                              capture_output=True, text=True, timeout=5)
+                mine.update(int(k) for k in kids.stdout.split() if k.isdigit())
+            except Exception:
+                pass
+
+        return [tok for tok in out.stdout.split()
+                if tok.isdigit() and int(tok) not in mine]
+
+    def _launch_fpga(self, allow_prompt: bool = True):
+        """Open the driver's UI in a terminal window, then verify over ssh.
+
+        The headless launches all aborted -- three different theories about
+        why, all wrong -- while running it in a terminal works every time.
+        So use the working path and verify separately, rather than guess a
+        fourth time at which property of a terminal session matters.
+
+        Falls back to the headless launch when there is no display or no
+        terminal emulator, so a panel running over plain ssh still has the
+        old behaviour rather than nothing.
+        """
+        # Is one already up? The remote start script guards against this,
+        # but the terminal launcher does not run that script -- it runs
+        # run_fpga_driver.sh directly -- so without this check pressing Run
+        # ROS Bridge on a working driver opens a second one.
+        st, st_lines = sbrio.fpga_driver_status()
+        if st == 'ALREADY_RUNNING':
+            return 'ALREADY_RUNNING', (
+                ['already up on the sbRIO — not opening another window']
+                + st_lines)
+
+        if st not in ('NOT_RUNNING',):
+            # Cannot tell. A duplicate driver is worse than a refused start,
+            # so do not guess -- ask, and only when a human pressed the button.
+            if not allow_prompt:
+                return 'UNVERIFIED_SKIPPED', [
+                    'cannot check whether the driver is already running (%s), '
+                    'so not starting one automatically.' % st,
+                    'Press "Start FPGA Driver" yourself, or install the ssh '
+                    'key so the panel can check (see corgi_ui/core/sbrio.py).']
+            answer = QMessageBox.question(
+                self, 'Cannot check the FPGA driver',
+                'The panel cannot tell whether the driver is already running '
+                'on %s (%s).\n\nOpening a second one would leave two '
+                'drivers contending for the same FPGA.\n\n'
+                'Open a terminal and start it anyway?' % (sbrio.SBRIO_HOST, st),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return 'UNVERIFIED_SKIPPED', ['cancelled — nothing started']
+
+        # grpccore aborts while SERVICING a registration, not while
+        # starting (its own log: binds, "receive publisher", then abort). Its
+        # only client is the bridge, so a bridge already running when the
+        # driver comes up is the first thing to rule out.
+        strays = self._stray_bridges()
+        if strays:
+            self._log('WARNING: corgi_ros_bridge is ALREADY RUNNING (pid %s) '
+                      'and this panel did not start it. It will connect to '
+                      'grpccore the moment the driver comes up, and grpccore '
+                      'has been aborting while servicing exactly that. Stop it '
+                      'first:  kill %s'
+                      % (', '.join(strays), ' '.join(strays)),
+                      LOGLEVEL.ERROR, 'fpga_driver')
+
+        token, lines = sbrio.launch_in_terminal()
+
+        if token != 'LAUNCHED_TERMINAL':
+            self._log('cannot open a terminal window (%s) — falling back to '
+                      'the headless launch, which is known to abort on this '
+                      'driver' % token, LOGLEVEL.WARN, 'fpga_driver')
+            for line in lines[:4]:
+                self._log('  ' + line, LOGLEVEL.WARN, 'fpga_driver')
+            return sbrio.start_fpga_driver()
+
+        self._log(lines[0] if lines else 'terminal opened',
+                  LOGLEVEL.INFO, 'fpga_driver')
+        self._log('  watch that window: it shows the driver\'s dashboard, and '
+                  'holds the reason on screen if it exits',
+                  LOGLEVEL.INFO, 'fpga_driver')
+
+        # Launching a window is not starting a driver, but verifying it
+        # here was worse than not verifying: eight back-to-back ssh checks
+        # take about two seconds, and the window needs longer than that just
+        # to log in and start grpccore. It reported FAILED on a driver that
+        # came up fine 8 s later.
+        #
+        # Hand it to the async poll instead. These fire on the GUI thread's
+        # timer, each spawning the same worker the periodic poll uses, so
+        # nothing blocks and the button updates itself the moment the driver
+        # appears.
+        for delay_ms in (3000, 6000, 10000, 15000, 22000, 30000):
+            QTimer.singleShot(delay_ms, self._poll_fpga_status)
+
+        return 'LAUNCHED_TERMINAL', [
+            'the button will switch to "Stop FPGA Driver" on its own once the '
+            'sbRIO reports the driver up (checked at 3, 6, 10, 15, 22 and '
+            '30 s).',
+            'If it does not, read that terminal window — it holds the '
+            'reason, and stays open on exit.']
+
+    def _start_fpga_driver(self, manual: bool) -> bool:
+        """Bring the driver up over ssh and report what happened.
+
+        This blocks the GUI, deliberately: it is bounded (5 s to connect, 30 s
+        overall), it only ever runs at bring-up, and nothing else in the panel
+        is useful until it finishes. A worker thread here would buy an
+        unresponsive-looking wait instead of an honest one.
+        """
+        self._fpga_busy = True
+        self.btn_fpga_driver.setEnabled(False)
+        self.btn_fpga_driver.setText('Starting FPGA driver…')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            token, lines = self._launch_fpga(allow_prompt=manual)
+        finally:
+            QApplication.restoreOverrideCursor()
+            self._fpga_busy = False
+            self.btn_fpga_driver.setEnabled(True)
+
+        ok = token in ('ALREADY_RUNNING', 'STARTED', 'UNVERIFIED',
+                       'LAUNCHED_TERMINAL')
+        # UNVERIFIED_SKIPPED is not a failure of the driver, just of the
+        # check -- log it as a warning rather than an error.
+        if token == 'UNVERIFIED_SKIPPED':
+            self._log('FPGA driver not started (could not verify whether one '
+                      'was already running)', LOGLEVEL.WARN, 'fpga_driver')
+            for line in lines[:4]:
+                self._log('  ' + line, LOGLEVEL.WARN, 'fpga_driver')
+            self._refresh_fpga_button()
+            return False
+        headline = {
+            'STARTED':         'FPGA driver started on %s' % sbrio.SBRIO_HOST,
+            'ALREADY_RUNNING': 'FPGA driver already running on %s' % sbrio.SBRIO_HOST,
+            'FAILED':          'FPGA driver did not come up on %s -- its own '
+                               'log follows' % sbrio.SBRIO_HOST,
+            'NOT_RUNNING':     'FPGA driver is not running on %s' % sbrio.SBRIO_HOST,
+            'NO_SCRIPT':       'FPGA start script not found (%s)' % sbrio.target_description(),
+            'NO_KEY':          'sbRIO refused key-based ssh',
+            'UNREACHABLE':     'sbRIO %s unreachable' % sbrio.SBRIO_HOST,
+            'TIMEOUT':         'sbRIO %s did not answer' % sbrio.SBRIO_HOST,
+            'NO_SSH':          'no ssh client on this machine',
+            'UNVERIFIED':      'FPGA driver launched in a terminal — NOT '
+                               'confirmed by this panel',
+            'LAUNCHED_TERMINAL': 'FPGA driver launching in a terminal window '
+                                 'on %s' % sbrio.SBRIO_HOST,
+            'UNVERIFIED_SKIPPED': 'FPGA driver NOT started — could not check '
+                                  'whether one is already running',
+        }.get(token, 'FPGA driver: unrecognised result %r' % token)
+
+        self._log(headline, LOGLEVEL.INFO if ok else LOGLEVEL.ERROR, 'fpga_driver')
+        for line in lines[:12]:
+            self._log('  ' + line,
+                      LOGLEVEL.INFO if ok else LOGLEVEL.WARN, 'fpga_driver')
+        if not ok and not manual:
+            self._log('  starting the bridge anyway — start the driver by hand '
+                      'if it is really down', LOGLEVEL.WARN, 'fpga_driver')
+        if ok and token != 'LAUNCHED_TERMINAL':
+            self._fpga_running = True
+        self._refresh_fpga_button()
+        return ok
+
+    # ========================================================================
     # Event Handlers - ROS Bridge
     # ========================================================================
     
@@ -631,6 +1782,13 @@ class CorgiControlPanel(QWidget):
                 )
                 return
             
+            # The bridge has nothing to talk to until the sbRIO's FPGA driver
+            # is up, so bring it up here instead of leaving it as a step to
+            # remember. Best-effort by design: a failure here is logged and the
+            # bridge still starts, because the driver may have been started by
+            # hand, or from another machine, or ssh keys may not be installed.
+            self._start_fpga_driver(manual=False)
+
             # Start ROS worker
             if self.ros_worker.start_ros():
                 self.log_widget.add_log(
@@ -679,7 +1837,13 @@ class CorgiControlPanel(QWidget):
         """Request robot mode change"""
         if not self.ros_worker.is_running:
             return
-        
+
+        # Reachable straight from ACTIVE now, i.e. mid-gait: drop the
+        # trigger first, exactly as E-STOP and Stop Gait do.
+        if mode == ROBOTMODE.UNINITIALIZED and self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+
         robot_cmd = RobotCmdStamped()
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
@@ -698,13 +1862,131 @@ class CorgiControlPanel(QWidget):
         
         self._update_button_states()
     
+    def _estop_retry(self):
+        """Re-send UNINITIALIZED until the robot confirms it, or time out loudly."""
+        mode = getattr(getattr(self, 'robot_state', None), 'robot_mode', None)
+        if mode is not None and int(mode) == int(ROBOTMODE.UNINITIALIZED):
+            self._estop_timer.stop()
+            self.log_widget.add_log(
+                'E-STOP CONFIRMED: robot reports Uninitialized (motors off)',
+                LOGLEVEL.WARN, 'orin')
+            return
+
+        if time.monotonic() > self._estop_deadline:
+            self._estop_timer.stop()
+            self.log_widget.add_log(
+                'E-STOP NOT CONFIRMED after 5 s -- the robot has not reported '
+                'Uninitialized (motors off). The gait trigger IS dropped, but do NOT assume '
+                'the motors are de-energised: CUT THE BENCH SUPPLY OUTPUT.',
+                LOGLEVEL.FATAL, 'orin')
+            return
+
+        if not self.ros_worker.is_running:
+            return
+        robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
+        robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(ROBOTMODE.UNINITIALIZED)
+        self.ros_worker.send_robot_command(robot_cmd)
+        self._robot_cmd_seq += 1
+
+    def _on_stop_gait_clicked(self):
+        """End the run and leave the robot holding. NOT an emergency control.
+
+        Drops the trigger (the controller's own abort) and requests IDLE, so
+        the motors stay energised. This is what e-stop used to do on its
+        first press -- which is exactly why it needed its own button: an
+        operator reaching for a red button in a hurry should not have to
+        know the robot's current mode to predict what happens.
+        """
+        if not self.ros_worker.is_running:
+            return
+
+        if self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+
+        robot_cmd = RobotCmdStamped()
+        robot_cmd.header.seq = self._robot_cmd_seq + 1
+        robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
+        robot_cmd.header.frame_id = ''
+        robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
+        self._pending_robot_mode = int(ROBOTMODE.IDLE)
+        self.ros_worker.send_robot_command(robot_cmd)
+        self._robot_cmd_seq += 1
+        self.log_widget.add_log(
+            'STOP GAIT: trigger dropped, -> Idle (energised), motors still '
+            'holding', LOGLEVEL.WARN, 'orin')
+        self._update_button_states()
+
     def _on_estop_clicked(self):
         """Handle E-Stop button click"""
         if not self.ros_worker.is_running:
             return
         
         self.log_widget.add_log('EMERGENCY STOP ACTIVATED!', LOGLEVEL.FATAL, 'orin')
-        
+
+        # STEP 0 -- tell the truth about what this button can reach.
+        #
+        # During INIT the legs are driven by the sbRIO's own SET_ZERO /
+        # HALL_CALIBRATE sweep, not by /motor/command. Step 1 below has no
+        # command stream to cut, and step 2 is a gRPC request to a driver
+        # that is inside its sweep loop and not servicing gRPC -- so it is
+        # queued until the sweep returns. Reported from the robot: "it only
+        # stops after the calibration is done." That is the designed
+        # behaviour, and no change in THIS repository can alter it; the
+        # abort would have to be polled inside the sweep, which lives in the
+        # sbRIO FPGA driver.
+        #
+        # Said loudly and immediately, because the operator is looking at
+        # this panel at the one moment it matters, and because Issue #35 has
+        # HALL_CALIBRATE failing on the ABAD motor of all four legs and
+        # driving them ~30 s with no stopping condition -- i.e. half a minute
+        # of leg motion this button cannot interrupt.
+        if (hasattr(self, 'robot_state')
+                and hasattr(self.robot_state, 'robot_mode')
+                and int(self.robot_state.robot_mode) == ROBOTMODE.INIT):
+            self.log_widget.add_log(
+                'E-STOP CANNOT interrupt hall calibration. The legs are driven '
+                'by the sbRIO sweep, not by motor/command, and the mode request '
+                'is queued until the sweep returns -- the robot will stop when '
+                'calibration ends, not now. To stop it NOW: bench supply output '
+                'off, or the physical e-stop inline.',
+                LOGLEVEL.FATAL, 'orin')
+
+        # STEP 1 -- CUT THE COMMAND SOURCE FIRST.
+        #
+        # Requesting a robot-mode change on its own does NOT stop anything
+        # publishing motor commands: gslip_pronk keeps streaming a moving
+        # gait trajectory at 1 kHz while the firmware changes mode under
+        # it, and the two fight every control cycle -- that is the loud
+        # buzzing after an e-stop (observed 2026-08-31, motors energised
+        # and conflicted, which is not the same as stopped).
+        #
+        # The controller's gait loop is `while (rclcpp::ok() && trigger_)`
+        # (gslip_pronk.cpp:3567), so dropping the trigger is its designed
+        # abort: the loop exits, run() returns, the node terminates, and
+        # nothing publishes /motor/command afterwards. It also closes the
+        # recording cleanly, so the data up to the abort survives.
+        #
+        # Reuses the trigger handler wholesale (same idiom as
+        # _on_recording_input_entered) so the message, the GPIO line and
+        # the logging all follow their tested path.
+        if self.btn_trigger.isChecked():
+            self.btn_trigger.setChecked(False)
+            self._on_trigger_clicked()
+            self.log_widget.add_log(
+                'E-Stop: trigger dropped -- controller gait loop exits, '
+                'motor command stream stops', LOGLEVEL.WARN, 'orin')
+
+        # STEP 2 -- then the mode request.
+        #
+        # NOTE this remains a REQUEST forwarded over gRPC to the robot's
+        # own state machine: there is no ack, no timeout and no retry, and
+        # it does not de-energise the motors. The bench supply output-off
+        # (or a physical e-stop inline) is the real emergency stop; this
+        # button stops the GAIT.
         robot_cmd = RobotCmdStamped()
         robot_cmd.header.seq = self._robot_cmd_seq + 1
         robot_cmd.header.stamp = self.ros_worker.node.get_clock().now().to_msg()
@@ -716,17 +1998,26 @@ class CorgiControlPanel(QWidget):
         else:
             current = -1
         
-        if current == ROBOTMODE.STANDBY:
-            robot_cmd.request_robot_mode = int(ROBOTMODE.IDLE)
-            self._pending_robot_mode = int(ROBOTMODE.IDLE)
-            self.log_widget.add_log('E-Stop: STANDBY -> IDLE', LOGLEVEL.WARN, 'orin')
-        else:
-            robot_cmd.request_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self._pending_robot_mode = int(ROBOTMODE.SYSTEM_ON)
-            self.log_widget.add_log('E-Stop: -> SYSTEM_ON', LOGLEVEL.WARN, 'orin')
-        
+        # UNCONDITIONAL. Not "IDLE from ACTIVE, UNINITIALIZED otherwise":
+        # an emergency control whose action depends on invisible state is
+        # not an emergency control. One press, one outcome, every time --
+        # motors de-energised. The gentle variant is its own button.
+        del current
+        robot_cmd.request_robot_mode = int(ROBOTMODE.UNINITIALIZED)
+        self._pending_robot_mode = int(ROBOTMODE.UNINITIALIZED)
+        self.log_widget.add_log(
+            'E-STOP: -> Uninitialized (motors off), de-energising -- retrying '
+            'until the robot confirms', LOGLEVEL.WARN, 'orin')
+
+        self._last_estop_at = time.monotonic()
         self.ros_worker.send_robot_command(robot_cmd)
         self._robot_cmd_seq += 1
+        # The mode change is an UNACKNOWLEDGED gRPC request. Sent once and
+        # dropped, nothing says so -- a plausible reading of "the first
+        # press didn't stop the motors". Keep asking until /robot/state
+        # agrees, and say so loudly if it never does.
+        self._estop_deadline = time.monotonic() + 5.0
+        self._estop_timer.start(200)
         self._update_button_states()
     
     # ========================================================================
@@ -760,24 +2051,144 @@ class CorgiControlPanel(QWidget):
             if self.process_manager.stop_process('imu', timeout=3.0):
                 self.log_widget.add_log('IMU Stopped', LOGLEVEL.WARN, 'system')
     
-    def _on_set_zero_clicked(self):
-        """Handle Set Zero button click"""
-        self.btn_set_zero.setEnabled(False)
-        self.btn_set_zero.setText('Setting Zero...')
+    def _on_home_clicked(self):
+        """Handle Home button click"""
+        # Refuse re-entry while a homing run is live. Without this, a second
+        # press reached start_process(), which returns False because the
+        # process is already running -- and the old failure branch then reset
+        # the button text, breaking completion detection. Same guard the IMU
+        # handler already had.
+        if self._homing_active or self.process_manager.is_running('homing'):
+            self.log_widget.add_log('Homing already in progress; ignoring press',
+                                    LOGLEVEL.WARN, 'system')
+            return
+
+        # Do not quietly become the SECOND writer on motor/command.
+        #
+        # corgi_homing publishes motor/command directly at kp 90, and
+        # force_control publishes it at 1 kHz too. With the pronk launch
+        # still open, homing ramps to 18.4 deg while force_control holds the
+        # last pronk pose at kp_h ~710, and the firmware takes them
+        # alternately -- reported 2026-09-01 as the robot spazzing after Set
+        # Home without Ctrl-C'ing the controller first.
+        #
+        # Tested on RECENT TRAFFIC, not on publisher existence: force_control
+        # keeps its publisher while idle (it stops publishing after 500 ms of
+        # silence), and gating on existence would refuse the ordinary
+        # launch-still-open case that is now harmless.
+        if (self._last_cmd is not None
+                and time.monotonic() - self._last_cmd_t < 0.5):
+            reply = QMessageBox.warning(
+                self, 'Something is already commanding the robot',
+                'motor/command is live right now -- the controller has not '
+                'stopped.\n\n'
+                'Homing publishes to the same topic at 1 kHz. Two writers '
+                'will fight every control cycle and the robot will thrash.\n\n'
+                'Stop the controller first (Ctrl-C its terminal, or Stop '
+                'Gait), then home.\n\n'
+                'Home anyway?',
+                QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+            if reply != QMessageBox.Yes:
+                self.log_widget.add_log(
+                    'Homing cancelled -- motor/command is still live. Stop the '
+                    'controller first.', LOGLEVEL.WARN, 'system')
+                return
+
+        self._homing_active = True
+        self._homing_saw_complete = False
+        self.btn_home.setEnabled(False)
+        self.btn_home.setText('Homing…')
         
         success = self.process_manager.start_process(
-            'set_zero',
-            ['ros2', 'run', 'corgi_set_zero', 'set_zero'],
+            'homing',
+            ['ros2', 'run', 'corgi_homing', 'homing'],
             capture_output=False
         )
         
         if success:
-            self.log_widget.add_log('Set Zero Started', LOGLEVEL.INFO, 'system')
+            self.log_widget.add_log('Homing Started', LOGLEVEL.INFO, 'system')
         else:
-            self.log_widget.add_log('Failed to start set_zero', LOGLEVEL.ERROR, 'system')
-            self.btn_set_zero.setEnabled(True)
-            self.btn_set_zero.setText('Set Zero')
+            self.log_widget.add_log('Failed to start homing', LOGLEVEL.ERROR, 'system')
+            self._homing_active = False
+            self.btn_home.setEnabled(True)
+            self.btn_home.setText('Set Home')
     
+    def _csv_arg_for(self, csv_file: str) -> str:
+        """Reproduce the argv[1] the Run handler passes to corgi_csv_control."""
+        csv_filename = os.path.basename(csv_file)
+        if csv_filename.endswith('.csv'):
+            csv_filename = csv_filename[:-4]
+        if not os.path.isabs(csv_file) and '/' not in csv_file:
+            return csv_filename
+        return csv_file
+
+    def _resolve_phase_path(self, csv_file: str):
+        """Resolve the phase sidecar exactly as corgi_csv_control does.
+
+        The node treats an argument containing '/' as a path and anything else as a
+        name under input_csv/, appends '.csv' when missing, then swaps that suffix
+        for '_phase.csv'. Mirroring it here means the panel reports on the same file
+        the node will actually open. Returns (csv_path, phase_path).
+        """
+        arg = self._csv_arg_for(csv_file)
+        if '/' in arg:
+            csv_path = arg
+        else:
+            csv_path = os.path.join(PATHS.DEFAULT_CSV_DIR, arg)
+        if not csv_path.endswith('.csv'):
+            csv_path += '.csv'
+        return csv_path, csv_path[:-4] + TOUCHDOWN.PHASE_SUFFIX
+
+    def _refresh_phase_status(self):
+        """Show whether touchdown softening will engage for the selected CSV."""
+        csv_file = self.edit_csv.text().strip()
+        enabled = bool(csv_file)
+        for widget in (self.edit_td_kp_scale, self.edit_td_lead_ms,
+                       self.edit_td_hold_ms, self.edit_td_ramp_ms):
+            widget.setEnabled(enabled)
+        if not csv_file:
+            self.label_phase_status.setText('')
+            return
+        _, phase_path = self._resolve_phase_path(csv_file)
+        if os.path.isfile(phase_path):
+            self.label_phase_status.setStyleSheet('color: #4caf50; font-size: 11px;')
+            self.label_phase_status.setText(
+                f'Phase sidecar found: {os.path.basename(phase_path)} — softening will engage'
+            )
+        else:
+            self.label_phase_status.setStyleSheet('color: #ff9800; font-size: 11px;')
+            self.label_phase_status.setText(
+                f'No {os.path.basename(phase_path)} — constant gains (softening off)'
+            )
+
+    def _touchdown_param_args(self):
+        """Build the -p arguments for touchdown softening.
+
+        Invalid entries fall back to the node defaults with a warning rather than
+        blocking the run, so a typo cannot strand the robot mid-session.
+        """
+        fields = (
+            ('td_kp_scale', self.edit_td_kp_scale, TOUCHDOWN.KP_SCALE),
+            ('td_lead_ms', self.edit_td_lead_ms, TOUCHDOWN.LEAD_MS),
+            ('td_hold_ms', self.edit_td_hold_ms, TOUCHDOWN.HOLD_MS),
+            ('td_ramp_ms', self.edit_td_ramp_ms, TOUCHDOWN.RAMP_MS),
+        )
+        args = []
+        for name, widget, default in fields:
+            text = widget.text().strip()
+            try:
+                value = float(text)
+                if value < 0.0:
+                    raise ValueError('negative')
+            except ValueError:
+                self.log_widget.add_log(
+                    f'Invalid {name} "{text}"; using default {default}', LOGLEVEL.WARN, 'system'
+                )
+                value = default
+                widget.setText(str(default))
+            args += ['-p', f'{name}:={value}']
+        return args
+
     def _on_select_csv_clicked(self):
         """Handle CSV file selection"""
         file_name, _ = QFileDialog.getOpenFileName(
@@ -790,6 +2201,16 @@ class CorgiControlPanel(QWidget):
         if file_name:
             self.edit_csv.setText(file_name)
             self.log_widget.add_log(f'Selected CSV file: {file_name}', LOGLEVEL.INFO, 'orin')
+            _, phase_path = self._resolve_phase_path(file_name)
+            if os.path.isfile(phase_path):
+                self.log_widget.add_log(
+                    f'Phase sidecar found: {phase_path}', LOGLEVEL.INFO, 'orin'
+                )
+            else:
+                self.log_widget.add_log(
+                    f'No phase sidecar at {phase_path}; touchdown softening will stay off',
+                    LOGLEVEL.WARN, 'system'
+                )
     
     def _on_csv_run_clicked(self):
         """Handle CSV control run button click"""
@@ -815,10 +2236,29 @@ class CorgiControlPanel(QWidget):
                 self.log_widget.add_log('CSV Control already running; skip start', LOGLEVEL.WARN, 'system')
                 return
             
-            # Build command with use_sim_time parameter if needed
+            _, phase_path = self._resolve_phase_path(csv_file)
+            softening = os.path.isfile(phase_path)
+            if softening:
+                self.log_widget.add_log(
+                    f'Touchdown softening ON via {os.path.basename(phase_path)}',
+                    LOGLEVEL.INFO, 'system'
+                )
+            else:
+                self.log_widget.add_log(
+                    f'Touchdown softening OFF (no {os.path.basename(phase_path)}); '
+                    'constant gains will be used',
+                    LOGLEVEL.WARN, 'system'
+                )
+            
+            # Build command; every -p goes after a single --ros-args separator
             cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg]
+            ros_args = []
             if self.use_sim_time:
-                cmd = ['ros2', 'run', 'corgi_csv_control', 'corgi_csv_control', csv_arg, '--ros-args', '-p', 'use_sim_time:=true']
+                ros_args += ['-p', 'use_sim_time:=true']
+            if softening:
+                ros_args += self._touchdown_param_args()
+            if ros_args:
+                cmd += ['--ros-args'] + ros_args
             
             success = self.process_manager.start_process(
                 'csv_control',
@@ -828,7 +2268,8 @@ class CorgiControlPanel(QWidget):
             
             if success:
                 mode_str = ' (sim)' if self.use_sim_time else ''
-                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}{mode_str}', LOGLEVEL.INFO, 'system')
+                soft_str = ' [soft touchdown]' if softening else ' [constant gains]'
+                self.log_widget.add_log(f'CSV Control Started with file: {csv_filename}{mode_str}{soft_str}', LOGLEVEL.INFO, 'system')
             else:
                 self.log_widget.add_log('Failed to start CSV Control', LOGLEVEL.ERROR, 'system')
                 self.btn_csv_run.setChecked(False)
@@ -850,6 +2291,111 @@ class CorgiControlPanel(QWidget):
         else:
             self.log_widget.add_log('Recording already in progress', LOGLEVEL.WARN, 'orin')
     
+    # Topics the diagnostics actually read. gap_histogram.py needs the first
+    # three; the rest are what make a run interpretable afterwards. Kept
+    # explicit rather than recording everything: a bigger bag is a slower
+    # analysis, not a better one.
+    BAG_TOPICS = (
+        '/impedance/command',
+        '/motor/command',
+        '/motor/state',
+        '/force/state',
+        '/power/state',
+        '/robot/state',
+        '/trigger',
+    )
+    BAG_DIR = os.path.expanduser('~/corgi_bags')
+
+    def _on_bag_record_clicked(self):
+        """Start or stop `ros2 bag record`.
+
+        Stopping goes through process_manager.stop_process, which sends
+        SIGINT to the process GROUP before escalating. That matters: rosbag
+        finalises its sqlite database on SIGINT, and a harder kill leaves a
+        corrupt .db3 -- "sqlite disk I/O error" already cost one capture.
+        """
+        if self.btn_bag.isChecked():
+            if self.process_manager.is_running('rosbag'):
+                self.log_widget.add_log('A bag is already recording',
+                                        LOGLEVEL.WARN, 'system')
+                return
+
+            name = self.edit_bag.text().strip() or datetime.now().strftime(
+                'run_%H%M%S')
+            name = os.path.basename(name)          # no path escapes
+            try:
+                os.makedirs(self.BAG_DIR, exist_ok=True)
+            except OSError as exc:
+                self.log_widget.add_log('Cannot create %s: %s'
+                                        % (self.BAG_DIR, exc),
+                                        LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            path = os.path.join(self.BAG_DIR, name)
+            if os.path.exists(path):
+                self.log_widget.add_log(
+                    'Bag %s already exists -- pick another name (rosbag will '
+                    'refuse to overwrite)' % path, LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            cmd = ['ros2', 'bag', 'record', '-o', path]
+            cmd += ['-a'] if self.chk_bag_all.isChecked() else list(self.BAG_TOPICS)
+
+            if not self.process_manager.start_process('rosbag', cmd,
+                                                      capture_output=False):
+                self.log_widget.add_log('Failed to start ros2 bag record',
+                                        LOGLEVEL.ERROR, 'system')
+                self.btn_bag.setChecked(False)
+                return
+
+            self._bag_path = path
+            self._bag_started_at = time.monotonic()
+            self.log_widget.add_log(
+                'Recording %s (%s)' % (path, 'all topics'
+                                       if self.chk_bag_all.isChecked()
+                                       else '%d topics' % len(self.BAG_TOPICS)),
+                LOGLEVEL.INFO, 'system')
+        else:
+            if not self.process_manager.is_running('rosbag'):
+                self.lbl_bag_status.setText('idle')
+                return
+            # 10 s before escalating past SIGINT: rosbag needs time to close
+            # its database, and a truncated bag is worse than a slow stop.
+            self.process_manager.stop_process('rosbag', timeout=10.0)
+            secs = time.monotonic() - self._bag_started_at
+            self.lbl_bag_status.setText('saved (%.0f s): %s'
+                                        % (secs, self._bag_path))
+            self.log_widget.add_log(
+                'Bag saved after %.0f s: %s' % (secs, self._bag_path),
+                LOGLEVEL.INFO, 'system')
+
+    def _repaint_bag_status(self):
+        """Elapsed time while recording. On the 5 Hz paint timer."""
+        if not hasattr(self, 'lbl_bag_status'):
+            return
+        running = self.process_manager.is_running('rosbag')
+        if running:
+            self.lbl_bag_status.setText(
+                'RECORDING %.0f s -> %s'
+                % (time.monotonic() - self._bag_started_at,
+                   os.path.basename(self._bag_path)))
+            self.lbl_bag_status.setStyleSheet(
+                'color: #e06c5a; font-size: 11px; font-weight: bold;')
+        else:
+            self.lbl_bag_status.setStyleSheet('color: #aaa; font-size: 11px;')
+            if self.btn_bag.isChecked():
+                # It died on its own -- almost always a name clash or no
+                # write permission. Say so rather than showing a stale
+                # "RECORDING" that is no longer true.
+                self.btn_bag.setChecked(False)
+                self.lbl_bag_status.setText('rosbag exited unexpectedly')
+                self.log_widget.add_log(
+                    'ros2 bag record exited on its own -- check the bag name '
+                    'and that %s is writable' % self.BAG_DIR,
+                    LOGLEVEL.ERROR, 'system')
+
     def _on_trigger_clicked(self):
         """Handle trigger button click"""
         if not self.ros_worker.is_running:
@@ -870,6 +2416,9 @@ class CorgiControlPanel(QWidget):
             )
         
         if self.btn_trigger.isChecked():
+            # Peak should mean "during this run", not "since the panel
+            # opened". The outgoing value is logged by the reset itself.
+            self._reset_power_peaks('run start')
             filename = trigger_cmd.output_filename if trigger_cmd.output_filename else "no filename"
             self.log_widget.add_log(f'Trigger enabled: {filename}', LOGLEVEL.INFO, 'orin')
         else:
@@ -880,28 +2429,43 @@ class CorgiControlPanel(QWidget):
     # ========================================================================
     
     def _handle_power_state_update(self, state):
-        """Handle power state update from ROS"""
+        """Accumulate power state. The badges are painted on a timer.
+
+        This arrives at the bridge's 1 kHz. Repainting four labels per board
+        per message churns the digits far faster than anyone can read them,
+        and makes Qt re-lay-out the row a thousand times a second to serve
+        an eye that manages about five. Sum here; average and paint in
+        _repaint_power_badges().
+        """
         self.power_state = state
+        self._last_power_at = time.monotonic()
         
-        try:
-            v_total = float(getattr(state, 'v_0', 0.0))
-        except Exception:
-            v_total = 0.0
+        pb1_v = self._get_float_field(state, 'pb1_v_0')
+        pb1_i = self._sum_powerboard_current(state, 'pb1')
+        pb2_v = self._get_float_field(state, 'pb2_v_0')
+        pb2_i = self._sum_powerboard_current(state, 'pb2')
+
+        a = self._power_accum
+        a['n'] += 1
+        a['pb1_v'] += pb1_v
+        a['pb1_i'] += pb1_i
+        a['pb2_v'] += pb2_v
+        a['pb2_i'] += pb2_i
+
+        # Peak from THIS sample. Doing it on the 5 Hz painted average would
+        # miss the transients entirely: a 20 ms spike barely moves a 200 ms
+        # mean, and a spike is the whole reason to have a peak reading.
+        self._peak_i = max(self._peak_i, pb1_i + pb2_i)
+        self._peak_w = max(self._peak_w, pb1_v * pb1_i + pb2_v * pb2_i)
+
+        # painted by _repaint_power_badges on a 5 Hz timer
         
-        try:
-            i_total = float(getattr(state, 'i_1', 0.0))
-        except Exception:
-            i_total = 0.0
-        
-        soc = self._calculate_soc(v_total)
-        power = v_total * i_total
-        
-        self.lbl_voltage.setText(f"{v_total:.1f} V")
-        self.lbl_soc.setText(f"{soc:.0f} %")
-        self.lbl_current.setText(f"{i_total:.2f} A")
-        self.lbl_power.setText(f"{power:.1f} W")
-        
-        self._update_button_states()
+        # Buttons are NOT refreshed here. This callback runs at the
+        # bridge's 1 kHz and _update_button_states() makes nineteen
+        # setEnabled() calls, none of which depend on power state --
+        # it reads only the bridge toggle, use_sim_time, the robot
+        # mode and _homing_active. It is driven by the 5 Hz paint
+        # timer instead, and directly by every user action.
     
     def _handle_robot_state_update(self, state):
         """Handle robot state update from ROS"""
@@ -911,32 +2475,47 @@ class CorgiControlPanel(QWidget):
         # Check if pending mode transition completed
         if self._pending_robot_mode is not None and current_mode == int(self._pending_robot_mode):
             self.log_widget.add_log(
-                f'Robot mode reached: {ROBOTMODE(self._pending_robot_mode).name} ({self._pending_robot_mode})',
+                f'Robot mode reached: {self._mode_text(self._pending_robot_mode)} ({self._pending_robot_mode})',
                 LOGLEVEL.INFO, 'system'
             )
             self._pending_robot_mode = None
             
             # Launch config panel if entering CONFIG mode
-            if current_mode == ROBOTMODE.MOTORCONFIG:
+            if current_mode == ROBOTMODE.CONFIG:
                 self._launch_config_panel()
         
         self._last_confirmed_mode = current_mode
+
+        # Everything below repaints the mode display, and reads ONLY
+        # state.robot_mode. robot/state streams at the bridge's 1 kHz
+        # while the mode changes a handful of times per session, so
+        # repainting per message is pure waste -- and setStyleSheet() is
+        # not cheap: Qt reparses the CSS and repolishes the widget on
+        # every call, on the GUI thread, competing with the log pane and
+        # the power badges.
+        #
+        # Guarding on the mode is exact: if it has not changed, the
+        # display is already correct. The pending-transition latch above
+        # stays per-message on purpose -- it must not miss the tick the
+        # transition lands on.
+        if current_mode == getattr(self, "_displayed_mode", None):
+            return
+        self._displayed_mode = current_mode
         
         # Update mode display
         try:
-            mode_enum = ROBOTMODE(state.robot_mode)
-            mode_text = mode_enum.name
+            mode_text = self._mode_text(state.robot_mode)
         except ValueError:
-            mode_text = "---"
+            mode_text = "no robot state"
         
         self.label_robot_mode_value.setText(mode_text)
         
         # Update mode display color
-        if state.robot_mode == ROBOTMODE.SYSTEM_ON:
+        if state.robot_mode == ROBOTMODE.UNINITIALIZED:
             color = COLORS.STATUS_SUCCESS
         elif state.robot_mode == ROBOTMODE.IDLE:
             color = "#2979ff"
-        elif state.robot_mode == ROBOTMODE.MOTORCONFIG:
+        elif state.robot_mode == ROBOTMODE.CONFIG:
             color = COLORS.STATUS_WARNING
         else:
             color = COLORS.STATUS_NEUTRAL
@@ -946,53 +2525,168 @@ class CorgiControlPanel(QWidget):
         )
         
         # Update button checked states to reflect current mode
-        self.btn_systemon.setChecked(state.robot_mode == ROBOTMODE.SYSTEM_ON)
+        self.btn_systemon.setChecked(state.robot_mode == ROBOTMODE.UNINITIALIZED)
         self.btn_idle.setChecked(state.robot_mode == ROBOTMODE.IDLE)
-        self.btn_standby.setChecked(state.robot_mode == ROBOTMODE.STANDBY)
-        self.btn_motorconfig.setChecked(state.robot_mode == ROBOTMODE.MOTORCONFIG)
+        self.btn_standby.setChecked(state.robot_mode == ROBOTMODE.ACTIVE)
+        self.btn_motorconfig.setChecked(state.robot_mode == ROBOTMODE.CONFIG)
         
-        self._update_button_states()
+        # Refreshed on the 5 Hz paint timer, not here: robot/state also
+        # streams at 1 kHz, so this call site doubled the ~19,000
+        # setEnabled() calls a second. The mode transition logic above
+        # still runs per message; only the button repaint is throttled.
     
+    def _handle_motor_cmd_update(self, msg):
+        """Store the newest motor command. Painting happens at 5 Hz."""
+        import time
+        self._last_cmd = msg
+        self._last_cmd_t = time.monotonic()
+
+    def _repaint_cmd_source(self):
+        """Name what is commanding the robot, from the gain fingerprint.
+
+        The label says "inferred" because a fingerprint is not an identity.
+        kp 90 / kd 1.75 is used by BOTH corgi_homing (homing.cpp:120-126)
+        and corgi_csv_control (corgi_csv_control.cpp:103-111), so it cannot
+        name one of them, and it does not try to.
+        """
+        import time
+        if not hasattr(self, "_cmd_mode_label"):
+            return
+
+        # Publisher count is a ROS API call; poll it every ~2 s, not at 5 Hz.
+        self._cmd_pub_poll += 1
+        if self._cmd_pub_poll >= 10:
+            self._cmd_pub_poll = 0
+            try:
+                if self.ros_worker.is_running and self.ros_worker.node is not None:
+                    self._cmd_pub_count = self.ros_worker.node.count_publishers(
+                        "motor/command")
+            except Exception:
+                self._cmd_pub_count = -1
+
+        n = self._cmd_pub_count
+        if n < 0:
+            self._cmd_pub_label.setText("publishers on motor/command: ?")
+            self._cmd_pub_label.setStyleSheet("color: #888; font-size: 11px;")
+        elif n > 1:
+            self._cmd_pub_label.setText(
+                "publishers on motor/command: %d  -- TWO WRITERS, they will "
+                "fight at 1 kHz" % n)
+            self._cmd_pub_label.setStyleSheet(
+                "color: #e06c5a; font-size: 11px; font-weight: bold;")
+        else:
+            self._cmd_pub_label.setText("publishers on motor/command: %d" % n)
+            self._cmd_pub_label.setStyleSheet("color: #aaa; font-size: 11px;")
+
+        stale = (self._last_cmd is None
+                 or time.monotonic() - self._last_cmd_t > 0.5)
+        if stale:
+            self._cmd_mode_label.setText("NO COMMAND STREAM")
+            self._cmd_mode_label.setToolTip(
+                "Nothing has published <tt>motor/command</tt> for over "
+                "0.5 s.")
+            self._cmd_mode_label.setStyleSheet(
+                "color: #888; font-size: 13px; font-weight: bold;")
+            self._cmd_gain_label.setText("kp  -  /  -  /  -")
+            return
+
+        m = self._last_cmd.module_a
+        kp_l, kp_r, kp_h = m.kp_l, m.kp_r, m.kp_h
+        self._cmd_gain_label.setText(
+            "kp %6.1f / %6.1f / %6.1f   (l/r/h)" % (kp_l, kp_r, kp_h))
+
+        def near(a, b):
+            return abs(a - b) < 0.5
+
+        # Short label, detail on hover. The full sentences were three to
+        # five times the width of the slot, and that is what drove the
+        # wrapping that squashed the config table.
+        if near(kp_l, 50) and near(kp_r, 50) and near(kp_h, 50):
+            text = "POSITION FALLBACK"
+            tip = ("<b>kp 50 on all three motors</b> -- force_control's "
+                   "<tt>position_control</tt> branch.<br><br>"
+                   "Reached only when <b>all six</b> impedance gains arrive "
+                   "at zero, and nothing in the built tree does that "
+                   "deliberately, so this is almost certainly a bug.<br><br>"
+                   "Until 2026-09-01 this branch also commanded "
+                   "<b>theta = 0</b> -- a fully folded leg -- with that live "
+                   "kp.")
+            colour = "#e06c5a"
+        elif near(kp_l, 90) and near(kp_r, 90) and near(kp_h, 90):
+            text = "JOINT PD  (homing or CSV)"
+            tip = ("<b>kp 90 / kd 1.75</b> -- fixed-gain joint PD, with "
+                   "force_control <b>out of the loop entirely</b>.<br><br>"
+                   "Which of the two cannot be told apart from here: "
+                   "<tt>corgi_homing</tt> and <tt>corgi_csv_control</tt> use "
+                   "identical gains and both publish "
+                   "<tt>motor/command</tt> directly.")
+            colour = "#5a9fd4"
+        else:
+            text = "IMPEDANCE"
+            tip = ("force_control's impedance law -- gains computed per leg "
+                   "from the commanded stiffness and damping. The normal "
+                   "running state.<br><br>"
+                   "Inferred from the gains, not from the publisher's "
+                   "identity.")
+            colour = "#6fbf73"
+
+        self._cmd_mode_label.setText(text)
+        self._cmd_mode_label.setToolTip(tip)
+        self._cmd_mode_label.setStyleSheet(
+            "color: %s; font-size: 13px; font-weight: bold;" % colour)
+
     def _handle_motor_state_update(self, state):
         """Handle motor state update from ROS"""
         self.motor_state = state
+        self._last_motor_at = time.monotonic()
         
         if not hasattr(state, 'module_a'):
             return
         
-        modules = [state.module_a, state.module_b, state.module_c, state.module_d]
+        # Same keys as the box definitions above -- module letters, not
+        # display strings. Keeping display text as a dictionary key is what
+        # allowed the panel to drift into two naming conventions.
+        modules = [
+            ('A', state.module_a),
+            ('B', state.module_b),
+            ('D', state.module_d),
+            ('C', state.module_c),
+        ]
+        # (field, symbol, is_angle) -- angles convert to degrees, torques
+        # are already N*m and must NOT be run through np.degrees.
+        state_fields = [
+            ('theta', 'θ', True),
+            ('beta', 'β', True),
+            ('gamma', 'γ', True),
+            ('torque_r', 'τ R', False),
+            ('torque_l', 'τ L', False),
+            ('torque_h', 'τ H', False),
+        ]
         
-        for module_idx, module in enumerate(modules):
-            if not hasattr(module, 'motor_mode'):
+        for leg_name, module in modules:
+            if module is None:
                 continue
             
-            for motor_idx in range(2):  # L and R motors
-                motor_num = module_idx * 2 + motor_idx + 1
-                key = f'M{motor_num}'
-                
+            for field_name, display_name, is_angle in state_fields:
+                key = f"{leg_name}_{field_name}"
                 if key not in self.motor_labels:
                     continue
                 
-                # Get position
-                pos = 0.0
-                if hasattr(module, 'position') and len(module.position) > motor_idx:
-                    pos = np.degrees(module.position[motor_idx])
-                
-                # Get temperature
-                temp = 0
-                if hasattr(module, 'temperature') and len(module.temperature) > motor_idx:
-                    temp = module.temperature[motor_idx]
-                
-                # Update label
-                self.motor_labels[key].setText(f"{key}: {pos:.1f}° | {temp}°C")
-                
-                # Color code by temperature
-                if temp > 60:
-                    self.motor_labels[key].setStyleSheet(
-                        f"color: {COLORS.STATUS_ERROR}; font-weight: bold;"
-                    )
-                else:
+                raw = self._get_float_field(module, field_name)
+                if is_angle:
+                    self.motor_labels[key].setText(
+                        f"{display_name}: {np.degrees(raw):.1f}°")
                     self.motor_labels[key].setStyleSheet("color: #aaa;")
+                else:
+                    self.motor_labels[key].setText(
+                        f"{display_name}: {raw:+.2f} N·m")
+                    # The ABAD clips silently at 45-64 N*m against a 44.25
+                    # stall (#15), so a torque worth noticing should look
+                    # different from one that is not.
+                    mag = abs(raw)
+                    colour = ('#ef5350' if mag > 20.0 else
+                              '#ffa726' if mag > 8.0 else '#aaa')
+                    self.motor_labels[key].setStyleSheet("color: %s;" % colour)
     
     def _handle_log_update(self, log_msg):
         """Handle log message from ROS"""
@@ -1011,14 +2705,17 @@ class CorgiControlPanel(QWidget):
         # Display in log widget
         self.log_widget.add_log(message, LOGLEVEL(level), node_name)
         
-        # Handle special messages - check for set_zero completion
-        if 'set_zero' in node_name.lower():
+        # Handle special messages - check for homing completion
+        if 'homing' in node_name.lower():
+            if 'abort' in message.lower():
+                self._homing_saw_complete = False
             if 'completed' in message.lower() or 'complete' in message.lower():
+                self._homing_saw_complete = True
                 self.log_widget.add_log(
-                    'Set Zero operation completed successfully',
+                    'Homing operation completed successfully',
                     LOGLEVEL.INFO, 'system'
                 )
-                self._on_set_zero_completed()
+                self._on_homing_completed()
         
         # Handle error recovery
         if level in [LOGLEVEL.ERROR, LOGLEVEL.FATAL]:
@@ -1034,18 +2731,170 @@ class CorgiControlPanel(QWidget):
     # ========================================================================
     # Helper Methods
     # ========================================================================
-    
-    def _calculate_soc(self, v_total: float) -> float:
-        """Calculate state of charge from voltage"""
-        V_MIN = 42.0  # 3.5V * 12
-        V_MAX = 50.4  # 4.2V * 12
-        
-        if V_MAX <= V_MIN:
+
+    def _get_float_field(self, state, field_name: str) -> float:
+        """Read a numeric field from a ROS message without breaking UI updates."""
+        try:
+            return float(getattr(state, field_name, 0.0))
+        except Exception:
             return 0.0
-        
-        soc = (v_total - V_MIN) / (V_MAX - V_MIN) * 100.0
-        return max(0.0, min(100.0, soc))
+
+    # Channel 0 is NOT load current, and including it made the panel read
+    # ~14.4 A per board (~1.4 kW total) while the bench supply showed 48 V
+    # 2 A (~96 W). Measured across the three hardware air runs of
+    # 2026-08-31 (n = 348279 / 31953 / 61590 rows):
+    #
+    #   i_0        median 13.2-13.9 A, sd as low as 0.03, and it does not
+    #              move with the gait -- it correlates NEGATIVELY with total
+    #              |torque| (r = -0.29, -0.11). A real supply current rises
+    #              with torque.
+    #   i_1..i_7   median 0.0-0.3 A each, spiking to 2-6 A during the pronk,
+    #              and their sum correlates +0.67 with total |torque|.
+    #
+    # Summed over 1..7 both boards come to ~1.7 A, which is what the supply
+    # actually shows. What i_0 IS remains unidentified -- that lives in the
+    # power-board firmware -- so it is excluded rather than reinterpreted.
+    POWER_LOAD_CHANNELS = tuple(range(1, 8))
+
+    def _sum_powerboard_current(self, state, board_prefix: str) -> float:
+        """Load current for one board: channels 1..7. See POWER_LOAD_CHANNELS."""
+        return sum(
+            self._get_float_field(state, f'{board_prefix}_i_{index}')
+            for index in self.POWER_LOAD_CHANNELS
+        )
+
+    def _update_power_badges(
+        self,
+        voltage: float,
+        current: float,
+        voltage_label: QLabel,
+        current_label: QLabel,
+        power_label: QLabel,
+    ):
+        """Update one powerboard summary row using v_0 and summed current."""
+        power = voltage * current
+
+        voltage_label.setText(f"{voltage:.1f} V")
+        current_label.setText(f"{current:.2f} A")
+        power_label.setText(f"{power:.1f} W")
+
+        voltage_label.setToolTip('Bus voltage (channel v_0), 200 ms mean.')
+
+        note = ('Sum of i_1..i_7. Channel 0 is excluded: it sits at a near '
+                'constant ~13.5 A, does not move with the gait, and '
+                'correlates negatively with torque — it is not load current. '
+                'Including it read ~1.4 kW against a supply showing ~96 W.')
+        current_label.setToolTip(note)
+        power_label.setToolTip(note)
     
+    STALE_AFTER_S = 0.75
+
+    def _check_stream_freshness(self):
+        """Dim what is no longer live, and say which stream stopped.
+
+        Runs on the 5 Hz paint timer. A value held on screen after its
+        stream stopped is indistinguishable from a live one that happens to
+        be steady -- which is exactly how a frozen reading gets believed.
+        """
+        now = time.monotonic()
+        stale = []
+        if self._last_power_at and now - self._last_power_at > self.STALE_AFTER_S:
+            stale.append(('power/state', now - self._last_power_at))
+        if self._last_motor_at and now - self._last_motor_at > self.STALE_AFTER_S:
+            stale.append(('motor/state', now - self._last_motor_at))
+
+        if stale:
+            worst = max(age for _, age in stale)
+            full = ('\u26a0  %s STOPPED %.1f s ago \u2014 the values below '
+                    'are frozen, not live'
+                    % (' and '.join(n for n, _ in stale), worst))
+            # Elide to the width the label actually has. Without this the
+            # Ignored size policy above would simply clip mid-word with no
+            # indication. Recomputed here on the 5 Hz timer, so it tracks a
+            # manual window resize by itself; the tooltip always has it all.
+            avail = self.lbl_stream_stale.width() - 14
+            if avail > 40:
+                fm = QFontMetrics(self.lbl_stream_stale.font())
+                self.lbl_stream_stale.setText(
+                    fm.elidedText(full, Qt.ElideRight, avail))
+            else:
+                self.lbl_stream_stale.setText(full)
+            self.lbl_stream_stale.setToolTip(full)
+        else:
+            # Blanked, never hidden -- the row is reserved so the geometry
+            # cannot move. See _create_stale_banner().
+            self.lbl_stream_stale.setText('')
+            self.lbl_stream_stale.setToolTip('')
+
+        power_stale = any(n == 'power/state' for n, _ in stale)
+        dim = "color: #6a6a6a;"
+        for lbl in (self.lbl_pb1_voltage, self.lbl_pb1_current,
+                    self.lbl_pb1_power, self.lbl_pb2_voltage,
+                    self.lbl_pb2_current, self.lbl_pb2_power,
+                    self.lbl_total_current, self.lbl_total_power):
+            lbl.setStyleSheet(dim if power_stale else "")
+
+        if any(n == 'motor/state' for n, _ in stale):
+            for lbl in self.motor_labels.values():
+                lbl.setStyleSheet(dim)
+
+        if bool(stale) != self._streams_stale:
+            self._streams_stale = bool(stale)
+            if self._streams_stale:
+                self._log('%s stopped — panel values are FROZEN until it '
+                          'resumes. Expected during HALL_CALIBRATE: the sbRIO '
+                          'driver runs the sweep in its own loop and is not '
+                          'servicing gRPC meanwhile.'
+                          % ' and '.join(n for n, _ in stale),
+                          LOGLEVEL.WARN, 'system')
+            else:
+                self._log('state streams live again — values are current',
+                          LOGLEVEL.INFO, 'system')
+
+    def _reset_power_peaks(self, why: str):
+        """Zero the peaks, logging the outgoing value so none is lost."""
+        if self._peak_w > 0.0:
+            self._log('peak power %.1f W at %.2f A (%s) — resetting'
+                      % (self._peak_w, self._peak_i, why),
+                      LOGLEVEL.INFO, 'system')
+        self._peak_i = 0.0
+        self._peak_w = 0.0
+
+    def _repaint_power_badges(self):
+        """Paint the 200 ms mean, at 5 Hz. Readable, and steadier than
+        whichever single sample happened to land on the repaint."""
+        self._check_stream_freshness()
+
+        a = self._power_accum
+        if not a['n']:
+            # No samples this window. Deliberately does NOT clear the badges:
+            # the last real value is worth keeping on screen, but
+            # _check_stream_freshness has already dimmed it and said so.
+            return
+        n = float(a['n'])
+        pb1_v, pb1_i = a['pb1_v'] / n, a['pb1_i'] / n
+        pb2_v, pb2_i = a['pb2_v'] / n, a['pb2_i'] / n
+        for k in a:
+            a[k] = 0
+
+        self._update_power_badges(
+            pb1_v, pb1_i,
+            self.lbl_pb1_voltage,
+            self.lbl_pb1_current, self.lbl_pb1_power,
+        )
+        self._update_power_badges(
+            pb2_v, pb2_i,
+            self.lbl_pb2_voltage,
+            self.lbl_pb2_current, self.lbl_pb2_power,
+        )
+
+        total_i = pb1_i + pb2_i
+        total_w = pb1_v * pb1_i + pb2_v * pb2_i
+        self.lbl_total_current.setText(f"{total_i:.2f} A")
+        self.lbl_total_power.setText(f"{total_w:.1f} W")
+        self.lbl_peak_current.setText(f"{self._peak_i:.2f} A")
+        self.lbl_peak_power.setText(f"{self._peak_w:.1f} W")
+
     def _update_button_states(self):
         """Update button enabled/disabled states based on current state"""
         bridge_on = self.btn_ros_bridge.isChecked()
@@ -1056,18 +2905,24 @@ class CorgiControlPanel(QWidget):
         
         # Basic buttons
         self.btn_estop.setEnabled(bridge_on)  # E-stop always requires bridge (safety critical)
+        self.btn_stop_gait.setEnabled(bridge_on)
         self.btn_imu.setEnabled(enable_basic)
         self.btn_trigger.setEnabled(enable_basic)
         self.btn_csv_select.setEnabled(enable_basic)
         self.btn_csv_run.setEnabled(enable_basic)
         
-        # Set zero button (only in STANDBY mode)
+        # Set zero button (only in ACTIVE mode)
         if hasattr(self, 'robot_state') and hasattr(self.robot_state, 'robot_mode'):
             current = self.robot_state.robot_mode
         else:
             current = -1
         
-        self.btn_set_zero.setEnabled(bridge_on and current == ROBOTMODE.STANDBY)
+        # ACTIVE gate kept (homing outside ACTIVE is unsafe), but a
+        # live homing run also holds the button down: this is called on
+        # every robot-state update and used to re-enable it mid-run.
+        self.btn_home.setEnabled(bridge_on
+                                 and current == ROBOTMODE.ACTIVE
+                                 and not self._homing_active)
         
         # FSM buttons - disable in simulation mode or when bridge is off
         if not bridge_on or self.use_sim_time:
@@ -1084,30 +2939,42 @@ class CorgiControlPanel(QWidget):
                 self.btn_motorconfig.setEnabled(True)
             else:
                 # FSM Transition Logic:
-                # SYSTEM_ON (0) <=> IDLE (2)
-                # SYSTEM_ON (0) <=> MOTORCONFIG (4)
-                # IDLE (2) <=> STANDBY (3)
-                # IDLE (2) -> MOTORCONFIG (4)
+                # UNINITIALIZED (0) <=> IDLE (2)
+                # UNINITIALIZED (0) <=> CONFIG (4)
+                # IDLE (2) <=> ACTIVE (3)
+                # IDLE (2) -> CONFIG (4)
+                # ACTIVE (3) -> UNINITIALIZED (0)  (firmware allows it; the
+                #   safe direction should never need two clicks)
                 
                 self.btn_systemon.setEnabled(
-                    current in [ROBOTMODE.INIT, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
+                    current in [ROBOTMODE.INIT, ROBOTMODE.IDLE,
+                                ROBOTMODE.ACTIVE, ROBOTMODE.CONFIG]
                 )
                 self.btn_idle.setEnabled(
-                    current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.STANDBY]
+                    current in [ROBOTMODE.UNINITIALIZED, ROBOTMODE.ACTIVE]
                 )
                 self.btn_standby.setEnabled(current == ROBOTMODE.IDLE)
                 self.btn_motorconfig.setEnabled(
-                    current in [ROBOTMODE.SYSTEM_ON, ROBOTMODE.IDLE, ROBOTMODE.MOTORCONFIG]
+                    current in [ROBOTMODE.UNINITIALIZED, ROBOTMODE.IDLE, ROBOTMODE.CONFIG]
                 )
     
-    def _on_set_zero_completed(self):
-        """Handle set zero completion"""
-        if self.process_manager.is_running('set_zero'):
-            self.process_manager.stop_process('set_zero', timeout=1.0)
+    def _on_homing_completed(self):
+        """Handle homing completion"""
+        self._homing_active = False
+        if self.process_manager.is_running('homing'):
+            self.process_manager.stop_process('homing', timeout=1.0)
         
-        self.btn_set_zero.setEnabled(True)
-        self.btn_set_zero.setText('Set Zero')
-        self.log_widget.add_log('Motor zero points set successfully', LOGLEVEL.INFO, 'system')
+        self.btn_home.setEnabled(True)
+        self.btn_home.setText('Set Home')
+        if self._homing_saw_complete:
+            self.log_widget.add_log('Motor home position set successfully',
+                                    LOGLEVEL.INFO, 'system')
+        else:
+            self.log_widget.add_log(
+                'HOMING DID NOT COMPLETE -- the node exited without reporting '
+                'completion (see its warning above). The zero was NOT set; do '
+                'not run a gait on this. Fix the cause and home again.',
+                LOGLEVEL.ERROR, 'system')
     
     def _launch_config_panel(self):
         """Launch configuration panel"""
@@ -1139,11 +3006,13 @@ class CorgiControlPanel(QWidget):
     
     def _timer_update(self):
         """Periodic timer update"""
-        # Check if set_zero process has completed
-        if self.btn_set_zero.text() == 'Setting Zero...':
-            if not self.process_manager.is_running('set_zero'):
+        # Check if homing process has completed. Keyed on the state flag,
+        # not the button text -- the text is presentation and anything that
+        # rewrites it used to switch this detector off permanently.
+        if self._homing_active:
+            if not self.process_manager.is_running('homing'):
                 # Process finished but callback wasn't triggered
-                self._on_set_zero_completed()
+                self._on_homing_completed()
 
         # Detect sim-time clock jump (Webots reset) and restart data recorder
         if self.use_sim_time and self.ros_worker.is_running:

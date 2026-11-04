@@ -7,6 +7,7 @@ Runs in separate thread to prevent blocking the GUI.
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import threading
 from typing import Optional
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -127,6 +128,7 @@ class ControlPanelRosWorker(RosWorkerBase):
     power_state_updated = pyqtSignal(object)  # PowerStateStamped
     robot_state_updated = pyqtSignal(object)  # RobotStateStamped
     motor_state_updated = pyqtSignal(object)  # MotorStateStamped
+    motor_cmd_updated = pyqtSignal(object)  # MotorCmdStamped
     log_updated = pyqtSignal(object)  # RosoutLog
     
     def __init__(self, node_name: str = 'corgi_control_panel'):
@@ -141,6 +143,7 @@ class ControlPanelRosWorker(RosWorkerBase):
         self.power_state_sub = None
         self.robot_state_sub = None
         self.motor_state_sub = None
+        self.motor_cmd_sub = None
         self.log_sub = None
     
     def _setup_publishers(self) -> None:
@@ -175,6 +178,26 @@ class ControlPanelRosWorker(RosWorkerBase):
             self._motor_state_callback,
             10
         )
+        # What the robot is being TOLD, not just what it did. The panel
+        # showed motor/state and never motor/command, which is why a node
+        # silently commanding theta=0 with kp=50, and two nodes writing this
+        # topic at once, were both invisible from here.
+        #
+        # BEST_EFFORT, KEEP_LAST(1): a 1 kHz stream into a monitor that only
+        # ever wants the newest sample. A RELIABLE reader would ask the
+        # writer to retransmit stale commands to a GUI. Relaxing a READER is
+        # always safe -- a RELIABLE writer matches a BEST_EFFORT reader, but
+        # never the reverse.
+        self.motor_cmd_sub = self.node.create_subscription(
+            MotorCmdStamped,
+            'motor/command',
+            self._motor_cmd_callback,
+            QoSProfile(
+                depth=1,
+                history=HistoryPolicy.KEEP_LAST,
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+            )
+        )
         self.log_sub = self.node.create_subscription(
             RosoutLog,
             '/rosout',
@@ -195,6 +218,10 @@ class ControlPanelRosWorker(RosWorkerBase):
         """Callback for motor state messages"""
         self.motor_state_updated.emit(msg)
     
+    def _motor_cmd_callback(self, msg: MotorCmdStamped) -> None:
+        """Callback for motor command messages (what the robot is told)"""
+        self.motor_cmd_updated.emit(msg)
+
     def _log_callback(self, msg: RosoutLog) -> None:
         """Callback for /rosout messages"""
         self.log_updated.emit(msg)
