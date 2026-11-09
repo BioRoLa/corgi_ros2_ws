@@ -3,7 +3,7 @@
     "livox_ros_driver2": {
       "cmake-args": [
         "-DROS_EDITION=ROS2",
-        "-DHUMBLE_ROS=humble"
+        "-DDISTRO_ROS=humble"
       ]
     }
   }
