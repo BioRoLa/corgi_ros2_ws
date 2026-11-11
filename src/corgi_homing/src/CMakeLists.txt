@@ -1,8 +1,8 @@
-add_executable(set_zero
-  set_zero.cpp
+add_executable(homing
+  homing.cpp
 )
 
-ament_target_dependencies(set_zero
+ament_target_dependencies(homing
   rclcpp
   std_msgs
   geometry_msgs
@@ -12,6 +12,6 @@ ament_target_dependencies(set_zero
 
 # Install
 install(TARGETS
-  set_zero
+  homing
   DESTINATION lib/${PROJECT_NAME}
 )
