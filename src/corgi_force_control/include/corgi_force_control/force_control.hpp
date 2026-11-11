@@ -68,7 +68,6 @@ private:
     std::array<corgi_force::LegFrame, 4> leg_frames_;
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr directions_sub_;
     bool directions_received_ = false;
-    bool motor_state_received_ = false;
     bool imu_received_ = false;
     bool imp_cmd_received_ = false;
 

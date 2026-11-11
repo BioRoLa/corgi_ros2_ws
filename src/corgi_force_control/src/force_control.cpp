@@ -61,7 +61,6 @@ void ForceControlNode::force_state_cb(const corgi_msgs::msg::ForceStateStamped::
 
 void ForceControlNode::motor_state_cb(const corgi_msgs::msg::MotorStateStamped::SharedPtr msg) {
     motor_state_ = *msg;
-    motor_state_received_ = true;
 }
 
 void ForceControlNode::imu_cb(const corgi_msgs::msg::ImuStamped::SharedPtr msg) {
@@ -205,11 +204,17 @@ void ForceControlNode::position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
 }
 
 void ForceControlNode::timer_cb() {
-    // Do not publish default zero-angle commands before all required inputs arrive.
-    if (!motor_state_received_ || !imu_received_ || !imp_cmd_received_ || (sim_ && !directions_received_)) return;
-    Eigen::Quaterniond quaternion(imu_.orientation.w, imu_.orientation.x, imu_.orientation.y, imu_.orientation.z);
-    Eigen::Matrix3d world_from_body;
-    if (!corgi_force::body_rotation(quaternion, sim_, world_from_body)) return;
+    // Match ABAD/gslip startup behavior: an impedance command is required,
+    // while motor and IMU feedback may arrive after publishing begins.
+    if (!imp_cmd_received_ || (sim_ && !directions_received_)) return;
+
+    Eigen::Matrix3d world_from_body = Eigen::Matrix3d::Identity();
+    if (imu_received_) {
+        Eigen::Quaterniond quaternion(
+            imu_.orientation.w, imu_.orientation.x,
+            imu_.orientation.y, imu_.orientation.z);
+        if (!corgi_force::body_rotation(quaternion, sim_, world_from_body)) return;
+    }
 
     std::vector<corgi_msgs::msg::ImpedanceCmd*> imp_cmd_modules = {
         &imp_cmd_.module_a,
