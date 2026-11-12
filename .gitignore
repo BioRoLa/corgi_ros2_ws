@@ -12,6 +12,7 @@ input_csv/*
 /*.md
 output_data/*
 !output_data/README.md
+bag/*
 
 /log
 /install
