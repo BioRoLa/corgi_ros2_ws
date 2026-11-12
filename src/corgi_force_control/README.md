@@ -40,7 +40,38 @@ This launch file sets `use_sim_time=true` for both nodes. Rebuild and restart `c
 ros2 run corgi_force_control exp_h24_node --ros-args -p use_sim_time:=true
 ```
 
-This command uses the simulation defaults: stiffness `k=4000.0` and damping `b=200.0`. No `k` or `b` arguments are needed.
+Simulation uses the `dev` defaults `K=(4000.0, 4000.0, 4000.0)` and
+`B=(200.0, 200.0, 200.0)`. Hardware uses `K=(2000.0, 100.0, 100.0)` and
+`B=(80.0, 10.0, 10.0)` in horizontal/lateral/vertical order. The ROS
+parameters are `k`, `k_lateral`, `k_vertical`, `b`, `b_lateral`, and
+`b_vertical`.
+
+### Override K and B
+
+Pass gain overrides after `--ros-args` with one `-p` option per parameter.
+For simulation, keep `use_sim_time:=true` in the same command:
+
+```bash
+ros2 run corgi_force_control exp_h24_node --ros-args \
+  -p use_sim_time:=true \
+  -p k:=4000.0 -p b:=200.0 \
+  -p k_lateral:=4000.0 -p b_lateral:=200.0 \
+  -p k_vertical:=4000.0 -p b_vertical:=200.0
+```
+
+For hardware, omit `use_sim_time` or set it to `false`:
+
+```bash
+ros2 run corgi_force_control exp_h24_node --ros-args \
+  -p k:=2000.0 -p b:=80.0 \
+  -p k_lateral:=100.0 -p b_lateral:=10.0 \
+  -p k_vertical:=100.0 -p b_vertical:=10.0
+```
+
+Here `k` and `b` control horizontal X, the `_lateral` parameters control Y,
+and the `_vertical` parameters control Z. The experiment reads these values
+at startup, so restart the node after changing them. The same parameter names
+apply to `exp_h15_node`, `exp_h18_node`, and `exp_h21_node`.
 
 Run only one experiment publisher. Initialization starts immediately after the simulator's active motor directions are received; wait for it to finish before triggering the experiment.
 

@@ -41,6 +41,10 @@ private:
     double h_;
     double b_value_;
     double k_value_;
+    double b_lateral_;
+    double k_lateral_;
+    double b_vertical_;
+    double k_vertical_;
     std::array<double, 3> model_target_ = {17.0 / 180.0 * M_PI, 0.0, 0.0};
     
 };
@@ -83,11 +87,22 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
             });
     }
 
-    const double default_b = sim_ ? 200.0 : 300.0;
-    const double default_k = 4000.0;
+    const double default_b = sim_ ? 200.0 : 80.0;
+    const double default_k = sim_ ? 4000.0 : 2000.0;
+    const double default_b_lateral = sim_ ? 200.0 : 10.0;
+    const double default_k_lateral = sim_ ? 4000.0 : 100.0;
+    const double default_b_vertical = sim_ ? 200.0 : 10.0;
+    const double default_k_vertical = sim_ ? 4000.0 : 100.0;
     b_value_ = this->declare_parameter<double>("b", default_b);
     k_value_ = this->declare_parameter<double>("k", default_k);
-    RCLCPP_INFO(this->get_logger(), "Using impedance params: b=%.2f, k=%.2f", b_value_, k_value_);
+    b_lateral_ = this->declare_parameter<double>("b_lateral", default_b_lateral);
+    k_lateral_ = this->declare_parameter<double>("k_lateral", default_k_lateral);
+    b_vertical_ = this->declare_parameter<double>("b_vertical", default_b_vertical);
+    k_vertical_ = this->declare_parameter<double>("k_vertical", default_k_vertical);
+    RCLCPP_INFO(this->get_logger(),
+                "Using impedance params: B=(%.2f, %.2f, %.2f), K=(%.2f, %.2f, %.2f)",
+                b_value_, b_lateral_, b_vertical_,
+                k_value_, k_lateral_, k_vertical_);
 
     imp_cmd_pub_ = this->create_publisher<corgi_msgs::msg::ImpedanceCmdStamped>("impedance/command", 1000);
     trigger_sub_ = this->create_subscription<corgi_msgs::msg::TriggerStamped>(
@@ -124,11 +139,11 @@ void ImpedanceCmdPublisherNode::initialize_impedance_command() {
         cmd->my = 0;
         cmd->mz = 0;
         cmd->bx = b_value_;
-        cmd->by = b_value_;
-        cmd->bz = b_value_;
+        cmd->by = b_lateral_;
+        cmd->bz = b_vertical_;
         cmd->kx = k_value_;
-        cmd->ky = k_value_;
-        cmd->kz = k_value_;
+        cmd->ky = k_lateral_;
+        cmd->kz = k_vertical_;
     }
 }
 
