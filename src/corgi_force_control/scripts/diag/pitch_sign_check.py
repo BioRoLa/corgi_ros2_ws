@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Does force_estimation use the right pitch sign on each leg? Checked against force plates.
 
-force_estimation evaluates each leg at beta +/- body pitch (A, D: + ; B, C: -).
+force_estimation evaluates each leg at beta + body pitch (every leg since
+2026-11-13; until then B and C used beta - pitch).
 A wrong sign on a leg is a beta error of 2*pitch there, and a beta error d
 rotates that leg's estimated sagittal force (fx, fz) by d. So: stand level,
 then pitch the stance, and compare how the estimate CHANGES between the two
@@ -26,8 +27,13 @@ negates it (pitch *= -1), so pass --hardware for a real-plate run. Plate
 frames and the leg mapping follow force_plate_track.py (--robot-yaw-deg,
 --plate-map).
 
-2026-10-12, sim, 5.6 deg pitch: misses at k = -2 / 0 / +2 were
-B 12.6 / 2.9 / 6.8 N, C 12.1 / 1.2 / 13.5 N -> B/C's "beta - pitch" is right.
+2026-10-12, sim, 5.6 deg pitch (run 160123): misses at k = -2 / 0 / +2 were
+B 12.6 / 2.9 / 6.8 N, C 12.1 / 1.2 / 13.5 N, which then favoured B/C's
+"beta - pitch". Not reproduced on 2026-11-13: with beta - pitch, B and C fitted
+no k (C missed by 30-43 N, run 20261113_190303); with beta + pitch on every leg
+all four fit at k = 0 within 0.2-0.4 N (20261113_191829), with A/D unchanged.
+A wrong angle also moves the contact point on the tread, so a wrong sign can
+show as "off, not a sign flip" rather than as k ~ +/-2.
 """
 import argparse
 import os

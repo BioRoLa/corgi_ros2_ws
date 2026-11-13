@@ -391,26 +391,21 @@ void ForceEstimationNode::timer_cb() {
     }
 
     for (int i=0; i<4; i++){
-        Eigen::MatrixXd force_est;
-
-        if (i == 1 || i == 2) {
-            force_est = estimator_->estimate(motor_state_modules[i]->theta, 
-                                            motor_state_modules[i]->beta - pitch,
-                                            motor_state_modules[i]->gamma,
-                                            motor_state_modules[i]->torque_l, 
-                                            motor_state_modules[i]->torque_r,
-                                            motor_state_modules[i]->torque_h
-                                                - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
-        }
-        else {
-            force_est = estimator_->estimate(motor_state_modules[i]->theta, 
-                                            motor_state_modules[i]->beta + pitch,
-                                            motor_state_modules[i]->gamma,
-                                            motor_state_modules[i]->torque_l, 
-                                            motor_state_modules[i]->torque_r,
-                                            motor_state_modules[i]->torque_h
-                                                - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
-        }
+        // Same pitch sign on every leg: beta reads the same way on all four
+        // (CONVENTIONS.md section 3), so body pitch adds to it uniformly --
+        // as in force_control since 2026-09-02. Until 2026-11-13 B and C
+        // were evaluated at beta - pitch. On the sim plates with a held
+        // -5.5 deg stance (run 20261113_190303) A and D fitted at k = 0
+        // (misses 0.2-0.5 N) while B and C fitted no rotation at all
+        // (C missed by 30-43 N): the wrong angle picks the wrong contact
+        // point on the tread, not just a rotated force.
+        Eigen::MatrixXd force_est = estimator_->estimate(motor_state_modules[i]->theta,
+                                        motor_state_modules[i]->beta + pitch,
+                                        motor_state_modules[i]->gamma,
+                                        motor_state_modules[i]->torque_l,
+                                        motor_state_modules[i]->torque_r,
+                                        motor_state_modules[i]->torque_h
+                                            - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
 
         // Leg-model frame -> body frame (corgi_utils/leg_frame.hpp, the one
         // place this map lives; force_control uses the same one). estimate()
