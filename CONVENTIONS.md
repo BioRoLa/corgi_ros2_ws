@@ -115,7 +115,7 @@ To be removed or renamed as geometry, in this order:
 | `force_estimation` | `pitch *= −1`, `yaw *= −1` on hardware | an IMU convention; belongs in the IMU node |
 | `force_control` | command fx sign (§4); friction feedforward direction (§3) | open |
 | `gslip_pronk` | `roll_sign`, `yaw_sign`, `pitch_sign`, `steer_sign`, `lat_sign` | geometry — keep; ideally derived from hip positions |
-| `corgi_sim` | the conversion sits behind `CORGI_DIRBETA_TRANSFORM` (the plant of record sets it to 1) | should become the default |
+| `corgi_sim` | the driver reads its own copy of the direction table (`motor_config.yaml`) | done: converts by default since 2026-11-13 (`CORGI_DIRBETA_TRANSFORM=0` = legacy plant); still to do: read the same table as the bridge |
 
 ## 7. Checking a change
 

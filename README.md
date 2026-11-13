@@ -192,7 +192,7 @@ ros2 launch corgi_sim Corgi_launch.py                     # sim + control panel
 ros2 launch corgi_sim Corgi_experiment_launch.py world:=Corgi_ABAD.wbt   # headless experiments
 ```
 
-The sim's plant switches are environment variables read by the driver: `CORGI_DIRBETA_TRANSFORM=1` and `CORGI_THETA_STOP=1` are the plant of record, and `CORGI_G_JOINT_MODE` selects the foot-arc gear model (default `gear`). `Corgi_ABAD_force_plate.wbt` puts the robot on four force plates laid out like the lab's Bertecs.
+The sim's plant switches are environment variables read by the driver. The driver converts torques and gains with the positions by default (`CORGI_DIRBETA_TRANSFORM=0` restores the legacy half-conversion); `CORGI_THETA_STOP=1` is part of the plant of record; `CORGI_G_JOINT_MODE` selects the foot-arc gear model (default `gear`). `Corgi_ABAD_force_plate.wbt` puts the robot on four force plates laid out like the lab's Bertecs.
 
 ### Running on the Real Robot
 
