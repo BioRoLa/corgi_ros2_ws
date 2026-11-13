@@ -1,4 +1,5 @@
 #include "corgi_force_estimation/force_estimation.hpp"
+#include "corgi_utils/leg_frame.hpp"
 
 KinematicsHelper::KinematicsHelper(bool sim)
     : sim_(sim),
@@ -407,31 +408,27 @@ void ForceEstimationNode::timer_cb() {
                                                 - abad_gravity_moment_ * std::cos(motor_state_modules[i]->gamma));
         }
 
-        // Only the lateral axis differs by side. motor/state is frame-
-        // consistent (beta reads the same sign on all four legs -- see
-        // force_control's 2026-09-02 pitch note), so x is the same body axis
-        // on every leg; the lateral axis is mirrored on the right pair.
-        // Checked against the sim force plates (Corgi_ABAD_force_plate.wbt)
-        // on the plant of record, CORGI_DIRBETA_TRANSFORM=1, 2026-10-12: with
-        // the old B/C mapping (fx negated, fy as A/D) B/C fx anti-correlated
-        // with the plate (r -0.92 / -0.83) and fy did too. Runs without the
-        // transform had shown the opposite fx result -- B/C torques are not
-        // in the ROS frame there, so they are not evidence for this mapping.
-        if (i == 1 || i == 2) {
-            force_state_modules[i]->fx = force_est(0, 0);
-            force_state_modules[i]->fy = force_est(1, 0);
-        }
-        else { 
-            force_state_modules[i]->fx = force_est(0, 0); 
-            force_state_modules[i]->fy = -force_est(1, 0);
-        }
-        
+        // Leg-model frame -> body frame (corgi_utils/leg_frame.hpp, the one
+        // place this map lives; force_control uses the same one). estimate()
+        // returns -J^-T tau, the ground's force on the foot in the leg
+        // model's frame (x back, y outward, z up); negated, it is the force
+        // the leg puts on the ground, which ForceState carries. This is the
+        // per-leg "fx = est, fy = -est on A/D, +est on B/C" mapping the node
+        // used to write out by hand -- the same numbers, checked against the
+        // sim force plates on the plant of record (CORGI_DIRBETA_TRANSFORM=1,
+        // 2026-10-12: the earlier B/C mapping, fx negated and fy as A/D,
+        // anti-correlated with the plates at r -0.92 / -0.83).
+        const Eigen::Vector3d f_body = -corgi::leg_model_to_body(
+            Eigen::Vector3d(force_est(0, 0), force_est(1, 0), force_est(2, 0)), i);
+        force_state_modules[i]->fx = f_body.x();
+        force_state_modules[i]->fy = f_body.y();
+
         // The foot pushes on the ground with the force the linkage transmits
         // PLUS the leg's own weight below the motors, so the weight makes fz
         // more negative (gravity_ is -9.81). The old "- mass_ * gravity_" added
         // it the other way: against the sim force plates every leg read
         // +18.3 N light (2 x 8.83) at gain 1.00 (2026-10-13).
-        force_state_modules[i]->fz = -force_est(2, 0) + mass_ * gravity_;
+        force_state_modules[i]->fz = f_body.z() + mass_ * gravity_;
     }
 
     force_state_.header.stamp = this->now();

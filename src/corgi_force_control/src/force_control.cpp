@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include "corgi_force_control/force_control.hpp"
+#include "corgi_utils/leg_frame.hpp"
 
 ForceControlNode::ForceControlNode()
     : Node("force_control"),
@@ -290,13 +291,24 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     // sign. 0.0 = bit-identical.
     const double beta_meas = motor_state_->beta;
     const double gamma_meas = motor_state_->gamma - trim_gamma_cur_;
+    // ImpedanceCmd fx fy fz is the force the leg puts on the ground in the
+    // BODY frame (CONVENTIONS.md section 4); J_fb works in the leg model's
+    // frame (x back, y outward, z up). Convert once, here, with the map
+    // force_estimation uses the other way (corgi_utils/leg_frame.hpp).
+    // Until 2026-11-13 the command went into J^T unconverted: +fx came out as
+    // -fx at the ground on every leg (sim plates and the robot, log 344, a
+    // 180 deg plate-vs-command phase on the fore-aft rock), and +fy as -fy on
+    // B and C, which gslip_pronk's lat_sign undid. fz was already right.
+    const Eigen::Vector3d f_cmd_leg = corgi::body_to_leg_model(
+        Eigen::Vector3d(imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz), leg_idx_cur_);
     Eigen::MatrixXd force_des(3, 1);
-    force_des << imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz;
+    force_des << f_cmd_leg.x(), f_cmd_leg.y(), f_cmd_leg.z();
 
+    // body frame, both sides (ForceState is body frame too); not used below
     Eigen::MatrixXd force_err(3, 1);
-    force_err << force_des(0, 0)-force_state_->fx, 
-                 force_des(1, 0)-force_state_->fy, 
-                 force_des(2, 0)-force_state_->fz;
+    force_err << imp_cmd_->fx - force_state_->fx,
+                 imp_cmd_->fy - force_state_->fy,
+                 imp_cmd_->fz - force_state_->fz;
     
     // position command and state (3D)
     Eigen::MatrixXd pos_des(3, 1);

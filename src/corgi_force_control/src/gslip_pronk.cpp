@@ -521,13 +521,11 @@ private:
     // commanded camber, so the lateral spring sat at rest and produced almost
     // no force. Lateral force needs a demand the foot must resist.
     //
-    // FRAME. fy is PER-LEG, not body frame. force_control builds the leg
-    // kinematics from ROS gamma (the driver un-mirrors it at
-    // corgi_driver.py:514) and ROS gamma > 0 abducts OUTWARD on all four legs,
-    // so +fy is outward on all four. Converting a body-frame command therefore
-    // needs the left/right selector {+1,-1,-1,+1} -- the same partition as
-    // roll_sign and steer_sign, and NOT dir_abad{+1,-1,+1,-1}, which is the
-    // mounting mirror the driver already applies on the way out.
+    // FRAME. fy is BODY frame (CONVENTIONS.md section 4): since 2026-11-13
+    // force_control converts the command into the leg model's frame
+    // (corgi_utils/leg_frame.hpp, y outward). Before that it took fy as
+    // leg-frame outward, and this function applied the left/right selector
+    // {+1,-1,-1,+1} itself; that selector now lives in leg_frame.hpp only.
     //
     // SIGN. J^T maps the force the FOOT exerts on the GROUND, so pushing the
     // feet toward +y accelerates the body toward -y. f_lateral_ is declared as
@@ -2488,12 +2486,10 @@ double GslipPronkNode::lateral_force(int leg_index, bool in_stance) const {
     // Module order is A=FL, B=FR, C=RR, D=RL, so the forelimbs are 0 and 1.
     if (f_lateral_front_only_ && leg_index > 1) return 0.0;
 
-    // Body +y -> leg-frame outward. Left legs abduct toward +y, right legs
-    // toward -y.
-    static const double lat_sign[4] = {+1.0, -1.0, -1.0, +1.0};
-
-    // Negated: J^T wants the force the foot puts INTO the ground.
-    return -f_lateral_ * lat_sign[leg_index];
+    // Body frame, the same on every leg (force_control converts to the leg
+    // frame). Negated: the command is the force the foot puts INTO the
+    // ground, and f_lateral_ is the force wanted on the body.
+    return -f_lateral_;
 }
 
 // Apply runtime changes to the impedance gains. Everything else is ignored,

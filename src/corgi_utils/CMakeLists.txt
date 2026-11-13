@@ -82,6 +82,9 @@ if(BUILD_TESTING)
   target_link_libraries(test_module_frame yaml-cpp)
   target_compile_definitions(test_module_frame PRIVATE
     MODULE_DIRECTIONS_YAML="${CMAKE_CURRENT_SOURCE_DIR}/config/module_directions.yaml")
+  # leg_frame.hpp: leg-model frame <-> body frame (CONVENTIONS.md section 4)
+  ament_add_gtest(test_leg_frame test/test_leg_frame.cpp)
+  target_include_directories(test_leg_frame PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${EIGEN3_INCLUDE_DIR})
 endif()
 
 ament_package()
