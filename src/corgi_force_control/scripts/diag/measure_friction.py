@@ -21,9 +21,16 @@ where s = +/-1 is the motor's torque-vs-phi sign. Per motor and per speed this
 takes the median over 5 deg beta bins of half that difference; across speeds it
 fits Fc + b*omega. Fc is directly comparable to friction_.
 
-force_control SUBTRACTS friction_ while phi rises, so its feedforward assists
-the motion only if tau(phi rising) < tau(phi falling). The SIGN column checks
-that, which no earlier measurement did.
+force_control ADDS friction_ while phi rises (since 2026-11-13; it subtracted
+before), so its feedforward assists the motion only if tau(phi rising) >
+tau(phi falling), i.e. s = +1. The SIGN column checks that. Rising is taken
+from the reported velocity of the same motor, so each torque is compared with
+its own velocity: on the old bridge, which left B/C torques AND velocities in
+the module frame, this still measured each motor consistently.
+
+2026-10-29 (20261029_210644, old bridge): s = +1 on all eight motors at
+10/20/40 deg/s -- the subtracting feedforward opposed the motion everywhere,
+which is what the sign change fixed.
 
 Procedure:
   1. Robot on a stand with EVERY foot clear of the ground and the stand -- the
@@ -238,8 +245,8 @@ def print_table(rows, args):
         if r is None:
             print("%-6s  no cruise samples in both directions -- increase --range or lower --cruise-frac" % label)
             continue
-        # force_control subtracts friction_ while phi rises: assists iff tau(rise) < tau(fall)
-        agrees = r["sign"] < 0
+        # force_control adds friction_ while phi rises: assists iff tau(rise) > tau(fall)
+        agrees = r["sign"] > 0
         sign_txt = ("agrees" if agrees else "OPPOSES force_control") + ("" if r["consistent_sign"] else ", mixed")
         print("%-6s  %6.3f   %8.4f   %5.3f  %5.2f   " % (label, r["fc"], r["b"], r["cfg"], r["fc"] / r["cfg"])
               + "  ".join("%5.3f" % r["per_speed"].get(s, float("nan")) for s in speeds) + "   " + sign_txt)

@@ -355,8 +355,12 @@ void ForceEstimationNode::timer_cb() {
             // direction and chattered +/-friction, and a parked motor fell to
             // the else branch and carried a permanent bias. The direction only
             // changes on a decisive move; before any move there is no term.
-            // Sign unchanged: added while phi rises, the mirror of
-            // force_control subtracting it from the command.
+            // SIGN (2026-11-13): the load sees the motor torque MINUS the
+            // friction it overcomes, so friction is subtracted while phi
+            // rises -- the mirror of force_control, which now adds it to
+            // the command. +torque drives +phi on every motor
+            // (measure_friction.py, 20261029_210644, all eight motors);
+            // until this date both terms had the opposite sign.
             // Seed from the first real reading: phi_prev starts at 0, so the
             // first tick otherwise "moves" by the whole startup angle and
             // latches that direction until the motor really reverses.
@@ -370,7 +374,7 @@ void ForceEstimationNode::timer_cb() {
                 fric_dir_[i][1] = -1;
                 phi_prev_modules_[i](1, 0) = phi_r;
             }
-            motor_state_modules[i]->torque_r += fric_dir_[i][1] * friction_[2*i];
+            motor_state_modules[i]->torque_r -= fric_dir_[i][1] * friction_[2*i];
 
             const double d_l = phi_l - phi_prev_modules_[i](0, 0);
             if (d_l > friction_deadband_) {
@@ -380,7 +384,7 @@ void ForceEstimationNode::timer_cb() {
                 fric_dir_[i][0] = -1;
                 phi_prev_modules_[i](0, 0) = phi_l;
             }
-            motor_state_modules[i]->torque_l += fric_dir_[i][0] * friction_[2*i+1];
+            motor_state_modules[i]->torque_l -= fric_dir_[i][0] * friction_[2*i+1];
         }
         // only once a real state has arrived (an all-default message has stamp 0)
         if (state.header.stamp.sec != 0 || state.header.stamp.nanosec != 0) phi_prev_seeded_ = true;

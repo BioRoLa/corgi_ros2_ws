@@ -802,8 +802,8 @@ void ForceControlNode::timer_cb() {
             // Corroborated in Alex's bag: cmd_trq_r_a has a monotonicity
             // ratio of 0.00 -- it reverses constantly and goes nowhere.
             //
-            // The sign convention is unchanged; only WHEN it flips changes.
-            // phi_prev advances ONLY on a decisive move, so slow real
+            // (The latch changed WHEN the sign flips; the sign itself was
+            // corrected separately, below.) phi_prev advances ONLY on a decisive move, so slow real
             // motion accumulates instead of being lost to rounding, and the
             // direction starts at 0 so a parked leg carries no bias.
             // Seed from the first real reading: phi_prev starts at 0, so the
@@ -822,10 +822,19 @@ void ForceControlNode::timer_cb() {
                 fric_dir_[i][1] = -1;
                 phi_prev_modules_[i](1, 0) = phi_r;
             }
+            // SIGN (2026-11-13): ADD friction in the direction of motion.
+            // +torque drives +phi on every motor (measure_friction.py
+            // 2026-10-29, run 20261029_210644: tau(phi rising) > tau(phi
+            // falling) on all eight, 10/20/40 deg/s, each torque against its
+            // own velocity), so the motor has to push WITH the motion to beat
+            // friction. Until this date the term was subtracted, which added
+            // friction instead of cancelling it (log 344, A2). The
+            // conversion at the bridge keeps tau and phi in one frame, so
+            // the sign is the same on every leg.
             if (fric_dir_[i][1] > 0)
-                motor_cmd_modules[i]->torque_r -= friction_ff_scale_ * friction_[2*i];
-            else if (fric_dir_[i][1] < 0)
                 motor_cmd_modules[i]->torque_r += friction_ff_scale_ * friction_[2*i];
+            else if (fric_dir_[i][1] < 0)
+                motor_cmd_modules[i]->torque_r -= friction_ff_scale_ * friction_[2*i];
 
             const double d_l = phi_l - phi_prev_modules_[i](0, 0);
             if (d_l > friction_deadband_) {
@@ -836,9 +845,9 @@ void ForceControlNode::timer_cb() {
                 phi_prev_modules_[i](0, 0) = phi_l;
             }
             if (fric_dir_[i][0] > 0)
-                motor_cmd_modules[i]->torque_l -= friction_ff_scale_ * friction_[2*i+1];
-            else if (fric_dir_[i][0] < 0)
                 motor_cmd_modules[i]->torque_l += friction_ff_scale_ * friction_[2*i+1];
+            else if (fric_dir_[i][0] < 0)
+                motor_cmd_modules[i]->torque_l -= friction_ff_scale_ * friction_[2*i+1];
 
             // gamma has no friction term specified; only its history is kept.
             phi_prev_modules_[i](2, 0) = gamma_fb;
