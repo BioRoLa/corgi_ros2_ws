@@ -232,3 +232,11 @@ Part of [corgi_ros_ws](https://github.com/BioRoLa/corgi_ros_ws.git).
 ## Module frame (`module_frame.hpp`)
 
 `corgi::ModuleFrame` converts between the common ROS joint convention and one leg module's own wiring: positions, r/l torque and velocity pairs (swap and negate on a mirrored-beta leg), r/l gain pairs (swap, never negate) and the ABAD torque and velocity. Every map is self-inverse. The robot bridge is its user; the sim driver applies the same algebra in Python. Definitions and derivation: [`CONVENTIONS.md`](../../CONVENTIONS.md) section 5. Tests: `colcon test --packages-select corgi_utils`.
+
+## Direction table (`config/module_directions.yaml`, `module_directions.hpp`)
+
+The one per-leg table of θ, β and γ directions, installed to `share/corgi_utils/config/`. The robot bridge reads it through `corgi::load_module_directions()`; the sim driver reads the same file in Python (`corgi_driver_pkg/module_directions.py`) with the same rules: every leg and key required, no other keys, each value ±1, θ = +1. `CORGI_MODULE_DIRECTIONS` overrides the path for the bridge, the sim and the control panel. Rebuild `corgi_utils` after an edit.
+
+## Leg-model frame (`leg_frame.hpp`)
+
+`LegModel` and `calculate_jacobian_3d` work in a per-leg frame: x backward, y outward, z up. `corgi::leg_model_to_body()` / `body_to_leg_model()` convert to and from the body frame (x forward, y left, z up) with `diag(−1, s, +1)`, s = +1 on the left legs (A, D) and −1 on the right (B, C). `force_control` converts its body-frame command with it, and `force_estimation` its estimate (CONVENTIONS.md section 4).

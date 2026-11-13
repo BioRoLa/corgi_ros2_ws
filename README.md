@@ -176,10 +176,10 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
 
 **Read [`CONVENTIONS.md`](CONVENTIONS.md) before touching anything that sends or reads joint torques, forces or angles.** It defines the body frame, the joint and motor angles, the force sign, and the one place per plant where each leg module's own wiring is converted:
 
-- robot: [`corgi_ros_bridge`](src/corgi_ros_bridge) with `config/real_motor_config.yaml`
-- sim: `corgi_sim/corgi_driver_pkg/corgi_driver.py` with `motor_config.yaml`
+- robot: [`corgi_ros_bridge`](src/corgi_ros_bridge)
+- sim: `corgi_sim/corgi_driver_pkg/corgi_driver.py`
 
-Above that boundary every node treats the four legs the same. The conversion itself is [`corgi_utils/module_frame.hpp`](src/corgi_utils/include/corgi_utils/module_frame.hpp), with unit tests (`colcon test --packages-select corgi_utils`).
+Both read the same per-leg direction table, [`corgi_utils/config/module_directions.yaml`](src/corgi_utils/config/module_directions.yaml), from the installed share (rebuild `corgi_utils` after editing it; `CORGI_MODULE_DIRECTIONS` overrides the path). Above that boundary every node treats the four legs the same. The conversion itself is [`corgi_utils/module_frame.hpp`](src/corgi_utils/include/corgi_utils/module_frame.hpp); the leg model's frame against the body frame is [`corgi_utils/leg_frame.hpp`](src/corgi_utils/include/corgi_utils/leg_frame.hpp). Unit tests: `colcon test --packages-select corgi_utils`.
 
 ## Usage Guide
 
@@ -198,7 +198,7 @@ The sim's plant switches are environment variables read by the driver. The drive
 
 Bring-up order and the exact commands live in the session launch crib (vault: *Session Launch Crib*). In short: bench supply, FPGA driver on the sbRIO, `ros2 run corgi_homing homing`, `ros2 launch corgi_ros_bridge corgi_ros_bridge.launch.py`, `ros2 launch corgi_imu imu.launch.py`, then the panel (`ros2 run corgi_panel corgi_control_panel`).
 
-The bridge refuses to start if its direction table is missing or invalid. `legacy_torque_frame:=true` restores the pre-2026-11-13 behaviour (positions converted, torques not) for comparison only.
+The bridge refuses to start if the direction table is missing or invalid (`module_directions_path:=...` points it at another file). `legacy_torque_frame:=true` restores the pre-2026-11-13 behaviour (positions converted, torques not) for comparison only.
 
 ### Force calibration and force-plate tools
 

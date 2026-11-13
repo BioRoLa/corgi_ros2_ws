@@ -3,10 +3,11 @@
 The one convention every node above the hardware boundary uses. If code and
 this file disagree, one of them is a bug: fix it, then say which here.
 
-Adopted 2026-11-13. Background: the force-plate sessions of 2026-10 traced
-every sign surprise to one place, the hardware boundary converting positions
-into a common frame but not torques, velocities or gains (implementation log
-§343–344; vault note *Torque Frame Mismatch — dir_beta vs Feedforward*).
+Adopted 2026-11-13 (implementation log §344–345). Background: the force-plate
+sessions of 2026-10 traced every sign surprise to one place, the hardware
+boundary converting positions into a common frame but not torques, velocities
+or gains (implementation log §343–344; vault note *Torque Frame Mismatch —
+dir_beta vs Feedforward*).
 
 ## 1. The rule
 
@@ -15,14 +16,18 @@ All topics above the hardware boundary (`motor/command`, `motor/state`,
 four legs**. Exactly two places convert between it and each leg module's own
 wiring:
 
-| boundary | where | reads |
-|---|---|---|
-| robot | `corgi_ros_bridge` | `corgi_ros_bridge/config/real_motor_config.yaml` |
-| sim | `corgi_sim/corgi_driver_pkg/corgi_driver.py` | `corgi_sim/corgi_driver_pkg/motor_config.yaml` |
+| boundary | where |
+|---|---|
+| robot | `corgi_ros_bridge` |
+| sim | `corgi_sim/corgi_driver_pkg/corgi_driver.py` |
 
-Both convert **positions, velocities, torques and gains together**, with the
-algebra in §5: C++ in `corgi_utils/module_frame.hpp`, Python in the sim
-driver's `ros_to_module` / `convert_torque` / `convert_gains`.
+Both read **one direction table**, `corgi_utils/config/module_directions.yaml`
+(installed to `share/corgi_utils/config/`; `CORGI_MODULE_DIRECTIONS` overrides
+the path for both and for the control panel, which displays it). Both convert
+**positions, velocities, torques and gains together**, with the algebra in §5:
+C++ in `corgi_utils/module_frame.hpp` (table loader `module_directions.hpp`),
+Python in the sim driver's `ros_to_module` / `convert_torque` /
+`convert_gains` (loader `corgi_driver_pkg/module_directions.py`, same rules).
 
 No node above the boundary flips a sign because of which leg it is on **for
 frame reasons**. Signs that come from *where* a leg is (left or right, front
@@ -53,22 +58,37 @@ Left {A, D}, right {B, C}, front {A, B}, rear {C, D}; diagonals {A, C} and
 
 Velocities are the time derivatives of the same quantities. Torques
 `torque_l`, `torque_r`, `torque_h` are the generalized forces on φ_l, φ_r and
-γ, in this same frame on every leg.
+γ, in this same frame on every leg: **+torque drives its angle up**, so a
+motor doing work against friction has τ·φ̇ > 0.
 
-> Open: the sign of a torque relative to its angle (does +`torque_r` push φ_r
-> up?) is not settled. `measure_friction.py` (2026-10-29) found
-> `force_control`'s friction feedforward opposing the motion on all eight motors,
-> which means either that feedforward or the reading of the sign is wrong. Settle
-> it with a lever and a known mass before relying on it.
+That sign was measured on 2026-10-29 (`measure_friction.py`, run
+`20261029_210644`): on all eight leg motors, at 10, 20 and 40 °/s, the torque
+while φ rises exceeds the torque while it falls, each torque compared with its
+own reported velocity. The friction feedforward in `force_control`, and its
+mirror in `force_estimation`, had the opposite sign until 2026-11-13. The
+ABAD (`torque_h`) has not been measured the same way.
 
 ## 4. Forces
 
 `ImpedanceCmd` `fx fy fz` and `ForceState` `fx fy fz` are **the force the leg
-puts on the ground, in the body frame**. A standing leg has fz < 0.
+puts on the ground, in the body frame**, the same on every leg. A standing leg
+has fz < 0. One qualification: `force_control` and `force_estimation` both
+evaluate the leg at β + IMU pitch, so fx and fz are levelled in pitch (x along
+the ground, z vertical) rather than tilted with the body; roll is not
+levelled.
 
-> Known deviation: `force_control` currently produces a +fx command as −fx at
-> the ground, in sim and on the robot (log §344, fore-aft rock). The fix belongs
-> in `force_control`, not in another sign somewhere else.
+The leg model (`LegModel`, `calculate_jacobian_3d`) works in its own frame per
+leg: **x backward, y outward, z up**. One helper converts,
+`corgi_utils/leg_frame.hpp`: `v_body = diag(−1, s, +1) v_leg`, with s = +1 on
+the left legs (A, D) and −1 on the right (B, C). That s is geometry. Both
+`force_control` (command in) and `force_estimation` (estimate out) call it;
+nothing else should convert.
+
+Until 2026-11-13 `force_control` fed the body-frame command into the leg frame
+unconverted: +fx came out as −fx at the ground on every leg (log §344), and +fy
+as −fy on B and C, which `gslip_pronk`'s `lat_sign` undid. Checked after the
+fix on the sim plates: fore-aft and lateral rocks, plate vs command in phase
+on all four legs at gain 0.98–1.01.
 
 ## 5. The module frame and the conversion
 
@@ -81,8 +101,9 @@ Each leg module has its own wiring. Per leg, a direction for each joint,
 | d_β | +1 | −1 | −1 | +1 | left/right mirror |
 | d_γ | +1 | −1 | +1 | −1 | left/right mirror × front/rear modules rotated 180° (physical, not a bug) |
 
-Robot: `joint_dir` in `real_motor_config.yaml`. Sim: `joint_dir.beta` and
-`motor_dir.ABAD` in `motor_config.yaml`.
+Robot and sim: `corgi_utils/config/module_directions.yaml` (§1). The sim's
+`corgi_driver_pkg/webots_model.yaml` holds only Webots-model details (G-joint
+direction, raw motor polarity) and may not set θ, β or γ.
 
 **Conversion** (self-inverse: the same map goes both ways):
 
@@ -107,23 +128,31 @@ legs use +1; the code refuses anything else.
 
 ## 6. What still flips above the boundary
 
-To be removed or renamed as geometry, in this order:
-
 | where | what | status |
 |---|---|---|
-| `force_estimation` | B/C evaluate at `beta − pitch`; B/C use fy = +est (A/D −est) | matches the sim plates on the converted plant (log §343); looks like hip-side geometry inside the estimator's leg model, to be made an explicit side term |
-| `force_estimation` | `pitch *= −1`, `yaw *= −1` on hardware | an IMU convention; belongs in the IMU node |
-| `force_control` | command fx sign (§4); friction feedforward direction (§3) | open |
-| `gslip_pronk` | `roll_sign`, `yaw_sign`, `pitch_sign`, `steer_sign`, `lat_sign` | geometry — keep; ideally derived from hip positions |
-| `corgi_sim` | the driver reads its own copy of the direction table (`motor_config.yaml`) | done: converts by default since 2026-11-13 (`CORGI_DIRBETA_TRANSFORM=0` = legacy plant); still to do: read the same table as the bridge |
+| hardware IMU | `corgi_imu` (CX5 driver, repo `BioRoLa/corgi_ros_ws`) publishes the angular rate rotated by diag(1, −1, −1) but the quaternion untransformed: pitch and yaw from the quaternion are mirrored (vault Open Issues #47). `force_estimation` undoes it (`pitch *= −1`, `yaw *= −1` on hardware); `force_control` does not, so on the robot it evaluates J at β − true pitch; `gslip_pronk` runs `k_pitch` with the opposite sign on hardware | **open** — fix in the driver (rotate the quaternion into the gyro's frame), then drop the estimator's negation and re-derive `k_pitch` / `d_pitch`, in one change. It alters `/imu` for every consumer on the robot, odometry included |
+| `gslip_pronk` | `roll_sign`, `yaw_sign`, `pitch_sign`, `steer_sign` | geometry (left/right, front/rear) — keep; ideally derived from hip positions |
+
+Removed on 2026-11-13: the sim's own copy of the direction table (both
+boundaries read `module_directions.yaml`); `force_control`'s unconverted
+command (+fx at the ground was −fx on every leg, +fy −fy on B/C;
+`leg_frame.hpp`) and with it `gslip_pronk`'s `lat_sign`; the estimator's
+per-leg output signs (`leg_frame.hpp`) and its `beta − pitch` on B/C
+(uniform `beta + pitch`, checked on the sim plates); the friction
+feedforward's sign in `force_control` and `force_estimation` (§3).
 
 ## 7. Checking a change
 
-- `colcon test --packages-select corgi_utils` — the conversion's unit tests.
+- `colcon test --packages-select corgi_utils` — the conversion, the table
+  loader and the leg-frame map; `python3 -m pytest test/` in `corgi_sim` —
+  the sim driver's side.
 - `measure_kt.py --joint beta` on leg A and on leg B, the same physical load:
   the two slopes have the **same sign**.
 - A force-plate rock scored with `force_plate_track.py`: every leg's
   *plate vs command* and *estimate vs plate* in phase.
+- A held pitched stance scored with `pitch_sign_check.py`: every leg's best
+  k at 0.
+- `measure_friction.py`: SIGN "agrees" on every motor.
 
 The robot bridge keeps the old half-conversion behind
 `legacy_torque_frame:=true` for A/B comparison and rollback only.
