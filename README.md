@@ -17,11 +17,13 @@ This is the central ROS 2 workspace for the Corgi quadruped robot, developed at 
   - [_Hardware_](#hardware)
   - [_Software_](#software)
 - [**_Installation and Build Instructions_**](#installation-and-build-instructions)
+- [**_Conventions_**](#conventions)
 - [**_Usage Guide_**](#usage-guide)
   - [_Running the Simulation_](#running-the-simulation)
   - [_Running on the Real Robot_](#running-on-the-real-robot)
+  - [_Force calibration and force-plate tools_](#force-calibration-and-force-plate-tools)
 - [**_Workspace Structure & Key Packages_**](#workspace-structure--key-packages)
-- [**_Notes & Contact_**](#notes--contact)
+- [**_Notes_**](#notes)
 
 ## System Architecture
 The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a low-level FPGA driver (NI sbRIO) via gRPC.
@@ -170,49 +172,74 @@ The system uses ROS2 on a high-level computer (PC/Jetson) to communicate with a 
     source /opt/ros/humble/setup.bash
     source $HOME/corgi_ws/corgi_ros2_ws/install/setup.bash
     ```
+## Conventions
+
+**Read [`CONVENTIONS.md`](CONVENTIONS.md) before touching anything that sends or reads joint torques, forces or angles.** It defines the body frame, the joint and motor angles, the force sign, and the one place per plant where each leg module's own wiring is converted:
+
+- robot: [`corgi_ros_bridge`](src/corgi_ros_bridge) with `config/real_motor_config.yaml`
+- sim: `corgi_sim/corgi_driver_pkg/corgi_driver.py` with `motor_config.yaml`
+
+Above that boundary every node treats the four legs the same. The conversion itself is [`corgi_utils/module_frame.hpp`](src/corgi_utils/include/corgi_utils/module_frame.hpp), with unit tests (`colcon test --packages-select corgi_utils`).
+
 ## Usage Guide
+
+### Running the Simulation
+
+Webots runs on Windows and the ROS side in WSL; the driver finds Windows through the first `nameserver` in `/etc/resolv.conf`.
+
+```bash
+ros2 launch corgi_sim Corgi_launch.py                     # sim + control panel
+ros2 launch corgi_sim Corgi_experiment_launch.py world:=Corgi_ABAD.wbt   # headless experiments
+```
+
+The sim's plant switches are environment variables read by the driver: `CORGI_DIRBETA_TRANSFORM=1` and `CORGI_THETA_STOP=1` are the plant of record, and `CORGI_G_JOINT_MODE` selects the foot-arc gear model (default `gear`). `Corgi_ABAD_force_plate.wbt` puts the robot on four force plates laid out like the lab's Bertecs.
 
 ### Running on the Real Robot
 
-<!-- **Safety First:** Always have the robot on a stand before powering the motors. -->
+Bring-up order and the exact commands live in the session launch crib (vault: *Session Launch Crib*). In short: bench supply, FPGA driver on the sbRIO, `ros2 run corgi_homing homing`, `ros2 launch corgi_ros_bridge corgi_ros_bridge.launch.py`, `ros2 launch corgi_imu imu.launch.py`, then the panel (`ros2 run corgi_panel corgi_control_panel`).
 
-1.  **Start Low-Level Driver**
+The bridge refuses to start if its direction table is missing or invalid. `legacy_torque_frame:=true` restores the pre-2026-11-13 behaviour (positions converted, torques not) for comparison only.
 
-    Before anything else, ensure the **`fpga_driver`** is running on the NI sbRIO.
+### Force calibration and force-plate tools
 
-2.  **Launch ROS Control Panel**
+In [`corgi_force_control/scripts/diag`](src/corgi_force_control/scripts/diag) (see its README):
 
-    On the Jetson/PC, run the main launch file. This will start the **_panel_**, **_data recorder_**, **_force estimation_**, and **_IMU_** nodes.
+| tool | what it does |
+|---|---|
+| `measure_kt.py` | a motor's true torque constant from a lever and known masses |
+| `measure_friction.py` | per-motor friction from a slow beta roll, and whether the friction feedforward has the right sign |
+| `rock_cycle.sh` | one scored force rock on the simulated force plates |
+| `force_plate_track.py` | scores a rock: command vs estimate vs plates (sim topics or a Vicon `.c3d`) |
+| `pitch_sign_check.py` | whether the estimator's per-leg pitch sign is right, from a pitched stance |
 
-    ```
-    ros2 launch corgi_panel corgi_control_panel_dev.launch
-    ```
-
-3.  **Control Panel Operation Sequence** 
+`exp_h24` (in `corgi_force_control`) stands the robot up and runs the rocks (`rock_mode:=diag_fz|pitch_fz|roll_fz|fore_fx|lateral_fy`).
 
 ## Workspace Structure & Key Packages
 
-### Key Packages in `src/`
-
-For more details on a specific package, please see its respective `README.md` file.
+For more details on a package, see its own `README.md`.
 
 - **Core**
-  - [`corgi_msgs`](src/corgi_msgs): Defines all custom ROS messages used in the project.
-  - [`corgi_ros_bridge`](src/corgi_ros_bridge): The gRPC client/server that connects ROS to the FPGA driver.
-  - [`corgi_data_recorder`](src/corgi_data_recorder): A flexible node to subscribe to topics and log data to CSV.
-  - [`corgi_panel`](src/corgi_panel): The PyQt5-based GUI for robot control and monitoring.
-  - [`corgi_utils`](src/corgi_utils): Shared utility functions, constants, and helper classes.
+  - [`corgi_msgs`](src/corgi_msgs): all custom messages and services.
+  - [`corgi_ros_bridge`](src/corgi_ros_bridge): gRPC link between ROS and the FPGA driver; the robot's frame boundary.
+  - [`corgi_utils`](src/corgi_utils): leg kinematics (`leg_model`), trajectory helpers, and the module-frame conversion.
+  - [`corgi_panel`](src/corgi_panel): the PyQt5 control and configuration panel.
+  - [`corgi_data_recorder`](src/corgi_data_recorder): logs topics to CSV.
+  - [`corgi_homing`](src/corgi_homing): homes the legs to the reference pose.
 
-- **Sensing & Estimation**
+- **Control & estimation**
+  - [`corgi_force_control`](src/corgi_force_control): impedance / force control, the G-SLIP pronk controller, `exp_h24`, and the diagnostics.
+  - [`corgi_force_estimation`](src/corgi_force_estimation): ground-reaction force estimate from motor torques (`/force/state`).
+  - [`corgi_odometry`](src/corgi_odometry): leg odometry and state estimation.
+  - [`corgi_csv_control`](src/corgi_csv_control): plays motor commands from a CSV file.
+  - [`corgi_virtual_agent`](src/corgi_virtual_agent): virtual agent for testing.
 
-  - [`*corgi_imu`](src/corgi_imu): Driver and interface for the LORD MicroStrain IMU.
+- **Simulation**
+  - [`corgi_sim`](src/corgi_sim) (submodule): Webots worlds, the robot proto and the driver plugin.
 
-- **Control & Planning**
-  - [`corgi_csv_control`](src/corgi_csv_control): Publishes motor commands from a pre-defined CSV file.
-  - [`corgi_set_zero`](src/corgi_set_zero): Adjust all motors to the standard zero position.
-  - [`corgi_walk`](src/corgi_walk): General legged locomotion and gait planning.
-  - [`corgi_stair`](src/corgi_stair): Algorithms specifically for stair climbing locomotion.
-  - [`corgi_gait_generate`](src/corgi_gait_generate): Procedural gait pattern generation.
-  - [`corgi_gait_selector`](src/corgi_gait_selector): Selects the appropriate gait based on robot state or command.
+- **Sensors** (submodules): `fast_lio`, `livox_ros_driver2`, `zed-ros2-wrapper`.
+
+- **Legacy** ([`src/legacy`](src/legacy)): earlier walking, stair, MPC and gait packages, kept for reference.
 
 ## Notes
+
+Research notes, the implementation log and session runsheets live in the project's Obsidian vault, not in this repository.

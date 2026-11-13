@@ -13,6 +13,8 @@ input_csv/*
 !input_csv/demo_walk_sim.csv
 !input_csv/demo_walk_real.
 /*.md
+# the frame and sign convention every node follows (README links it)
+!/CONVENTIONS.md
 output_data/*
 !output_data/README.md
 

@@ -2,6 +2,10 @@
 
 This package defines all custom ROS messages (`.msg`) and services (`.srv`) used throughout the Corgi robot workspace. These custom data structures are essential for ensuring consistent and clear communication between the various nodes, such as the controllers, state estimators, simulation, and hardware interfaces.
 
+## Conventions
+
+Every field in `MotorCmd`, `MotorState`, `ImpedanceCmd` and `ForceState` is in one convention, the same on all four legs: see [`CONVENTIONS.md`](../../CONVENTIONS.md) at the top of the workspace. In short: body frame x forward, y left, z up; +beta puts the foot behind the hip on every leg; forces are the force the leg puts on the ground (a standing leg has fz < 0). Per-leg wiring is converted only at the hardware bridge and the sim driver.
+
 ## Package Dependencies
 
 This package is a core dependency for nearly all other `corgi_*` packages in the workspace. It depends on the following standard ROS packages:
@@ -29,7 +33,7 @@ Below is a complete list of all messages and services defined in this package. M
     * **`PowerCmdStamped.msg`**: A timestamped command to control the system's power rails and trigger steering calibration.
 
 * #### Whole-Body & Leg Control Messages
-    * **`ForceState.msg`**: Reports the measured X and Y forces for a single leg.
+    * **`ForceState.msg`**: The estimated force one leg puts on the ground, `fx fy fz`, body frame (see Conventions).
     * **`ForceStateStamped.msg`**: A timestamped message aggregating the `ForceState` from all four legs.
     * **`ImpedanceCmd.msg`**: Defines impedance control parameters (target angles, forces, stiffness, damping) for a single leg.
     * **`ImpedanceCmdStamped.msg`**: A timestamped command that bundles `ImpedanceCmd` for all four legs.

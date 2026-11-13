@@ -227,3 +227,8 @@ TODO
 ## Repository
 
 Part of [corgi_ros_ws](https://github.com/BioRoLa/corgi_ros_ws.git).
+
+
+## Module frame (`module_frame.hpp`)
+
+`corgi::ModuleFrame` converts between the common ROS joint convention and one leg module's own wiring: positions, r/l torque and velocity pairs (swap and negate on a mirrored-beta leg), r/l gain pairs (swap, never negate) and the ABAD torque and velocity. Every map is self-inverse. The robot bridge is its user; the sim driver applies the same algebra in Python. Definitions and derivation: [`CONVENTIONS.md`](../../CONVENTIONS.md) section 5. Tests: `colcon test --packages-select corgi_utils`.
