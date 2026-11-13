@@ -55,6 +55,11 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+# The per-leg direction table both hardware boundaries read (CONVENTIONS.md)
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Export for downstream packages
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
@@ -67,11 +72,16 @@ ament_export_dependencies(
 
 add_subdirectory(src)
 
-# module_frame.hpp: the ROS <-> leg-module conversion (CONVENTIONS.md section 5)
+# module_frame.hpp / module_directions.hpp: the ROS <-> leg-module conversion
+# and its table (CONVENTIONS.md section 5)
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_module_frame test/test_module_frame.cpp)
   target_include_directories(test_module_frame PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  find_package(yaml-cpp REQUIRED)
+  target_link_libraries(test_module_frame yaml-cpp)
+  target_compile_definitions(test_module_frame PRIVATE
+    MODULE_DIRECTIONS_YAML="${CMAKE_CURRENT_SOURCE_DIR}/config/module_directions.yaml")
 endif()
 
 ament_package()

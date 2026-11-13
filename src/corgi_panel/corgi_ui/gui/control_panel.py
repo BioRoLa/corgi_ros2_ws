@@ -1016,7 +1016,8 @@ class CorgiControlPanel(QWidget):
                 'N·m.',
             'torque_h':
                 'τ H — the ABAD (hip) motor, the one that produces γ.\n'
-                'Called "ABAD motor dir" in the Motor Direction Config below. '
+                'Its direction per leg is the γ row of the Module Direction '
+                'table below. '
                 '9:1 gearbox,\n'
                 'stall 44.25 N·m — but Issue #15 has it clipping silently well '
                 'below that.',
@@ -1099,96 +1100,61 @@ class CorgiControlPanel(QWidget):
 
         return monitor_layout
 
-    # Direction-table rows. Each row lists the key under BOTH schemas, because
-    # there are two of these files and they do not agree on names:
-    #
-    #   hardware  corgi_ros_bridge/config/real_motor_config.yaml
-    #             joint_dir{theta, beta, gamma}   motor_dir{R, L, H}
-    #   sim       corgi_driver_pkg/motor_config.yaml
-    #             joint_dir{theta, beta, g_joint_beta}  motor_dir{L, R, ABAD}
+    # Direction-table rows: (section, keys, label). One table since
+    # 2026-11-13, corgi_utils/config/module_directions.yaml, flat per leg
+    # ({theta, beta, gamma}), so there is no section.
     CONFIG_FIELDS = [
-        ('joint_dir', ('theta',),                'θ  joint dir'),
-        ('joint_dir', ('beta',),                 'β  joint dir'),
-        ('joint_dir', ('gamma', 'g_joint_beta'), 'γ / G-joint dir'),
-        ('motor_dir', ('L',),                    'Motor L dir'),
-        ('motor_dir', ('R',),                    'Motor R dir'),
-        ('motor_dir', ('H', 'ABAD'),             'ABAD motor dir'),
+        ('', ('theta',), 'θ  dir'),
+        ('', ('beta',),  'β  dir'),
+        ('', ('gamma',), 'γ (ABAD) dir'),
     ]
 
     def _load_motor_config(self) -> dict:
-        """Load the direction config that is ACTUALLY IN EFFECT.
+        """Load the per-leg direction table the boundaries actually use.
 
-        The hardware file is read from the SOURCE tree, because that is the
-        path corgi_ros_bridge defaults to; override with
-        CORGI_REAL_MOTOR_CONFIG if the bridge was launched with a
-        real_motor_config_path parameter pointing elsewhere.
+        One file since 2026-11-13 (CONVENTIONS.md section 5):
+        share/corgi_utils/config/module_directions.yaml, read by
+        corgi_ros_bridge on the robot and by corgi_driver.py in sim, so the
+        panel shows the same thing in both modes. CORGI_MODULE_DIRECTIONS
+        overrides the path for all three. A bridge started with
+        module_directions_path:=... reads a file the panel cannot see.
 
-        This used to look only for the simulator's motor_config.yaml inside
-        corgi_driver_pkg, a package that does not exist on the robot — so on
-        hardware every cell rendered '?'. Had it resolved, it would have been
-        worse: the panel would have shown the SIMULATOR's mirror signs while
-        the bridge was applying the real robot's. Load the file matching the
-        current mode first, and remember which one won so the group box can
-        name it.
+        Before this there were two tables, the bridge's real_motor_config.yaml
+        and the sim's motor_config.yaml, with different key names, and the
+        panel had to guess which one was in effect.
         """
-        import importlib.util
         self._config_source = None
         self._config_source_kind = None
-
-        def _real_source():
-            # What corgi_ros_bridge ACTUALLY reads: its
-            # default_real_motor_config_path() points into the source tree, not
-            # the installed share, so the bridge picks up an edit without a
-            # rebuild. The panel has to read the same file or it can show
-            # yesterday's signs while the robot uses today's.
-            override = os.environ.get('CORGI_REAL_MOTOR_CONFIG')
-            if override:
-                return override, 'CORGI_REAL_MOTOR_CONFIG'
-            return (os.path.join(
-                os.path.expanduser('~'),
-                'corgi_ws/corgi_ros2_ws/src/corgi_ros_bridge/config',
-                'real_motor_config.yaml'), 'bridge source')
-
-        def _real_share():
-            from ament_index_python.packages import get_package_share_directory
-            share = get_package_share_directory('corgi_ros_bridge')
-            return (os.path.join(share, 'config', 'real_motor_config.yaml'),
-                    'installed share — the bridge may be reading a newer source copy')
-
-        def _sim():
-            spec = importlib.util.find_spec('corgi_driver_pkg')
-            if spec and spec.origin:
-                return (os.path.join(os.path.dirname(spec.origin),
-                                     'motor_config.yaml'), 'simulator')
-            from ament_index_python.packages import get_package_share_directory
-            return (os.path.join(get_package_share_directory('corgi_sim'),
-                                 'motor_config.yaml'), 'simulator')
-
-        order = ([_sim, _real_source, _real_share] if self.use_sim_time
-                 else [_real_source, _real_share, _sim])
-        for getter in order:
-            try:
-                path, kind = getter()
-                with open(path, 'r') as f:
-                    cfg = yaml.safe_load(f) or {}
-                if cfg:
-                    self._config_source = path
-                    self._config_source_kind = kind
-                    return cfg
-            except Exception as e:
-                print(f"Warning: direction config not readable ({e})")
-
+        try:
+            env = os.environ.get('CORGI_MODULE_DIRECTIONS')
+            if env:
+                path, kind = env, 'CORGI_MODULE_DIRECTIONS'
+            else:
+                from ament_index_python.packages import get_package_share_directory
+                path = os.path.join(get_package_share_directory('corgi_utils'),
+                                    'config', 'module_directions.yaml')
+                kind = 'bridge and sim'
+            with open(path, 'r') as f:
+                cfg = yaml.safe_load(f) or {}
+            if cfg:
+                self._config_source = path
+                self._config_source_kind = kind
+                return cfg
+        except Exception as e:
+            print(f"Warning: direction table not readable ({e})")
         return {}
 
     @staticmethod
     def _config_value(cfg, mod_id, section, keys):
-        """First key present under this schema, or None when the row simply
-        does not exist in the file that was loaded (rendered as a dash, which
-        is a different statement from '?')."""
-        sect = (cfg or {}).get(mod_id, {}).get(section, {}) or {}
+        """First key present, or None when the row does not exist in the file
+        that was loaded (rendered as a dash, which is a different statement
+        from '?')."""
+        row = (cfg or {}).get(mod_id, {}) or {}
+        if section:
+            row = row.get(section, {}) or {}
         for k in keys:
-            if k in sect:
-                return sect[k]
+            if k in row:
+                return row[k]
         return None
 
     def _set_config_title(self):
@@ -1199,18 +1165,19 @@ class CorgiControlPanel(QWidget):
         kind = getattr(self, '_config_source_kind', None)
         if src:
             self._config_grp.setTitle(
-                "Motor Direction Config  —  %s  [%s]"
+                "Module Directions  —  %s  [%s]"
                 % (os.path.basename(src), kind or '?'))
             self._config_grp.setToolTip(src)
         else:
             self._config_grp.setTitle(
-                "Motor Direction Config  —  NOT LOADED (no yaml found)")
+                "Module Directions  —  NOT LOADED (no yaml found)")
             self._config_grp.setToolTip(
-                'Looked for the bridge config in the source tree, then the '
-                'installed share, then the simulator package.')
+                'Looked for share/corgi_utils/config/module_directions.yaml '
+                '(or CORGI_MODULE_DIRECTIONS).')
 
     def _create_motor_config_display(self) -> QGroupBox:
-        """Create a read-only display of the motor direction config (motor_config.yaml)."""
+        """Create a read-only display of the per-leg direction table
+        (corgi_utils/config/module_directions.yaml)."""
         cfg = self._load_motor_config()
 
         self._config_grp = QGroupBox()

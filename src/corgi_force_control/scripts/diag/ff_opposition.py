@@ -39,7 +39,9 @@ from collections import defaultdict
 
 import numpy as np
 
-# From motor_config.yaml, quoted in the Torque Frame Mismatch note.
+# beta row of corgi_utils/config/module_directions.yaml (the sim's
+# motor_config.yaml when these runs were made), quoted in the Torque Frame
+# Mismatch note.
 DIR_BETA = {"A": +1, "B": -1, "C": -1, "D": +1}
 LEG_MOTORS = ("L_Motor", "R_Motor")
 

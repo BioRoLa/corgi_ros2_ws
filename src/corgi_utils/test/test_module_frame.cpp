@@ -4,8 +4,11 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <fstream>
+#include <string>
 #include <vector>
 
+#include "corgi_utils/module_directions.hpp"
 #include "corgi_utils/module_frame.hpp"
 
 using corgi::ModuleDirections;
@@ -162,4 +165,64 @@ TEST(ModuleFrame, TheRegressionItself)
     ModuleFrame a({1, 1, 1}), b({1, -1, -1});
     EXPECT_EQ(a.torque_rl(3.0, 1.0), std::make_pair(3.0, 1.0));
     EXPECT_NE(b.torque_rl(3.0, 1.0), std::make_pair(3.0, 1.0));
+}
+
+// ---- the shipped table, config/module_directions.yaml ----------------------
+
+namespace {
+
+std::string write_table(const std::string& name, const std::string& text)
+{
+    const std::string path = testing::TempDir() + name;
+    std::ofstream(path) << text;
+    return path;
+}
+
+const char* GOOD_ROWS =
+    "A: {theta: 1, beta: 1, gamma: 1}\n"
+    "B: {theta: 1, beta: -1, gamma: -1}\n"
+    "C: {theta: 1, beta: -1, gamma: 1}\n";
+
+}  // namespace
+
+// The file both boundaries read must say what CONVENTIONS.md section 5 says.
+TEST(ModuleDirections, ShippedTableIsTheConvention)
+{
+    const auto frames = corgi::load_module_directions(MODULE_DIRECTIONS_YAML);
+    const auto expect = configured_legs();
+    for (size_t i = 0; i < frames.size(); ++i) {
+        EXPECT_EQ(frames[i].directions().theta, expect[i].theta) << "leg " << i;
+        EXPECT_EQ(frames[i].directions().beta, expect[i].beta) << "leg " << i;
+        EXPECT_EQ(frames[i].directions().gamma, expect[i].gamma) << "leg " << i;
+    }
+}
+
+TEST(ModuleDirections, MissingLegOrKeyIsAnErrorNotPlusOne)
+{
+    EXPECT_THROW(corgi::load_module_directions(write_table("no_d.yaml", GOOD_ROWS)),
+                 std::runtime_error);
+    const std::string no_gamma = std::string(GOOD_ROWS) + "D: {theta: 1, beta: 1}\n";
+    EXPECT_THROW(corgi::load_module_directions(write_table("no_gamma.yaml", no_gamma)),
+                 std::runtime_error);
+    EXPECT_THROW(corgi::load_module_directions(testing::TempDir() + "does_not_exist.yaml"),
+                 std::runtime_error);
+}
+
+// The pre-2026-11-13 layout (joint_dir / motor_dir) must not be half-read.
+TEST(ModuleDirections, OldFormatIsRejected)
+{
+    const std::string old =
+        "A: {joint_dir: {theta: 1, beta: 1, gamma: 1}, motor_dir: {R: 1, L: 1, H: 1}}\n"
+        "B: {joint_dir: {theta: 1, beta: -1, gamma: -1}}\n"
+        "C: {joint_dir: {theta: 1, beta: -1, gamma: 1}}\n"
+        "D: {joint_dir: {theta: 1, beta: 1, gamma: -1}}\n";
+    EXPECT_THROW(corgi::load_module_directions(write_table("old.yaml", old)), std::runtime_error);
+}
+
+TEST(ModuleDirections, BadValuesAreRejected)
+{
+    const std::string half = std::string(GOOD_ROWS) + "D: {theta: 1, beta: 0.5, gamma: -1}\n";
+    EXPECT_THROW(corgi::load_module_directions(write_table("half.yaml", half)), std::invalid_argument);
+    const std::string mirror = std::string(GOOD_ROWS) + "D: {theta: -1, beta: 1, gamma: -1}\n";
+    EXPECT_THROW(corgi::load_module_directions(write_table("mirror.yaml", mirror)), std::invalid_argument);
 }

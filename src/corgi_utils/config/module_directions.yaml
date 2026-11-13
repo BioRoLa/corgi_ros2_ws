@@ -1,0 +1,29 @@
+# Leg module directions: THE per-leg sign table (CONVENTIONS.md section 5).
+#
+# Both hardware boundaries read this one file, from the installed share
+# (share/corgi_utils/config/module_directions.yaml):
+#   robot  corgi_ros_bridge                 (parameter module_directions_path)
+#   sim    corgi_sim corgi_driver_pkg       (corgi_driver_pkg/module_directions.py)
+# The control panel shows it. Override the path for all three with the
+# CORGI_MODULE_DIRECTIONS environment variable. Edit, then
+#   colcon build --packages-select corgi_utils
+#
+# Each value is how a module's own frame relates to the common convention,
+# which is identical on all four legs:
+#   theta  must be +1 (the 17 deg offset in phi breaks the r/l swap)
+#   beta   -1 mirrors beta and swaps the r/l motor pair: positions and
+#          velocities and torques swap and negate, gains swap -- the
+#          left/right mirror
+#   gamma  -1 mirrors the ABAD position, velocity and torque -- the
+#          left/right mirror times front/rear modules rotated 180 deg
+# The table describes how the modules are mounted, which the Webots model
+# reproduces, so the robot and the sim share it. Motor wiring polarity is not
+# here: on the robot it is handled below the bridge, in the sim by
+# corgi_driver_pkg/webots_model.yaml.
+#
+# Every key is required; a missing or non +/-1 value stops the bridge and the
+# sim driver rather than defaulting.
+A: {theta: 1, beta: 1, gamma: 1}
+B: {theta: 1, beta: -1, gamma: -1}
+C: {theta: 1, beta: -1, gamma: 1}
+D: {theta: 1, beta: 1, gamma: -1}

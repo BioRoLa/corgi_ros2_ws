@@ -47,7 +47,8 @@ LEGS = ("A", "B", "C", "D")
 # Per-leg camber sign.
 #
 # `lr` is the pattern under test. gamma > 0 abducts OUTWARD on all four legs
-# (motor_dir.ABAD = {+1,-1,+1,-1} in motor_config.yaml already compensates the
+# (gamma = {+1,-1,+1,-1} in corgi_utils/config/module_directions.yaml, formerly
+# the sim's motor_dir.ABAD, already compensates the
 # front/rear ABAD axis flip), so {+1,-1,-1,+1} drives all four contacts to the
 # same side while the hips stay put -- which is a uniform lean. It is the same
 # left/right partition as gslip_pronk's steer_sign and roll_sign.

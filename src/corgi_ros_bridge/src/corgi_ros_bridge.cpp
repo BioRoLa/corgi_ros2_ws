@@ -6,6 +6,8 @@
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include <yaml-cpp/yaml.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include "corgi_utils/module_directions.hpp"
 #include "corgi_utils/module_frame.hpp"
 
 #include "NodeHandler.h"
@@ -88,55 +90,29 @@ core::Publisher<config_msg::ConfigStamped>          *grpc_config_cmd_pub;
 std::array<corgi::ModuleFrame, 4> module_frames;
 bool legacy_torque_frame = false;
 
-std::string default_real_motor_config_path()
+// The one direction table (CONVENTIONS.md section 5), shared with the sim
+// driver: share/corgi_utils/config/module_directions.yaml, or
+// CORGI_MODULE_DIRECTIONS if set. The module_directions_path parameter
+// overrides both.
+std::string default_module_directions_path()
 {
-    const char* home = std::getenv("HOME");
-    if (home == nullptr) {
-        return "corgi_ros2_ws/src/corgi_ros_bridge/config/real_motor_config.yaml";
+    const char* env = std::getenv("CORGI_MODULE_DIRECTIONS");
+    if (env != nullptr && *env != '\0') {
+        return env;
     }
-    return std::string(home) + "/corgi_ws/corgi_ros2_ws/src/corgi_ros_bridge/config/real_motor_config.yaml";
+    return ament_index_cpp::get_package_share_directory("corgi_utils") + "/config/module_directions.yaml";
 }
 
-double yaml_direction_or(const YAML::Node& node, const std::string& key, double fallback)
-{
-    if (!node || !node[key]) {
-        return fallback;
-    }
-    return node[key].as<double>();
-}
-
-// Throws on anything it cannot use: a bridge running with the wrong directions
-// drives mirrored legs the wrong way, so it must not start (it used to fall
-// back to all +1 with a warning).
+// Throws on anything it cannot use (corgi::load_module_directions): a bridge
+// running with the wrong directions drives mirrored legs the wrong way, so it
+// must not start (it used to fall back to all +1 with a warning).
 void load_module_frames(const std::string& path, const rclcpp::Logger& logger)
 {
-    static const std::array<std::string, 4> leg_names = {"A", "B", "C", "D"};
-
-    YAML::Node root = YAML::LoadFile(path);
-    for (size_t i = 0; i < leg_names.size(); ++i) {
-        YAML::Node leg = root[leg_names[i]];
-        if (!leg || !leg["joint_dir"]) {
-            throw std::runtime_error("leg " + leg_names[i] + " has no joint_dir in " + path);
-        }
-        YAML::Node joint_dir = leg["joint_dir"];
-        corgi::ModuleDirections d;
-        d.theta = yaml_direction_or(joint_dir, "theta", 1.0);
-        d.beta = yaml_direction_or(joint_dir, "beta", 1.0);
-        d.gamma = yaml_direction_or(joint_dir, "gamma", 1.0);
-        // motor_dir is gone: torques, velocities and gains now follow joint_dir
-        // (CONVENTIONS.md section 5). A file that still sets it to anything
-        // but +1 expects a behaviour this bridge no longer has.
-        if (YAML::Node motor_dir = leg["motor_dir"]) {
-            for (const char* k : {"R", "L", "H"}) {
-                if (motor_dir[k] && motor_dir[k].as<double>() != 1.0) {
-                    throw std::runtime_error("leg " + leg_names[i] + " sets motor_dir." + k +
-                        " != 1 in " + path + "; motor_dir is no longer used (CONVENTIONS.md section 5)");
-                }
-            }
-        }
-        module_frames[i] = corgi::ModuleFrame(d, leg_names[i]);
-        RCLCPP_INFO(logger, "leg %s: joint_dir theta %+.0f beta %+.0f gamma %+.0f",
-                    leg_names[i].c_str(), d.theta, d.beta, d.gamma);
+    module_frames = corgi::load_module_directions(path);
+    for (size_t i = 0; i < module_frames.size(); ++i) {
+        const auto& d = module_frames[i].directions();
+        RCLCPP_INFO(logger, "leg %s: theta %+.0f beta %+.0f gamma %+.0f",
+                    corgi::module_leg_names()[i].c_str(), d.theta, d.beta, d.gamma);
     }
     RCLCPP_INFO(logger, "Loaded leg module directions: %s", path.c_str());
 }
@@ -438,9 +414,9 @@ int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("corgi_ros_bridge");
     RCLCPP_INFO(node->get_logger(), "Corgi ROS Bridge Starts");
-    node->declare_parameter<std::string>("real_motor_config_path", default_real_motor_config_path());
     try {
-        load_module_frames(node->get_parameter("real_motor_config_path").as_string(), node->get_logger());
+        const auto path = node->declare_parameter<std::string>("module_directions_path", "");
+        load_module_frames(path.empty() ? default_module_directions_path() : path, node->get_logger());
     } catch (const std::exception& e) {
         RCLCPP_FATAL(node->get_logger(), "Leg module directions unusable: %s. Not starting.", e.what());
         rclcpp::shutdown();

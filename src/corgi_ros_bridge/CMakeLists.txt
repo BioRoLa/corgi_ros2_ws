@@ -9,6 +9,7 @@ find_package(rosgraph_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(corgi_utils REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
 #set(CMAKE_EXE_LINKER_FLAGS)
 set(CMAKE_CXX_STANDARD 17)
@@ -33,9 +34,6 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake)
 
 add_subdirectory(src)
 install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}
-)
-install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
