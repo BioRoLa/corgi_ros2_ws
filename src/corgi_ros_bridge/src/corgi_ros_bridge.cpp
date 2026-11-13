@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include <yaml-cpp/yaml.h>
+#include "corgi_utils/module_frame.hpp"
 
 #include "NodeHandler.h"
 #include "Config.pb.h"
@@ -76,16 +77,16 @@ core::Publisher<robot_msg::RobotCmdStamped>         *grpc_robot_cmd_pub;
 core::Publisher<steering_msg::SteeringCmdStamped>   *grpc_steer_cmd_pub;
 core::Publisher<config_msg::ConfigStamped>          *grpc_config_cmd_pub;
 
-struct LegAxisConfig {
-    double theta = 1.0;
-    double beta = 1.0;
-    double gamma = 1.0;
-    double motor_r = 1.0;
-    double motor_l = 1.0;
-    double motor_h = 1.0;
-};
-
-std::array<LegAxisConfig, 4> real_axis_config;
+// The ROS <-> leg-module boundary (CONVENTIONS.md). Positions, velocities,
+// torques and gains are converted together through one ModuleFrame per leg.
+// Until 2026-11-13 only positions were converted (joint_dir) while torques and
+// velocities took a separate motor_dir (+1 everywhere) and gains passed
+// straight through, so on B/C (beta) and B/D (gamma) the angles and the torques
+// were in different frames -- the force-plate sessions' sign surprises (log
+// 344) and the vault's "Torque Frame Mismatch" note. legacy_torque_frame:=true
+// restores that behaviour for A/B comparison and rollback only.
+std::array<corgi::ModuleFrame, 4> module_frames;
+bool legacy_torque_frame = false;
 
 std::string default_real_motor_config_path()
 {
@@ -104,28 +105,40 @@ double yaml_direction_or(const YAML::Node& node, const std::string& key, double 
     return node[key].as<double>();
 }
 
-void load_real_axis_config(const std::string& path, const rclcpp::Logger& logger)
+// Throws on anything it cannot use: a bridge running with the wrong directions
+// drives mirrored legs the wrong way, so it must not start (it used to fall
+// back to all +1 with a warning).
+void load_module_frames(const std::string& path, const rclcpp::Logger& logger)
 {
     static const std::array<std::string, 4> leg_names = {"A", "B", "C", "D"};
 
-    try {
-        YAML::Node root = YAML::LoadFile(path);
-        for (size_t i = 0; i < leg_names.size(); ++i) {
-            YAML::Node leg = root[leg_names[i]];
-            YAML::Node joint_dir = leg["joint_dir"];
-            YAML::Node motor_dir = leg["motor_dir"];
-
-            real_axis_config[i].theta = yaml_direction_or(joint_dir, "theta", 1.0);
-            real_axis_config[i].beta = yaml_direction_or(joint_dir, "beta", 1.0);
-            real_axis_config[i].gamma = yaml_direction_or(joint_dir, "gamma", 1.0);
-            real_axis_config[i].motor_r = yaml_direction_or(motor_dir, "R", 1.0);
-            real_axis_config[i].motor_l = yaml_direction_or(motor_dir, "L", 1.0);
-            real_axis_config[i].motor_h = yaml_direction_or(motor_dir, "H", 1.0);
+    YAML::Node root = YAML::LoadFile(path);
+    for (size_t i = 0; i < leg_names.size(); ++i) {
+        YAML::Node leg = root[leg_names[i]];
+        if (!leg || !leg["joint_dir"]) {
+            throw std::runtime_error("leg " + leg_names[i] + " has no joint_dir in " + path);
         }
-        RCLCPP_INFO(logger, "Loaded real motor axis config: %s", path.c_str());
-    } catch (const std::exception& e) {
-        RCLCPP_WARN(logger, "Failed to load real motor axis config '%s': %s. Using all 1.0 directions.", path.c_str(), e.what());
+        YAML::Node joint_dir = leg["joint_dir"];
+        corgi::ModuleDirections d;
+        d.theta = yaml_direction_or(joint_dir, "theta", 1.0);
+        d.beta = yaml_direction_or(joint_dir, "beta", 1.0);
+        d.gamma = yaml_direction_or(joint_dir, "gamma", 1.0);
+        // motor_dir is gone: torques, velocities and gains now follow joint_dir
+        // (CONVENTIONS.md section 5). A file that still sets it to anything
+        // but +1 expects a behaviour this bridge no longer has.
+        if (YAML::Node motor_dir = leg["motor_dir"]) {
+            for (const char* k : {"R", "L", "H"}) {
+                if (motor_dir[k] && motor_dir[k].as<double>() != 1.0) {
+                    throw std::runtime_error("leg " + leg_names[i] + " sets motor_dir." + k +
+                        " != 1 in " + path + "; motor_dir is no longer used (CONVENTIONS.md section 5)");
+                }
+            }
+        }
+        module_frames[i] = corgi::ModuleFrame(d, leg_names[i]);
+        RCLCPP_INFO(logger, "leg %s: joint_dir theta %+.0f beta %+.0f gamma %+.0f",
+                    leg_names[i].c_str(), d.theta, d.beta, d.gamma);
     }
+    RCLCPP_INFO(logger, "Loaded leg module directions: %s", path.c_str());
 }
 
 // Gains must be finite and non-negative. There is deliberately no upper
@@ -163,22 +176,33 @@ void ros_motor_cmd_cb(const corgi_msgs::msg::MotorCmdStamped cmd){
     };
 
     for (int i = 0; i < 4; i++) {
-        const auto& axis = real_axis_config[i];
-        grpc_motor_modules[i]->set_theta(std::min(std::max(ros_motor_modules[i].theta * axis.theta, 17/180.0*M_PI), 160/180.0*M_PI));
-        grpc_motor_modules[i]->set_beta(ros_motor_modules[i].beta * axis.beta);
-        grpc_motor_modules[i]->set_gamma(ros_motor_modules[i].gamma * axis.gamma);
-        grpc_motor_modules[i]->set_kp_r(sanitize_gain(ros_motor_modules[i].kp_r, "kp_r"));
-        grpc_motor_modules[i]->set_kp_l(sanitize_gain(ros_motor_modules[i].kp_l, "kp_l"));
-        grpc_motor_modules[i]->set_kp_h(sanitize_gain(ros_motor_modules[i].kp_h, "kp_h"));
-        grpc_motor_modules[i]->set_ki_r(sanitize_gain(ros_motor_modules[i].ki_r, "ki_r"));
-        grpc_motor_modules[i]->set_ki_l(sanitize_gain(ros_motor_modules[i].ki_l, "ki_l"));
-        grpc_motor_modules[i]->set_ki_h(sanitize_gain(ros_motor_modules[i].ki_h, "ki_h"));
-        grpc_motor_modules[i]->set_kd_r(sanitize_gain(ros_motor_modules[i].kd_r, "kd_r"));
-        grpc_motor_modules[i]->set_kd_l(sanitize_gain(ros_motor_modules[i].kd_l, "kd_l"));
-        grpc_motor_modules[i]->set_kd_h(sanitize_gain(ros_motor_modules[i].kd_h, "kd_h"));
-        grpc_motor_modules[i]->set_torque_r(ros_motor_modules[i].torque_r * axis.motor_r);
-        grpc_motor_modules[i]->set_torque_l(ros_motor_modules[i].torque_l * axis.motor_l);
-        grpc_motor_modules[i]->set_torque_h(ros_motor_modules[i].torque_h * axis.motor_h);
+        const corgi::ModuleFrame& f = module_frames[i];
+        const auto& m = ros_motor_modules[i];
+        grpc_motor_modules[i]->set_theta(std::min(std::max(f.theta(m.theta), 17/180.0*M_PI), 160/180.0*M_PI));
+        grpc_motor_modules[i]->set_beta(f.beta(m.beta));
+        grpc_motor_modules[i]->set_gamma(f.gamma(m.gamma));
+
+        // r/l gains swap and torques swap-and-negate on a mirrored-beta leg;
+        // the ABAD torque follows gamma (CONVENTIONS.md section 5)
+        const double kp_r = sanitize_gain(m.kp_r, "kp_r"), kp_l = sanitize_gain(m.kp_l, "kp_l");
+        const double ki_r = sanitize_gain(m.ki_r, "ki_r"), ki_l = sanitize_gain(m.ki_l, "ki_l");
+        const double kd_r = sanitize_gain(m.kd_r, "kd_r"), kd_l = sanitize_gain(m.kd_l, "kd_l");
+        const auto kp = legacy_torque_frame ? std::make_pair(kp_r, kp_l) : f.gain_rl(kp_r, kp_l);
+        const auto ki = legacy_torque_frame ? std::make_pair(ki_r, ki_l) : f.gain_rl(ki_r, ki_l);
+        const auto kd = legacy_torque_frame ? std::make_pair(kd_r, kd_l) : f.gain_rl(kd_r, kd_l);
+        const auto tq = legacy_torque_frame ? std::make_pair(m.torque_r, m.torque_l) : f.torque_rl(m.torque_r, m.torque_l);
+        grpc_motor_modules[i]->set_kp_r(kp.first);
+        grpc_motor_modules[i]->set_kp_l(kp.second);
+        grpc_motor_modules[i]->set_kp_h(sanitize_gain(m.kp_h, "kp_h"));
+        grpc_motor_modules[i]->set_ki_r(ki.first);
+        grpc_motor_modules[i]->set_ki_l(ki.second);
+        grpc_motor_modules[i]->set_ki_h(sanitize_gain(m.ki_h, "ki_h"));
+        grpc_motor_modules[i]->set_kd_r(kd.first);
+        grpc_motor_modules[i]->set_kd_l(kd.second);
+        grpc_motor_modules[i]->set_kd_h(sanitize_gain(m.kd_h, "kd_h"));
+        grpc_motor_modules[i]->set_torque_r(tq.first);
+        grpc_motor_modules[i]->set_torque_l(tq.second);
+        grpc_motor_modules[i]->set_torque_h(legacy_torque_frame ? m.torque_h : f.torque_h(m.torque_h));
     }
 
     grpc_motor_cmd.mutable_header()->set_seq(ros_motor_cmd.header.seq);
@@ -260,16 +284,22 @@ void grpc_motor_state_cb(const motor_msg::MotorStateStamped state) {
     };
 
     for (int i = 0; i < 4; i++) {
-        const auto& axis = real_axis_config[i];
-        ros_motor_modules[i]->theta = grpc_motor_modules[i]->theta() * axis.theta;
-        ros_motor_modules[i]->beta = grpc_motor_modules[i]->beta() * axis.beta;
-        ros_motor_modules[i]->gamma = grpc_motor_modules[i]->gamma() * axis.gamma;
-        ros_motor_modules[i]->velocity_r = grpc_motor_modules[i]->velocity_r() * axis.motor_r;
-        ros_motor_modules[i]->velocity_l = grpc_motor_modules[i]->velocity_l() * axis.motor_l;
-        ros_motor_modules[i]->velocity_h = grpc_motor_modules[i]->velocity_h() * axis.motor_h;
-        ros_motor_modules[i]->torque_r = grpc_motor_modules[i]->torque_r() * axis.motor_r;
-        ros_motor_modules[i]->torque_l = grpc_motor_modules[i]->torque_l() * axis.motor_l;
-        ros_motor_modules[i]->torque_h = grpc_motor_modules[i]->torque_h() * axis.motor_h;
+        const corgi::ModuleFrame& f = module_frames[i];
+        const motor_msg::MotorState& g = *grpc_motor_modules[i];
+        ros_motor_modules[i]->theta = f.theta(g.theta());
+        ros_motor_modules[i]->beta = f.beta(g.beta());
+        ros_motor_modules[i]->gamma = f.gamma(g.gamma());
+        // the maps are self-inverse, so module -> ROS is the same call
+        const auto v = legacy_torque_frame ? std::make_pair(g.velocity_r(), g.velocity_l())
+                                           : f.velocity_rl(g.velocity_r(), g.velocity_l());
+        const auto tq = legacy_torque_frame ? std::make_pair(g.torque_r(), g.torque_l())
+                                            : f.torque_rl(g.torque_r(), g.torque_l());
+        ros_motor_modules[i]->velocity_r = v.first;
+        ros_motor_modules[i]->velocity_l = v.second;
+        ros_motor_modules[i]->velocity_h = legacy_torque_frame ? g.velocity_h() : f.velocity_h(g.velocity_h());
+        ros_motor_modules[i]->torque_r = tq.first;
+        ros_motor_modules[i]->torque_l = tq.second;
+        ros_motor_modules[i]->torque_h = legacy_torque_frame ? g.torque_h() : f.torque_h(g.torque_h());
     }
 
     ros_motor_state.motor_mode = static_cast<int32_t>(grpc_motor_state.motor_mode());
@@ -409,7 +439,23 @@ int main(int argc, char **argv) {
     auto node = rclcpp::Node::make_shared("corgi_ros_bridge");
     RCLCPP_INFO(node->get_logger(), "Corgi ROS Bridge Starts");
     node->declare_parameter<std::string>("real_motor_config_path", default_real_motor_config_path());
-    load_real_axis_config(node->get_parameter("real_motor_config_path").as_string(), node->get_logger());
+    try {
+        load_module_frames(node->get_parameter("real_motor_config_path").as_string(), node->get_logger());
+    } catch (const std::exception& e) {
+        RCLCPP_FATAL(node->get_logger(), "Leg module directions unusable: %s. Not starting.", e.what());
+        rclcpp::shutdown();
+        return 1;
+    }
+    legacy_torque_frame = node->declare_parameter<bool>("legacy_torque_frame", false);
+    if (legacy_torque_frame) {
+        RCLCPP_WARN(node->get_logger(),
+            "LEGACY TORQUE FRAME: positions converted, torques/velocities/gains NOT -- "
+            "B/C (beta) and B/D (gamma) torques are in the module frame. A/B and rollback only "
+            "(CONVENTIONS.md).");
+    } else {
+        RCLCPP_INFO(node->get_logger(),
+            "MODULE FRAME: positions, velocities, torques and gains all converted per leg (CONVENTIONS.md).");
+    }
 
     bool debug_mode = false;
     if (argc >= 2 && argv[1] != nullptr) {

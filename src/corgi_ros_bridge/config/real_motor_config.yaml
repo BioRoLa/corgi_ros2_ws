@@ -1,53 +1,34 @@
-# Real robot axis direction config.
-# This file is separate from corgi_sim/corgi_driver_pkg/motor_config.yaml.
+# Leg module directions for the robot bridge: the ONLY per-leg sign table on the
+# robot side. See CONVENTIONS.md at the top of the workspace.
 #
-# joint_dir:
-#   theta: theta command/state direction
-#   beta : beta command/state direction
-#   gamma: ABAD command/state direction
-# motor_dir:
-#   R: right motor torque/velocity direction
-#   L: left motor torque/velocity direction
-#   H: ABAD motor torque/velocity direction
-#
-# Use 1.0 to keep the current convention, -1.0 to reverse it.
-
+# joint_dir is how each module's own wiring relates to the common ROS convention
+# (the same on all four legs). The bridge converts positions, velocities,
+# torques AND gains from these, together:
+#   beta  -1  mirrors beta and swaps the r/l motor pair (torques swap and negate,
+#             gains swap) -- the left/right mirror
+#   gamma -1  mirrors the ABAD position, torque and velocity -- left/right mirror
+#             times front/rear modules rotated 180 deg
+#   theta     must be +1
+# There is no motor_dir any more (removed 2026-11-13): it let torques and
+# positions take different signs. The sim's copy of this table is
+# corgi_sim/corgi_driver_pkg/motor_config.yaml (joint_dir.beta, motor_dir.ABAD).
 A:
   joint_dir:
     theta: 1.0
     beta: 1.0
     gamma: 1.0
-  motor_dir:
-    R: 1.0
-    L: 1.0
-    H: 1.0
-
 B:
   joint_dir:
     theta: 1.0
     beta: -1.0
     gamma: -1.0
-  motor_dir:
-    R: 1.0
-    L: 1.0
-    H: 1.0
-
 C:
   joint_dir:
     theta: 1.0
     beta: -1.0
     gamma: 1.0
-  motor_dir:
-    R: 1.0
-    L: 1.0
-    H: 1.0
-
 D:
   joint_dir:
     theta: 1.0
     beta: 1.0
     gamma: -1.0
-  motor_dir:
-    R: 1.0
-    L: 1.0
-    H: 1.0

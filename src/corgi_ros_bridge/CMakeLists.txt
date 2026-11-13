@@ -8,6 +8,7 @@ find_package(std_msgs REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
+find_package(corgi_utils REQUIRED)
 
 #set(CMAKE_EXE_LINKER_FLAGS)
 set(CMAKE_CXX_STANDARD 17)

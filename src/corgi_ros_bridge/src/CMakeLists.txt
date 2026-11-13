@@ -12,7 +12,7 @@ get_filename_component(GRPC_CORE_INCLUDE_DIR "${GRPC_CORE_PREFIX}/../include" AB
 
 # Define the executable and link required libraries
 add_executable(corgi_ros_bridge corgi_ros_bridge.cpp)
-ament_target_dependencies(corgi_ros_bridge rclcpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs)
+ament_target_dependencies(corgi_ros_bridge rclcpp std_msgs rosgraph_msgs geometry_msgs corgi_msgs corgi_utils)
 
 target_include_directories(corgi_ros_bridge PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
