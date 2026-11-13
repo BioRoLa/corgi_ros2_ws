@@ -67,4 +67,11 @@ ament_export_dependencies(
 
 add_subdirectory(src)
 
+# module_frame.hpp: the ROS <-> leg-module conversion (CONVENTIONS.md section 5)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_module_frame test/test_module_frame.cpp)
+  target_include_directories(test_module_frame PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+endif()
+
 ament_package()
