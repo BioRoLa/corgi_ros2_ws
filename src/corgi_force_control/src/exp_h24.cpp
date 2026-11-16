@@ -53,7 +53,7 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
     : Node("exp_h24"),
     sim_(false),
     trigger_(false),
-    mg_(23.05 * 9.81),
+    mg_(29.6 * 9.81),
     s_(0.0),
     h_(0.0),
     b_value_(0.0),
