@@ -78,7 +78,7 @@ done
 if ! fresh_grep "$OUT/sim.log" "publishing 4 force plates"; then
     echo "SIM OR PLATES FAILED TO START -- see $OUT/sim.log"; finish; exit 1
 fi
-echo "CORGI_DIRBETA_TRANSFORM=$CORGI_DIRBETA_TRANSFORM CORGI_THETA_STOP=$CORGI_THETA_STOP CORGI_G_JOINT_MODE=${CORGI_G_JOINT_MODE:-gear (default)}" | tee "$OUT/plant.txt"
+echo "CORGI_DIRBETA_TRANSFORM=$CORGI_DIRBETA_TRANSFORM CORGI_THETA_STOP=$CORGI_THETA_STOP CORGI_G_JOINT_MODE=${CORGI_G_JOINT_MODE:-gear (default)} COUPLING_SCALE=${COUPLING_SCALE:-0.0}" | tee "$OUT/plant.txt"
 if [ "$CORGI_DIRBETA_TRANSFORM" = "1" ] && ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
     sleep 3   # the banner is logged just after the plates come up
     if ! fresh_grep "$OUT/sim.log" "DIR_BETA TRANSFORM ON"; then
@@ -88,8 +88,16 @@ fi
 sleep 3
 
 # --- estimation + control + rock publisher -------------------------------------
-setsid nohup ros2 launch corgi_force_control force_control.launch.py \
-    > "$OUT/ctl.log" 2>&1 < /dev/null &
+# The two nodes directly (force_control.launch.py passes only use_sim_time), so
+# force_control's knobs can be set per run. COUPLING_SCALE defaults to 0.0, the
+# hardware session config of record (log 324), so a sim rock is comparable to
+# a robot rock. The node's own default, 1.0, limit-cycles in a planted sim
+# stance (beta +/-0.2 deg at ~5 Hz, log 344 3c); COUPLING_SCALE=1.0 to
+# reproduce runs made before 2026-11-16.
+setsid nohup ros2 run corgi_force_estimation force_estimation_node --ros-args -p use_sim_time:=true \
+    > "$OUT/fe.log" 2>&1 < /dev/null &
+setsid nohup ros2 run corgi_force_control force_control_node --ros-args -p use_sim_time:=true \
+    -p coupling_scale:=${COUPLING_SCALE:-0.0} > "$OUT/ctl.log" 2>&1 < /dev/null &
 sleep 3
 setsid nohup ros2 run corgi_force_control exp_h24_node --ros-args \
     -p use_sim_time:=true -p rock_mode:="$MODE" -p rock_hold_s:=4.0 "${PARAMS[@]}" \
