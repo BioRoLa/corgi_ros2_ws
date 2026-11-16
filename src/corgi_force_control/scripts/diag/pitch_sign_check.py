@@ -22,8 +22,9 @@ in the bag (sim) or --plate-c3d (the Vicon Nexus capture of the Bertecs). A
 c3d has no ROS clock; it is aligned by cross-correlating each leg's estimated
 fz with its plate fz (they agree to ~1 ms in sim), which the session's two
 sharp body rocks make unambiguous -- the windows here are seconds long. The
-pitch is computed exactly as force_estimation does in sim; on hardware it
-negates it (pitch *= -1), so pass --hardware for a real-plate run. Plate
+pitch is computed exactly as force_estimation does. --hardware negates it, for
+bags recorded BEFORE 2026-11-16 only: corgi_imu then published pitch mirrored
+and force_estimation negated it. Newer hardware bags need no flag. Plate
 frames and the leg mapping follow force_plate_track.py (--robot-yaw-deg,
 --plate-map).
 
@@ -90,7 +91,7 @@ def main():
     ap.add_argument("--level", nargs=2, type=float, metavar=("T0", "T1"), help="level reference window, bag time s")
     ap.add_argument("--pitched", type=float, metavar="T0", help="pitched stance from this bag time s to the end")
     ap.add_argument("--timeline", action="store_true", help="print pitch and total plate load every 0.5 s")
-    ap.add_argument("--hardware", action="store_true", help="negate pitch as force_estimation does off-sim")
+    ap.add_argument("--hardware", action="store_true", help="negate pitch: hardware bags from before 2026-11-16 (mirrored IMU quaternion)")
     ap.add_argument("--plate-map", help="leg=plate (default: nearest plate to each hip)")
     ap.add_argument("--plate-c3d", help="Vicon Nexus capture of the Bertec plates (hardware)")
     ap.add_argument("--robot-yaw-deg", type=float, default=0.0, help="robot heading in the plate/lab frame")

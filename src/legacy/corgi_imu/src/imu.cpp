@@ -61,6 +61,19 @@ int main(int argc, char **argv)
 
     printf("Starting IMU node\n");
 
+    // Rollback / A-B only: the pre-2026-11-16 quaternion (pitch and yaw
+    // mirrored against the gyro). Consumers no longer compensate for it.
+    const bool legacy_orientation = node->declare_parameter<bool>("legacy_orientation", false);
+    if (legacy_orientation) {
+        RCLCPP_WARN(node->get_logger(),
+            "LEGACY ORIENTATION: quaternion pitch and yaw are mirrored against the gyro. "
+            "force_estimation, force_control and gslip_pronk expect the corrected frame.");
+    } else {
+        RCLCPP_INFO(node->get_logger(),
+            "IMU frame: x forward, y left, z up; orientation and angular_velocity agree in sign "
+            "(CONVENTIONS.md).");
+    }
+
     imu = std::make_shared<CV7_AHRS>("/dev/ttyTHS1", 921600, 1000, 500);
 
     auto pub = node->create_publisher<corgi_msgs::msg::ImuStamped>("imu", 1);
@@ -99,10 +112,14 @@ int main(int argc, char **argv)
         
         imu_msg.header = headers_msg;
 
-        // Physical mounting correction:
-        // The IMU is mounted with +X pointing backward and +Z pointing downward
-        // relative to the robot body frame. This is a 180-degree rotation about
-        // the Y axis, so vectors transform as (x, y, z) -> (-x, y, -z).
+        // /imu convention (CONVENTIONS.md): body frame x forward, y left,
+        // z up; orientation = that body frame in a z-up world, so roll,
+        // pitch, yaw are rotations about +x, +y, +z and agree in sign with
+        // angular_velocity (nose DOWN is +pitch and +wy).
+        //
+        // Vectors: the driver hands over (x, -y, -z) of the sensor's axes and
+        // this flips x and z, so body = Rz(pi) * sensor. Checked on the robot:
+        // the published rate passes the push test and Vicon as FLU.
         imu_msg.linear_acceleration.x = -acceleration.x();
         imu_msg.linear_acceleration.y = acceleration.y();
         imu_msg.linear_acceleration.z = -acceleration.z();
@@ -111,11 +128,21 @@ int main(int argc, char **argv)
         imu_msg.angular_velocity.y = twist.y();
         imu_msg.angular_velocity.z = -twist.z();
 
-        // Apply the fixed mounting offset to the attitude quaternion.
-        // The IMU quaternion describes the sensor frame pose, so the body frame
-        // pose is q_body = q_imu * q_mount, where q_mount = Ry(pi).
+        // Orientation: q_raw is the sensor in the device's z-DOWN world.
+        // Until 2026-11-16 this published q_raw * Ry(pi), which left the
+        // world z-down: pitch and yaw came out mirrored against the gyro
+        // (hardware bags 2026-09-04 and 2026-10-29: quaternion-derived rate
+        // vs published rate r = +0.95 on x, -0.98 on y, -0.99 on z; vault
+        // Open Issues #47) and every consumer patched it differently.
+        // Correct: q_body = Rx(pi) * q_raw * Rz(pi) -- Rx(pi) turns the world
+        // z-up, Rz(pi) is the same mount the vectors use. That equals the old
+        // output with y and z negated, which is how it is written here.
         const Eigen::Quaternionf q_mount(0.0f, 0.0f, 1.0f, 0.0f);
-        const Eigen::Quaternionf body_orientation = (orientation * q_mount).normalized();
+        Eigen::Quaternionf body_orientation = (orientation * q_mount).normalized();
+        if (!legacy_orientation) {
+            body_orientation.y() = -body_orientation.y();
+            body_orientation.z() = -body_orientation.z();
+        }
         imu_msg.orientation.x = body_orientation.x();
         imu_msg.orientation.y = body_orientation.y();
         imu_msg.orientation.z = body_orientation.z();

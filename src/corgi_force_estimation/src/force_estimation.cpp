@@ -342,8 +342,9 @@ void ForceEstimationNode::timer_cb() {
     };
 
     if (!sim_){
-        pitch *= -1;
-        yaw *= -1;
+        // No IMU sign patch here any more: corgi_imu publishes the
+        // quaternion in the body frame since 2026-11-16 (it was mirrored in
+        // pitch and yaw, and this node negated both).
 
         // dynamic friction compensation
         for (int i=0; i<4; i++) {

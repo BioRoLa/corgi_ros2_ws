@@ -130,8 +130,18 @@ legs use +1; the code refuses anything else.
 
 | where | what | status |
 |---|---|---|
-| hardware IMU | `corgi_imu` (CX5 driver, repo `BioRoLa/corgi_ros_ws`) publishes the angular rate rotated by diag(1, −1, −1) but the quaternion untransformed: pitch and yaw from the quaternion are mirrored (vault Open Issues #47). `force_estimation` undoes it (`pitch *= −1`, `yaw *= −1` on hardware); `force_control` does not, so on the robot it evaluates J at β − true pitch; `gslip_pronk` runs `k_pitch` with the opposite sign on hardware | **open** — fix in the driver (rotate the quaternion into the gyro's frame), then drop the estimator's negation and re-derive `k_pitch` / `d_pitch`, in one change. It alters `/imu` for every consumer on the robot, odometry included |
 | `gslip_pronk` | `roll_sign`, `yaw_sign`, `pitch_sign`, `steer_sign` | geometry (left/right, front/rear) — keep; ideally derived from hip positions |
+
+Removed on 2026-11-16: the hardware IMU mirror. `corgi_imu` published its
+quaternion with pitch and yaw mirrored against its own gyro (vault Open Issues
+#47); it now publishes body x forward, y left, z up with orientation and rate
+agreeing in sign (nose down is +pitch and +wy), `force_estimation`'s
+`pitch *= −1, yaw *= −1` is gone, and `force_control` (which never
+compensated) is right on the robot for the first time.
+`legacy_orientation:=true` on the IMU node restores the old quaternion.
+**Gait gains tuned on the mirror must flip**: `k_pitch` on the robot takes the
+sim's sign again (−0.30, not +0.30), `d_pitch` the same sign as `k_pitch`, and
+any hardware `k_yaw` / heading gain reverses.
 
 Removed on 2026-11-13: the sim's own copy of the direction table (both
 boundaries read `module_directions.yaml`); `force_control`'s unconverted
@@ -153,6 +163,8 @@ feedforward's sign in `force_control` and `force_estimation` (§3).
 - A held pitched stance scored with `pitch_sign_check.py`: every leg's best
   k at 0.
 - `measure_friction.py`: SIGN "agrees" on every motor.
+- `check_imu_frames.py` on a bag with the body rocked by hand: PASS (the
+  quaternion and the rate agree on every axis).
 
 The robot bridge keeps the old half-conversion behind
 `legacy_torque_frame:=true` for A/B comparison and rollback only.
