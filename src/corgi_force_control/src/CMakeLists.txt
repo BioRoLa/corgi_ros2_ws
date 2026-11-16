@@ -24,6 +24,20 @@ foreach(height h15 h18 h21 h24)
   )
 endforeach()
 
+# Independent H21 horizontal-force experiments.
+foreach(axis fx fy)
+  add_executable(exp_h21_${axis}_node exp_h21_${axis}.cpp)
+  ament_target_dependencies(exp_h21_${axis}_node
+    rclcpp
+    std_msgs
+    corgi_msgs
+    Eigen3
+  )
+  target_link_libraries(exp_h21_${axis}_node
+    corgi_force_estimation::corgi_force_estimation
+  )
+endforeach()
+
 # Impedance command publisher (exp_sim_stay) node
 add_executable(exp_sim_stay_node exp_sim_stay.cpp)
 ament_target_dependencies(exp_sim_stay_node
@@ -43,6 +57,8 @@ install(TARGETS
   exp_h18_node
   exp_h21_node
   exp_h24_node
+  exp_h21_fx_node
+  exp_h21_fy_node
   exp_sim_stay_node
   DESTINATION lib/${PROJECT_NAME}
 )

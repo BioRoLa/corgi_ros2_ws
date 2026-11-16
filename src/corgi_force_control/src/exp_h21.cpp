@@ -87,12 +87,12 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
             });
     }
 
-    const double default_b = sim_ ? 200.0 : 80.0;
-    const double default_k = sim_ ? 4000.0 : 2000.0;
-    const double default_b_lateral = sim_ ? 200.0 : 10.0;
-    const double default_k_lateral = sim_ ? 4000.0 : 100.0;
-    const double default_b_vertical = sim_ ? 200.0 : 10.0;
-    const double default_k_vertical = sim_ ? 4000.0 : 100.0;
+    const double default_b = 100.0;
+    const double default_k = 4000.0;
+    const double default_b_lateral = 100.0;
+    const double default_k_lateral = 4000.0;
+    const double default_b_vertical = 100.0;
+    const double default_k_vertical = 4000.0;
     b_value_ = this->declare_parameter<double>("b", default_b);
     k_value_ = this->declare_parameter<double>("k", default_k);
     b_lateral_ = this->declare_parameter<double>("b_lateral", default_b_lateral);
