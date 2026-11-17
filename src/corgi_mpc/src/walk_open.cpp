@@ -27,9 +27,9 @@ int main(int argc, char **argv) {
 
     bool sim = false;
     node->get_parameter("use_sim_time", sim);
-    const double stand_height = node->declare_parameter<double>("stand_height", 0.20);
-    const double velocity = node->declare_parameter<double>("velocity", 0.10);
-    const double step_length = node->declare_parameter<double>("step_length", 0.20);
+    const double stand_height = node->declare_parameter<double>("stand_height", 0.25);
+    const double velocity = node->declare_parameter<double>("velocity", 0.1);
+    const double step_length = node->declare_parameter<double>("step_length", 0.3);
     const double step_height = node->declare_parameter<double>("step_height", 0.04);
     const double duration = node->declare_parameter<double>("duration", 20.0);  // s, ramp-up included
     const double kp = node->declare_parameter<double>("kp", 90.0);

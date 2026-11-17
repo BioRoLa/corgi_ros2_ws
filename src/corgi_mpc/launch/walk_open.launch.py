@@ -2,7 +2,7 @@
 """Open-loop walk: corgi_walk's WalkGait as position commands (no MPC).
 
 gait:=hXX_vYY sets the stand height to XX cm and the speed to YY cm/s,
-for example h20_v10 (0.20 m, 0.10 m/s).
+for example h25_v10 (0.25 m, 0.10 m/s). The defaults match mpc_walk.
 """
 
 import re
@@ -74,8 +74,8 @@ def _setup(context):
 def generate_launch_description():
     defaults = (
         ('environment', 'sim', 'sim or real'),
-        ('gait', 'h20_v10', 'hXX_vYY: stand height XX cm, speed YY cm/s'),
-        ('step_length', '0.2', 'hip travel per gait cycle (m)'),
+        ('gait', 'h25_v10', 'hXX_vYY: stand height XX cm, speed YY cm/s'),
+        ('step_length', '0.3', 'hip travel per gait cycle (m)'),
         ('step_height', '0.04', 'swing height (m), at most stand height - 0.145'),
         ('duration', '20.0', 'walking time, 1 s ramp-up included (s)'),
         ('use_sim_time', 'auto', 'auto (follows environment), true or false'),
