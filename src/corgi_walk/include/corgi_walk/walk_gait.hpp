@@ -1,5 +1,5 @@
-#ifndef TrotGait_HPP
-#define TrotGait_HPP
+#ifndef WALKGAIT_HPP
+#define WALKGAIT_HPP
 
 #include <iostream>
 #include <cmath>
@@ -8,14 +8,28 @@
 #include <chrono>
 #include <array>
 #include <string>
-
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
-class TrotGait {
-    public:
-        TrotGait(bool sim=true, double CoM_bias=0.0, int rate=1000, double BL=0.444, double BW=0.4, double BH=0.2);
+#include "corgi_utils/robot_params.hpp"
 
-        void initialize(double init_eta[8]);
+// Walk gait for the ABAD Corgi. The gait is planned in the sagittal plane with
+// the ABAD joints held at gamma = 0, and the leg touches the ground on its foot
+// arc (centre O_r, radius LegModel::foot_radius), which rolls during stance.
+//
+// stand_height is the height of the hip (ABAD axis) above the ground.
+// step_length is the hip travel per gait cycle.
+// theta/beta use the same convention as before: all legs share one sagittal
+// frame with +x forward, so module A and D need their beta negated when sent
+// to the motors.
+class WalkGait {
+    public:
+        // BL: front to hind hip distance, BW: left to right wheel plane distance.
+        WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000,
+                 double BL=corgi_robot::wheel_base,
+                 double BW=corgi_robot::abad_track + 2.0 * corgi_robot::abad_axis_to_wheel_plane,
+                 double BH=corgi_robot::chassis_height);
+
+        void initialize(double init_eta[8], double step_length_=0.3);
         std::array<std::array<double, 4>, 2> step();
         void set_velocity(double new_value);
         void set_stand_height(double new_value);
@@ -28,12 +42,17 @@ class TrotGait {
         std::array<int, 4> get_swing_phase();
         std::array<double, 4> get_duty();
         bool if_touchdown();
+        // Standing pose (same layout as init_eta) for the current stand_height
+        // and the given step length, with module A the first leg to swing.
+        std::array<double, 8> get_init_eta(double step_length_);
+        // Longest step_length the foot arc can cover at the given stand height.
+        double max_step_length(double stand_height_);
 
-        double velocity     = 0.4;
+        double velocity     = 0.1;
         double stand_height = 0.25;
-        double step_length  = 0.2;
+        double step_length  = 0.3;
         double step_height  = 0.04;
-        
+
     private:
         LegModel leg_model;
 
@@ -42,7 +61,9 @@ class TrotGait {
         const double BW;  // body width
         const double BH;  // body height
         const double CoM_bias;
-        const double swing_time = 0.5;
+        const double swing_time = 0.2;
+        const double max_beta = 40.0 * M_PI / 180.0;  // foot arc spans alpha in [-40, 40] deg
+        double max_reach;  // largest hip to O_r distance the linkage can reach
 
         // Variable
         int rate;
@@ -67,9 +88,6 @@ class TrotGait {
         bool touchdown;
 
         // Intermediate variables
-        int current_rim;
-        std::string touch_rim_list[5] = {"G", "L_l", "L_r", "U_l", "U_r"};
-        int touch_rim_idx[5] = {3, 2, 4, 1, 5};
         double swing_phase_ratio;
         std::array<double, 2> curve_point_temp;
         std::array<double, 2> result_eta;
@@ -83,7 +101,13 @@ class TrotGait {
         double diff_step_length = 0.0;  // Differential step length 
         double new_diff_step_length = 0.0;  // New differential step length
         double diff_dS = 0.0;   // Differential dS
-        int sign_diff[4];   // Differential sign
-};//end class TrotGait
+        int sign_diff[4] = {0, 0, 0, 0};   // Differential sign
 
-#endif // TrotGait_HPP
+        // Largest touchdown beta allowed at the current stand height.
+        double beta_limit(double stand_height_);
+        // Distance the contact point leads the hip at touchdown so that the
+        // stance sweep is symmetric: stance_travel = 2*H_O*tan(b) + 2*R_arc*b.
+        double touchdown_lead(double stance_travel);
+};//end class WalkGait
+
+#endif // WALKGAIT_HPP

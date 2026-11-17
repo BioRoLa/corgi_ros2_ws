@@ -14,13 +14,10 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>sensor_msgs</depend>
   <depend>corgi_msgs</depend>
   <depend>corgi_utils</depend>
   <depend>corgi_walk</depend>
   <depend>corgi_force_estimation</depend>
-  <depend>corgi_gait_selector</depend>
-  <depend>corgi_hybrid</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

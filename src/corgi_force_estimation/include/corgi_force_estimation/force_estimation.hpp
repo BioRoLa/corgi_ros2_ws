@@ -34,6 +34,10 @@ public:
     Eigen::MatrixXd calculate_P_poly(int rim, double alpha);
     Eigen::MatrixXd calculate_P_poly_3d(double alpha);
     Eigen::MatrixXd calculate_P_poly_3d(int rim, double alpha);
+    // contact_radius: radius of the contact point about the rim arc centre
+    // (LegModel::contact_radius). The tyre is a torus, so it drops below
+    // foot_radius once the wheel is tilted.
+    Eigen::MatrixXd calculate_P_poly_3d(int rim, double alpha, double contact_radius);
     Eigen::MatrixXd calculate_jacobian(const Eigen::MatrixXd& P_theta,
                                        const Eigen::MatrixXd& P_theta_deriv,
                                        double beta);

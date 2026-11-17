@@ -12,6 +12,12 @@ This package has been completely converted to ROS 2 Humble, including all librar
 
 ## Features
 
+> **ABAD robot:** both gaits plan in the sagittal plane with the ABAD joints held
+> at `gamma = 0`. The leg stands on its foot arc (centre `O_r`, radius 0.145 m),
+> so `stand_height` is the hip (ABAD axis) height above the ground and must lie
+> between `0.145 + step_height` and about 0.38 m. Touchdown is limited to
+> `|beta| <= 40 deg`, which bounds the step length (`max_step_length`).
+
 ### WalkGait Class
 Generates stable walking gait trajectories using Bezier curve interpolation.
 
@@ -26,8 +32,9 @@ Generates stable walking gait trajectories using Bezier curve interpolation.
 
 **Key Methods:**
 ```cpp
-WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000, 
-         double BL=0.444, double BW=0.4, double BH=0.2);
+// Body dimensions default to the ABAD Corgi (corgi_utils/robot_params.hpp)
+WalkGait(bool sim=true, double CoM_bias=0.0, int rate=1000,
+         double BL=0.510, double BW=0.42335, double BH=0.138);
 void initialize(double init_eta[8], double step_length=0.3);
 std::array<std::array<double, 4>, 2> step();  // Returns [theta, beta] for 4 legs
 void set_velocity(double velocity);
@@ -36,6 +43,8 @@ void set_step_length(double length);
 void set_step_height(double height);
 void set_curvature(double curvature);  // Turning radius control
 bool if_touchdown();  // Check if leg is touching ground
+std::array<double, 8> get_init_eta(double step_length);  // Standing pose for the current stand height
+double max_step_length(double stand_height);             // Longest step the foot arc can cover
 ```
 
 ### TrotGait Class

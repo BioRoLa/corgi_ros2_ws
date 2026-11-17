@@ -100,7 +100,7 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                            std::array<double, 3>{normal.x(), normal.y(), normal.z()});
     
     // calculate jacobian
-    P_poly = kinematics_.calculate_P_poly_3d(legmodel.rim, legmodel.alpha);
+    P_poly = kinematics_.calculate_P_poly_3d(legmodel.rim, legmodel.alpha, legmodel.contact_radius);
     for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
     for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(model.x(), i);
     for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(model.x(), i);

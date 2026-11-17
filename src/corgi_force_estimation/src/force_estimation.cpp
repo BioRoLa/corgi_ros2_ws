@@ -106,19 +106,23 @@ Eigen::MatrixXd KinematicsHelper::calculate_P_poly_3d(double alpha) {
 }
 
 Eigen::MatrixXd KinematicsHelper::calculate_P_poly_3d(int rim, double alpha) {
+    return calculate_P_poly_3d(rim, alpha, leg_model_.foot_radius);
+}
+
+Eigen::MatrixXd KinematicsHelper::calculate_P_poly_3d(int rim, double alpha, double contact_radius) {
     // Freeze the selected material parameter when differentiating in theta.
     // Alpha is in degrees; explicit rim selection resolves shared endpoints.
     double a_mod = std::remainder(alpha, 360.0);
     Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
     if (rim == 1) {
         Eigen::Matrix2d rotation = Eigen::Rotation2Dd(a_mod * M_PI / 180.0).toRotationMatrix();
-        P_poly = rotation * (G_coef_ - O_r_coef_) * (leg_model_.foot_radius / leg_model_.R) + O_r_coef_;
+        P_poly = rotation * (G_coef_ - O_r_coef_) * (contact_radius / leg_model_.R) + O_r_coef_;
     } else if (rim == 2) {
         Eigen::Matrix2d rotation = Eigen::Rotation2Dd((a_mod - 180.0) * M_PI / 180.0).toRotationMatrix();
-        P_poly = rotation * (H_r_coef_ - U_r_coef_) * (leg_model_.foot_radius / leg_model_.R) + U_r_coef_;
+        P_poly = rotation * (H_r_coef_ - U_r_coef_) * (contact_radius / leg_model_.R) + U_r_coef_;
     } else if (rim == 3) {
         Eigen::Matrix2d rotation = Eigen::Rotation2Dd((a_mod + 180.0) * M_PI / 180.0).toRotationMatrix();
-        P_poly = rotation * (H_l_coef_ - U_l_coef_) * (leg_model_.foot_radius / leg_model_.R) + U_l_coef_;
+        P_poly = rotation * (H_l_coef_ - U_l_coef_) * (contact_radius / leg_model_.R) + U_l_coef_;
     }
     return P_poly;
 }
@@ -211,7 +215,7 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double gamma
     leg_model.contact_map_3d(theta, model_beta, model_gamma,
                             std::array<double, 3>{normal.x(), normal.y(), normal.z()});
 
-    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly_3d(leg_model.rim, leg_model.alpha);
+    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly_3d(leg_model.rim, leg_model.alpha, leg_model.contact_radius);
     Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
     Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
     for (int i = 0; i < 8; i++) P_theta += P_poly.col(i) * std::pow(theta, i);

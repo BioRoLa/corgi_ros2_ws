@@ -46,6 +46,12 @@ int main(int argc, char **argv)
         motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
+        // ABAD joint: held at gamma = 0 by the gait
+        motor_cmd_modules[i]->gamma = 0;
+        motor_cmd_modules[i]->kp_h = 150;
+        motor_cmd_modules[i]->ki_h = 0;
+        motor_cmd_modules[i]->kd_h = 1.75;
+        motor_cmd_modules[i]->torque_h = 0;
     } // end for
 
     enum STATES
@@ -59,11 +65,6 @@ int main(int argc, char **argv)
     const std::array<double, 2> CoM_bias = {0.0, 0.0};
     const int sampling_rate = 1000;
     const int transform_count = 5 * sampling_rate; // 5s
-    // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    // double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246,  0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334};   // normal
-    const double init_eta[8] = {1.857467698281913, 0.4791102940603915, 1.6046663223045279, 0.12914729012802004, 1.6046663223045279, -0.12914729012802004, 1.857467698281913, -0.4791102940603915}; // stand height 0.25, step length 0.3, swing time 0.2
-    // const double init_eta[8] = {1.8264141254935087, 0.45320412446525266, 1.6024917635870688, 0.12115692429841468, 1.6024917635870688, -0.12115692429841468, 1.8264141254935087, -0.45320412446525266};  // stand height 0.25, step length 0.3, swing time 0.25
-    // const double init_eta[8] = {1.8900999073259275, 0.5043376058303682, 1.6069784307289758, 0.13712110729189467, 1.6069784307289758, -0.13712110729189467, 1.8900999073259275, -0.5043376058303682};  // stand height 0.25, step length 0.3, swing time 0.15
     double velocity = 0.1;
     double stand_height = 0.25;
     double step_length = 0.3;
@@ -112,6 +113,8 @@ int main(int argc, char **argv)
     walk_gait.set_stand_height(stand_height);
     walk_gait.set_step_length(step_length);
     walk_gait.set_step_height(step_height);
+    // Standing pose for this stand height and step length
+    const std::array<double, 8> init_eta = walk_gait.get_init_eta(step_length);
     while (rclcpp::ok())
     {
         auto one_loop_start = std::chrono::high_resolution_clock::now();
@@ -141,7 +144,7 @@ int main(int argc, char **argv)
             if (last_state != state)
             {
                 double current_eta[8] = {eta_list[0][0], -eta_list[1][0], eta_list[0][1], eta_list[1][1], eta_list[0][2], eta_list[1][2], eta_list[0][3], -eta_list[1][3]};
-                walk_gait.initialize(current_eta);
+                walk_gait.initialize(current_eta, step_length);
             } // end if
             break;
         case WALK:

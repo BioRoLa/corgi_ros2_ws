@@ -1,0 +1,28 @@
+# Convex MPC for the ABAD Corgi. Everything is in the world frame (z up).
+# Keys other than Q_diagonal are optional; the defaults are in src/mpc.cpp.
+
+# The lateral and yaw weights are untuned starting values.
+Q_diagonal: [
+  100,  100,  50,    # roll, pitch, yaw
+  0,    0,    50,    # x, y, z
+  0.1,  0.1,  0.1,   # angular velocity x, y, z
+  1,    1,    2,     # linear velocity x, y, z
+  0                  # gravity state
+]
+
+R_weight: 1.0e-8     # weight on every force component
+
+mass: 23.05          # kg
+# inertia_diagonal: [0.275, 0.962, 1.163]   # kg m^2, body frame; default is a uniform box
+# com_offset: [0.0, 0.0, 0.057166]          # CoM in the body frame of robot_params.hpp
+
+friction_coef: 0.6   # |fx|, |fy| <= friction_coef * fz
+fz_min: 0.0          # N, per stance foot
+fz_max: 250.0        # N, per stance foot
+
+horizon: 10          # N; N-1 inputs at 100 Hz
+
+# Weights used on the old robot (no lateral force, no yaw):
+# Q_diagonal: [100, 100, 0,  0, 0, 50,  0.1, 0.1, 0,  0, 0, 2,  0]
+# Q_diagonal: [40,  40,  0,  0, 0, 100, 0.01, 0.01, 0,  3, 0, 1,  0]
+# Q_diagonal: [40,  40,  0,  0, 0, 100, 0.1, 0.1, 0,  0, 0, 2,  0]

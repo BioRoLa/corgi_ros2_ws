@@ -34,22 +34,28 @@ int main(int argc, char **argv)
         motor_cmd_modules[i]->kd_l = 1.75;
         motor_cmd_modules[i]->torque_r = 0;
         motor_cmd_modules[i]->torque_l = 0;
+        // ABAD joint: held at gamma = 0 by the gait
+        motor_cmd_modules[i]->gamma = 0;
+        motor_cmd_modules[i]->kp_h = 90;
+        motor_cmd_modules[i]->ki_h = 0;
+        motor_cmd_modules[i]->kd_h = 1.75;
+        motor_cmd_modules[i]->torque_h = 0;
     } // end for
 
     double CoM_bias = 0.0;
     int sampling_rate = 1000;
 
-    // double init_eta[8] = {1.7908786895256839, 0.7368824288764617, 1.1794001564068406, -0.07401410141135822, 1.1744876957173913, -1.8344700758454735e-15, 1.7909927830130310, 5.5466991499313485};
-    double init_eta[8] = {1.7695243267183387, 0.7277016876093340, 1.2151854401036246, 0.21018258666216960, 1.2151854401036246, -0.21018258666216960000, 1.7695243267183387, -0.727701687609334}; // normal
-    TrotGait walk_gait(true, CoM_bias, sampling_rate);
-    walk_gait.initialize(init_eta);
-    std::array<std::array<double, 4>, 2> eta_list;
     double velocity = 0.1;
-    double stand_height = 0.2;
+    double stand_height = 0.28; // hip (ABAD axis) height above the ground
     double step_length = 0.3;
-    double step_height = 0.05;
+    double step_height = 0.04;
     double curvature = 0.0;
     int count = 0;
+    TrotGait walk_gait(true, CoM_bias, sampling_rate);
+    walk_gait.stand_height = stand_height;
+    std::array<double, 8> init_eta = walk_gait.get_init_eta(step_length);
+    walk_gait.initialize(init_eta.data());
+    std::array<std::array<double, 4>, 2> eta_list;
 
     // --- Synchronization Setup ---
     // Define control period based on sampling_rate (seconds = 1 / sampling_rate)
@@ -81,11 +87,11 @@ int main(int argc, char **argv)
         count++;
         velocity = 0.2 * cos(count / 1711.0);
         walk_gait.set_velocity(velocity);
-        stand_height = 0.25 + 0.05 * cos(count / 1211.0);
+        stand_height = 0.28 + 0.03 * cos(count / 1211.0);
         walk_gait.set_stand_height(stand_height);
         step_length = (count++ / 3311) % 2 == 0 ? 0.3 : 0.1;
         walk_gait.set_step_length(step_length);
-        step_height = (count++ / 2311) % 2 == 0 ? 0.08 : 0.04;
+        step_height = (count++ / 2311) % 2 == 0 ? 0.06 : 0.04;
         walk_gait.set_step_height(step_height);
         curvature = 1.0 * sin(count / 3911.0);
         walk_gait.set_curvature(curvature);

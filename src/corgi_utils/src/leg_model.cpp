@@ -21,11 +21,15 @@ LegModel::LegModel(bool sim) :
     r(sim? 0.019 : 0.019), // No tire 0.0125: With tire 0.019// they are now the same in webots
     radius(R + r),
     // Foot design parameters
-    foot_offset(0.02225),      // 22.25 mm
-    tyre_thickness(0.01225),   // 12.25 mm
+    foot_offset(0.03),         // 30 mm
+    tyre_thickness(0.015),     // 15 mm
     foot_radius(R + foot_offset + tyre_thickness),
+    tread_radius(R + foot_offset),
     wheel_thickness(0.04),
+    tread_half_width(wheel_thickness / 2.0 - tyre_thickness),
     abad_axis_to_wheel_plane(0.091675),
+    d_wheel(abad_axis_to_wheel_plane),
+    contact_radius(foot_radius),
     // Linkage parameters
     arc_HF(M_PI * 130.0 / 180.0),
     arc_BC(M_PI * 101.0 / 180.0),
@@ -190,7 +194,23 @@ std::array<double, 2> LegModel::rim_point(double alpha) {
     return this->rim_point(alpha, 0);
 }
 
-std::array<double, 2> LegModel::rim_point(double alpha, int rim_in) {
+double LegModel::rim_radius(double w) const {
+    // Flat tread for |w| <= tread_half_width, then a corner fillet of radius
+    // tyre_thickness down to tread_radius at the wheel edge.
+    double excess = std::abs(w) - tread_half_width;
+    if (excess <= 0.0) return foot_radius;
+    return tread_radius + std::sqrt(std::max(0.0, tyre_thickness * tyre_thickness - excess * excess));
+}
+
+std::array<double, 3> LegModel::rim_point_3d(double alpha, int rim_in, double w, double gamma_in) {
+    std::array<double, 2> p = this->rim_point(alpha, rim_in, w);
+    double lateral = abad_axis_to_wheel_plane + w;
+    double sin_g = std::sin(gamma_in);
+    double cos_g = std::cos(gamma_in);
+    return {p[0], lateral * cos_g - p[1] * sin_g, lateral * sin_g + p[1] * cos_g};
+}
+
+std::array<double, 2> LegModel::rim_point(double alpha, int rim_in, double w) {
     // Calculates point on the wheel rim for given alpha angle (degrees).
     // Alpha is the material parameter: foot [-40,40], right upper [40,180],
     // left upper [-180,-40]. It is not a world-frame bearing.
@@ -240,7 +260,8 @@ std::array<double, 2> LegModel::rim_point(double alpha, int rim_in) {
     double rotated_x = rot_mat[0][0] * dx + rot_mat[0][1] * dy;
     double rotated_y = rot_mat[1][0] * dx + rot_mat[1][1] * dy;
     
-    return {{center[0] + foot_radius * rotated_x, center[1] + foot_radius * rotated_y}};
+    double r_eff = this->rim_radius(w);
+    return {{center[0] + r_eff * rotated_x, center[1] + r_eff * rotated_y}};
 }
 // TODO: remove contact_map after contact_map_3d is fully tested and validated in simulation　
 void LegModel::contact_map(double theta_in, double beta_in, double slope, bool contact_upper, bool contact_lower) {
@@ -346,31 +367,49 @@ void LegModel::contact_map_3d(double theta_in, double beta_in, double gamma_in, 
         arc_list[0][0] = no_contact;
     }
 
-    // Pick the lower wheel edge using the normal, including ground inclination.
-    double contact_edge_offset = 0.0;
-    if (std::abs(normal_y) > 1e-12) {
-        contact_edge_offset = normal_y > 0.0 ? -wheel_thickness / 2.0 : wheel_thickness / 2.0;
-    }
-    d_wheel = abad_axis_to_wheel_plane + contact_edge_offset;
+    // The tyre is a torus: a flat tread of half width tread_half_width with
+    // corner fillets of radius tyre_thickness. For each rim arc, e_r is the
+    // in-plane radial direction of its lowest point; the cross-section point
+    // furthest along -normal is the support point of the fillet on the low side.
+    const std::array<std::complex<double>, 3> centers = {O_r_c, U_r_c, U_l_c};
+    bool tilted = std::abs(normal_y) > 1e-4;  // near upright: tread centre
 
     double min_value = no_contact;
     int min_index = 3;
+    double min_w = 0.0;
+    double min_radius = foot_radius;
+    std::complex<double> min_point = 0.0;
     for (int i = 0; i < 3; i++) {
         if (!std::isfinite(arc_list[i][0])) continue;
-        double height = normal_plane * arc_list[i][0] + normal_y * d_wheel;
+        std::complex<double> e_r = (std::complex<double>(arc_list[i][2], arc_list[i][0]) - centers[i]) / foot_radius;
+        double w = 0.0;
+        double rho = foot_radius;
+        if (tilted) {
+            double radial = std::max(0.0, -normal_plane * e_r.imag());
+            double norm = std::hypot(radial, normal_y);
+            rho = tread_radius + tyre_thickness * radial / norm;
+            w = -std::copysign(tread_half_width, normal_y) - tyre_thickness * normal_y / norm;
+        }
+        std::complex<double> point = centers[i] + rho * e_r;
+        double height = normal_plane * point.imag() + normal_y * (abad_axis_to_wheel_plane + w);
         if (height < min_value) {
             min_value = height;
             min_index = i;
+            min_w = w;
+            min_radius = rho;
+            min_point = point;
         }
     }
 
     rim = min_index == 3 ? 0 : min_index + 1;
     alpha = arc_list[min_index][1] * 180.0 / M_PI;
+    contact_w = min_w;
+    contact_radius = min_radius;
+    d_wheel = abad_axis_to_wheel_plane + contact_w;
     contact_p = {0.0, 0.0};
     contact_p_3d = {0.0, 0.0, 0.0};
     if (rim != 0) {
-        std::complex<double> contact = std::complex<double>(arc_list[min_index][2], arc_list[min_index][0])
-                                       * std::exp(1i * slope_adjusted);
+        std::complex<double> contact = min_point * std::exp(1i * slope_adjusted);
         contact_p = {contact.real(), contact.imag()};
         contact_p_3d = {contact_p[0],
                         d_wheel * cos_g - contact_p[1] * sin_g,
@@ -470,6 +509,10 @@ std::array<double, 2> LegModel::inverse(const std::array<double, 2>& pos, const 
     if (joint == "G"){
         theta = inv_G_dist_poly(abs_pos);
         beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);    // atan2(y, x)
+    } else if (joint == "O_r"){
+        // Foot arc centre: on the leg axis, R closer to the hip than G.
+        theta = inv_G_dist_poly(abs_pos + R);
+        beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);
     } else if (joint == "U_l" || joint == "U_r"){
         theta = inv_U_dist_poly(abs_pos);
         double U_x_beta0, U_y_beta0;
@@ -493,7 +536,7 @@ std::array<double, 2> LegModel::inverse(const std::array<double, 2>& pos, const 
         }//end if else            
         beta = std::atan2(pos[1], pos[0]) - std::atan2(L_y_beta0, L_x_beta0);    // atan2(y, x)
     } else {
-        throw std::runtime_error("joint needs to be 'G', 'U_l', 'U_r', 'L_l', or 'L_r'.");
+        throw std::runtime_error("joint needs to be 'G', 'O_r', 'U_l', 'U_r', 'L_l', or 'L_r'.");
     }//end if else
 
     return {theta, beta};
@@ -687,10 +730,11 @@ std::array<double, 3> LegModel::objective_3d(const std::array<double, 3> &d_q, c
     std::complex<double> guessed_O_exp = (O_r_poly[0](guessed_q[0]) + 1i * O_r_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0.0, guessed_q[1]));
 
     double d_alpha = std::arg(-1i / (guessed_I_exp - guessed_O_exp)) - std::arg(-1i / (current_I_exp - current_O_exp));
-    double roll_d = d_alpha * foot_radius;
 
     this->contact_map_3d(current_q[0], current_q[1], current_q[2], slope, true, true);
     std::array<double, 3> current_contact = contact_p_3d;
+    // Rolling happens on the circle the contact point traces about the wheel axis.
+    double roll_d = d_alpha * contact_radius;
 
     this->contact_map_3d(guessed_q[0], guessed_q[1], guessed_q[2], slope, true, true);
     std::array<double, 3> guessed_contact = contact_p_3d;
