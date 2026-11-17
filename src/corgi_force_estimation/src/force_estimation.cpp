@@ -3,6 +3,7 @@
 KinematicsHelper::KinematicsHelper(bool sim)
     : sim_(sim),
       leg_model_(sim),
+      foot_model_(sim),
       H_l_coef_(2, 8),
       H_r_coef_(2, 8),
       F_l_coef_(2, 8),
@@ -189,6 +190,79 @@ Eigen::MatrixXd KinematicsHelper::calculate_jacobian_3d(const Eigen::MatrixXd& P
     return jacobian;
 }
 
+bool KinematicsHelper::parse_foot_link(const std::string& name, FootLink& link) {
+    if (name == "axis") link = FootLink::Axis;
+    else if (name == "F_l") link = FootLink::F_l;
+    else if (name == "F_r") link = FootLink::F_r;
+    else return false;
+    return true;
+}
+
+Eigen::Matrix3d KinematicsHelper::contact_jacobian_3d(double theta, double beta, double gamma) {
+    Eigen::MatrixXd P_poly = calculate_P_poly_3d(leg_model_.rim, leg_model_.alpha, leg_model_.contact_radius);
+    Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
+    Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
+    for (int i = 0; i < 8; i++) P_theta += P_poly.col(i) * std::pow(theta, i);
+    for (int i = 1; i < 8; i++) P_theta_deriv += i * P_poly.col(i) * std::pow(theta, i - 1);
+    Eigen::Matrix3d jacobian = calculate_jacobian_3d(P_theta, P_theta_deriv, beta, gamma, leg_model_.d_wheel);
+    if (leg_model_.rim != 1 || foot_link_ == FootLink::Axis) return jacobian;
+
+    // Foot held on a lower link: differentiate the contact point as a point
+    // fixed to the frame (G -> F_l or F_r) of that link. Sagittal plane, same
+    // (x, z) convention as calculate_jacobian_3d.
+    const bool left = foot_link_ == FootLink::F_l;
+    auto link_frame = [&](double t, double b, Eigen::Vector2d& origin, Eigen::Vector2d& axis) {
+        foot_model_.forward(t, b);
+        const auto& link = left ? foot_model_.F_l : foot_model_.F_r;
+        origin << foot_model_.G[0], foot_model_.G[1];
+        axis = (Eigen::Vector2d(link[0], link[1]) - origin).normalized();
+    };
+    const double cb = std::cos(beta), sb = std::sin(beta);
+    const Eigen::Vector2d contact(P_theta(0, 0) * cb - P_theta(1, 0) * sb,
+                                  P_theta(0, 0) * sb + P_theta(1, 0) * cb);
+    Eigen::Vector2d origin, axis;
+    link_frame(theta, beta, origin, axis);
+    const double along = (contact - origin).dot(axis);
+    const double across = (contact - origin).dot(Eigen::Vector2d(-axis.y(), axis.x()));
+    auto point = [&](double t, double b) {
+        link_frame(t, b, origin, axis);
+        return Eigen::Vector2d(origin + along * axis + across * Eigen::Vector2d(-axis.y(), axis.x()));
+    };
+    // theta = (phi_L - phi_R) / 2 + theta0, beta = (phi_L + phi_R) / 2
+    constexpr double h = 1e-6;
+    Eigen::Matrix2d sagittal;
+    sagittal.col(0) = (point(theta + h / 2, beta + h / 2) - point(theta - h / 2, beta - h / 2)) / (2 * h);
+    sagittal.col(1) = (point(theta - h / 2, beta + h / 2) - point(theta + h / 2, beta - h / 2)) / (2 * h);
+    const double sg = std::sin(gamma), cg = std::cos(gamma);
+    for (int col = 0; col < 2; ++col) {
+        jacobian(0, col) = sagittal(0, col);
+        jacobian(1, col) = -sagittal(1, col) * sg;
+        jacobian(2, col) = sagittal(1, col) * cg;
+    }
+    return jacobian;
+}
+
+bool declare_leg_model_parameters(rclcpp::Node& node, bool sim, KinematicsHelper& kinematics,
+                                  corgi_force::LegGravity& gravity) {
+    const std::string foot_link = node.declare_parameter<std::string>("foot_link", sim ? "F_l" : "axis");
+    KinematicsHelper::FootLink link;
+    if (!KinematicsHelper::parse_foot_link(foot_link, link)) {
+        RCLCPP_ERROR(node.get_logger(), "foot_link must be axis, F_l or F_r (got %s)", foot_link.c_str());
+        return false;
+    }
+    kinematics.set_foot_link(link);
+    const bool leg_gravity = node.declare_parameter<bool>("leg_gravity", sim);
+    gravity = corgi_force::LegGravity{};
+    if (leg_gravity) {
+        gravity.m_cz = node.declare_parameter<double>("leg_m_cz", -0.070);
+        gravity.m_cz_theta = node.declare_parameter<double>("leg_m_cz_theta", -0.105);
+        gravity.m_d_abad = node.declare_parameter<double>("abad_m_d", -0.150);
+    }
+    RCLCPP_INFO(node.get_logger(), "Leg model: foot_link %s, leg gravity %s (m_cz %.3f, m_cz_theta %.3f, abad_m_d %.3f)",
+                foot_link.c_str(), leg_gravity ? "on" : "off", gravity.m_cz, gravity.m_cz_theta, gravity.m_d_abad);
+    return true;
+}
+
 // ============================================================================
 // ForceEstimator Implementation
 // ============================================================================
@@ -215,16 +289,11 @@ Eigen::MatrixXd ForceEstimator::estimate(double theta, double beta, double gamma
     leg_model.contact_map_3d(theta, model_beta, model_gamma,
                             std::array<double, 3>{normal.x(), normal.y(), normal.z()});
 
-    Eigen::MatrixXd P_poly = kinematics_.calculate_P_poly_3d(leg_model.rim, leg_model.alpha, leg_model.contact_radius);
-    Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
-    Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
-    for (int i = 0; i < 8; i++) P_theta += P_poly.col(i) * std::pow(theta, i);
-    for (int i = 1; i < 8; i++) P_theta_deriv += i * P_poly.col(i) * std::pow(theta, i - 1);
-
-    Eigen::Matrix3d model_jacobian = kinematics_.calculate_jacobian_3d(
-        P_theta, P_theta_deriv, model_beta, model_gamma, leg_model.d_wheel);
+    Eigen::Matrix3d model_jacobian = kinematics_.contact_jacobian_3d(theta, model_beta, model_gamma);
     Eigen::Matrix3d jacobian = world_from_leg * corgi_force::motor_jacobian(model_jacobian, frame);
     Eigen::Vector3d torque(torque_l, torque_r, torque_h);
+    // Statics: torque + leg weight + J^T * (ground reaction) = 0.
+    torque += gravity_.motor_torque(model_beta, world_from_leg, frame);
     // Least-squares reaction force remains finite at singular contact configurations.
     return jacobian.transpose().completeOrthogonalDecomposition().solve(-torque);
 }
@@ -242,8 +311,14 @@ ForceEstimationNode::ForceEstimationNode()
     RCLCPP_INFO(this->get_logger(), "Force Estimation Starts");
 
     this->get_parameter_or("use_sim_time", sim_, false);
-    mass_ = 0.9;
     estimator_ = std::make_unique<ForceEstimator>(sim_);
+    corgi_force::LegGravity leg_gravity;
+    if (!declare_leg_model_parameters(*this, sim_, estimator_->kinematics(), leg_gravity)) {
+        throw std::invalid_argument("invalid leg model parameters");
+    }
+    estimator_->set_leg_gravity(leg_gravity);
+    // Without the leg gravity model, keep the old constant leg-weight offset.
+    mass_ = this->get_parameter("leg_gravity").as_bool() ? 0.0 : 0.9;
 
     if (sim_) {
         RCLCPP_INFO(this->get_logger(), "Waiting for Webots clock...");

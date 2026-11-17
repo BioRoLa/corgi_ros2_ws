@@ -8,7 +8,16 @@ ForceControlNode::ForceControlNode()
       phi_prev_modules_(4, Eigen::MatrixXd::Zero(3, 1))
 {
     RCLCPP_INFO(this->get_logger(), "Force Control Starts");
-    
+    if (!declare_leg_model_parameters(*this, sim_, kinematics_, leg_gravity_)) {
+        throw std::invalid_argument("invalid leg model parameters");
+    }
+    force_feedback_ki_ = this->declare_parameter<double>("force_feedback_ki", 0.0);
+    force_feedback_limit_ = this->declare_parameter<double>("force_feedback_limit", 20.0);
+    force_feedback_min_fz_ = this->declare_parameter<double>("force_feedback_min_fz", 5.0);
+    for (auto& integral : force_integral_) integral.setZero();
+    RCLCPP_INFO(this->get_logger(), "Force feedback: ki %.1f 1/s, limit %.1f N, active above %.1f N",
+                force_feedback_ki_, force_feedback_limit_, force_feedback_min_fz_);
+
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
     while (rclcpp::ok()) {
@@ -74,23 +83,29 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                        corgi_msgs::msg::ForceState* force_state_, 
                                        corgi_msgs::msg::MotorCmd* motor_cmd_, 
                                        const Eigen::Matrix3d& world_from_leg,
-                                       const corgi_force::LegFrame& frame) {
-    // force command (3D)
+                                       const corgi_force::LegFrame& frame,
+                                       Eigen::Vector3d& force_integral) {
+    // force command (3D): the force the foot applies to the ground
     Eigen::MatrixXd force_des(3, 1);
     force_des << imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz;
 
-    Eigen::MatrixXd force_err(3, 1);
-    force_err << force_des(0, 0)-force_state_->fx, 
-                 force_des(1, 0)-force_state_->fy, 
-                 force_des(2, 0)-force_state_->fz;
-    
+    // Optional outer force loop on the estimate. force/state is the ground
+    // reaction on the leg, so the foot pushes the ground with its negative.
+    if (force_feedback_ki_ > 0.0) {
+        const double dt = 0.001;
+        if (-imp_cmd_->fz > force_feedback_min_fz_) {
+            Eigen::Vector3d measured(-force_state_->fx, -force_state_->fy, -force_state_->fz);
+            force_integral += force_feedback_ki_ * dt * (Eigen::Vector3d(force_des) - measured);
+            force_integral = force_integral.cwiseMax(-force_feedback_limit_).cwiseMin(force_feedback_limit_);
+        } else {
+            // Leg unloaded or in swing: let the correction fade out.
+            force_integral *= std::exp(-dt / 0.05);
+        }
+        force_des += force_integral;
+    }
+
     LegModel& legmodel = kinematics_.get_leg_model();
-            
-    Eigen::MatrixXd P_poly = Eigen::MatrixXd::Zero(2, 8);
-    Eigen::MatrixXd P_poly_deriv = Eigen::MatrixXd::Zero(2, 7);
-    Eigen::MatrixXd P_theta = Eigen::MatrixXd::Zero(2, 1);
-    Eigen::MatrixXd P_theta_deriv = Eigen::MatrixXd::Zero(2, 1);
-    
+
     // Use contact_map_3d to get alpha and contact point
     Eigen::Vector3d normal = world_from_leg.transpose() * Eigen::Vector3d::UnitZ();
     Eigen::Vector3d model = frame.model_angles(motor_state_->theta, motor_state_->beta, motor_state_->gamma);
@@ -98,15 +113,9 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     double model_gamma = model.z();
     legmodel.contact_map_3d(model.x(), model_beta, model_gamma,
                            std::array<double, 3>{normal.x(), normal.y(), normal.z()});
-    
-    // calculate jacobian
-    P_poly = kinematics_.calculate_P_poly_3d(legmodel.rim, legmodel.alpha, legmodel.contact_radius);
-    for (int i=0; i<7; i++) P_poly_deriv.col(i) = P_poly.col(i+1)*(i+1);
-    for (int i=0; i<8; i++) P_theta += P_poly.col(i) * pow(model.x(), i);
-    for (int i=0; i<7; i++) P_theta_deriv += P_poly_deriv.col(i) * pow(model.x(), i);
 
-    Eigen::Matrix3d J_leg = kinematics_.calculate_jacobian_3d(
-        P_theta, P_theta_deriv, model_beta, model_gamma, legmodel.d_wheel);
+    // calculate jacobian (foot_link decides how a foot contact loads the motors)
+    Eigen::Matrix3d J_leg = kinematics_.contact_jacobian_3d(model.x(), model_beta, model_gamma);
     // Cartesian commands and impedance axes are world-frame; columns are [L,R,H].
     Eigen::Matrix3d J_fb = world_from_leg * corgi_force::motor_jacobian(J_leg, frame);
 
@@ -130,7 +139,9 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
     Eigen::Vector3d target_model = frame.model_angles(imp_cmd_->theta, imp_cmd_->beta, imp_cmd_->gamma);
     target_model.x() = std::max(target_model.x(), 17.0 / 180.0 * M_PI);
     eta_cmd = frame.motor_angles(target_model);
-    trq_cmd_base = J_fb.transpose() * (force_des + M*(-acc_fb));
+    // Statics: torque + leg weight = J^T * (force the foot applies to the ground).
+    trq_cmd_base = J_fb.transpose() * (force_des + M*(-acc_fb))
+                 - leg_gravity_.motor_torque(model_beta, world_from_leg, frame);
 
     // calculate phi command
     Eigen::MatrixXd phi_des(3, 1);
@@ -253,7 +264,8 @@ void ForceControlNode::timer_cb() {
             const auto& frame = leg_frames_[i];
             Eigen::Matrix3d world_from_leg = world_from_body * frame.body_from_leg;
             force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i],
-                          force_state_modules[i], motor_cmd_modules[i], world_from_leg, frame);
+                          force_state_modules[i], motor_cmd_modules[i], world_from_leg, frame,
+                          force_integral_[i]);
 
         }
         phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;

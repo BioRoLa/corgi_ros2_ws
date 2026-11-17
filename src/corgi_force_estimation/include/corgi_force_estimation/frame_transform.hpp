@@ -3,6 +3,7 @@
 
 #include <Eigen/Geometry>
 #include <array>
+#include <cmath>
 #include <vector>
 #include <stdexcept>
 
@@ -90,5 +91,33 @@ inline bool body_rotation(const Eigen::Quaterniond& imu, bool sim, Eigen::Matrix
 inline Eigen::Matrix3d motor_jacobian(const Eigen::Matrix3d& model_jacobian, const LegFrame& frame) {
     return model_jacobian * frame.model_motor_derivative();
 }
+
+// Weight of the leg itself, as generalized gravity forces on the motors.
+// Beta turns the whole linkage rigidly, so the leg centre of mass in the leg
+// frame is Rot(beta) * (0, cz(theta)) with cz < 0 below the hip (the linkage is
+// symmetric, so it stays on the leg axis); the ABAD joint additionally carries
+// the module's sideways centre-of-mass offset. Only mass moments are needed:
+//   m_cz       = M * cz            (kg m)
+//   m_cz_theta = M * dcz/dtheta    (kg m / rad)
+//   m_d_abad   = M_module * d      (kg m)
+struct LegGravity {
+    double m_cz = 0.0, m_cz_theta = 0.0, m_d_abad = 0.0;
+
+    // Motor-coordinate torque the leg weight applies to the joints (N m), for
+    // model beta and world_from_leg. A motor must apply the negative of this to
+    // hold the leg against gravity.
+    Eigen::Vector3d motor_torque(double beta, const Eigen::Matrix3d& world_from_leg,
+                                 const LegFrame& frame, double g = 9.81) const {
+        Eigen::Vector3d gravity = world_from_leg.transpose() * Eigen::Vector3d(0.0, 0.0, -g);
+        double sb = std::sin(beta), cb = std::cos(beta);
+        // U = -(gx * x + gz * z) with x = -cz sin(beta), z = cz cos(beta).
+        double q_beta = -m_cz * (gravity.x() * cb + gravity.z() * sb);
+        double q_theta = m_cz_theta * (-gravity.x() * sb + gravity.z() * cb);
+        double q_gamma = -m_d_abad * gravity.z();
+        // Model joint torques: theta = (phi_L - phi_R) / 2, beta = (phi_L + phi_R) / 2.
+        Eigen::Vector3d model(0.5 * (q_theta + q_beta), 0.5 * (q_beta - q_theta), q_gamma);
+        return frame.model_motor_derivative().transpose() * model;
+    }
+};
 } // namespace corgi_force
 #endif

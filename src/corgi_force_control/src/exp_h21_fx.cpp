@@ -64,7 +64,8 @@ ImpedanceCmdPublisherNode::ImpedanceCmdPublisherNode()
 
     this->get_parameter_or("use_sim_time", sim_, false);
     kinematics_ = std::make_unique<KinematicsHelper>(sim_);
-    const double default_mass = sim_ ? 22.055468 : 29.6;
+    // Simulation: the force plates read 226 N in total for the corgi_sim robot.
+    const double default_mass = sim_ ? 23.05 : 29.6;
     mg_ = this->declare_parameter<double>("robot_mass", default_mass) * 9.81;
 
     if (sim_) {

@@ -30,6 +30,22 @@ class KinematicsHelper {
 public:
     explicit KinematicsHelper(bool sim);
 
+    // How a foot (rim 1) contact point moves with the joints.
+    //   Axis: the foot arc stays aligned with the O-G leg axis without loading
+    //         the motors (the LegModel geometry; the original Jacobian).
+    //   F_l / F_r: the foot is held on that lower link, so moments about G go
+    //         through that link's chain. corgi_sim servoes its foot (G) joint
+    //         on one lower link, which behaves as F_l.
+    enum class FootLink { Axis, F_l, F_r };
+    void set_foot_link(FootLink link) { foot_link_ = link; }
+    FootLink foot_link() const { return foot_link_; }
+    // "axis", "F_l" or "F_r"; returns false for anything else.
+    static bool parse_foot_link(const std::string& name, FootLink& link);
+
+    // Contact Jacobian in model coordinates (rows x, y, z of the leg frame;
+    // columns phi_L, phi_R, gamma). Call leg_model.contact_map_3d first.
+    Eigen::Matrix3d contact_jacobian_3d(double theta, double beta, double gamma);
+
     // Kinematics computations
     Eigen::MatrixXd calculate_P_poly(int rim, double alpha);
     Eigen::MatrixXd calculate_P_poly_3d(double alpha);
@@ -57,6 +73,8 @@ private:
 
     bool sim_;
     LegModel leg_model_;
+    LegModel foot_model_;  // scratch model for the foot-link Jacobian
+    FootLink foot_link_ = FootLink::Axis;
 
     // Polynomial coefficient matrices (2x8 each)
     Eigen::MatrixXd H_l_coef_;
@@ -81,9 +99,24 @@ public:
     // Return world-frame ground reaction; input angles/torques are motor coordinates.
     Eigen::MatrixXd estimate(double theta, double beta, double gamma, double torque_l, double torque_r, double torque_h, const Eigen::Matrix3d& world_from_body, const corgi_force::LegFrame& frame);
 
+    KinematicsHelper& kinematics() { return kinematics_; }
+    // Leg weight removed from the motor torques before solving for the force.
+    void set_leg_gravity(const corgi_force::LegGravity& gravity) { gravity_ = gravity; }
+
 private:
     KinematicsHelper kinematics_;
+    corgi_force::LegGravity gravity_;
 };
+
+// Leg model options shared by force estimation and force control, as ROS
+// parameters (defaults differ between simulation and hardware):
+//   foot_link       "F_l" (sim) / "axis" (real), see KinematicsHelper::FootLink
+//   leg_gravity     true (sim) / false (real): compensate the leg's own weight
+//   leg_m_cz, leg_m_cz_theta, abad_m_d   LegGravity mass moments; the
+//                   defaults are fitted to the corgi_sim robot on force plates
+// Returns false (and logs) for an invalid foot_link.
+bool declare_leg_model_parameters(rclcpp::Node& node, bool sim, KinematicsHelper& kinematics,
+                                  corgi_force::LegGravity& gravity);
 
 
 class ForceEstimationNode : public rclcpp::Node {

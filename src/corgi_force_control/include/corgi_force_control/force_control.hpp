@@ -42,7 +42,8 @@ private:
                       corgi_msgs::msg::ForceState* force_state_, 
                       corgi_msgs::msg::MotorCmd* motor_cmd_, 
                       const Eigen::Matrix3d& world_from_leg,
-                      const corgi_force::LegFrame& frame);
+                      const corgi_force::LegFrame& frame,
+                      Eigen::Vector3d& force_integral);
     
     void position_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_, 
                          corgi_msgs::msg::MotorCmd* motor_cmd_);
@@ -50,6 +51,13 @@ private:
     // Initialize the mode before the kinematics helper that consumes it.
     const bool sim_;
     KinematicsHelper kinematics_;
+    corgi_force::LegGravity leg_gravity_;
+
+    // Outer force loop (force_feedback_ki = 0 disables it)
+    double force_feedback_ki_ = 0.0;      // 1/s
+    double force_feedback_limit_ = 20.0;  // N, per axis
+    double force_feedback_min_fz_ = 5.0;  // N, commanded load above which it integrates
+    std::array<Eigen::Vector3d, 4> force_integral_;
     
     // Messages
     corgi_msgs::msg::ImpedanceCmdStamped imp_cmd_;
