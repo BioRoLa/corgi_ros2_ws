@@ -10,6 +10,7 @@
 #include <string>
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/bezier.hpp"
+#include "corgi_utils/swing_planner.hpp"
 #include "corgi_utils/robot_params.hpp"
 
 // Trot gait for the ABAD Corgi. The gait is planned in the sagittal plane with
@@ -89,11 +90,11 @@ class TrotGait {
 
         // Intermediate variables
         double swing_phase_ratio;
-        std::array<double, 2> curve_point_temp;
         std::array<double, 2> result_eta;
-        std::array<double, 2> p_lo;
-        std::array<double, 2> p_td;
-        std::array<SwingProfile, 4> sp;
+        // Swing of each leg, planned as in LegWheel (corgi_utils/swing_planner.hpp).
+        std::array<legwheel_swing::RimSwing, 4> sp;
+        // Pose of each leg one control period earlier (for the lift-off velocity).
+        std::array<std::array<double, 2>, 4> prev_eta;
 
         // For turning 
         double outer_radius;
@@ -108,6 +109,8 @@ class TrotGait {
         // Distance the contact point leads the hip at touchdown so that the
         // stance sweep is symmetric: stance_travel = 2*H_O*tan(b) + 2*R_arc*b.
         double touchdown_lead(double stance_travel);
+        // Touchdown beta b of that symmetric stance sweep.
+        double stance_beta(double stance_travel);
 };//end class TrotGait
 
 #endif // TROTGAIT_HPP

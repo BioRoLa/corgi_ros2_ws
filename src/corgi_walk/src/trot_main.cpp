@@ -45,16 +45,26 @@ int main(int argc, char **argv)
     double CoM_bias = 0.0;
     int sampling_rate = 1000;
 
-    double velocity = 0.1;
-    double stand_height = 0.28; // hip (ABAD axis) height above the ground
-    double step_length = 0.3;
-    double step_height = 0.04;
+    // vary_parameters (default true) runs the demo that sweeps every gait
+    // parameter. Set it false to walk straight with the fixed values below,
+    // e.g. to compare /motor/command against a LegWheel CSV.
+    const bool vary_parameters = node->declare_parameter<bool>("vary_parameters", true);
+    double velocity = node->declare_parameter<double>("velocity", 0.1);
+    double stand_height = node->declare_parameter<double>("stand_height", 0.28); // hip (ABAD axis) height above the ground
+    double step_length = node->declare_parameter<double>("step_length", 0.3);
+    double step_height = node->declare_parameter<double>("step_height", 0.04);
     double curvature = 0.0;
     int count = 0;
     TrotGait walk_gait(true, CoM_bias, sampling_rate);
     walk_gait.stand_height = stand_height;
     std::array<double, 8> init_eta = walk_gait.get_init_eta(step_length);
     walk_gait.initialize(init_eta.data());
+    walk_gait.step_height = step_height;
+    walk_gait.set_step_length(step_length);
+    if (!vary_parameters)
+    {
+        walk_gait.set_velocity(velocity);
+    } // end if
     std::array<std::array<double, 4>, 2> eta_list;
 
     // --- Synchronization Setup ---
@@ -84,17 +94,20 @@ int main(int argc, char **argv)
     while (rclcpp::ok())
     {
         // for (int count=0; count<200000; ){
-        count++;
-        velocity = 0.2 * cos(count / 1711.0);
-        walk_gait.set_velocity(velocity);
-        stand_height = 0.28 + 0.03 * cos(count / 1211.0);
-        walk_gait.set_stand_height(stand_height);
-        step_length = (count++ / 3311) % 2 == 0 ? 0.3 : 0.1;
-        walk_gait.set_step_length(step_length);
-        step_height = (count++ / 2311) % 2 == 0 ? 0.06 : 0.04;
-        walk_gait.set_step_height(step_height);
-        curvature = 1.0 * sin(count / 3911.0);
-        walk_gait.set_curvature(curvature);
+        if (vary_parameters)
+        {
+            count++;
+            velocity = 0.2 * cos(count / 1711.0);
+            walk_gait.set_velocity(velocity);
+            stand_height = 0.28 + 0.03 * cos(count / 1211.0);
+            walk_gait.set_stand_height(stand_height);
+            step_length = (count++ / 3311) % 2 == 0 ? 0.3 : 0.1;
+            walk_gait.set_step_length(step_length);
+            step_height = (count++ / 2311) % 2 == 0 ? 0.06 : 0.04;
+            walk_gait.set_step_height(step_height);
+            curvature = 1.0 * sin(count / 3911.0);
+            walk_gait.set_curvature(curvature);
+        } // end if
         eta_list = walk_gait.step();
         // Publish motor commands
         for (int i = 0; i < 4; i++)

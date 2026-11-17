@@ -18,6 +18,34 @@ This package has been completely converted to ROS 2 Humble, including all librar
 > between `0.145 + step_height` and about 0.38 m. Touchdown is limited to
 > `|beta| <= 40 deg`, which bounds the step length (`max_step_length`).
 
+### Match with LegWheel
+
+Both gaits follow the LegWheel planner (`GaitGenerator3D`, BioRoLa/LegWheel):
+
+- **Stance:** the foot arc rolls under the hip, sweeping symmetrically about it.
+- **Swing:** planned relative to the hip on the rim point that will touch the
+  ground, with LegWheel's 12-point Bezier shape fitted to the lift-off and
+  touchdown velocities (`corgi_utils/swing_planner.hpp`). `step_height` is the
+  height of that rim point above its lift-off/touchdown line, so the foot
+  clears the ground by more than `step_height` (about 0.10 m for walk at
+  `stand_height` 0.25, `step_length` 0.3, `step_height` 0.04).
+- **Walk timing:** legs lift off a quarter cycle apart (A, C, B, D).
+
+LegWheel fits the swing shape with NLopt COBYLA; this package uses its own
+optimizer, so swing angles can differ by a few degrees. Recorded on
+`/motor/command` against LegWheel CSVs with the same settings (`stand_height`
+0.25 m, 0.1 m/s, `step_length` 0.3 m, `step_height` 0.04 m, LegWheel stance duty
+set to 0.8 for walk and 0.5 for trot, stability margin 0):
+
+| Gait | Stance max error (theta / beta) | Swing max error (theta / beta) |
+|---|---|---|
+| Walk | 0.21 / 0.36 deg | 3.0 / 1.3 deg |
+| Trot | 0.15 / 0.37 deg | 0.8 / 1.0 deg |
+
+LegWheel CSVs use one beta sign for all legs. `walk_main`/`trot_main` publish
+beta negated on A and D instead (the simulator convention), so negate B and C
+beta of a LegWheel CSV before comparing or playing it in Webots.
+
 ### WalkGait Class
 Generates stable walking gait trajectories using Bezier curve interpolation.
 
@@ -133,9 +161,14 @@ Simple walking gait with sinusoidal parameter variation:
 
 ```bash
 ros2 run corgi_walk walk_main
+
+# Straight walk with fixed parameters (also for trot_main)
+ros2 run corgi_walk walk_main --ros-args -p vary_parameters:=false \
+  -p stand_height:=0.25 -p velocity:=0.1 -p step_length:=0.3 -p step_height:=0.04
 ```
 
-**Behavior:**
+**Behavior** (default `vary_parameters:=true`; set it `false` to hold
+`velocity`, `stand_height`, `step_length` and `step_height` constant):
 - Velocity oscillates: `0.2 * cos(t)`
 - Stand height oscillates: `0.25 + 0.05 * cos(t)`
 - Step length alternates: 0.3 m / 0.1 m

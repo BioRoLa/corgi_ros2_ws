@@ -23,6 +23,7 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 add_library(${PROJECT_NAME}
   src/leg_model.cpp
   src/bezier.cpp
+  src/swing_planner.cpp
   src/trajectory_plan.cpp
 )
 
