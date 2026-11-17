@@ -26,6 +26,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2_msgs REQUIRED)
 find_package(corgi_msgs REQUIRED)
 find_package(corgi_utils REQUIRED)
 find_package(corgi_walk REQUIRED)
@@ -49,7 +50,7 @@ include_directories(BEFORE SYSTEM ${CORGI_MPC_EIGEN_INCLUDE_DIRS})
 
 add_subdirectory(src)
 
-install(DIRECTORY config
+install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
 )
 

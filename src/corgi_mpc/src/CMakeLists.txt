@@ -9,13 +9,24 @@ ament_target_dependencies(mpc_walk
   rclcpp
   std_msgs
   geometry_msgs
+  tf2_msgs
   corgi_msgs
   corgi_utils
   corgi_walk
 )
 target_link_libraries(mpc_walk corgi_mpc_core)
 
+# Open-loop walk: WalkGait straight to motor/command
+add_executable(walk_open walk_open.cpp)
+ament_target_dependencies(walk_open
+  rclcpp
+  std_msgs
+  corgi_msgs
+  corgi_walk
+)
+
 install(TARGETS
   mpc_walk
+  walk_open
   DESTINATION lib/${PROJECT_NAME}
 )

@@ -23,6 +23,7 @@
 #include "corgi_msgs/msg/motor_state_stamped.hpp"
 #include "corgi_msgs/msg/contact_state_stamped.hpp"
 #include "corgi_msgs/msg/imu_stamped.hpp"
+#include "tf2_msgs/msg/tf_message.hpp"
 
 #include "corgi_utils/leg_model.hpp"
 #include "corgi_utils/robot_params.hpp"
@@ -67,7 +68,7 @@ int main(int argc, char **argv) {
     const double velocity     = node->declare_parameter<double>("velocity", 0.1);
     const double step_length  = node->declare_parameter<double>("step_length", 0.3);
     const double step_height  = node->declare_parameter<double>("step_height", 0.04);
-    const double duration     = node->declare_parameter<double>("duration", 20.0);     // s of walking, ramps included
+    const double duration     = node->declare_parameter<double>("duration", 20.0);     // s of walking, ramp-up included
     // Impedance about the gait trajectory, world x / y / z
     Gains stance, swing;
     stance.kx = node->declare_parameter<double>("stance.kx", 2000.0);
@@ -88,6 +89,18 @@ int main(int argc, char **argv) {
     const std::string height_topic   = node->declare_parameter<std::string>("height_topic", "odometry/legacy/z_position_hip");
     const std::string contact_topic  = node->declare_parameter<std::string>("contact_topic", "odometry/legacy/contact");
     const std::string config_path    = node->declare_parameter<std::string>("config_path", "");
+    // odom_legacy: the topics above. sim_driver (simulation only): Webots ground
+    // truth, /tf odom -> base_link and sim/body/velocity from corgi_sim.
+    const std::string state_source   = node->declare_parameter<std::string>("state_source", "odom_legacy");
+    if (state_source != "odom_legacy" && state_source != "sim_driver") {
+        RCLCPP_ERROR(node->get_logger(), "state_source must be odom_legacy or sim_driver");
+        return 1;
+    }
+
+    if (state_source == "sim_driver" && !sim) {
+        RCLCPP_ERROR(node->get_logger(), "state_source:=sim_driver needs use_sim_time:=true");
+        return 1;
+    }
 
     if (sim) {
         RCLCPP_INFO(node->get_logger(), "Waiting for clock synchronization...");
@@ -113,6 +126,9 @@ int main(int argc, char **argv) {
     corgi_msgs::msg::ImuStamped imu;
     geometry_msgs::msg::Vector3 odom_pos, odom_vel;
     double odom_z = stand_height;
+    const bool use_sim_state = state_source == "sim_driver";
+    bool sim_pos_received = false, sim_vel_received = false;
+    geometry_msgs::msg::Vector3 sim_pos, sim_vel;
 
     std::array<corgi_force::LegFrame, 4> leg_frames;
     for (int i = 0; i < 4; ++i) leg_frames[i] = corgi_force::leg_frame(i, sim);
@@ -137,6 +153,25 @@ int main(int argc, char **argv) {
         velocity_topic, 10, [&](const geometry_msgs::msg::Vector3::SharedPtr msg) { odom_vel = *msg; });
     auto odom_z_sub = node->create_subscription<std_msgs::msg::Float64>(
         height_topic, 10, [&](const std_msgs::msg::Float64::SharedPtr msg) { odom_z = msg->data; });
+    rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr sim_tf_sub;
+    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr sim_vel_sub;
+    if (use_sim_state) {
+        sim_tf_sub = node->create_subscription<tf2_msgs::msg::TFMessage>(
+            "/tf", 10, [&](const tf2_msgs::msg::TFMessage::SharedPtr msg) {
+                for (const auto &tf : msg->transforms) {
+                    if (tf.child_frame_id != "base_link") continue;
+                    sim_pos.x = tf.transform.translation.x;
+                    sim_pos.y = tf.transform.translation.y;
+                    sim_pos.z = tf.transform.translation.z;
+                    sim_pos_received = true;
+                }
+            });
+        sim_vel_sub = node->create_subscription<geometry_msgs::msg::Vector3>(
+            "sim/body/velocity", 10, [&](const geometry_msgs::msg::Vector3::SharedPtr msg) {
+                sim_vel = *msg;
+                sim_vel_received = true;
+            });
+    }
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr directions_sub;
     if (sim) {
         // Joint and motor signs of the simulated robot, needed by the leg frames.
@@ -264,21 +299,34 @@ int main(int argc, char **argv) {
     std::array<bool, 4> in_stance = {true, true, true, true};
     double target_vel = 0.0;
     bool reference_set = false;
+    bool ground_located = false;
+    double ground_z = 0.0;
     double yaw_ref = 0.0;
     Eigen::Vector2d pos_ref = Eigen::Vector2d::Zero();
     Eigen::Vector2d heading(1.0, 0.0);
+
+    // Stopping: WalkGait advances the swing with the distance walked, so
+    // slowing down keeps a leg in the air longer and at zero speed freezes it
+    // there. After the walking time the robot keeps cruise speed until all
+    // four feet are down (or settle_timeout passes), then stands.
+    const int settle_timeout = 3 * mpc.freq;
+    bool standing = false;
 
     int loop_count = 0;
     while (rclcpp::ok()) {
         rclcpp::spin_some(node);
 
-        // Velocity profile: ramp up, cruise, ramp down, then hold still.
+        if (standing) {
+            // Hold the last stance pose with an even share of the weight, so
+            // force control is not left holding the last MPC forces.
+            publish_cmd();
+            if (!sleep_one_period()) break;
+            continue;
+        }
+
+        // Velocity profile: ramp up, then cruise until the stop.
         if (loop_count < ramp_loop) {
             target_vel += velocity / ramp_loop;
-        } else if (loop_count >= target_loop - ramp_loop && loop_count < target_loop) {
-            target_vel -= velocity / ramp_loop;
-        } else if (loop_count >= target_loop) {
-            target_vel = 0.0;
         }
         walk_gait.set_velocity(target_vel);
 
@@ -313,34 +361,6 @@ int main(int argc, char **argv) {
         double yaw = std::atan2(world_from_body(1, 0), world_from_body(0, 0));
         Eigen::Vector3d ang_vel = world_from_body * ang_vel_body;
 
-        if (!reference_set) {
-            // Walk along the heading the robot has when the controller starts.
-            yaw_ref = yaw;
-            heading << std::cos(yaw), std::sin(yaw);
-            pos_ref << odom_pos.x, odom_pos.y;
-            reference_set = true;
-        }
-        pos_ref += target_vel * mpc.dt * heading;
-
-        Eigen::VectorXd x(mpc.n_x);
-        x << roll, pitch, yaw,
-             odom_pos.x, odom_pos.y, odom_z,
-             ang_vel,
-             odom_vel.x, odom_vel.y, odom_vel.z,
-             -mpc.gravity;
-        // Keep the yaw error continuous across +-pi.
-        x(2) = yaw_ref + std::remainder(yaw - yaw_ref, 2.0 * M_PI);
-
-        Eigen::VectorXd x_ref((mpc.N - 1) * mpc.n_x);
-        for (int k = 0; k < mpc.N - 1; ++k) {
-            Eigen::Vector2d pos_k = pos_ref + (k + 1) * mpc.dt * target_vel * heading;
-            x_ref.segment(k * mpc.n_x, mpc.n_x) << 0.0, 0.0, yaw_ref,
-                                                   pos_k.x(), pos_k.y(), stand_height,
-                                                   0.0, 0.0, 0.0,
-                                                   target_vel * heading.x(), target_vel * heading.y(), 0.0,
-                                                   -mpc.gravity;
-        }
-
         // Foot positions relative to the CoM, from the measured joint angles
         std::array<Eigen::Vector3d, 4> r;
         for (int i = 0; i < 4; ++i) {
@@ -357,6 +377,57 @@ int main(int argc, char **argv) {
             Eigen::Vector3d foot_body = Eigen::Vector3d(hip[0], hip[1], hip[2])
                                         + frame.body_from_leg * Eigen::Map<Eigen::Vector3d>(legmodel.contact_p_3d.data());
             r[i] = world_from_body * (foot_body - mpc.com_offset);
+        }
+
+        // Body position and velocity (world frame). The MPC height is the CoM
+        // height above the ground.
+        Eigen::Vector3d pos(odom_pos.x, odom_pos.y, odom_z);
+        Eigen::Vector3d vel(odom_vel.x, odom_vel.y, odom_vel.z);
+        if (use_sim_state) {
+            if (sim_pos_received && sim_vel_received) {
+                const double com_z = sim_pos.z + (world_from_body * mpc.com_offset).z();
+                if (!ground_located) {
+                    // The Webots floor is not at z = 0: locate it once, from the
+                    // leg kinematics while all four feet are down.
+                    double foot_z = 0.0;
+                    for (const auto &ri : r) foot_z += ri.z() / 4.0;
+                    ground_z = com_z + foot_z;
+                    ground_located = true;
+                }
+                pos << sim_pos.x, sim_pos.y, com_z - ground_z;
+                vel << sim_vel.x, sim_vel.y, sim_vel.z;
+            } else {
+                RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 1000,
+                    "state_source=sim_driver: no /tf base_link or sim/body/velocity yet, using legacy odometry");
+            }
+        }
+
+        if (!reference_set) {
+            // Walk along the heading the robot has when the controller starts.
+            yaw_ref = yaw;
+            heading << std::cos(yaw), std::sin(yaw);
+            pos_ref << pos.x(), pos.y();
+            reference_set = true;
+        }
+        pos_ref += target_vel * mpc.dt * heading;
+
+        Eigen::VectorXd x(mpc.n_x);
+        x << roll, pitch, yaw,
+             pos,
+             ang_vel,
+             vel,
+             -mpc.gravity;
+        // Keep the yaw error continuous across +-pi.
+        x(2) = yaw_ref + std::remainder(yaw - yaw_ref, 2.0 * M_PI);
+
+        Eigen::VectorXd x_ref((mpc.N - 1) * mpc.n_x);
+        for (int k = 0; k < mpc.N - 1; ++k) {
+            Eigen::Vector2d pos_k = pos_ref + (k + 1) * mpc.dt * target_vel * heading;
+            x_ref.segment(k * mpc.n_x, mpc.n_x) << 0.0, 0.0, yaw_ref,
+                                                   pos_k.x(), pos_k.y(), stand_height,
+                                                   0.0, 0.0, 0.0,
+                                                   target_vel * heading.x(), target_vel * heading.y(), 0.0,
+                                                   -mpc.gravity;
         }
 
         mpc.update_model(yaw, r);
@@ -381,7 +452,22 @@ int main(int argc, char **argv) {
             force(2), force(5), force(8), force(11), force(1), force(4), force(7), force(10));
 
         loop_count++;
-        if (loop_count == target_loop) RCLCPP_INFO(node->get_logger(), "Finished");
+        if (loop_count >= target_loop) {
+            const bool all_stance = in_stance[0] && in_stance[1] && in_stance[2] && in_stance[3];
+            if (all_stance || loop_count >= target_loop + settle_timeout) {
+                if (!all_stance) {
+                    RCLCPP_WARN(node->get_logger(), "Not all feet down %d cycles after the walk, stopping anyway", settle_timeout);
+                }
+                for (auto &cmd : imp_cmd_modules) {
+                    set_gains(cmd, stance);
+                    cmd->fx = 0.0;
+                    cmd->fy = 0.0;
+                    cmd->fz = -weight_per_leg;
+                }
+                standing = true;
+                RCLCPP_INFO(node->get_logger(), "Finished");
+            }
+        }
 
         if (!sleep_one_period()) {
             RCLCPP_WARN(node->get_logger(), "Sleep until failed!");
