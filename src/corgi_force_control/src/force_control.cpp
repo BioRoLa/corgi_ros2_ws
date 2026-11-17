@@ -11,13 +11,6 @@ ForceControlNode::ForceControlNode()
     if (!declare_leg_model_parameters(*this, sim_, kinematics_, leg_gravity_)) {
         throw std::invalid_argument("invalid leg model parameters");
     }
-    force_feedback_ki_ = this->declare_parameter<double>("force_feedback_ki", 0.0);
-    force_feedback_limit_ = this->declare_parameter<double>("force_feedback_limit", 20.0);
-    force_feedback_min_fz_ = this->declare_parameter<double>("force_feedback_min_fz", 5.0);
-    for (auto& integral : force_integral_) integral.setZero();
-    RCLCPP_INFO(this->get_logger(), "Force feedback: ki %.1f 1/s, limit %.1f N, active above %.1f N",
-                force_feedback_ki_, force_feedback_limit_, force_feedback_min_fz_);
-
     // Wait for clock synchronization
     RCLCPP_INFO(this->get_logger(), "Waiting for clock synchronization...");
     while (rclcpp::ok()) {
@@ -83,26 +76,12 @@ void ForceControlNode::force_control(corgi_msgs::msg::ImpedanceCmd* imp_cmd_,
                                        corgi_msgs::msg::ForceState* force_state_, 
                                        corgi_msgs::msg::MotorCmd* motor_cmd_, 
                                        const Eigen::Matrix3d& world_from_leg,
-                                       const corgi_force::LegFrame& frame,
-                                       Eigen::Vector3d& force_integral) {
-    // force command (3D): the force the foot applies to the ground
+                                       const corgi_force::LegFrame& frame) {
+    // force command (3D): the force the foot applies to the ground. Feed-forward
+    // only; the force estimate is for corgi_mpc.
+    (void)force_state_;
     Eigen::MatrixXd force_des(3, 1);
     force_des << imp_cmd_->fx, imp_cmd_->fy, imp_cmd_->fz;
-
-    // Optional outer force loop on the estimate. force/state is the ground
-    // reaction on the leg, so the foot pushes the ground with its negative.
-    if (force_feedback_ki_ > 0.0) {
-        const double dt = 0.001;
-        if (-imp_cmd_->fz > force_feedback_min_fz_) {
-            Eigen::Vector3d measured(-force_state_->fx, -force_state_->fy, -force_state_->fz);
-            force_integral += force_feedback_ki_ * dt * (Eigen::Vector3d(force_des) - measured);
-            force_integral = force_integral.cwiseMax(-force_feedback_limit_).cwiseMin(force_feedback_limit_);
-        } else {
-            // Leg unloaded or in swing: let the correction fade out.
-            force_integral *= std::exp(-dt / 0.05);
-        }
-        force_des += force_integral;
-    }
 
     LegModel& legmodel = kinematics_.get_leg_model();
 
@@ -264,8 +243,7 @@ void ForceControlNode::timer_cb() {
             const auto& frame = leg_frames_[i];
             Eigen::Matrix3d world_from_leg = world_from_body * frame.body_from_leg;
             force_control(imp_cmd_modules[i], phi_vel_prev_modules_[i], motor_state_modules[i],
-                          force_state_modules[i], motor_cmd_modules[i], world_from_leg, frame,
-                          force_integral_[i]);
+                          force_state_modules[i], motor_cmd_modules[i], world_from_leg, frame);
 
         }
         phi_vel_prev_modules_[i] << motor_state_modules[i]->velocity_l, motor_state_modules[i]->velocity_r, motor_state_modules[i]->velocity_h;
