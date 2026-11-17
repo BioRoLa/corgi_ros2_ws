@@ -32,9 +32,7 @@ Start the simulation in Webots before continuing.
 ros2 launch corgi_force_control force_control.launch.py
 ```
 
-This launch file sets `use_sim_time=true` for both nodes. Add
-`force_feedback_ki:=10.0` to turn on the outer force loop (see
-[Force control options](#force-control-options)). Rebuild and restart `corgi_sim` together with the control packages so they share the active motor direction config.
+This launch file sets `use_sim_time=true` for both nodes. Rebuild and restart `corgi_sim` together with the control packages so they share the active motor direction config.
 
 ### Terminal 3: Start an experiment
 
@@ -198,15 +196,15 @@ ros2 topic pub --once /trigger corgi_msgs/msg/TriggerStamped "{enable: true}"
 ```
 
 In simulation, the **Start Trigger** button in `corgi_panel` performs the same
-action. By default these are feed-forward force experiments: the estimated
-force is recorded but not fed back (see [Force control options](#force-control-options)
-for the optional force loop). Stop immediately if hardware motion or
+action. These are feed-forward force experiments: `force_control_node` does
+not use the force estimate. Stop immediately if hardware motion or
 oscillation grows unexpectedly.
 
 ## Force control options
 
-`force_control_node` and `force_estimation_node` share a leg model. Set the
-same values on both nodes:
+`force_control_node` and `force_estimation_node` share a leg model (the force
+estimate itself is used by `corgi_mpc`, not by force control). Set the same
+values on both nodes:
 
 | Parameter | Simulation default | Hardware default | Meaning |
 |---|---|---|---|
@@ -215,15 +213,6 @@ same values on both nodes:
 | `leg_m_cz` | -0.070 kg m | | leg mass x centre-of-mass height below the hip (beta torque) |
 | `leg_m_cz_theta` | -0.105 kg m/rad | | change of that moment with theta (theta torque) |
 | `abad_m_d` | -0.150 kg m | | module mass x sideways centre-of-mass offset (ABAD torque) |
-
-`force_control_node` also has an optional outer force loop on the estimated
-force:
-
-| Parameter | Default | Meaning |
-|---|---|---|
-| `force_feedback_ki` | 0.0 (off) | integral gain (1/s); 10 tracks the force plates well in simulation |
-| `force_feedback_limit` | 20.0 N | largest correction per axis |
-| `force_feedback_min_fz` | 5.0 N | integrate only while the leg is commanded to push at least this much; otherwise the correction fades out (swing) |
 
 **Foot link.** The `LegModel` foot arc is centred on the leg axis (O_r = G + R)
 and stays aligned with it. With `foot_link:=axis` that alignment carries no
@@ -241,13 +230,6 @@ The defaults were fitted to the force plates in corgi_sim. With `leg_gravity`
 on, the estimator drops its old constant 0.9 kg leg-weight offset. The hardware
 model angles have not been checked against this convention, so hardware keeps
 `leg_gravity:=false` until it is fitted there.
-
-Example, simulation with the force loop:
-
-```bash
-ros2 run corgi_force_control force_control_node --ros-args \
-  -p use_sim_time:=true -p force_feedback_ki:=10.0
-```
 
 ## Other real-hardware experiments
 
