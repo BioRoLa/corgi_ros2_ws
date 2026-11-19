@@ -19,7 +19,14 @@ public:
     // 3D rim parameter in degrees. An explicit rim resolves shared endpoints:
     // 1 = foot, 2 = right upper, 3 = left upper; 0 selects by alpha.
     std::array<double, 2> rim_point(double alpha = 0.0);
-    std::array<double, 2> rim_point(double alpha, int rim_in);
+    // w is the lateral offset from the wheel mid-plane (m); the tyre is a
+    // torus, so the rim radius shrinks towards the wheel edges (rim_radius).
+    std::array<double, 2> rim_point(double alpha, int rim_in, double w = 0.0);
+    // Same point relative to the ABAD axis, in the frame before the ABAD
+    // rotation (the frame contact_p_3d uses).
+    std::array<double, 3> rim_point_3d(double alpha, int rim_in, double w, double gamma_in);
+    // Tyre outer radius about the rim arc centre at lateral offset w.
+    double rim_radius(double w) const;
 
     // Inverse kinematics
     std::array<double, 2> inverse(const std::array<double, 2> &pos, const std::string &joint = "G");
@@ -61,17 +68,26 @@ public:
     const double radius; // Wheel radius + Tire radius
 
     // Foot design parameters
-    const double foot_offset;      // 22.25 mm
-    const double tyre_thickness;   // 12.25 mm
-    const double foot_radius;      // R + foot_offset + tyre_thickness
-    const double wheel_thickness;
+    // Foot design parameters (ABAD robot, toroidal tyre; values follow
+    // LegWheel RobotParams and the CorgiRobotABAD proto mesh).
+    const double foot_offset;      // 30 mm: tyre corner centre radius - R
+    const double tyre_thickness;   // 15 mm: tyre corner (torus minor) radius
+    const double foot_radius;      // 145 mm: R + foot_offset + tyre_thickness
+    const double tread_radius;     // 130 mm: R + foot_offset
+    const double wheel_thickness;  // 40 mm
+    const double tread_half_width; // 5 mm: flat tread half width
     const double abad_axis_to_wheel_plane;
 
     // Current theta and beta
     double theta;
     double beta;
     double gamma;
+    // Set by contact_map_3d: lateral offset of the contact point from the wheel
+    // mid-plane, its distance from the ABAD axis, and its radius about the rim
+    // arc centre.
+    double contact_w = 0.0;
     double d_wheel;
+    double contact_radius;
 
     // Contact map variable
     int rim = 3; // 1 -> 2 -> 3 -> 4 -> 5 -> 0:
